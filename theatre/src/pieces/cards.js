@@ -26,10 +26,11 @@ export const meta = {
 const hashSlug = (s) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
 
 // The baked drawings are fetched but NOT waited for inside build(). In the headless judging browser
-// nothing a page requests is served for the first ~4.3 s of its life — measured with
-// tools/_cards-probe.mjs: a request issued at t=100 ms and one issued at t=1.4 s both land at
-// t≈4.4 s — so whichever piece awaits a file inside its build wears four seconds that have nothing
-// to do with its own work (cards' actual drawing and geometry is 12 ms). The materials are made
+// nothing the theatre page asks the dev server for is delivered for the first ~4 s of its life,
+// however early it is asked for: logging every request of a boot showed one issued at t=100 ms and
+// one issued at t=1.4 s both landing at t≈4.4 s, while the server answers the same URLs in ~1 ms to
+// curl. So whichever piece AWAITS a file inside its build wears four seconds that have nothing to
+// do with its own work — cards' own drawing and geometry is 12 ms of it. The materials are made
 // first and the maps are hung on them when the files arrive; `api.ready` is awaited by setState and
 // place, which main.js awaits, so a judging frame never renders a card without its back.
 const attach = (p, mat) =>

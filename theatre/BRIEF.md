@@ -148,6 +148,12 @@ small `node` script with the Write tool and run it.
    and reuse tiles, avoid per-vertex JS loops over huge geometries, and never load more than a handful
    of card textures up front (the deck is 78 × 500 KB; load faces on demand). A slow build is a black
    frame for every other piece's critic, so this is a hard rule.
+   One caveat measured on this machine: the headless judging browser serves nothing a page requests
+   for its first ~4 s, so whichever piece first awaits a file wears those seconds whatever it is
+   doing. If your piece is the one wearing it, check with tools/shot.mjs whether the number moves to
+   another piece when you stop awaiting (import small JSON instead of fetching it, and hang textures
+   on their materials when they arrive); if it simply moves, the page total is what matters and it is
+   not your bug.
 5. Dense deterministic drawings are BAKED: wrap them in `bakedTexture` / `bakedLevels` / `bakedJSON` from
    `src/core/bake.js` (see cards.js, ink-tiles.js, pepe-head.js for the pattern) and run `node tools/bake.mjs`
    after changing the drawing code; the file name carries a hash of the drawing source, so a stale bake

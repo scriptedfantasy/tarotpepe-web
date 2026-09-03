@@ -1,8 +1,12 @@
 // cards-art — everything drawn onto the card: the front (the supplied plate on a paper margin with
-// one printed ink rule and a little wear), the back (a dense ink pattern: a lattice of hatched
-// diamonds carrying frogs, stars and moons around an oval medallion, a milled band of ticks), and
-// the deck's cut edge. All pen work goes through strokes.js so the cards share one hand with the
-// rest of the world.
+// one printed ink rule and a little wear), the back (bare paper, a wobbly double rule, a lattice of
+// big diamonds carrying frogs, stars and moons, one medallion), and the deck's cut edge. All pen
+// work goes through strokes.js so the cards share one hand with the rest of the world.
+//
+// Everything here is ink or paper — never a grey, never a fill standing in for tone. Ink covers
+// about a seventh of the back; the rest is the world's paper. That is not restraint for its own
+// sake: twenty-one of these lie fanned across the table at ninety pixels wide for a third of the
+// film, and a denser drawing mip-filters to a flat grey tile at that size.
 //
 // Nothing here uses a canvas clip: in the headless judging browser a stroke under a complex clip
 // costs a full-canvas mask each time (round 1 spent 12 s in one hatch pass). Hatching is clipped
