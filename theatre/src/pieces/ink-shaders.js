@@ -223,6 +223,7 @@ precision highp int;
 uniform sampler2D tAlbedo, tNorm, tMisc, tDepth, tLit, tEdge, tWall, tFloor, tPaper;
 uniform vec2 uRes;
 uniform float uDpr, uSeed, uNear, uFar, uHatchK, uLref, uLineBase, uBreak, uPaperAmt, uHatchBoil;
+uniform float uPocket;      // how much a fold in the set darkens: under a ledge, into a corner
 uniform int uMode;          // 0 all, 1 lines only, 2 tone only
 uniform mat4 uInvVP;
 uniform vec3 uInk, uPaper;
@@ -299,22 +300,26 @@ void main() {
     s += 1.0 - lum(texture(tAlbedo, vUv + vec2(-r.x, r.y)).rgb);
     texBusy = s * 0.2;
   }
-  // …and whether that drawing is a MASS rather than a line: sampled on a ring wider than any pen
-  // stroke or letter, so a 2 px contour and a hand-lettered cap score near zero while a coat, a
-  // cat, a shelf carcass or a hole scores near one. Masses are not filled, they are hatched.
-  float mass = 0.0;
+  // …and whether that drawing is a MASS rather than a stroke. A ring wider than any pen stroke,
+  // louvre bar or hand-lettered cap: the ring's MINIMUM says "dark in every direction", so a
+  // 2 px contour, a 5 px louvre and a letter all score zero and are left exactly as drawn, while
+  // the inside of a coat, a cat, a shelf carcass or a hole scores one. The ring's MEAN says how
+  // deep inside the shape we are. Masses are never filled; they are re-drawn as strokes.
+  // Two rings at incommensurate radii, so a regular pattern (louvres, a weave, floorboards) can
+  // never line up with both and pass itself off as a mass.
+  float massMin = 1.0, massMean = 0.0;
   {
-    vec2 r = 13.0 * uDpr / uRes;
     const float D = 0.7071;
-    mass = (1.0 - lum(texture(tAlbedo, vUv + vec2(r.x, 0.0)).rgb))
-         + (1.0 - lum(texture(tAlbedo, vUv - vec2(r.x, 0.0)).rgb))
-         + (1.0 - lum(texture(tAlbedo, vUv + vec2(0.0, r.y)).rgb))
-         + (1.0 - lum(texture(tAlbedo, vUv - vec2(0.0, r.y)).rgb))
-         + (1.0 - lum(texture(tAlbedo, vUv + r * D).rgb))
-         + (1.0 - lum(texture(tAlbedo, vUv - r * D).rgb))
-         + (1.0 - lum(texture(tAlbedo, vUv + vec2(r.x, -r.y) * D).rgb))
-         + (1.0 - lum(texture(tAlbedo, vUv + vec2(-r.x, r.y) * D).rgb));
-    mass *= 0.125;
+    vec2 dirs[8] = vec2[8](vec2(1, 0), vec2(-1, 0), vec2(0, 1), vec2(0, -1),
+                           vec2(D, D), vec2(-D, -D), vec2(D, -D), vec2(-D, D));
+    vec2 r0 = 5.5 * uDpr / uRes, r1 = 11.0 * uDpr / uRes;
+    for (int i = 0; i < 8; i++) {
+      massMin = min(massMin, 1.0 - lum(texture(tAlbedo, vUv + dirs[i] * r0).rgb));
+      float dk = 1.0 - lum(texture(tAlbedo, vUv + dirs[i] * r1).rgb);
+      massMin = min(massMin, dk);
+      massMean += dk;
+    }
+    massMean *= 0.125;
   }
 
   // ── the stroke grid, anchored to the surface in world space ──────────────────────────────
@@ -324,11 +329,13 @@ void main() {
   // on this grid, which is why a mass and the tone beside it agree.
   vec2 huv = vec2(0.0);
   bool up = false;
+  float facing = 1.0;
   vec3 wp = vec3(0.0), n = vec3(0.0, 0.0, 1.0);
   if (!bg) {
     vec4 wp4 = uInvVP * vec4(vUv * 2.0 - 1.0, zc * 2.0 - 1.0, 1.0);
     wp = wp4.xyz / wp4.w;
     n = octDecode(texture(tNorm, vUv).rg);
+    facing = abs(dot(n, normalize(uCamPos - wp)));
     vec4 misc = texture(tMisc, vUv);
     float dObj = 0.25 * exp2((misc.r + misc.g / 255.0) * 8.0);
     vec3 an = abs(n);
@@ -336,7 +343,10 @@ void main() {
     vec2 wuv = up ? wp.xz : (an.x > an.z ? wp.zy : wp.xy);
     if (!up && an.x > an.z && n.x < 0.0) wuv.x = -wuv.x; // keep handedness so strokes lean the same way
     if (!up && an.x <= an.z && n.z < 0.0) wuv.x = -wuv.x;
-    huv = wuv * exp2(floor(log2(uHatchK / dObj) + 0.5));
+    // a surface turned away foreshortens, which would crowd its strokes together on the paper;
+    // draw them larger to compensate, snapped to the same octaves so nothing slides
+    float fore = clamp(facing, 0.5, 1.0);
+    huv = wuv * exp2(floor(log2(uHatchK / (dObj * fore)) + 0.5));
     huv += (vec2(hash21(vec2(uSeed, 1.0)), hash21(vec2(2.0, uSeed))) - 0.5) * uHatchBoil;
   }
   vec4 hTile = bg ? vec4(0.0) : (up ? texture(tFloor, huv) : texture(tWall, huv));
@@ -375,19 +385,38 @@ void main() {
     // hard away from us, scaled by how readily the material takes tone (hatch 0.5 = plain paper,
     // glass and pictures near 0), plus a standing bias for a material that is dark in itself
     float shade = 1.0 - smoothstep(uTone.x, uTone.y, L);
-    float facing = abs(dot(n, normalize(uCamPos - wp)));
     float graz = pow(1.0 - facing, 3.0) * uTone.w;
-    float soak = clamp(hatchW / 0.45, 0.0, 1.0) * (1.0 - smoothstep(0.16, 0.52, texBusy));
+    // where the set folds in on itself — under every shelf board, into the top corners, beside the
+    // door architrave. Broad lights cannot see these pockets; a draughtsman hatches them every
+    // time. Only a NEAR fold counts, so a figure standing well clear of a wall casts no ring.
+    float pocket = 0.0;
+    {
+      float dc = linD(zc);
+      vec2 r = 26.0 * uDpr / uRes;
+      const float D = 0.7071;
+      vec2 dirs[8] = vec2[8](vec2(1, 0), vec2(-1, 0), vec2(0, 1), vec2(0, -1),
+                             vec2(D, D), vec2(-D, -D), vec2(D, -D), vec2(-D, D));
+      for (int i = 0; i < 8; i++) {
+        float rel = (dc - linD(texture(tDepth, vUv + dirs[i] * r).x)) / max(dc, 0.001);
+        pocket += smoothstep(0.006, 0.030, rel) * (1.0 - smoothstep(0.10, 0.26, rel));
+      }
+      pocket = pocket * 0.125 * uPocket;
+    }
+    // A surface turned well away from us is left bare and the contour does the work — which is
+    // what the folios' frontal interiors do with their side walls and ceilings. Tone belongs to
+    // the planes we are square to.
+    float edgeOn = smoothstep(0.24, 0.62, facing);
+    float soak = clamp(hatchW / 0.45, 0.0, 1.0) * (1.0 - smoothstep(0.16, 0.52, texBusy)) * edgeOn;
     float bias = max(0.0, hatchW - 0.5) * 1.0;
-    float d = (shade * uTone.z + graz) * soak + bias;
+    float d = (shade * uTone.z + graz + pocket) * soak + bias;
     // a hand does not follow a shadow's edge: break the boundary between levels on the stroke
     // grid so a patch of hatch ends raggedly, the way strokes of unequal length do
     float rag = vnoise(huv * 2.0 + uSeed * 0.13) * 0.78 + vnoise(huv * 5.0 + 11.0) * 0.22;
     d += (rag - 0.5) * uLevels.w;
     float level = step(uLevels.x, d) + step(uLevels.y, d) + step(uLevels.z, d);
     if (hatchW > 0.9) level = 4.0; // the material declares itself a black thing
-    // even the darkest level is drawn: the three-way hatch is solid at its core and leaves nicks
-    // of paper, so the mass has a scratchy silhouette instead of a vector edge
+    // even the darkest level is drawn: a crowded two-direction lattice, black across a shape but
+    // still leaving nicks of paper, so the mass has a scratchy silhouette instead of a vector edge
     float cov = level > 3.5 ? hTile.a : level < 1.5 ? hTile.r : level < 2.5 ? hTile.g : hTile.b;
     if (level > 0.5) hatchInk = smoothstep(0.32, 0.62, cov) * (level > 3.5 ? 1.0 : 1.0 - halo);
   }
@@ -396,17 +425,18 @@ void main() {
   // One pen, one pressure: a texture's stroke is ink or it is paper, never a grey. And the pen
   // cannot lay down a fill — so wherever the texture is not a line but a MASS (a bottle, a cat, a
   // shelf carcass, a black band), the fill is thrown away and the shape is re-drawn on the stroke
-  // grid instead: three-way hatch crowding to solid at the core, opening to cross-hatch at the
-  // rim, so the silhouette breaks into separate strokes the way a drawn black shape does.
+  // grid instead: strokes crowding to near-solid at the core, opening to cross-hatch at the rim,
+  // so the silhouette breaks into separate strokes the way a drawn black shape does.
   float texInk = 0.0;
   vec3 base = uPaper;
   if (uMode == 0 && !bg) {
     if (colorful) base = alb.rgb;
     else {
       texInk = smoothstep(0.15, 0.36, 0.95 - lum(alb.rgb));
-      float carve = smoothstep(0.26, 0.52, mass);
+      float carve = smoothstep(0.25, 0.65, massMin); // a stroke is left alone; a mass is re-drawn
       if (carve > 0.001) {
-        float cov = mix(hTile.b, hTile.a, smoothstep(0.55, 0.98, mass));
+        float core = smoothstep(0.55, 0.97, massMean); // 0 just inside the rim, 1 deep inside
+        float cov = mix(hTile.b, hTile.a, core);       // cross-hatch at the rim → crowded at the core
         texInk = min(texInk, mix(1.0, smoothstep(0.30, 0.60, cov), carve));
       }
     }

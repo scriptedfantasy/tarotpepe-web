@@ -173,11 +173,11 @@ function drawWallLevels() {
     strokes(g, rng, { angle: Math.PI / 3, spacing: 7.6, width: PEN, segMin: 90, segMax: 360, fill: 0.86, jitter: 0.28, lean: 0.03 });
   }, 103);
   const darkest = levelCanvas((g, rng) => {
-    // black, but drawn: three directions crowding together. The strokes still separate here and
-    // there, which is what gives a black mass its scratchy rim instead of a vector edge.
-    strokes(g, rng, { angle: V, spacing: 4.2, width: PEN * 1.2, segMin: 150, segMax: 460, fill: 0.95, jitter: 0.2, lean: 0.015 });
-    strokes(g, rng, { angle: 0, spacing: 4.8, width: PEN * 1.15, segMin: 150, segMax: 460, fill: 0.93, jitter: 0.24, lean: 0.02 });
-    strokes(g, rng, { angle: Math.PI / 4, spacing: 5.5, width: PEN * 1.1, segMin: 150, segMax: 460, fill: 0.9, jitter: 0.24, lean: 0.025 });
+    // black, but drawn. Two directions on a legible lattice at a ~4 texel pitch: crowded enough
+    // to read as a black mass across a shape, open enough that you can still count the strokes
+    // and that the shape's rim breaks into separate strokes instead of ending on a vector edge.
+    strokes(g, rng, { angle: V, spacing: 4.0, width: PEN * 1.05, segMin: 160, segMax: 480, fill: 0.96, jitter: 0.12, lean: 0.012 });
+    strokes(g, rng, { angle: Math.PI * 0.31, spacing: 4.6, width: PEN, segMin: 160, segMax: 480, fill: 0.94, jitter: 0.14, lean: 0.016 });
   }, 104);
   return packLevels([light, mid, dark, darkest]);
 }
@@ -195,9 +195,8 @@ function drawFloorLevels() {
     strokes(g, rng, { angle: Math.PI / 2 + 0.35, spacing: 8, width: PEN, segMin: 90, segMax: 340, fill: 0.84, jitter: 0.3, lean: 0.04 });
   }, 203);
   const darkest = levelCanvas((g, rng) => {
-    dashRows(g, rng, { spacing: 4.2, width: PEN * 1.2, len: 180, fill: 0.95 });
-    strokes(g, rng, { angle: Math.PI / 2, spacing: 4.8, width: PEN * 1.15, segMin: 150, segMax: 460, fill: 0.93, jitter: 0.22, lean: 0.02 });
-    strokes(g, rng, { angle: -Math.PI / 4, spacing: 5.5, width: PEN * 1.1, segMin: 150, segMax: 460, fill: 0.9, jitter: 0.24, lean: 0.025 });
+    dashRows(g, rng, { spacing: 4.0, width: PEN * 1.05, len: 190, fill: 0.96 });
+    strokes(g, rng, { angle: -Math.PI * 0.31, spacing: 4.6, width: PEN, segMin: 160, segMax: 480, fill: 0.94, jitter: 0.14, lean: 0.016 });
   }, 204);
   return packLevels([light, mid, dark, darkest]);
 }

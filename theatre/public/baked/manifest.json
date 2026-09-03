@@ -1,22 +1,22 @@
 {
-  "card-back-5c1e1df6": {
+  "card-back-12e35a7d": {
     "kind": "png",
-    "file": "card-back-5c1e1df6.png"
+    "file": "card-back-12e35a7d.png"
   },
-  "deck-side-be080658": {
+  "deck-side-01d6eeba": {
     "kind": "png",
-    "file": "deck-side-be080658.png"
+    "file": "deck-side-01d6eeba.png"
   },
   "ink-paper-7df40bfd": {
     "kind": "png",
     "file": "ink-paper-7df40bfd.png"
   },
-  "ink-wall-c30028af": {
+  "ink-wall-3efc07d7": {
     "kind": "png",
-    "file": "ink-wall-c30028af.png"
+    "file": "ink-wall-3efc07d7.png"
   },
-  "ink-floor-1ad335b6": {
+  "ink-floor-1b6701e4": {
     "kind": "png",
-    "file": "ink-floor-1ad335b6.png"
+    "file": "ink-floor-1b6701e4.png"
   }
 }

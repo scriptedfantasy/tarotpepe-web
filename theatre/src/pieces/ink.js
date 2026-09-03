@@ -15,7 +15,15 @@
 //   5. Composite lines (pressure-varied dilation, occasional skips), tone quantised to 4 stroke
 //                levels drawn with world-anchored hatch tiles, selective colour, paper grain.
 import * as THREE from 'three';
-import { INK, PAPER } from '../core/strokes.js';
+
+// What the pen and the sheet actually are, sampled off the folios (STYLE.md §1.1 and §3): the
+// paper is a cool, faintly green off-white, not a cream; the ink is a neutral near-black, not a
+// warm brown-black. strokes.js still exports the older, warmer pair for materials and for the
+// canvases the other pieces draw on — those are only ever seen THROUGH this pass, which repaints
+// every non-colourful surface with the values below, so the two need not agree.
+// (Reported upward: src/core/strokes.js PAPER/INK should be moved to match.)
+const PAPER = '#f8f9f4';
+const INK = '#0d0e0d';
 import { makeWallTiles, makeFloorTiles, makePaperGrain } from './ink-tiles.js';
 import { GBUF_VERT, GBUF_FRAG, QUAD_VERT, EDGE_FRAG, EXTEND_FRAG, COMPOSITE_FRAG } from './ink-shaders.js';
 
@@ -46,8 +54,9 @@ export async function build(ctx) {
     // levels below a plain-paper material (hatch 0.5) is BARE above L≈0.10 — most of the room —
     // takes clumped rain to L≈0.055, dense strokes to L≈0.022, cross-hatch below. Nothing turns
     // solid black from want of light: solid ink is reserved for materials flagged hatch ≈ 1.
-    tone: [0.0, 0.5, 1.0, 0.22],
+    tone: [0.0, 0.5, 1.0, 0.18],
     levels: [0.55, 0.82, 0.96, 0.14], // thresholds → tone levels 1..3; w = ragged level boundary
+    pocket: 0.6, // how much a fold in the set (under a ledge, into a corner) asks for strokes
     paper: 0.55, // paper grain amount (the grain itself is already a whisper)
     hatchBoil: 0.003, // tile-units of hatch shiver on twos
     letterbox: null, // e.g. 1.85 → paper-white bars; null → none
@@ -212,6 +221,7 @@ export async function build(ctx) {
       uBreak: { value: params.breakAmt },
       uPaperAmt: { value: params.paper },
       uHatchBoil: { value: params.hatchBoil },
+      uPocket: { value: params.pocket },
       uMode: { value: 0 },
       uInvVP: { value: new THREE.Matrix4() },
       uInk: { value: new THREE.Color(INK) },
@@ -318,6 +328,7 @@ export async function build(ctx) {
     cu.uBreak.value = params.breakAmt;
     cu.uPaperAmt.value = params.paper;
     cu.uHatchBoil.value = params.hatchBoil;
+    cu.uPocket.value = params.pocket;
     cu.uMode.value = mode;
     cu.uInvVP.value.multiplyMatrices(cam.matrixWorld, cam.projectionMatrixInverse);
     cu.uLevels.value.set(...params.levels);

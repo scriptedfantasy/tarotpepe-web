@@ -15,7 +15,7 @@ page.on('request', (r) => started.set(r, Date.now()));
 page.on('requestfinished', (r) => {
   const s = started.get(r) ?? Date.now();
   const ms = Date.now() - s;
-  if (ms > 60 || !/\.(js|ts)(\?|$)/.test(r.url())) console.log(`[net +${s - T0} ${ms}ms]`, r.url().slice(0, 110));
+  console.log(`[net +${s - T0} ${ms}ms]`, r.url().slice(0, 110));
 });
 page.on('pageerror', (e) => console.log('[pageerror]', String(e)));
 await page.route('**/@vite/client', (route) =>

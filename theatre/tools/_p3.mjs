@@ -18,6 +18,7 @@ page.on('requestfinished', (r) => {
   if (ms > 60 || !/\.(js|ts)(\?|$)/.test(r.url())) console.log(`[net +${s - T0} ${ms}ms]`, r.url().slice(0, 110));
 });
 page.on('pageerror', (e) => console.log('[pageerror]', String(e)));
+await page.route('**/fonts/*.ttf', (r) => r.abort());
 await page.route('**/@vite/client', (route) =>
   route.fulfill({ contentType: 'application/javascript', body: 'export function createHotContext(){ return { accept(){}, acceptExports(){}, dispose(){}, prune(){}, decline(){}, invalidate(){}, on(){}, off(){}, send(){}, data: {} }; }\nexport function updateStyle(){}\nexport function removeStyle(){}\nexport function injectQuery(u){return u;}\nexport class ErrorOverlay {}' }),
 );

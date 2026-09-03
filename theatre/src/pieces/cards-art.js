@@ -74,8 +74,10 @@ export function ellipsePts(cx, cy, rx, ry, { n = 72, a0 = 0, a1 = Math.PI * 2 } 
   return pts;
 }
 
-export function inkRounded(g, x, y, w, h, r, opts) {
-  inkPath(g, roundedRectPts(x, y, w, h, r), { ...opts, closed: true });
+export function inkRounded(g, x, y, w, h, r, opts = {}) {
+  // a long printed rule bends slowly; jitter every 9 px and it reads as a shaky hand, not a
+  // confident one, so the step is the wobble's wavelength
+  inkPath(g, roundedRectPts(x, y, w, h, r, { step: opts.step ?? 9 }), { ...opts, closed: true });
 }
 export function inkEllipse(g, cx, cy, rx, ry, opts) {
   inkPath(g, ellipsePts(cx, cy, rx, ry), { ...opts, closed: true });
@@ -167,45 +169,55 @@ function dot(g, x, y, r, color = INK, alpha = 1) {
 
 // ---------- motifs ----------
 
-// A frog's face in a few pen lines: the wide flat head, two big eyes sitting on the crown under
-// heavy lids, the long deadpan mouth with its lower lip.
-export function frogGlyph(g, cx, cy, s, rng, { tone = false, width = 2 } = {}) {
+// Tarot Pepe's face in a few pen lines. The tells, from public/pepe/pepe-meditation.webp: the two
+// big eyes sit ON TOP of the head and break its crown, each under one heavy lid stroke, the pupil
+// low and looking inward; the mouth is one long wide smile that reaches nearly to the cheeks, with
+// a second line under it for the lower lip; the chin is a soft mass. Drawn at contour weight so it
+// survives being 8 px across in the lattice.
+export function frogGlyph(g, cx, cy, s, rng, { tone = false, width = 2, simple = false, stock = STOCK } = {}) {
   const o = { rng, width, wobble: Math.max(0.3, s * 0.012) };
   const head = [];
   for (let k = 0; k < 48; k++) {
     const a = (k / 48) * Math.PI * 2;
-    const rx = s, ry = s * 0.74;
+    const rx = s, ry = s * 0.78;
     let x = Math.cos(a) * rx, y = Math.sin(a) * ry;
-    if (y < 0) y *= 0.8; // flatter crown
-    if (y > 0) x *= 1.06 - 0.14 * (y / ry); // cheeks tuck in below
-    head.push([cx + x, cy + y + s * 0.05]);
+    if (y < 0) y *= 0.86; // flatter crown
+    if (y > 0) x *= 1 - 0.22 * (y / ry) ** 1.6; // cheeks tuck in to the chin, with no kink at the widest
+    head.push([cx + x, cy + y + s * 0.06]);
   }
-  if (tone) {
-    // hatching first, the contour over it: under the chin and down the shadow side
-    hatchPoly(g, head, { angle: 0.12, spacing: s * 0.055, width: width * 0.6, rng, alpha: 0.85, bounds: [cx - s * 1.2, cy + s * 0.45, s * 2.4, s * 0.6], inset: 2 });
-    hatchPoly(g, head, { angle: Math.PI / 2 - 0.2, spacing: s * 0.06, width: width * 0.55, rng, alpha: 0.75, bounds: [cx + s * 0.6, cy - s * 0.6, s * 0.6, s * 1.5], inset: 2 });
-  }
-  inkPath(g, head, { ...o, closed: true, width: width * 1.2 });
+  // A face in this world is pure contour — in every Aline frame the faces carry no hatching at all,
+  // only the hair and the coats are masses. `tone` is a thin band under the jaw and nothing else.
+  if (tone) hatchPoly(g, head, { angle: 0.1, spacing: s * 0.1, width: width * 0.7, rng, bounds: [cx - s * 0.9, cy + s * 0.6, s * 1.8, s * 0.3], inset: 4 });
+  inkPath(g, head, { ...o, closed: true, width: width * 1.15 });
+  // the eyes, in front of the crown: paper knocked out, then the ball drawn as an OPEN arc with one
+  // heavy lid closing it over the top. Drawing the ball as a full circle and the lid on top of it
+  // makes a pair of spectacles; the lid has to BE the top of the eye.
+  const rx = s * 0.35, ry = s * 0.32;
   for (const sx of [-1, 1]) {
-    const ex = cx + sx * s * 0.42, ey = cy - s * 0.36;
-    const eye = ellipsePts(ex, ey, s * 0.32, s * 0.26, { n: 28 });
-    if (tone) hatchPoly(g, eye, { angle: 0, spacing: s * 0.05, width: width * 0.5, rng, alpha: 0.8, bounds: [ex - s * 0.4, ey - s * 0.3, s * 0.8, s * 0.2] });
-    inkPath(g, eye, { ...o, closed: true });
-    // the lid: a heavy stroke across the upper third
-    inkLine(g, ex - s * 0.32, ey - s * 0.05, ex + s * 0.32, ey - s * 0.08, { rng, width: width * 1.6, wobble: s * 0.01 });
-    // the pupil under it, looking a little inward
-    dot(g, ex - sx * s * 0.03, ey + s * 0.06, s * 0.085);
+    const ex = cx + sx * s * 0.4, ey = cy - s * 0.54;
+    fillPath(g, ellipsePts(ex, ey, rx * 1.07, ry * 1.07, { n: 26 }), stock);
+    inkPath(g, ellipsePts(ex, ey, rx, ry, { n: 22, a0: -Math.PI * 0.1, a1: Math.PI * 1.1 }), o);
+    // the lid is a SHAPE, not a thicker stroke: the ink pass lays every line down at one pressure,
+    // so weight alone would vanish and leave a pair of spectacles
+    const lid = ellipsePts(ex, ey, rx, ry, { n: 16, a0: Math.PI * 1.1, a1: Math.PI * 1.9 });
+    fillPath(g, lid, INK);
+    inkPath(g, lid, { ...o, width: width * 1.4 });
+    dot(g, ex - sx * s * 0.03, ey + s * 0.08, s * 0.13);
   }
-  // mouth: long, nearly straight, the ends turned down a hair
-  const m = [];
-  for (let k = 0; k <= 16; k++) {
-    const u = k / 16 - 0.5;
-    m.push([cx + u * s * 1.5, cy + s * 0.32 + u * u * s * 0.3]);
+  // the mouth: one long smile, the ends lifted
+  const arc = (halfW, dip, rise, n) => {
+    const p = [];
+    for (let k = 0; k <= n; k++) {
+      const u = k / n - 0.5;
+      p.push([cx + u * s * halfW * 2, cy + s * dip - u * u * s * rise]);
+    }
+    return p;
+  };
+  inkPath(g, arc(0.72, 0.3, 0.8, 18), { ...o, width: width * 1.5 });
+  if (!simple) {
+    inkPath(g, arc(0.42, 0.38, 0.7, 12), { ...o, width: width * 0.85 });
+    for (const sx of [-1, 1]) inkLine(g, cx + sx * s * 0.12, cy - s * 0.02, cx + sx * s * 0.16, cy + s * 0.03, { rng, width: width * 0.9, wobble: 0.3 });
   }
-  inkPath(g, m, { ...o, width: width * 1.35 });
-  const m2 = m.map(([x, y]) => [x * 0.985 + cx * 0.015, y + s * 0.1]);
-  inkPath(g, m2.slice(3, -3), { ...o, width: width * 0.8 });
-  for (const sx of [-1, 1]) inkLine(g, cx + sx * s * 0.12, cy + s * 0.06, cx + sx * s * 0.17, cy + s * 0.1, { rng, width: width * 0.9, wobble: 0.3 });
 }
 
 export function starGlyph(g, cx, cy, s, rng, { width = 2 } = {}) {
@@ -233,69 +245,72 @@ function rays(g, cx, cy, rx0, ry0, rx1, ry1, { every = 4, rng, width = 2, alt = 
 }
 
 // ---------- the back ----------
-
+//
+// The back is a printed card, drawn with the same pen as the room: bare paper, a wobbly double rule
+// near the cut, a lattice of big diamonds carrying frogs, stars and moons, and one medallion in the
+// middle. Two rules govern it, and they fight each other:
+//
+//   * it must be legible at ~90 px wide, because twenty-one of these are fanned across the table
+//     for a third of the film. So: few elements, each one big, each drawn at contour weight.
+//   * it must be worth looking at at 450 px wide in the card1 close-up. So: a real emblem, hand
+//     lettering, a milled edge.
+//
+// What resolves them is BARE PAPER. Ink covers about a seventh of the surface; everything else is
+// the world's paper. A dense pattern of fine strokes — round 1's mistake — averages to a flat grey
+// tile the moment the card is small, which is the one thing the bible forbids.
 export function drawBack(g, W, H, rng = mulberry32(21), { stock = STOCK } = {}) {
   g.fillStyle = stock;
   g.fillRect(0, 0, W, H);
-  const R = (W * 5) / 130; // the cut's corner radius in px
+  const R = (W * 5) / 130; // the cut's corner radius in px (the card is 130 mm wide)
   const cx = W / 2, cy = H / 2;
-  const F = 40; // the pattern field starts here (the inner rule sits on its edge)
+  const OUT = 30, MID = 88; // the two rules, in from the cut
+  const F = MID + 12; // the lattice field starts a hair inside the inner rule
   const fx = F, fy = F, fw = W - 2 * F, fh = H - 2 * F;
   const field = [fx, fy, fw, fh];
 
-  // the lattice: two diagonal families of lines, cells alternately hatched and plain
-  const S = 56; // perpendicular spacing of the lattice lines
-  const D = S * Math.SQRT2; // diamond width/height
+  // the lattice: two families of diagonals far enough apart that the diamonds stay open paper
+  const D = 244; // diamond width/height (three and a half across the card)
   const cellCentre = (i, j) => [cx + ((i + j + 1) * D) / 2, cy + ((i - j) * D) / 2];
-  const cellPoly = (x, y) => [
-    [x, y - D / 2],
-    [x + D / 2, y],
-    [x, y + D / 2],
-    [x - D / 2, y],
-  ];
   const N = Math.ceil(Math.hypot(fw, fh) / D) + 2;
-  const RX = 150, RY = 230; // the medallion
+  const RX = 212, RY = 300; // the medallion
   const inMedallion = (x, y, pad) => ((x - cx) / (RX + pad)) ** 2 + ((y - cy) / (RY + pad)) ** 2 < 1;
-  const cornerR = 128;
-  const corners = [
-    [fx, fy],
-    [fx + fw, fy],
-    [fx, fy + fh],
-    [fx + fw, fy + fh],
-  ];
-  const inCorner = (x, y, pad) => corners.some(([px, py]) => Math.hypot(x - px, y - py) < cornerR + pad);
 
-  // 1. hatched diamonds (checkerboard), the stroke direction alternating row by row so it weaves
-  for (let i = -N; i <= N; i++) {
-    for (let j = -N; j <= N; j++) {
-      if ((i + j) % 2 !== 0) continue;
-      const [x, y] = cellCentre(i, j);
-      if (x < fx - D / 2 || x > fx + fw + D / 2 || y < fy - D / 2 || y > fy + fh + D / 2) continue;
-      if (inMedallion(x, y, -D * 0.2) || inCorner(x, y, -D * 0.2)) continue;
-      const vertical = ((((i - j) / 2) % 2) + 2) % 2 === 0;
-      hatchPoly(g, cellPoly(x, y), { angle: vertical ? Math.PI / 2 + 0.04 : 0.05, spacing: 5.6, width: 1.6, wobble: 0.45, jitter: 1.2, rng, alpha: 0.95, inset: 2.5, bounds: field });
-    }
-  }
-  // 2. lattice lines
+  // 1. the lattice lines, drawn right through the field; the medallion is knocked out over them
   const half = Math.hypot(fw, fh);
   for (let k = -N; k <= N; k++) {
     const c = (k * D) / 2;
     for (const s of [1, -1]) {
-      const seg = clipSegRect(cx + c - half, cy + s * (c + half), cx + c + half, cy + s * (c - half), [fx - 2, fy - 2, fw + 4, fh + 4]);
-      if (seg) inkLine(g, ...seg, { width: 2.6, wobble: 1.1, rng, segments: 36 });
+      const seg = clipSegRect(cx + c - half, cy + s * (c + half), cx + c + half, cy + s * (c - half), [fx, fy, fw, fh]);
+      // a stub in a corner is a mistake, not a drawing
+      if (seg && Math.hypot(seg[2] - seg[0], seg[3] - seg[1]) > 90) inkLine(g, ...seg, { width: 6.2, wobble: 2.2, rng, segments: 26 });
     }
   }
-  // 3. motifs in the plain diamonds, in ordered rows along one diagonal: frogs, stars, moons
+  // 2. a solid pip where the lines cross. It is the one element small enough to be a DOT at fan
+  //    size, which is what gives a card ninety pixels wide a rhythm rather than a plain grid.
+  for (let a = -N; a <= N; a++) {
+    for (let b = -N; b <= N; b++) {
+      if ((a + b) % 2 !== 0) continue;
+      const x = cx + ((a + b) * D) / 2, y = cy + ((a - b) * D) / 2;
+      if (x < fx + 14 || x > fx + fw - 14 || y < fy + 14 || y > fy + fh - 14) continue;
+      if (inMedallion(x, y, 46)) continue;
+      const r = 10;
+      fillPath(g, [[x, y - r * 1.5], [x + r, y], [x, y + r * 1.5], [x - r, y]], INK);
+    }
+  }
+  // 3. one motif in every other diamond, in ordered rows: a frog, a star, a moon
   for (let i = -N; i <= N; i++) {
     for (let j = -N; j <= N; j++) {
       if ((i + j) % 2 === 0) continue;
       const [x, y] = cellCentre(i, j);
-      if (x < fx + 22 || x > fx + fw - 22 || y < fy + 22 || y > fy + fh - 22) continue;
-      if (inMedallion(x, y, 30) || inCorner(x, y, 26)) continue;
-      const m = ((((i - j - 1) / 2) % 3) + 3) % 3;
-      if (m === 0) frogGlyph(g, x, y, D * 0.24, rng, { width: 2.2 });
-      else if (m === 1) starGlyph(g, x, y, D * 0.2, rng, { width: 2.6 });
-      else moonGlyph(g, x, y, D * 0.16, rng, { width: 2.2, stock });
+      if (x < fx + 60 || x > fx + fw - 60 || y < fy + 60 || y > fy + fh - 60) continue;
+      if (inMedallion(x, y, 40)) continue;
+      // rows of one motif each, folded about the card's centre so the back reads the same either
+      // way up — a printed card is symmetric under a half-turn
+      const n = (i - j - 1) / 2;
+      const m = ((n >= 0 ? n : -n - 1) + 1) % 3;
+      if (m === 0) frogGlyph(g, x, y, D * 0.2, rng, { width: 4.4, simple: true, stock });
+      else if (m === 1) starGlyph(g, x, y, D * 0.15, rng, { width: 5.4 });
+      else moonGlyph(g, x, y, D * 0.115, rng, { width: 4.6, stock });
     }
   }
 
@@ -306,98 +321,52 @@ export function drawBack(g, W, H, rng = mulberry32(21), { stock = STOCK } = {}) 
   g.fillRect(0, 0, fx, H);
   g.fillRect(fx + fw, 0, W - fx - fw, H);
 
-  // 5. corner fans: a quarter disc of paper with rays from the corner and a moon and stars
-  for (const [px, py] of corners) {
-    const sx = px < cx ? 1 : -1, sy = py < cy ? 1 : -1;
-    const a0 = sx > 0 ? (sy > 0 ? 0 : 270) : sy > 0 ? 90 : 180;
-    const A0 = (a0 * Math.PI) / 180, A1 = ((a0 + 90) * Math.PI) / 180;
-    fillPath(g, ellipsePts(px, py, cornerR, cornerR, { n: 36, a0: A0, a1: A1 }).concat([[px, py]]), stock);
-    inkPath(g, ellipsePts(px, py, cornerR, cornerR, { n: 32, a0: A0, a1: A1 }), { width: 3.6, wobble: 1.2, rng });
-    inkPath(g, ellipsePts(px, py, cornerR - 11, cornerR - 11, { n: 32, a0: A0, a1: A1 }), { width: 1.8, wobble: 0.9, rng });
-    rays(g, px, py, 50, 50, cornerR - 18, cornerR - 18, { every: 5, rng, width: 2, a0: a0 + 3, a1: a0 + 90 });
-    inkPath(g, ellipsePts(px, py, 44, 44, { n: 24, a0: A0, a1: A1 }), { width: 2.6, wobble: 0.9, rng });
-    moonGlyph(g, px + sx * 19, py + sy * 19, 9, rng, { width: 2, stock });
-    starGlyph(g, px + sx * 35, py + sy * 8, 5, rng, { width: 1.6 });
-    starGlyph(g, px + sx * 8, py + sy * 35, 5, rng, { width: 1.6 });
-  }
-
-  // 6. the medallion: an oval of paper, a sunburst, a milled edge, the emblem, the name
-  fillPath(g, ellipsePts(cx, cy, RX + 26, RY + 26), stock);
-  rays(g, cx, cy, RX + 6, RY + 6, RX + 24, RY + 24, { every: 3, rng, width: 1.9 });
-  inkEllipse(g, cx, cy, RX, RY, { width: 5, wobble: 1.3, rng });
-  inkEllipse(g, cx, cy, RX - 10, RY - 10, { width: 1.8, wobble: 0.9, rng });
-  for (let deg = 0; deg < 360; deg += 4.5) {
-    const a = (deg * Math.PI) / 180;
-    dot(g, cx + (RX - 5) * Math.cos(a), cy + (RY - 5) * Math.sin(a), 1.6);
-  }
+  // 5. the medallion: an oval of bare paper punched out of the lattice, a milled edge of ticks, a
+  //    heavy ring, the emblem, the name. This is the one dark thing on the card, so that a card
+  //    seen small is paper with a badge on it.
+  fillPath(g, ellipsePts(cx, cy, RX + 40, RY + 40), stock);
+  rays(g, cx, cy, RX + 8, RY + 8, RX + 38, RY + 38, { every: 7.5, rng, width: 4, alt: true });
+  inkEllipse(g, cx, cy, RX, RY, { width: 8.5, wobble: 2.4, rng });
+  inkEllipse(g, cx, cy, RX - 17, RY - 17, { width: 3.4, wobble: 1.4, rng });
   // the emblem: the frog, in tone, with the collar of his robe
-  const hy = cy - 54, hs = 86;
+  const hy = cy - 78, hs = 122;
   {
-    const sh = hy + hs * 0.55; // the shoulder line
+    const sh = hy + hs * 0.95; // the shoulder line, just under the chin
     const left = [], right = [];
     for (let k = 0; k <= 12; k++) {
       const u = k / 12;
-      const x = hs * (0.36 + 0.7 * u);
-      const y = sh + hs * 0.05 - Math.sin(u * Math.PI * 0.5) * hs * 0.02 + u * u * hs * 0.34;
+      const x = hs * (0.3 + 0.98 * u);
+      const y = sh + hs * 0.06 + u ** 1.7 * hs * 0.34;
       left.push([cx - x, y]);
       right.push([cx + x, y]);
     }
-    inkPath(g, left, { width: 2.2, wobble: 0.9, rng });
-    inkPath(g, right, { width: 2.2, wobble: 0.9, rng });
-    // lapels
-    const V = [[cx - hs * 0.36, sh + hs * 0.05], [cx + hs * 0.36, sh + hs * 0.05], [cx + hs * 0.08, sh + hs * 0.62], [cx - hs * 0.08, sh + hs * 0.62]];
-    hatchPoly(g, V, { angle: Math.PI / 2 + 0.2, spacing: 4, width: 1.2, rng, alpha: 0.85, inset: 1 });
-    inkPath(g, [V[0], V[3]], { width: 2, wobble: 0.8, rng });
-    inkPath(g, [V[1], V[2]], { width: 2, wobble: 0.8, rng });
-    inkPath(g, [V[0], [cx - hs * 0.46, sh + hs * 0.36]], { width: 1.6, wobble: 0.8, rng });
-    inkPath(g, [V[1], [cx + hs * 0.46, sh + hs * 0.36]], { width: 1.6, wobble: 0.8, rng });
-    for (const sx of [-1, 1]) for (const f of [0.62, 0.8]) inkLine(g, cx + sx * hs * f, sh + hs * 0.3, cx + sx * hs * (f + 0.06), sh + hs * 0.8, { width: 1.3, wobble: 0.8, rng, alpha: 0.85 });
+    inkPath(g, left, { width: 4.2, wobble: 1.4, rng });
+    inkPath(g, right, { width: 4.2, wobble: 1.4, rng });
+    // the robe: a plain white one, so the neck is two strokes closing to a V and nothing more
+    const nk = sh + hs * 0.06;
+    inkPath(g, [[cx - hs * 0.3, nk], [cx - hs * 0.02, nk + hs * 0.4]], { width: 3.6, wobble: 1.2, rng });
+    inkPath(g, [[cx + hs * 0.3, nk], [cx + hs * 0.02, nk + hs * 0.4]], { width: 3.6, wobble: 1.2, rng });
     // a paper gap so the head sits in front of the collar
-    fillPath(g, ellipsePts(cx, hy + hs * 0.05, hs * 1.02, hs * 0.76), stock);
+    fillPath(g, ellipsePts(cx, hy + hs * 0.06, hs * 1.0, hs * 0.84), stock);
   }
-  frogGlyph(g, cx, hy, hs, rng, { tone: true, width: 2.4 });
-  // a crown of stars and a moon over the head
-  starGlyph(g, cx - 65, cy - 172, 14, rng, { width: 2 });
-  moonGlyph(g, cx + 61, cy - 170, 11, rng, { width: 1.8, stock });
-  starGlyph(g, cx, cy - 191, 9, rng, { width: 1.8 });
-  starGlyph(g, cx - 32, cy - 187, 5, rng, { width: 1.4 });
-  starGlyph(g, cx + 31, cy - 188, 5, rng, { width: 1.4 });
-  // the name on a ribbon
-  const rb = { x: cx - 98, y: cy + 94, w: 196, h: 40 };
-  fillPath(g, roundedRectPts(rb.x, rb.y, rb.w, rb.h, 4), stock);
-  inkRounded(g, rb.x, rb.y, rb.w, rb.h, 4, { width: 2.2, wobble: 0.9, rng });
-  for (const sx of [-1, 1]) {
-    const ex = sx > 0 ? rb.x + rb.w : rb.x;
-    const tail = [
-      [ex, rb.y + 5],
-      [ex + sx * 22, rb.y + 2],
-      [ex + sx * 15, rb.y + rb.h / 2],
-      [ex + sx * 22, rb.y + rb.h - 2],
-      [ex, rb.y + rb.h - 5],
-    ];
-    fillPath(g, tail, stock);
-    hatchPoly(g, tail, { angle: Math.PI / 2, spacing: 3.6, width: 1.2, rng, alpha: 0.85, inset: 1 });
-    inkPath(g, tail, { width: 2, wobble: 0.7, rng });
-  }
-  letter(g, 'TAROT PEPE', cx, rb.y + rb.h / 2 + 1, { size: 25, weight: 700, tracking: 0.14, jitter: 1, rng });
-  letter(g, '78 CARTES', cx, rb.y + rb.h + 26, { size: 14, weight: 600, tracking: 0.2, jitter: 0.8, rng });
-  for (const dx of [-28, 0, 28]) starGlyph(g, cx + dx, rb.y + rb.h + 55, 6, rng, { width: 1.6 });
+  frogGlyph(g, cx, hy, hs, rng, { width: 5, stock });
+  // a crown: a moon and stars over the head
+  moonGlyph(g, cx, cy - 240, 19, rng, { width: 3.4, stock });
+  starGlyph(g, cx - 76, cy - 222, 13, rng, { width: 3 });
+  starGlyph(g, cx + 76, cy - 222, 13, rng, { width: 3 });
+  // the name, between two rules
+  const ny = cy + 152;
+  inkLine(g, cx - 120, ny - 32, cx + 120, ny - 32, { width: 3.4, wobble: 1.2, rng, segments: 8 });
+  letter(g, 'TAROT PEPE', cx, ny + 2, { size: 38, weight: 700, tracking: 0.12, jitter: 1.5, rng });
+  inkLine(g, cx - 120, ny + 36, cx + 120, ny + 36, { width: 3.4, wobble: 1.2, rng, segments: 8 });
+  letter(g, '78 CARTES', cx, ny + 66, { size: 25, weight: 600, tracking: 0.28, jitter: 1.1, rng });
 
-  // 7. the printed frame: an inner rule on the field's edge, a milled band of ticks, a heavy
-  // outer rule a hair inside the cut
-  inkRounded(g, F - 2, F - 2, W - 2 * F + 4, H - 2 * F + 4, Math.max(4, R - F + 6), { width: 2, wobble: 0.9, rng });
-  {
-    const band = roundedRectPts(27, 27, W - 54, H - 54, R - 17, { step: 7 });
-    for (let k = 0; k < band.length; k++) {
-      const a = band[k], b = band[(k + 1) % band.length], c = band[(k - 1 + band.length) % band.length];
-      const dx = b[0] - c[0], dy = b[1] - c[1];
-      const l = Math.hypot(dx, dy) || 1;
-      const nx = -dy / l, ny = dx / l;
-      const len = k % 2 ? 3.2 : 5.2;
-      inkLine(g, a[0] - nx * len, a[1] - ny * len, a[0] + nx * len, a[1] + ny * len, { width: 1.6, wobble: 0.35, rng });
-    }
+  // 6. the two rules, and a star in the bare band at each corner
+  inkRounded(g, MID, MID, W - 2 * MID, H - 2 * MID, Math.max(6, R - MID + 10), { width: 4.2, wobble: 1.3, rng, step: 26 });
+  inkRounded(g, OUT, OUT, W - 2 * OUT, H - 2 * OUT, Math.max(6, R - OUT + 4), { width: 8.5, wobble: 1.9, rng, step: 30 });
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+    starGlyph(g, cx + sx * (W / 2 - 59), cy + sy * (H / 2 - 59), 15, rng, { width: 3.6 });
   }
-  inkRounded(g, 16, 16, W - 32, H - 32, R - 8, { width: 4.5, wobble: 1.3, rng });
 }
 
 // ---------- the front ----------
@@ -455,28 +424,28 @@ function cornerWear(g, W, H, rng, stock, amount) {
 
 // ---------- the deck's cut edge ----------
 
-// n stacked cards seen from the side: a hairline for each card, none exactly like its neighbour,
-// none quite parallel. u wraps around the deck's perimeter, so every line is a gentle wave that
-// meets itself at the seam.
-export function drawDeckSide(g, W, H, n, rng = mulberry32(31), { stock = STOCK } = {}) {
+// A stack of paper, drawn the way the folios draw one: NOT a line per card — seventy-eight
+// hairlines squeezed into sixty pixels of screen is a grey slab, which is exactly what the pen
+// never does. A few full-weight wobbly lines, well apart, with bare paper between them, and the
+// stack reads as cards. `lines` is how many the whole deck gets, whatever n is.
+export function drawDeckSide(g, W, H, n, rng = mulberry32(31), { stock = STOCK, lines = 7 } = {}) {
   g.fillStyle = stock;
   g.fillRect(0, 0, W, H);
-  const pitch = H / n;
-  for (let i = 0; i < n; i++) {
-    const y = (i + 0.5) * pitch + (rng() - 0.5) * pitch * 0.3;
-    const amp = (rng() - 0.5) * pitch * 0.5, ph = rng() * Math.PI * 2;
-    const heavy = rng() < 0.12;
+  const pitch = H / (lines + 1);
+  for (let i = 0; i < lines; i++) {
+    const y = (i + 1) * pitch + (rng() - 0.5) * pitch * 0.42;
+    const amp = (0.1 + rng() * 0.22) * pitch, ph = rng() * Math.PI * 2;
     const pts = [];
     for (let k = 0; k <= 40; k++) {
       const x = (W * k) / 40;
       pts.push([x, y + amp * Math.sin((2 * Math.PI * x) / W + ph)]);
     }
-    inkPath(g, pts, { width: heavy ? 2.2 : 1.1 + rng() * 0.6, wobble: 0.35, rng, alpha: heavy ? 0.95 : 0.55 + rng() * 0.35 });
+    inkPath(g, pts, { width: (rng() < 0.3 ? 0.65 : 1) * pitch * 0.22, wobble: pitch * 0.05, rng });
   }
-  // a few short darker dashes where cards sit proud of the stack
-  for (let k = 0; k < 10; k++) {
-    const y = rng() * H, x = rng() * W * 0.9;
-    inkLine(g, x, y, x + 10 + rng() * 22, y, { width: 1.8, wobble: 0.3, rng, alpha: 0.9 });
+  // two or three cards sitting proud: a short heavy dash where a corner sticks out of the stack
+  for (let k = 0; k < 3; k++) {
+    const y = pitch * 0.5 + rng() * (H - pitch), x = rng() * W * 0.8;
+    inkLine(g, x, y, x + W * (0.06 + rng() * 0.1), y + (rng() - 0.5) * pitch * 0.2, { width: pitch * 0.2, wobble: 1, rng });
   }
 }
 
