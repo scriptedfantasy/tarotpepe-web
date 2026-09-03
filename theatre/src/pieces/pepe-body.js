@@ -79,7 +79,7 @@ function latheSurface(profile, zScale = 1) {
 
 // A fold: a long low tent with a sharp ridge, fading out at both ends. pts/nrm: the path on the
 // cloth and the cloth's outward normal there.
-function tentStrip(pts, nrm, { halfW = 0.0045, height = 0.002, sink = 0.0006 } = {}) {
+function tentStrip(pts, nrm, { halfW = 0.0055, height = 0.003, sink = 0.0008 } = {}) {
   const n = pts.length;
   const pos = [], idx = [];
   const T = new THREE.Vector3(), B = new THREE.Vector3();
@@ -143,51 +143,58 @@ function phiToward(mesh, dir) {
 export function buildHand(side, skin) {
   const h = new THREE.Group();
   h.name = side < 0 ? 'handL' : 'handR';
+  const mirror = side < 0 ? 1 : -1;
+  // the palm: a flat pad whose far end lifts toward the visitor, so the open palm is seen
+  const TILT = -0.4; // rotation about x: the far end rises
   const palm = flag(new THREE.Mesh(new THREE.SphereGeometry(1, 24, 14), skin));
-  palm.scale.set(0.047, 0.011, 0.06);
-  palm.position.set(0, 0, 0.06);
+  palm.scale.set(0.05, 0.011, 0.056);
+  palm.rotation.x = TILT;
+  palm.position.set(0, 0.014, 0.052);
   h.add(palm);
   const heel = flag(new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), skin));
-  heel.scale.set(0.031, 0.011, 0.04);
-  heel.position.set(0, 0, 0.018);
+  heel.scale.set(0.034, 0.012, 0.036);
+  heel.rotation.x = TILT * 0.5;
+  heel.position.set(0, 0.006, 0.016);
   h.add(heel);
+  // the far edge of the palm, where the fingers start
+  const edgeY = 0.014 + 0.056 * Math.sin(-TILT), edgeZ = 0.052 + 0.056 * Math.cos(TILT) - 0.008;
+  const RISE = 0.36; // radians above the palm plane the fingers rise: resting open, not raised
   const fingers = [
-    { x: -0.036, len: 0.084, ang: -0.64, up: 0.2 },
-    { x: -0.013, len: 0.1, ang: -0.22, up: 0.16 },
-    { x: 0.012, len: 0.102, ang: 0.18, up: 0.16 },
-    { x: 0.034, len: 0.088, ang: 0.6, up: 0.2 },
+    { x: -0.04, len: 0.088, ang: -0.62 },
+    { x: -0.015, len: 0.104, ang: -0.22 },
+    { x: 0.012, len: 0.106, ang: 0.17 },
+    { x: 0.037, len: 0.092, ang: 0.56 },
   ];
-  const mirror = side < 0 ? 1 : -1;
   for (const f of fingers) {
-    const base = new THREE.Vector3(f.x * mirror, 0.001, 0.104);
-    const dir = new THREE.Vector3(Math.sin(f.ang) * mirror, f.up, Math.cos(f.ang)).normalize();
+    const base = new THREE.Vector3(f.x * mirror, edgeY - 0.004 + Math.abs(f.x) * 0.1, edgeZ - Math.abs(f.x) * 0.25);
+    const dir = new THREE.Vector3(Math.sin(f.ang) * Math.cos(RISE) * mirror, Math.sin(RISE), Math.cos(f.ang) * Math.cos(RISE)).normalize();
     const mid = base.clone().addScaledVector(dir, f.len * 0.55);
-    const dir2 = dir.clone().add(new THREE.Vector3(0, 0.3, 0)).normalize(); // the knuckle bends toward the palm
+    const dir2 = dir.clone().add(new THREE.Vector3(0, 0.22, 0.05)).normalize(); // the last joint curls up a little more
     const tip = mid.clone().addScaledVector(dir2, f.len * 0.45);
-    const prox = capsuleBetween(base, mid, 0.0068, skin, { taper: 0.92, radial: 12 });
+    const prox = capsuleBetween(base, mid, 0.0086, skin, { taper: 0.9, radial: 12 });
     prox.name = 'finger';
     h.add(prox);
-    const dist = capsuleBetween(mid, tip, 0.0062, skin, { taper: 0.72, radial: 12 });
+    const dist = capsuleBetween(mid, tip, 0.0077, skin, { taper: 0.8, radial: 12 });
     dist.name = 'fingertip';
     h.add(dist);
-    const k = flag(new THREE.Mesh(new THREE.SphereGeometry(0.0078, 10, 8), skin));
-    k.position.copy(base).addScaledVector(dir, 0.002);
+    const k = flag(new THREE.Mesh(new THREE.SphereGeometry(0.0095, 10, 8), skin));
+    k.position.copy(base).addScaledVector(dir, 0.003);
     h.add(k);
-    const k2 = flag(new THREE.Mesh(new THREE.SphereGeometry(0.0068, 10, 8), skin));
+    const k2 = flag(new THREE.Mesh(new THREE.SphereGeometry(0.0084, 10, 8), skin));
     k2.position.copy(mid);
     h.add(k2);
   }
-  // the thumb, on the inner side of the palm, well out to the side
-  const tb = new THREE.Vector3(side * 0.04, 0.002, 0.048);
-  const tdir = new THREE.Vector3(side * 0.88, 0.26, 0.4).normalize();
-  const tmid = tb.clone().addScaledVector(tdir, 0.036);
-  const tdir2 = tdir.clone().add(new THREE.Vector3(0, 0.25, 0.1)).normalize();
-  const thumb = capsuleBetween(tb, tmid, 0.0078, skin, { taper: 0.9, radial: 12 });
+  // the thumb, on the outer side of the palm, out to the side and up
+  const tb = new THREE.Vector3(side * 0.042, 0.02, 0.05);
+  const tdir = new THREE.Vector3(side * 0.82, 0.42, 0.38).normalize();
+  const tmid = tb.clone().addScaledVector(tdir, 0.038);
+  const tdir2 = tdir.clone().add(new THREE.Vector3(0, 0.3, 0.2)).normalize();
+  const thumb = capsuleBetween(tb, tmid, 0.0092, skin, { taper: 0.9, radial: 12 });
   thumb.name = 'thumb';
   h.add(thumb);
-  const thumbTip = capsuleBetween(tmid, tmid.clone().addScaledVector(tdir2, 0.034), 0.007, skin, { taper: 0.75, radial: 12 });
+  const thumbTip = capsuleBetween(tmid, tmid.clone().addScaledVector(tdir2, 0.036), 0.0082, skin, { taper: 0.78, radial: 12 });
   h.add(thumbTip);
-  const tk = flag(new THREE.Mesh(new THREE.SphereGeometry(0.0074, 10, 8), skin));
+  const tk = flag(new THREE.Mesh(new THREE.SphereGeometry(0.0078, 10, 8), skin));
   tk.position.copy(tmid);
   h.add(tk);
   return h;
@@ -302,10 +309,10 @@ export function buildBody(ctx, mats, { headY, shoulderY = 0.96 }) {
     [0.152, shoulderY - 0.1],
     [0.16, shoulderY - 0.03],
     [0.155, shoulderY + 0.01],
-    [0.125, shoulderY + 0.04],
-    [0.095, shoulderY + 0.06],
-    [0.078, shoulderY + 0.072],
-    [0.0, shoulderY + 0.072],
+    [0.13, shoulderY + 0.045],
+    [0.108, shoulderY + 0.068],
+    [0.092, shoulderY + 0.084],
+    [0.0, shoulderY + 0.084],
   ];
   const ZS = 0.68;
   const torsoGeo = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 56);
@@ -327,14 +334,15 @@ export function buildBody(ctx, mats, { headY, shoulderY = 0.96 }) {
   g.add(torso);
   parts.torso = torso;
   // neckline: a rolled band
-  const collar = flag(new THREE.Mesh(new THREE.TorusGeometry(0.082, 0.011, 10, 40), collarMat ?? robe));
+  const collar = flag(new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.011, 10, 40), collarMat ?? robe));
   collar.rotation.x = Math.PI / 2;
-  collar.position.set(0, shoulderY + 0.066, 0.0);
+  collar.position.set(0, shoulderY + 0.08, 0.0);
   collar.scale.set(1, 0.76, 1);
   g.add(collar);
   // a short green neck between the collar and the jaw
-  const neck = flag(new THREE.Mesh(new THREE.CylinderGeometry(0.056, 0.064, 0.11, 20), skin));
-  neck.position.set(0, shoulderY + 0.105, 0.0);
+  const neck = flag(new THREE.Mesh(new THREE.CylinderGeometry(0.074, 0.086, 0.1, 22), skin));
+  neck.scale.z = 0.85;
+  neck.position.set(0, shoulderY + 0.12, 0.0);
   g.add(neck);
   parts.neck = neck;
 
@@ -386,7 +394,9 @@ export function buildBody(ctx, mats, { headY, shoulderY = 0.96 }) {
     const pOut = phiToward(upper, new THREE.Vector3(side * 0.7, 0.35, 0.6));
     const upFolds = [
       foldOnLathe(upSurf, [[pFront, upLen / 2 - 0.04], [pFront + 0.15, 0], [pFront + 0.05, -upLen / 2 + 0.03]], 16),
-      foldOnLathe(upSurf, [[pOut, upLen / 2 - 0.06], [pOut - 0.1, -upLen / 2 + 0.05]], 12, { height: 0.0018 }),
+      foldOnLathe(upSurf, [[pFront + 0.55, upLen / 2 - 0.02], [pFront + 0.62, -0.01], [pFront + 0.5, -upLen / 2 + 0.06]], 16, { height: 0.0024 }),
+      foldOnLathe(upSurf, [[pOut, upLen / 2 - 0.06], [pOut - 0.1, -upLen / 2 + 0.05]], 12, { height: 0.0024 }),
+      foldOnLathe(upSurf, [[pFront - 0.5, upLen / 2 - 0.05], [pFront - 0.42, -upLen / 2 + 0.09]], 12, { height: 0.0022 }),
     ];
     upper.geometry = withFolds(upper.geometry, upFolds);
     const loSurf = latheSurface(taperedProfile(0.046, 0.054, loLen));
@@ -399,7 +409,8 @@ export function buildBody(ctx, mats, { headY, shoulderY = 0.96 }) {
       foldOnLathe(loSurf, [[qTop - 0.7, loLen / 2 - 0.036], [qTop + 0.1, loLen / 2 - 0.028], [qTop + 0.75, loLen / 2 - 0.04]], 12, { height: 0.0018 }),
       // long lines from the elbow toward the cuff
       foldOnLathe(loSurf, [[qOut, loLen / 2 - 0.05], [qOut + 0.2, 0], [qOut + 0.1, -loLen / 2 + 0.05]], 16),
-      foldOnLathe(loSurf, [[qIn, loLen / 2 - 0.07], [qIn - 0.15, -loLen / 2 + 0.06]], 14, { height: 0.0018 }),
+      foldOnLathe(loSurf, [[qIn, loLen / 2 - 0.07], [qIn - 0.15, -loLen / 2 + 0.06]], 14, { height: 0.0024 }),
+      foldOnLathe(loSurf, [[qTop + 0.35, loLen / 2 - 0.06], [qTop + 0.45, -0.01], [qTop + 0.3, -loLen / 2 + 0.05]], 14, { height: 0.0024 }),
       // gathers at the cuff
       foldOnLathe(loSurf, [[qTop - 0.55, -loLen / 2 + 0.003], [qTop - 0.45, -loLen / 2 + 0.04]], 6, { height: 0.0018 }),
       foldOnLathe(loSurf, [[qTop + 0.05, -loLen / 2 + 0.003], [qTop + 0.1, -loLen / 2 + 0.046]], 6, { height: 0.0018 }),
@@ -411,7 +422,7 @@ export function buildBody(ctx, mats, { headY, shoulderY = 0.96 }) {
     // outward and a little down, the thumb up
     const wq = wrist.getWorldQuaternion(new THREE.Quaternion());
     const want = new THREE.Object3D();
-    orient(want, new THREE.Vector3(side * 0.8, -0.42, 0.42), new THREE.Vector3(side * 0.12, 0.42, 0.9));
+    orient(want, new THREE.Vector3(side * 0.3, 0.04, 1), UP);
     hand.quaternion.copy(wq.invert().multiply(want.quaternion));
     arms[side < 0 ? 'L' : 'R'] = { shoulder, elbow, wrist, hand };
   }

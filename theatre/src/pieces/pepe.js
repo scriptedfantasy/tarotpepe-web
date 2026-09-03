@@ -19,7 +19,7 @@ export const meta = {
 };
 
 export const SKIN = '#5dbb63';
-export const LIPS = '#c9342e';
+export const LIPS = '#d24b3e';
 
 export async function build(ctx) {
   const { pos, headY } = ctx.layout.pepe;
@@ -32,7 +32,7 @@ export async function build(ctx) {
     lips: inkMaterial({ color: LIPS, colorful: true, hatch: 0.3 }),
     ink: inkMaterial({ color: INK, colorful: true, hatch: 0, roughness: 1 }),
     white: inkMaterial({ color: '#faf8f3', colorful: false, hatch: 0.1 }),
-    robe: inkMaterial({ color: PAPER, colorful: false, hatch: 0.6 }),
+    robe: inkMaterial({ color: PAPER, colorful: false, hatch: 0.64 }),
     wood: inkMaterial({ color: PAPER, colorful: false, hatch: 0.6, lineWeight: 1.1 }),
     cushion: inkMaterial({ color: PAPER, colorful: false, hatch: 0.4 }),
     collar: inkMaterial({ color: PAPER, colorful: false, hatch: 0.12 }),

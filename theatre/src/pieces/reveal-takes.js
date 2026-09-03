@@ -45,7 +45,10 @@ export function compose(tracks) {
 // Four drawings of flight with the apex held one frame, a landing a millimetre proud, a settle.
 // The card is flicked: it spins a little in the air, banks into its travel (leading edge up),
 // lands a touch over-spun and squares itself as it settles.
-export function dealTrack(mesh, from, to, { cues = {}, faceUp = false } = {}) {
+// Options: spin — the over-spin of the flick in radians (default: more on a long throw); apex — the
+// height of the flight (a card drawn from the fan to its slot is carried lower than one flicked
+// from the deck); bank — how far it banks into its travel.
+export function dealTrack(mesh, from, to, { cues = {}, faceUp = false, spin: spinAmt = null, apex = 0.07, bank = 0.17 } = {}) {
   const d = to.p.clone().sub(from.p);
   d.y = 0;
   const dist = d.length();
@@ -62,15 +65,18 @@ export function dealTrack(mesh, from, to, { cues = {}, faceUp = false } = {}) {
     mesh.quaternion.copy(_q2.multiply(_q));
     cue?.();
   };
-  const spin = to.ry + (dist > 0.4 ? 0.42 : 0.26) * (u.x < 0 ? 1 : -1); // the flick, more on a long throw
+  const dir = u.x < 0 ? 1 : -1;
+  const over = spinAmt ?? (dist > 0.4 ? 0.42 : 0.26); // the flick, more on a long throw
+  const spin = to.ry + over * dir;
   const midRy = lerp(from.ry, spin, 0.55);
+  const k = apex / 0.07;
   return [
     at(0, 0, 0, from.ry), // on the deck
-    at(0.05, 0.016, -0.12, from.ry + 0.04, cues.lift), // pinched: the hand's edge comes up first
-    at(0.4, 0.07, 0.17, midRy), // apex, banked into the travel
-    at(0.4, 0.07, 0.17, midRy), // the apex held one frame
-    at(0.82, 0.028, 0.07, spin),
-    at(1, 0.001, 0, to.ry + 0.05 * (u.x < 0 ? 1 : -1), cues.land), // lands a millimetre proud, over-spun
+    at(0.05, 0.016, -0.12 * k, from.ry + 0.04, cues.lift), // pinched: the hand's edge comes up first
+    at(0.4, apex, bank, midRy), // apex, banked into the travel
+    at(0.4, apex, bank, midRy), // the apex held one frame
+    at(0.82, 0.4 * apex, 0.4 * bank, spin),
+    at(1, 0.001, 0, to.ry + Math.min(0.05, over * 0.2) * dir, cues.land), // lands a millimetre proud, over-spun
     at(1, 0, 0, to.ry), // settles
   ];
 }
