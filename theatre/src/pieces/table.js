@@ -1,13 +1,15 @@
 // PIECE: table — the reading table: a round café table on a turned pedestal, dressed with a square
-// fringed cloth that hangs in real folds (its four points hang low at the diagonals), and the small
-// things that live on its far half: a wine glass, an ashtray with stubbed cigarettes, a candle stuck
-// in a bottle, a saucer with an espresso cup and a sugar cube, a folded newspaper, coins.
-// The near half stays clear for the three card slots and the deck (ctx.layout.spread / deck).
+// fringed café cloth (a woven check drawn stroke by stroke) laid corner-forward so a point hangs
+// towards the visitor and the hem is two lines dropping out of the frame; the still life in one
+// row across the middle band: a wine glass, an ashtray with stubbed cigarettes, a candle stuck in
+// a bottle, a saucer with an espresso cup and a sugar cube, a folded newspaper, coins, a pocket
+// watch, a folded letter, spectacles. The near half stays clear for the three card slots and the
+// deck (ctx.layout.spread / deck).
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
-import { surface, lathe, merge, smooth } from './table-geo.js';
-import { clothTopTexture, skirtTexture, woodTexture, wrapRepeat } from './table-textures.js';
-import { buildStillLife } from './table-objects.js';
+import { surface, lathe, merge, smooth, CLOTH_ROT } from './table-geo.js';
+import { clothTopTexture, skirtTexture, fringeTexture, woodTexture, wrapRepeat } from './table-textures.js';
+import { buildStillLife, PLACES } from './table-objects.js';
 
 export const meta = {
   name: 'table',
@@ -101,7 +103,11 @@ export async function build(ctx) {
     g.add(bm);
   }
 
-  // ---------- the cloth: a square, W half-width, laid on the round top ----------
+  // ---------- the cloth: a square, W half-width, laid corner-forward on the round top ----------
+  const cloth = new THREE.Group();
+  cloth.name = 'cloth';
+  cloth.rotation.y = CLOTH_ROT;
+  g.add(cloth);
   const W = 0.78; // half-width of the square cloth
   const S = 0.012; // radius of the bend over the table edge
   const rho = (th) => W / Math.max(Math.abs(Math.cos(th)), Math.abs(Math.sin(th)));
@@ -141,55 +147,52 @@ export async function build(ctx) {
   // the crease is a true dihedral.
   const skirtGeo = surface((u, v) => skirtPoint(u * Math.PI * 2, v), 720, 36).toNonIndexed();
   skirtGeo.computeVertexNormals();
-  const skirtMat = inkMaterial({ map: skirtTexture(W, R - S), hatch: 0.55, side: THREE.DoubleSide });
+  const skirtMat = inkMaterial({ map: wrapRepeat(skirtTexture(W, R - S)), hatch: 0.45, side: THREE.DoubleSide });
   const skirt = new THREE.Mesh(skirtGeo, skirtMat);
   skirt.castShadow = true;
   skirt.receiveShadow = true;
-  g.add(skirt);
+  cloth.add(skirt);
 
-  // the cloth on the top: a disc that meets the skirt at the bend
-  const clothTop = new THREE.Mesh(new THREE.CircleGeometry(R - S + 0.0005, 128), inkMaterial({ map: clothTopTexture(R - S), hatch: 0.3 }));
+  // the cloth on the top: a disc that meets the skirt at the bend. Its check is the drawing of
+  // the top; the ink pass adds tone (hatch 0.6: strokes in the shadow of the hands and the things).
+  const marks = {
+    rings: [
+      [...PLACES.wineGlass, 0.034],
+      [...PLACES.tumbler, 0.03],
+      [PLACES.tumbler[0] - 0.08, PLACES.tumbler[1] - 0.12, 0.031],
+    ],
+    crumbs: [[PLACES.plate[0] + 0.1, PLACES.plate[1] - 0.06]],
+    burns: [[PLACES.ashtray[0] + 0.1, PLACES.ashtray[1] - 0.05]],
+  };
+  const clothTop = new THREE.Mesh(new THREE.CircleGeometry(R - S + 0.0005, 128), inkMaterial({ map: clothTopTexture(R - S, marks), hatch: 0.6 }));
   clothTop.rotation.x = -Math.PI / 2;
   clothTop.position.y = top + 0.0002;
   clothTop.receiveShadow = true;
-  g.add(clothTop);
+  cloth.add(clothTop);
 
-  // ---------- fringe: hundreds of little strands hanging from the hem ----------
+  // ---------- fringe: a band below the hem where only the pen's ticks exist (alpha-tested) ----------
   {
-    const N = 420;
-    const parts = [];
-    const tmp = new THREE.Object3D();
-    let seed = 7;
-    const rnd = () => {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return seed / 4294967296;
-    };
-    for (let i = 0; i < N; i++) {
-      const th = (i / N) * Math.PI * 2 + (rnd() - 0.5) * 0.004;
-      const p = skirtPoint(th, 1);
-      const len = 0.03 + rnd() * 0.012;
-      const geo = new THREE.BoxGeometry(0.0035, len, 0.0035);
-      tmp.position.set(p[0] + Math.sin(th) * 0.002, p[1] - len / 2 + 0.003, p[2] + Math.cos(th) * 0.002);
-      tmp.rotation.set((rnd() - 0.5) * 0.25, th, (rnd() - 0.5) * 0.25);
-      tmp.updateMatrix();
-      geo.applyMatrix4(tmp.matrix);
-      parts.push(geo);
-      // a knot at the top of every third strand
-      if (i % 3 === 0) {
-        const k = new THREE.SphereGeometry(0.003, 6, 5);
-        tmp.rotation.set(0, 0, 0);
-        tmp.position.set(p[0] + Math.sin(th) * 0.002, p[1] + 0.001, p[2] + Math.cos(th) * 0.002);
-        tmp.updateMatrix();
-        k.applyMatrix4(tmp.matrix);
-        parts.push(k);
-      }
-    }
-    const fringe = new THREE.Mesh(merge(parts), inkMaterial({ hatch: 0.6, lineWeight: 0.7 }));
-    fringe.castShadow = true;
-    g.add(fringe);
+    const FR = 0.04; // strand length
+    const REP = 46; // texture repeats around (≈ 370 strands)
+    const fringeGeo = surface(
+      (u, v) => {
+        const th = u * Math.PI * 2;
+        const p = skirtPoint(th, 1);
+        const rr = Math.hypot(p[0], p[2]) + 0.002 + v * 0.004;
+        return [Math.sin(th) * rr, p[1] + 0.004 - v * FR, Math.cos(th) * rr, u * REP, 1 - v];
+      },
+      720,
+      2,
+    );
+    const fringeMat = inkMaterial({ map: fringeTexture(), hatch: 0, lineWeight: 0.5, side: THREE.DoubleSide, transparent: true });
+    fringeMat.alphaTest = 0.5;
+    const fringe = new THREE.Mesh(fringeGeo, fringeMat);
+    fringe.castShadow = false;
+    fringe.receiveShadow = true;
+    cloth.add(fringe);
   }
 
-  // ---------- the still life on the far half ----------
+  // ---------- the still life across the middle band ----------
   const objects = buildStillLife(ctx, top + 0.0006);
   g.add(objects);
 

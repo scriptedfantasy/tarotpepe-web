@@ -1,18 +1,23 @@
 // pepe-head.js — the supplied head (public/pepe/head-lowpoly.glb), mounted and dressed to match the
-// meditation drawing: flat green skin (no photo texture), the grin closed behind a wide lens of red
-// lips with an ink line between them, the wild eyes replaced by paper-white eyeballs under heavy
-// green half-lids, the pupils looking a hair to the side. The skull is widened a little: Pepe's
-// head in the drawing is a squashed bun, wider than it is tall.
+// meditation drawing: flat green skin (no photo texture); the model's grin buried under a smooth
+// skin shell merged into the skull so the ink pass finds no line there; a small closed mouth low
+// on the muzzle — two red lips, the lower one fuller, one thin parting line between them; the
+// wild eyes replaced by paper-white balls that rise above the crown as two domes, each under a
+// heavy green half-lid whose lower edge is the one thick curved line of the face, with a small
+// pupil tucked just under it. The head is a squashed bun, wider than tall, tilted a little toward
+// the visitor so the muzzle reads as a snout.
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeVertices, mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { bakedJSON } from '../core/bake.js';
 
-export const HEAD_H = 0.36; // metres, crown to jaw
-export const WIDEN = 1.22; // x-stretch of the whole face, drawing proportion
+export const HEAD_H = 0.33; // metres, crown to jaw
+export const WIDEN = 1.18; // x-stretch of the whole face, drawing proportion
+export const TILT = 8; // degrees the face dips toward the visitor
 
 const clamp = THREE.MathUtils.clamp;
+const rad = THREE.MathUtils.degToRad;
 
 // Load the head GLB with its photo textures stripped out of the JSON before parsing: we paint the
 // skin flat, so decoding two 4096² PNGs would only cost seconds of build time for nothing.
@@ -61,16 +66,19 @@ function flag(mesh) {
   return mesh;
 }
 
-// The mouth. A lens of lips that hugs the real skull: sample points on a muzzle ellipsoid, cast a
-// ray in along its normal to find the skin, bridge across the open grin, then puff the lips out
-// from that surface. Rows near the lens edge tuck under the skin so nothing floats.
+// The muzzle. Sample points on a muzzle ellipsoid, cast a ray in along its normal to find the real
+// skin, bridge across the model's grin; that skin-offset field carries (a) a smooth green shell
+// that buries the grin (merged into the skull mesh, so no object boundary is drawn around it) and
+// (b) the small red mouth sitting on the shell: lower lip, upper lip, and the parting line.
 async function buildMouth({ skull, face, lipsMat, inkMat }) {
-  const A = 0.19, B = 0.14, C = 0.182, cy = -0.05, cz = -0.002; // muzzle ellipsoid (face-local, pre-widen)
-  const yc0 = -0.094, smile = 0.046, H = 0.046, alphaMax = THREE.MathUtils.degToRad(70);
+  const K = HEAD_H / 0.36;
+  const A = 0.19 * K, B = 0.14 * K, C = 0.182 * K, cy = -0.05 * K, cz = -0.002; // muzzle ellipsoid (face-local, pre-widen)
+  // the sheet: u runs around the muzzle (±70°), v up it; y = yc0 + smile·u² + v·h(u)
+  const yc0 = -0.086, smile = 0.036, H = 0.062, alphaMax = rad(70);
+  const hOf = (u) => H * Math.sqrt(Math.max(0, 1 - u * u)) + 0.006;
   const base = (u, v) => {
     const alpha = u * alphaMax;
-    const h = H * Math.pow(Math.max(0, 1 - u * u), 0.5) + 0.006;
-    const y = yc0 + smile * u * u + v * h;
+    const y = yc0 + smile * u * u + v * hOf(u);
     const yy = clamp((y - cy) / B, -0.985, 0.985);
     const rho = Math.sqrt(1 - yy * yy);
     const P = new THREE.Vector3(A * rho * Math.sin(alpha), y, cz + C * rho * Math.cos(alpha));
@@ -78,9 +86,10 @@ async function buildMouth({ skull, face, lipsMat, inkMat }) {
     return { P, N };
   };
 
-  // skin-offset field, raycast against the skull in pre-widen face space
-  const savedScale = face.scale.clone();
+  // skin-offset field, raycast against the skull in pre-widen, untilted face space
+  const savedScale = face.scale.clone(), savedRot = face.rotation.clone();
   face.scale.set(1, 1, 1);
+  face.rotation.set(0, 0, 0);
   face.updateMatrixWorld(true);
   const ray = new THREE.Raycaster();
   ray.near = 0;
@@ -90,8 +99,8 @@ async function buildMouth({ skull, face, lipsMat, inkMat }) {
     const hits = ray.intersectObject(skull, false);
     return hits.length ? 0.12 - hits[0].distance : null;
   };
-  const NU = 44, NV = 11;
-  // 540 raycasts against the skull: seconds in the judging browser, so the field is baked
+  const NU = 48, NV = 12;
+  // ~640 raycasts against the skull: seconds in the judging browser, so the field is baked
   const D = await bakedJSON(
     'pepe-mouth-field',
     () => {
@@ -120,7 +129,9 @@ async function buildMouth({ skull, face, lipsMat, inkMat }) {
     },
     { deps: [buildMouth, HEAD_H, WIDEN] },
   );
+  const skullInv = skull.matrixWorld.clone().invert();
   face.scale.copy(savedScale);
+  face.rotation.copy(savedRot);
   face.updateMatrixWorld(true);
   const field = (u, v) => {
     const fi = ((u + 1) / 2) * NU, fj = ((v + 1) / 2) * NV;
@@ -128,18 +139,24 @@ async function buildMouth({ skull, face, lipsMat, inkMat }) {
     const tu = clamp(fi - i0, 0, 1), tv = clamp(fj - j0, 0, 1);
     return D[i0][j0] * (1 - tu) * (1 - tv) + D[i0 + 1][j0] * tu * (1 - tv) + D[i0][j0 + 1] * (1 - tu) * tv + D[i0 + 1][j0 + 1] * tu * tv;
   };
+  // the shell's height above the skull: a gentle puff, tucked under the skin at the sheet's edges
+  const shellOff = (u, v) => {
+    const edge = Math.max(0, Math.abs(v) - 0.6) / 0.4;
+    return 0.005 * (1 - v * v) * (0.3 + 0.7 * (1 - u * u)) - 0.004 * edge * edge + 0.0015;
+  };
 
-  const sheet = ({ vMin, vMax, puff, sink, lift, segsU = 64, segsV = 16, uMax = 1, hook = 0 }) => {
+  // a strip of the sheet between vLo(u) and vHi(u), lifted off the skin by off(u, t, v), t ∈ [-1,1] across
+  const sheet = ({ vLo, vHi, off, uMax = 1, segsU = 64, segsV = 16 }) => {
     const pos = [], idx = [];
     for (let i = 0; i <= segsU; i++) {
       const u = (-1 + (2 * i) / segsU) * uMax;
+      const lo = vLo(u), hi = vHi(u);
       for (let j = 0; j <= segsV; j++) {
-        const vv = -1 + (2 * j) / segsV;
-        const v = vMin + ((vv + 1) / 2) * (vMax - vMin) + hook * u * u * u * u;
+        const t = -1 + (2 * j) / segsV;
+        const v = lo + ((t + 1) / 2) * (hi - lo);
         const { P, N } = base(u, v);
-        const edge = Math.max(0, Math.abs(vv) - 0.7) / 0.3;
-        const off = field(u, v) + puff * (1 - vv * vv) * (0.22 + 0.78 * (1 - u * u)) - sink * edge * edge + lift;
-        pos.push(P.x + N.x * off, P.y + N.y * off, P.z + N.z * off);
+        const o = field(u, v) + off(u, t, v);
+        pos.push(P.x + N.x * o, P.y + N.y * o, P.z + N.z * o);
       }
     }
     for (let i = 0; i < segsU; i++) {
@@ -155,16 +172,32 @@ async function buildMouth({ skull, face, lipsMat, inkMat }) {
     return g;
   };
 
+  // (a) the shell over the whole grin, in the skull's own coordinates so it can be merged
+  const shell = sheet({ vLo: () => -1, vHi: () => 1, off: (u, t, v) => shellOff(u, v), uMax: 1, segsU: 72, segsV: 18 });
+  shell.applyMatrix4(skullInv);
+
+  // (b) the mouth: a band 60% of the head wide, low on the muzzle, corners a little up
+  const uL = 0.5, ym0 = -0.081, smileL = 0.05, HB = 0.0275;
+  const hb = (u) => {
+    const q = clamp(Math.abs(u) / uL, 0, 1);
+    return HB * Math.sqrt(Math.max(0, 1 - q ** 6)) * (1 - 0.25 * q * q);
+  };
+  const ym = (u) => ym0 + smileL * u * u;
+  const vOf = (u, y) => (y - yc0 - smile * u * u) / hOf(u);
+  const part = 0.28; // the parting sits above centre: the lower lip is the fuller one
+  const bulge = (u, amp) => amp * Math.pow(hb(u) / HB, 0.7);
+  const lipOff = (amp) => (u, t, v) => shellOff(u, v) + 0.0005 + bulge(u, amp) * Math.pow(Math.max(0, 1 - t * t), 0.55);
+  const lower = flag(new THREE.Mesh(sheet({ vLo: (u) => vOf(u, ym(u) - hb(u)), vHi: (u) => vOf(u, ym(u) + (part - 0.05) * hb(u)), off: lipOff(0.0095), uMax: uL, segsU: 56, segsV: 14 }), lipsMat));
+  lower.name = 'lips';
+  const upper = flag(new THREE.Mesh(sheet({ vLo: (u) => vOf(u, ym(u) + (part + 0.05) * hb(u)), vHi: (u) => vOf(u, ym(u) + hb(u)), off: lipOff(0.0065), uMax: uL, segsU: 56, segsV: 10 }), lipsMat));
+  upper.name = 'lipUpper';
+  const line = new THREE.Mesh(sheet({ vLo: (u) => vOf(u, ym(u) + (part - 0.025) * hb(u)), vHi: (u) => vOf(u, ym(u) + (part + 0.025) * hb(u)), off: (u, t, v) => shellOff(u, v) + 0.0012, uMax: uL * 0.97, segsU: 40, segsV: 2 }), inkMat);
+  line.name = 'mouthLine';
+
   const mouth = new THREE.Group();
   mouth.name = 'mouth';
-  const lips = flag(new THREE.Mesh(sheet({ vMin: -1, vMax: 1, puff: 0.012, sink: 0.014, lift: 0.0 }), lipsMat));
-  lips.name = 'lips';
-  mouth.add(lips);
-  // the line between the lips sits a little above centre (the lower lip is the fuller one)
-  const line = new THREE.Mesh(sheet({ vMin: 0.10, vMax: 0.34, puff: 0.012, sink: 0, lift: 0.0025, segsV: 4, uMax: 0.985, hook: 0.22 }), inkMat);
-  line.name = 'mouthLine';
-  mouth.add(line);
-  return { mouth, lips, line };
+  mouth.add(lower, upper, line);
+  return { shell, mouth, lips: lower, upper, line };
 }
 
 export async function buildHead(ctx, mats) {
@@ -211,8 +244,7 @@ export async function buildHead(ctx, mats) {
   // pass then draws its silhouette and real creases, not every polygon seam of the low-poly mesh
   try {
     const geo = skull.geometry.clone();
-    geo.deleteAttribute('uv');
-    geo.deleteAttribute('normal');
+    for (const k of Object.keys(geo.attributes)) if (k !== 'position') geo.deleteAttribute(k);
     const merged = mergeVertices(geo, 1e-4);
     merged.computeVertexNormals();
     skull.geometry = merged;
@@ -220,7 +252,8 @@ export async function buildHead(ctx, mats) {
     console.warn('[pepe] skull smoothing skipped', e);
   }
   // the skull: flat green, drawn by the ink pass. Keep both sides: the grin cavity is open-backed.
-  skull.material = inkMaterial({ color: skin.color.getStyle(), colorful: true, hatch: 0.35, side: THREE.DoubleSide });
+  const skinColor = skin.color.getStyle();
+  skull.material = inkMaterial({ color: skinColor, colorful: true, hatch: 0.35, side: THREE.DoubleSide });
   flag(skull);
   if (tongue) tongue.visible = false;
 
@@ -241,38 +274,38 @@ export async function buildHead(ctx, mats) {
     }
     eyesMesh.visible = false;
   } else {
-    eyeSpec.push({ c: new THREE.Vector3(-0.075, 0.05, 0.1), r: 0.068 }, { c: new THREE.Vector3(0.075, 0.05, 0.1), r: 0.068 });
+    eyeSpec.push({ c: new THREE.Vector3(-0.07, 0.045, 0.09), r: 0.062 }, { c: new THREE.Vector3(0.07, 0.045, 0.09), r: 0.062 });
   }
 
-  // eyes: paper-white balls, a black pupil dome, a heavy green lid with a rolled rim
-  const gaze = new THREE.Vector3(0.32, -0.30, 1).normalize();
-  eyeSpec.forEach(({ c, r }, i) => {
+  // eyes: two domes on the crown. A paper-white ball pushed up and forward out of the model's
+  // socket, a small black pupil sunk into it just under the lid line, a heavy green half-lid
+  // (a sphere cap, its lower edge the one thick line of the face; no rolled rim: the rim drew as
+  // a second bar). The lid's material asks the ink pass for a heavier pen.
+  const lidMat = inkMaterial({ color: skinColor, colorful: true, hatch: 0.35, lineWeight: 1.75 });
+  eyeSpec.forEach(({ c, r: r0 }, i) => {
     const side = i === 0 ? -1 : 1;
+    const r = r0 * 1.16;
     const eye = new THREE.Group();
     eye.name = 'eye' + (side < 0 ? 'L' : 'R');
-    eye.position.copy(c);
-    const ball = flag(new THREE.Mesh(new THREE.SphereGeometry(r * 1.02, 28, 20), white));
+    eye.position.copy(c).add(new THREE.Vector3(0, 0.03, 0.012));
+    const ball = flag(new THREE.Mesh(new THREE.SphereGeometry(r, 32, 22), white));
     eye.add(ball);
-    const pupil = flag(new THREE.Mesh(new THREE.SphereGeometry(r * 0.43, 20, 14), ink));
-    pupil.scale.set(0.92 / WIDEN, 1, 0.32);
-    pupil.position.copy(gaze).multiplyScalar(r * 1.0);
+    const gaze = new THREE.Vector3(-side * 0.1, -0.2, 0.97).normalize();
+    const pupil = flag(new THREE.Mesh(new THREE.SphereGeometry(r * 0.36, 20, 14), ink));
+    pupil.scale.set(0.82 / WIDEN, 1, 0.5);
+    pupil.position.copy(gaze).multiplyScalar(r * 0.9);
     pupil.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), gaze);
     eye.add(pupil);
     face.add(eye);
 
     const lid = new THREE.Group();
     lid.name = 'lid' + (side < 0 ? 'L' : 'R');
-    lid.position.copy(c);
-    const R = r * 1.075;
-    const theta = THREE.MathUtils.degToRad(95);
-    const cap = flag(new THREE.Mesh(new THREE.SphereGeometry(R, 30, 18, 0, Math.PI * 2, 0, theta), skin));
+    lid.position.copy(eye.position);
+    const R = r * 1.05;
+    const cap = flag(new THREE.Mesh(new THREE.SphereGeometry(R, 32, 18, 0, Math.PI * 2, 0, rad(66)), lidMat));
     lid.add(cap);
-    const rim = flag(new THREE.Mesh(new THREE.TorusGeometry(R * Math.sin(theta), 0.0042, 8, 40), skin));
-    rim.rotation.x = Math.PI / 2;
-    rim.position.y = R * Math.cos(theta);
-    lid.add(rim);
-    lid.rotation.z = side * THREE.MathUtils.degToRad(-7);
-    lid.rotation.x = THREE.MathUtils.degToRad(9);
+    lid.rotation.z = side * rad(-5);
+    lid.rotation.x = rad(14);
     face.add(lid);
 
     parts.eyes.push(eye);
@@ -281,11 +314,22 @@ export async function buildHead(ctx, mats) {
   });
 
   const m = await buildMouth({ skull, face, lipsMat: lips, inkMat: ink });
-
+  // bury the model's grin: the shell joins the skull mesh so no boundary is drawn around it
+  try {
+    const merged = mergeGeometries([skull.geometry, m.shell], false);
+    if (merged) skull.geometry = merged;
+    else console.warn('[pepe] muzzle shell not merged (attribute mismatch)');
+  } catch (e) {
+    console.warn('[pepe] muzzle shell merge failed', e);
+  }
   face.add(m.mouth);
   parts.mouth = m.mouth;
   parts.lips = m.lips;
+  parts.lipUpper = m.upper;
   parts.mouthLine = m.line;
+
+  // the snout: the whole face dips a little toward the visitor
+  face.rotation.x = rad(TILT);
 
   return parts;
 }

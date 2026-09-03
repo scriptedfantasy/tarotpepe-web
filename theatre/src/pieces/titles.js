@@ -4,11 +4,12 @@
 // stepped: a card cuts in, holds, cuts out; a title may type itself on the 12fps clock.
 // API: title(opts), chapter(n | key, name?), closing(), hide(), letterbox(on), setState(name).
 import { fit, starRule, border, frog, manicule, cardRow, marquee, marqueeSize, zigzag, bracket } from './titles-draw.js';
+import { vignette } from './titles-vignette.js';
 
 export const meta = {
   name: 'titles',
   judge: { shot: 'home', states: ['title', 'chapter', 'closing', 'hidden'], dom: true },
-  files: ['src/pieces/titles.js', 'src/pieces/titles-draw.js'],
+  files: ['src/pieces/titles.js', 'src/pieces/titles-draw.js', 'src/pieces/titles-vignette.js'],
 };
 
 const INK = '#1c1a17';
@@ -50,6 +51,7 @@ export async function build(ctx) {
     #titles h1.end { font-size: 18vh; letter-spacing: 0.14em; text-indent: 0.14em; margin: 1.6vh 0 2vh 0; }
     #titles h1 .ch.off { visibility: hidden; }
     #titles .sub { font-size: 2.4vh; letter-spacing: 0.36em; text-indent: 0.36em; font-weight: 500; }
+    #titles .card.title .sub { font-size: 2.9vh; letter-spacing: 0.3em; text-indent: 0.3em; font-weight: 700; }
     #titles .gloss { font-size: 2.1vh; letter-spacing: 0.14em; font-weight: 400; margin-top: 2.2vh; }
     #titles .gloss::before { content: '«\\00a0\\00a0'; }
     #titles .gloss::after { content: '\\00a0\\00a0»'; }
@@ -59,7 +61,7 @@ export async function build(ctx) {
     #titles .byline .who { font-weight: 700; letter-spacing: 0.3em; margin-left: 0.6em; }
     #titles .orn { display: block; margin-top: 3vh; }
     #titles .mark { display: flex; flex-direction: column; align-items: center; margin-top: 2.6vh; }
-    #titles .mark .label { font-size: 1.35vh; letter-spacing: 0.34em; text-indent: 0.34em; font-weight: 500; margin-top: 0.4vh; }
+    #titles .mark .label { font-size: 1.35vh; letter-spacing: 0.34em; text-indent: 0.34em; font-weight: 500; margin-top: 0.9vh; }
     #titles canvas.marquee { display: block; margin: 0.6vh 0 0.2vh 0; }
     #titles canvas.bracket { display: block; margin: 0 0 0.9vh 0; }
     #titles .corner { position: absolute; top: calc(${BAR * 100}% + 4.6vh); font-size: 1.55vh; letter-spacing: 0.28em; font-weight: 500; }
@@ -136,7 +138,8 @@ export async function build(ctx) {
     marquee: (g, w, h, d) => marquee(g, w, h, d.text, { capH: +d.cap, ink: d.ink, bulb: d.bulb, count: d.count != null ? +d.count : Infinity }),
     bracket: (g, w, h, d, fg) => bracket(g, w, h, { color: fg, seed: 13 }),
     rule: (g, w, h, d, fg) => starRule(g, w, h, { color: fg, seed: +(d.seed ?? 5), star: d.star !== '0' }),
-    frog: (g, w, h, d, fg) => frog(g, w, h, { color: fg === INK ? INK : INK, seed: 21 }),
+    frog: (g, w, h, d, fg) => frog(g, w, h, { color: INK, seed: 21 }),
+    vignette: (g, w, h, d, fg) => vignette(g, w, h, { color: INK, seed: 51 }),
     manicule: (g, w, h, d, fg) => manicule(g, w, h, { color: fg }),
     cards: (g, w, h, d, fg) => cardRow(g, w, h, +(d.current ?? 0), { color: fg }),
   };
@@ -146,10 +149,11 @@ export async function build(ctx) {
   const api = {
     CHAPTERS,
     title({ kicker = 'A reading, in miniature', title = 'Tarot Pepe', sub = 'in three cards', type = false, palette = 'mustard' } = {}) {
-      const pal = palette === 'oxblood' ? { bg: OXBLOOD, fg: MUSTARD } : { bg: MUSTARD, fg: INK };
+      const pal = palette === 'oxblood' ? { bg: OXBLOOD, fg: MUSTARD, bulb: OXBLOOD } : { bg: MUSTARD, fg: INK, bulb: '#f1e0a6' };
       const word = title.toUpperCase();
-      const capH = vh(15);
+      const capH = vh(13.5);
       const ms = marqueeSize(word, capH);
+      const vw = vh(70), vhh = Math.round((vw * 240) / 560);
       return show('title', {
         ...pal,
         corner: ['Série I &mdash; N° 1', 'Admission: one question'],
@@ -158,19 +162,19 @@ export async function build(ctx) {
         frame: (g, w, h) => {
           // the zig-zag spine: one bold band down the left edge, just inside the double rule
           const inset = Math.round(h * BAR) + Math.round(h * 0.03) + 7;
-          const bw = Math.round(w * 0.022);
+          const bw = Math.round(w * 0.03);
           const y0 = inset + 5, y1 = h - inset - 5;
-          const colors = palette === 'oxblood' ? [MUSTARD, STEEL, PAPER] : [OXBLOOD, STEEL, MUSTARD];
-          zigzag(g, inset + 5, y0, y1, bw, { colors, ground: INK, ink: INK, seed: 17 });
+          const [ground, colors] = palette === 'oxblood' ? [INK, [MUSTARD, STEEL]] : [OXBLOOD, [STEEL, PAPER]];
+          zigzag(g, inset + 5, y0, y1, bw, { colors, ground, ink: INK, seed: 17 });
         },
         html:
           `<canvas class="bracket" data-draw="bracket" data-w="${vh(34)}" data-h="${vh(2.2)}"></canvas>` +
           `<div class="kicker caps">${esc(kicker)}</div>` +
           rule(vh(30), 18, 5) +
-          `<canvas class="marquee" data-draw="marquee" data-w="${ms.w}" data-h="${ms.h}" data-cap="${capH}" data-text="${esc(word)}" data-ink="${pal.fg}" data-bulb="${pal.bg}"${type ? ' data-count="0"' : ''}></canvas>` +
+          `<canvas class="marquee" data-draw="marquee" data-w="${ms.w}" data-h="${ms.h}" data-cap="${capH}" data-text="${esc(word)}" data-ink="${pal.fg}" data-bulb="${pal.bulb}"${type ? ' data-count="0"' : ''}></canvas>` +
           rule(vh(30), 18, 6) +
           `<div class="sub caps">${esc(sub)}</div>` +
-          `<div class="mark"><canvas data-draw="frog" data-w="${vh(19)}" data-h="${vh(14)}"></canvas><div class="label caps">Proprietor</div></div>`,
+          `<div class="mark"><canvas data-draw="vignette" data-w="${vw}" data-h="${vhh}"></canvas><div class="label caps">Tarot Pepe, proprietor</div></div>`,
       });
     },
     chapter(n, name, { type = false } = {}) {

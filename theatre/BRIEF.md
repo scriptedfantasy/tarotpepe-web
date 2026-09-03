@@ -20,6 +20,27 @@ the cards piece designs the physical object around it (back, edges, deck, wear),
 The bar is "utterly perfect". A critic will put our frame next to a real frame from the film, blind,
 and say which is the better-crafted frame. We keep going until ours wins or ties.
 
+## Interactive, and Pepe really speaks (the user's rule)
+
+- **Tarot Pepe talks to the visitor, powered by an LLM.** His lines come from the `mind` piece, which calls
+  `POST /api/pepe` — a streaming proxy in `server/pepe.mjs` wired into the Vite dev server (Anthropic if
+  `ANTHROPIC_API_KEY` is set, else OpenRouter if `OPENROUTER_API_KEY`; keys live in `theatre/.env.local`,
+  gitignored, see `.env.example`). Without a key the scripted lines in `script.js` are used, so the show
+  never stops. The model is given the persona (deadpan, precise, formal, brief, funny without winking, no
+  mysticism, never an assistant), the beat (greeting · the question · reading position i of card X ·
+  follow-up · farewell), what the visitor said, and the scripted line for that card as a hint of his voice.
+  The mind yields SENTENCES; flow says them one at a time through `dialogue.say` (typed on twos, held, cut).
+- **Chat or voice.** The visitor answers by typing (`dialogue.ask`, a drawn input in the picture) or by voice
+  (a mic button: the browser's SpeechRecognition; when voice is on, Pepe is also spoken by speechSynthesis).
+  Chat is the default, voice a toggle; both must work in Chrome.
+- **The visitor chooses the cards.** After the shuffle Pepe fans the deck face down across the table and the
+  visitor picks three — click/tap a card in the fan, or say/type "the third from the left" — and each pick
+  slides to its slot before it is turned. `reveal` owns `fan()`, `pick(i)`, `awaitPick()` (raycast + a
+  2-frame hover lift); `flow` wires the choice to the conversation.
+- The `mind` piece is judged on a transcript: `?view=mind&state=transcript` runs a canned visit (a fixed
+  answer, three fixed cards) against the real endpoint and prints every line into a `#transcript` block on
+  the page; the critic reads it as a scene.
+
 ## The world's rules (do not break these)
 
 - **Ink on paper.** Everything is drawn: outlines with a hand's wobble, tone from hatching (vertical
@@ -78,13 +99,14 @@ Pieces and their judging views (`http://127.0.0.1:5173/?view=<piece>&state=<stat
 | titles | title + chapter + closing cards (DOM) | home | title, chapter, closing, hidden |
 | dialogue | the script (`script.js`) + how lines appear (DOM) | pepe | greeting, question, reading, farewell |
 | sound | procedural WebAudio | home | default |
-| flow | the whole evening, beat by beat | home | title, greeting, question, shuffle, dealt, reading, farewell |
+| mind | the LLM conversation: persona, beats, streaming client, script fallback; plus server/pepe.mjs | pepe | greeting, question, reading, transcript |
+| flow | the whole evening, interactive: ask → answer → shuffle → fan → the visitor picks three → turns + readings → follow-up → farewell | home | title, greeting, question, shuffle, fan, dealt, reading, farewell |
 
 Piece API contract: `export const meta`, `export async function build(ctx)` returning an object that may have
 `update(ctx)` (called every frame; check `ctx.clock.stepped` for 12fps work), `setState(name, ctx)` (show a
 judging state; must be deterministic), plus whatever the piece offers others. `ctx.pieces.<name>` holds
 earlier-built pieces (build order: lighting, room, props, table, cards, pepe, pepeAnim, reveal, camera, ink,
-titles, dialogue, sound, flow). If a build throws, main.js logs it and continues — but a broken piece
+titles, dialogue, sound, mind, flow). If a build throws, main.js logs it and continues — but a broken piece
 breaks the composite everyone is judged on, so **never leave the page with console errors**.
 
 ## Tools (run from the theatre directory; the dev server is already running on 127.0.0.1:5173)

@@ -32,11 +32,8 @@ const BAND = {
 const PROFILE = {
   skirt: [[0, 0.165, 0.026]],
   dado: [[0.905, 0.97, 0.036]],
-  rail: [[2.6, 2.64, 0.03]],
-  cornice: [
-    [2.98, 3.03, 0.028],
-    [3.03, 3.1, 0.085],
-  ],
+  rail: [[2.6, 2.625, 0.018]], // a small bead: one line in the drawing, not a band
+  cornice: [[2.98, 3.1, 0.07]], // one step: a line below, a line at the ceiling
 };
 
 export async function build(ctx) {
@@ -57,7 +54,7 @@ export async function build(ctx) {
   const M = {
     paper: mat('wallpaper', wallpaperTexture(), { hatch: 0.3 }),
     side: mat('sidewall', plainTexture({ seed: 77 }), { hatch: 0.34 }),
-    frieze: mat('frieze', friezeTexture({ y0: BAND.frieze[0], height: BAND.frieze[1] - BAND.frieze[0] }), { hatch: 0.25 }),
+    frieze: mat('frieze', friezeTexture({ y0: BAND.frieze[0], height: BAND.frieze[1] - BAND.frieze[0] }), { hatch: 0.15 }), // a printed border: the key, not rain-hatch over it
     wainscot: mat('wainscot', wainscotTexture(), { hatch: 0.4 }),
     floor: mat('floor', floorTexture(), { hatch: 0.35 }),
     trim: mat('trim', plainTexture({ seed: 72 }), { hatch: 0.5, lineWeight: 1.15 }),
@@ -133,7 +130,9 @@ export async function build(ctx) {
   const sideRun = (profile, side) => {
     for (const [y0, y1, d] of profile) {
       const x0 = side < 0 ? -hx : hx - d, x1 = side < 0 ? -hx + d : hx;
-      P.boxFrom(x0, x1, y0, y1, zb + d, zb + D + overrun, M.trim, { receive: true });
+      // runs into the back-wall moulding (same material, so the overlap is invisible and the
+      // corner closes without an end face showing)
+      P.boxFrom(x0, x1, y0, y1, zb, zb + D + overrun, M.trim, { receive: true });
     }
   };
   for (const key of ['skirt', 'dado', 'rail', 'cornice']) {
@@ -196,34 +195,33 @@ function buildWindow(P, M, w, zb, jit = Math.random) {
   P.boxFrom(x0, x1, y1 - f, y1, zf0, zf1, M.trim);
   P.boxFrom(x0, x1, y0, y0 + f, zf0, zf1, M.trim);
   const xm = (x0 + x1) / 2;
-  P.boxFrom(xm - 0.03, xm + 0.03, y0, y1, zf0 - 0.005, zf1 + 0.005, M.trim);
-  // leaves
+  // leaves: two casements meeting in the middle (no mullion — the film's windows are a pair of
+  // plain leaves whose meeting stiles make one double line)
   const zl0 = zf0 + 0.008, zl1 = zf1 - 0.008;
   const s = 0.042, rt = 0.05, rb = 0.075;
   const leaves = [
-    [x0 + f, xm - 0.03],
-    [xm + 0.03, x1 - f],
+    [x0 + f, xm - 0.004],
+    [xm + 0.004, x1 - f],
   ];
   for (const [lx0, lx1] of leaves) {
     P.boxFrom(lx0, lx0 + s, y0 + f, y1 - f, zl0, zl1, M.trim);
     P.boxFrom(lx1 - s, lx1, y0 + f, y1 - f, zl0, zl1, M.trim);
     P.boxFrom(lx0, lx1, y1 - f - rt, y1 - f, zl0, zl1, M.trim);
     P.boxFrom(lx0, lx1, y0 + f, y0 + f + rb, zl0, zl1, M.trim);
-    // transom bar a third of the way down, and a glazing bar splitting the lower light
+    // one transom bar a third of the way down; no glazing bars (the film's casements are two
+    // plain leaves with one bar each)
     const yt = y1 - f - (y1 - y0 - 2 * f) * 0.34;
     P.boxFrom(lx0, lx1, yt - 0.018, yt + 0.018, zl0, zl1, M.trim);
-    const xg = (lx0 + lx1) / 2;
-    P.boxFrom(xg - 0.011, xg + 0.011, y0 + f + rb, yt - 0.018, zl0 + 0.004, zl1 - 0.004, M.trim);
-    // glass, one pane behind the bars
+    // glass, one pane behind the bar
     P.plane(lx1 - lx0 - 2 * s, y1 - y0 - 2 * f - rt - rb, (lx0 + lx1) / 2, (y0 + f + rb + y1 - f - rt) / 2, (zl0 + zl1) / 2, M.glass);
   }
-  // espagnolette on the right leaf's meeting stile: a long rod, keepers, a lever hanging down
+  // espagnolette on the right leaf's meeting stile: two keepers and a lever hanging down (no long
+  // rod: at the wide shot it turned the meeting stiles into one black bar)
   {
     const [lx0] = leaves[1];
     const rx = lx0 + s / 2, rz = zl1 + 0.012;
     const ry0 = y0 + f + rb + 0.04, ry1 = y1 - f - rt - 0.04;
-    P.cylinder(0.007, 0.007, ry1 - ry0, rx, (ry0 + ry1) / 2, rz, M.metal, { segments: 10 });
-    for (const y of [ry0 + 0.02, (ry0 + ry1) / 2 + 0.16, ry1 - 0.02]) P.box(0.024, 0.03, 0.018, rx, y, rz - 0.003, M.metal);
+    for (const y of [ry0 + 0.02, ry1 - 0.02]) P.box(0.024, 0.03, 0.018, rx, y, rz - 0.003, M.metal);
     const ly = (y0 + y1) / 2 - 0.05;
     P.cylinder(0.014, 0.014, 0.03, rx, ly, rz + 0.01, M.metal, { rx: Math.PI / 2, segments: 10 });
     P.box(0.018, 0.13, 0.014, rx + 0.012, ly - 0.075, rz + 0.026, M.metal, { rz: -0.18, cast: true });
@@ -348,7 +346,8 @@ function buildDoor(P, M, d, zb) {
   // door stops
   P.boxFrom(x0 + lin, x0 + lin + 0.012, y0, top, zr + 0.035, zr + 0.06, M.trim);
   P.boxFrom(x1 - lin - 0.012, x1 - lin, y0, top, zr + 0.035, zr + 0.06, M.trim);
-  // the transom light: a fixed frame with two bars, three panes
+  // the transom light: a fixed frame around one pane (no glazing bars — the VOYANTE sign from the
+  // props piece hangs in this light and owns the space)
   {
     const tx0 = x0 + lin, tx1 = x1 - lin, ty0 = top + tb, ty1 = y1 - lin;
     const tz0 = zr + 0.03, tz1 = zr + 0.07, ff = 0.035;
@@ -356,10 +355,6 @@ function buildDoor(P, M, d, zb) {
     P.boxFrom(tx1 - ff, tx1, ty0, ty1, tz0, tz1, M.trim);
     P.boxFrom(tx0, tx1, ty1 - ff, ty1, tz0, tz1, M.trim);
     P.boxFrom(tx0, tx1, ty0, ty0 + ff, tz0, tz1, M.trim);
-    for (const k of [1, 2]) {
-      const bx = tx0 + ((tx1 - tx0) * k) / 3;
-      P.boxFrom(bx - 0.012, bx + 0.012, ty0 + ff, ty1 - ff, tz0 + 0.004, tz1 - 0.004, M.trim);
-    }
     P.plane(tx1 - tx0 - 2 * ff, ty1 - ty0 - 2 * ff, (tx0 + tx1) / 2, (ty0 + ty1) / 2, (tz0 + tz1) / 2, M.glass);
   }
   // architrave on the wall face, with plinth blocks at the foot and a cap over the head

@@ -420,85 +420,110 @@ export function zigzag(g, x, y0, y1, bw, { colors = ['#7a2e2a', '#697791', '#e0a
 // braces. Each glyph here is a hand-defined polygon (100 units = cap height, stem width `s`
 // varies letter to letter), filled with ink and re-stroked with a drifting pen; the bulbs walk
 // the skeleton of every stroke and turn its corners.
+// The dots sit on a lattice of pitch `g` (0.44 of the stem) in two rows either side of every
+// stroke's centre line; `e` is how far the first dot sits from a letter's edge and `j` is where a
+// bar's dots begin after a stem, so that every corner closes as a 2 x 2 block of dots.
+const DOT_PITCH = 0.44;
 const GLYPHS = {
-  T: (s) => ({
-    w: 78,
-    polys: [[[0, 0], [78, 0], [78, s], [39 + s / 2, s], [39 + s / 2, 100], [39 - s / 2, 100], [39 - s / 2, s], [0, s]]],
-    skel: [
-      { pts: [[s * 0.5, s / 2], [78 - s * 0.5, s / 2]] },
-      { pts: [[39, s / 2 + s * 0.62], [39, 100 - s / 2]] },
-    ],
-    post: 39,
-  }),
-  E: (s) => ({
-    w: 66,
-    polys: [[[0, 0], [66, 0], [66, s], [s, s], [s, 50 - s / 2], [58, 50 - s / 2], [58, 50 + s / 2], [s, 50 + s / 2], [s, 100 - s], [66, 100 - s], [66, 100], [0, 100]]],
-    skel: [
-      { pts: [[s / 2, s / 2], [s / 2, 100 - s / 2]] },
-      { pts: [[s / 2 + s * 0.62, s / 2], [66 - s / 2, s / 2]] },
-      { pts: [[s / 2 + s * 0.62, 50], [58 - s / 2, 50]] },
-      { pts: [[s / 2 + s * 0.62, 100 - s / 2], [66 - s / 2, 100 - s / 2]] },
-    ],
-    post: s / 2,
-  }),
-  P: (s) => ({
-    w: 72,
-    polys: [
-      roundVerts([[0, 0], [72, 0, 24], [72, 60, 24], [s, 60], [s, 100], [0, 100]]),
-      roundVerts([[s, s], [72 - s, s, 9], [72 - s, 60 - s, 9], [s, 60 - s]]),
-    ],
-    skel: [
-      { pts: [[s / 2, s / 2], [s / 2, 100 - s / 2]] },
-      { pts: roundVerts([[s / 2 + s * 0.62, s / 2], [72 - s / 2, s / 2, 24 - s / 2], [72 - s / 2, 60 - s / 2, 24 - s / 2], [s / 2 + s * 0.62, 60 - s / 2]], false) },
-    ],
-    post: s / 2,
-  }),
-  R: (s) => ({
-    w: 76,
-    polys: [
-      roundVerts([[0, 0], [76, 0, 24], [76, 58, 14], [56, 58], [78, 100], [57, 100], [38, 58], [s, 58], [s, 100], [0, 100]]),
-      roundVerts([[s, s], [76 - s, s, 9], [76 - s, 58 - s, 9], [s, 58 - s]]),
-    ],
-    skel: [
-      { pts: [[s / 2, s / 2], [s / 2, 100 - s / 2]] },
-      { pts: roundVerts([[s / 2 + s * 0.62, s / 2], [76 - s / 2, s / 2, 24 - s / 2], [76 - s / 2, 58 - s / 2, 14 - s / 2], [s / 2 + s * 0.62, 58 - s / 2]], false) },
-      { pts: [[50, 58 + s * 0.45], [67.5, 100 - s / 2]] },
-    ],
-    post: s / 2,
-  }),
-  O: (s) => ({
-    w: 80,
-    polys: [
-      roundVerts([[0, 0, 32], [80, 0, 32], [80, 100, 32], [0, 100, 32]]),
-      roundVerts([[s + 1.5, s - 1, 13], [80 - s + 1, s + 0.5, 17], [80 - s - 0.5, 100 - s + 1, 15], [s + 0.5, 100 - s - 1, 12]]),
-    ],
-    skel: [{ pts: roundVerts([[s / 2, s / 2, 32 - s / 2], [80 - s / 2, s / 2, 32 - s / 2], [80 - s / 2, 100 - s / 2, 32 - s / 2], [s / 2, 100 - s / 2, 32 - s / 2]]), closed: true }],
-    post: null,
-  }),
-  A: (s) => {
-    const hw = s * 1.04;
-    const xL = (y) => 28 + hw - 0.28 * y, xR = (y) => 56 - hw + 0.28 * y;
-    const yA = (2 * hw - 28) / 0.56;
-    const cb = 60;
+  T: (s, g) => {
+    const e = s / 2 - g / 2, j = s / 2 + g / 2 + g;
+    return {
+      w: 82,
+      polys: [[[0, 0], [82, 0], [82, s], [41 + s / 2, s], [41 + s / 2, 100], [41 - s / 2, 100], [41 - s / 2, s], [0, s]]],
+      skel: [
+        { pts: [[e, s / 2], [82 - e, s / 2]] },
+        { pts: [[41, j], [41, 100 - e]] },
+      ],
+      post: 41,
+    };
+  },
+  E: (s, g) => {
+    const e = s / 2 - g / 2, j = s / 2 + g / 2 + g;
+    return {
+      w: 74,
+      polys: [[[0, 0], [74, 0], [74, s], [s, s], [s, 50 - s / 2], [67, 50 - s / 2], [67, 50 + s / 2], [s, 50 + s / 2], [s, 100 - s], [74, 100 - s], [74, 100], [0, 100]]],
+      skel: [
+        { pts: [[s / 2, e], [s / 2, 100 - e]] },
+        { pts: [[j, s / 2], [74 - e, s / 2]] },
+        { pts: [[j, 50], [67 - e, 50]] },
+        { pts: [[j, 100 - s / 2], [74 - e, 100 - s / 2]] },
+      ],
+      post: s / 2,
+    };
+  },
+  P: (s, g) => {
+    const e = s / 2 - g / 2, j = s / 2 + g / 2 + g;
+    const B = 64, R = 26, r = 9;
+    return {
+      w: 76,
+      polys: [
+        roundVerts([[0, 0], [76, 0, R], [76, B, R], [s, B], [s, 100], [0, 100]]),
+        roundVerts([[s, s], [76 - s, s, r], [76 - s, B - s, r], [s, B - s]]),
+      ],
+      skel: [
+        { pts: [[s / 2, e], [s / 2, 100 - e]] },
+        { pts: roundVerts([[j, s / 2], [76 - s / 2, s / 2, R - s / 2], [76 - s / 2, B - s / 2, R - s / 2], [j, B - s / 2]], false) },
+      ],
+      post: s / 2,
+    };
+  },
+  R: (s, g) => {
+    const e = s / 2 - g / 2, j = s / 2 + g / 2 + g;
+    const B = 64, R = 26, r = 9;
+    // the leg: a slab of the stem's weight running from under the bowl to the bottom right
+    const legX = (y) => 48 + ((y - B) / (100 - B)) * 24;
     return {
       w: 84,
       polys: [
-        [[0, 100], [28, 0], [56, 0], [84, 100], [xR(100), 100], [xR(cb + s), cb + s], [xL(cb + s), cb + s], [xL(100), 100]],
-        [[42, yA], [xR(cb), cb], [xL(cb), cb]],
+        roundVerts([[0, 0], [82, 0, R], [82, B, 14], [62, B], [86, 100], [58, 100], [34, B], [s, B], [s, 100], [0, 100]]),
+        roundVerts([[s, s], [82 - s, s, r], [82 - s, B - s, r], [s, B - s]]),
       ],
       skel: [
-        { pts: [[28 + hw / 2 - 0.28 * (100 - s / 2), 100 - s / 2], [28 + hw / 2 - 0.28 * (s / 2), s / 2], [56 - hw / 2 + 0.28 * (s / 2), s / 2], [56 - hw / 2 + 0.28 * (100 - s / 2), 100 - s / 2]] },
-        { pts: [[xL(cb + s / 2) + s * 0.45, cb + s / 2], [xR(cb + s / 2) - s * 0.45, cb + s / 2]] },
+        { pts: [[s / 2, e], [s / 2, 100 - e]] },
+        { pts: roundVerts([[j, s / 2], [82 - s / 2, s / 2, R - s / 2], [82 - s / 2, B - s / 2, 14 - s / 2], [j, B - s / 2]], false) },
+        { pts: [[legX(B + g * 0.55), B + g * 0.55], [legX(100 - e), 100 - e]] },
       ],
-      post: 28 + hw / 2 - 0.28 * 100,
+      post: s / 2,
+    };
+  },
+  O: (s, g) => ({
+    w: 84,
+    polys: [
+      roundVerts([[0, 0, 32], [84, 0, 32], [84, 100, 32], [0, 100, 32]]),
+      roundVerts([[s + 1.5, s - 1, 13], [84 - s + 1, s + 0.5, 15], [84 - s - 0.5, 100 - s + 1, 14], [s + 0.5, 100 - s - 1, 12]]),
+    ],
+    skel: [{ pts: roundVerts([[s / 2, s / 2, 32 - s / 2], [84 - s / 2, s / 2, 32 - s / 2], [84 - s / 2, 100 - s / 2, 32 - s / 2], [s / 2, 100 - s / 2, 32 - s / 2]]), closed: true }],
+    post: null,
+  }),
+  A: (s, g) => {
+    const e = s / 2 - g / 2, j = s / 2 + g / 2 + g;
+    const hw = s * 1.04;
+    const xL = (y) => 30 + hw - 0.3 * y, xR = (y) => 60 - hw + 0.3 * y;
+    const xLc = (y) => 30 + hw / 2 - 0.3 * y, xRc = (y) => 60 - hw / 2 + 0.3 * y;
+    const yA = (2 * hw - 30) / 0.6;
+    const cb = 56;
+    const yT = s - e + g; // where the legs' dots begin, under the flat top's two rows
+    return {
+      w: 90,
+      polys: [
+        [[0, 100], [30, 0], [60, 0], [90, 100], [xR(100), 100], [xR(cb + s), cb + s], [xL(cb + s), cb + s], [xL(100), 100]],
+        [[45, yA], [xR(cb), cb], [xL(cb), cb]],
+      ],
+      skel: [
+        { pts: [[30 + e, s / 2], [60 - e, s / 2]] },
+        { pts: [[xLc(100 - e), 100 - e], [xLc(yT), yT]] },
+        { pts: [[xRc(yT), yT], [xRc(100 - e), 100 - e]] },
+        { pts: [[xL(cb + s / 2) + (j - s / 2) * 0.9, cb + s / 2], [xR(cb + s / 2) - (j - s / 2) * 0.9, cb + s / 2]] },
+      ],
+      post: xLc(100),
     };
   },
 };
-const SPACE_W = 52;
+const SPACE_W = 50;
 
 // Where every glyph sits, and its particular stem width, lean and drop — so both the size
 // measurement and the drawing agree.
-function layoutWord(text, capH, { gap = 0.2, seed = 3 } = {}) {
+function layoutWord(text, capH, { gap = 0.15, seed = 3 } = {}) {
   const rng = mulberry32(seed * 7919 + 1);
   const k = capH / 100;
   const out = [];
@@ -508,25 +533,27 @@ function layoutWord(text, capH, { gap = 0.2, seed = 3 } = {}) {
       x += SPACE_W * k - gap * capH;
       continue;
     }
-    const s = 17 * (0.93 + rng() * 0.14);
+    // heavy slab stems, a quarter of the cap height, no two alike
+    const s = 24 * (0.94 + rng() * 0.12);
+    const g = s * DOT_PITCH;
     const sx = 0.97 + rng() * 0.06;
     const make = GLYPHS[ch.toUpperCase()] ?? GLYPHS.E;
-    const glyph = make(s);
+    const glyph = make(s, g);
     const w = glyph.w * sx * k;
-    out.push({ ch, glyph, x, w, s, sx, k, rot: (rng() - 0.5) * 0.024, dy: (rng() - 0.5) * 3, seed: Math.floor(rng() * 1e6) });
+    out.push({ ch, glyph, x, w, s, g, sx, k, rot: (rng() - 0.5) * 0.02, dy: (rng() - 0.5) * 3, seed: Math.floor(rng() * 1e6) });
     x += w + gap * capH;
   }
   return { letters: out, total: x - gap * capH };
 }
 
-export function marqueeSize(text, capH, { gap = 0.2, seed = 3 } = {}) {
+export function marqueeSize(text, capH, { gap = 0.15, seed = 3 } = {}) {
   const { total } = layoutWord(text, capH, { gap, seed });
   const padX = Math.max(capH * 0.32, total * 0.075);
   return { w: Math.ceil(total + padX * 2), h: Math.ceil(capH * 1.52), textW: total, padX };
 }
 
 // Draw the word onto `g` (a context already scaled to CSS px), in a box w x h.
-export function marquee(g, w, h, text, { capH, ink = INK, bulb = '#e0a526', count = Infinity, seed = 3, gap = 0.2, rails = true } = {}) {
+export function marquee(g, w, h, text, { capH, ink = INK, bulb = '#f1e0a6', count = Infinity, seed = 3, gap = 0.15, rails = true } = {}) {
   const rng = mulberry32(seed);
   const { letters, total } = layoutWord(text, capH, { gap, seed });
   const x0 = (w - total) / 2;
@@ -551,14 +578,18 @@ export function marquee(g, w, h, text, { capH, ink = INK, bulb = '#e0a526', coun
         hairline(g, px, y - capH * (0.04 + rng() * 0.02), px, y + capH * (0.05 + rng() * 0.03), { color: ink, rng, width: 1.1, wobble: 0.3 });
       }
     });
-    // diagonal braces across the word, top rail to bottom rail, each about a letter and a half wide
+    // diagonal braces across the word, top rail to bottom rail, each about two letters wide
     const n = letters.length;
     const picks = n >= 6 ? [0, Math.floor(n * 0.42), n - 3] : [0, Math.max(1, n - 2)];
     for (const i of picks) {
       const L = letters[i];
-      const xs = x0 + L.x - L.w * 0.04, xe = xs + L.w * 1.35 + gap * capH;
+      const xs = x0 + L.x - L.w * 0.04, xe = xs + L.w * (2.1 + rng() * 0.3) + 2 * gap * capH;
       hairline(g, xs, y1 + 1.3, xe, y2 + 1.3, { color: ink, rng, width: 0.9, wobble: 0.5, alpha: 0.8 });
     }
+    // a third, mid-height hairline that only runs part of the way
+    const ym = top + 50 * k + (rng() - 0.5) * 6;
+    const xm0 = x0 + total * (0.28 + rng() * 0.1), xm1 = x0 + total + ext * (0.6 + rng() * 0.5);
+    hairline(g, xm0, ym, xm1, ym, { color: ink, rng, width: 0.8, wobble: 0.5, alpha: 0.6 });
     // posts below the baseline, at the stem of two or three letters
     const withPost = letters.filter((L) => L.glyph.post != null);
     const chosen = [withPost[0], withPost[Math.floor(withPost.length / 2)], withPost[withPost.length - 1]].filter(Boolean);
@@ -584,13 +615,14 @@ export function marquee(g, w, h, text, { capH, ink = INK, bulb = '#e0a526', coun
     };
     const polys = glyph.polys.map((poly) => poly.map(T));
     inkPoly(g, polys, { fill: ink, color: ink, width: Math.max(1.6, capH * 0.017), wobble: Math.max(1.2, capH * 0.016), rng: lrng, overshoot: Math.max(2, capH * 0.022), period: capH * 0.28 });
-    // bulbs: one row along every stroke, turning the corners
-    const r0 = s * 0.185 * k;
-    const sp = s * 0.53 * k;
+    // the dotted fill: two rows of small pale dots down every stroke, on a lattice that turns
+    // each corner as a 2 x 2 block, every dot placed a hair off its mark
+    const gpx = L.g * k;
+    const r0 = s * 0.12 * k;
     g.save();
     g.fillStyle = bulb;
     g.strokeStyle = bulb;
-    g.lineWidth = 0.6;
+    g.lineWidth = 0.5;
     for (const line of glyph.skel) {
       const pts = line.pts.map(T);
       const closed = !!line.closed;
@@ -602,24 +634,29 @@ export function marquee(g, w, h, text, { capH, ink = INK, bulb = '#e0a526', coun
         len += Math.hypot(b[0] - a[0], b[1] - a[1]);
         cum.push(len);
       }
-      const nb = Math.max(1, Math.round(len / sp) + (closed ? 0 : 1));
-      const step = closed ? len / nb : nb > 1 ? len / (nb - 1) : 0;
+      const n = Math.max(1, Math.round(len / gpx));
+      const nb = closed ? n : n + 1;
+      const step = len / n;
       const at = (d) => {
         d = Math.max(0, Math.min(len, d));
         let j = 0;
         while (j < segs - 1 && cum[j + 1] < d) j++;
         const a = pts[j], b = pts[(j + 1) % pts.length];
-        const u = cum[j + 1] > cum[j] ? (d - cum[j]) / (cum[j + 1] - cum[j]) : 0;
-        return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
+        const sl = cum[j + 1] - cum[j] || 1;
+        const u = (d - cum[j]) / sl;
+        return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, (b[0] - a[0]) / sl, (b[1] - a[1]) / sl];
       };
       for (let j = 0; j < nb; j++) {
-        if (lrng() < 0.035) continue; // a bulb out
-        const d = j * step + (j > 0 && j < nb - 1 ? (lrng() - 0.5) * sp * 0.3 : 0);
-        const [bx, by] = at(d);
-        const rr = r0 * (0.78 + lrng() * 0.44);
-        const jx = (lrng() - 0.5) * 2.6, jy = (lrng() - 0.5) * 2.6;
-        drawBulb(g, bx + jx, by + jy, rr, lrng);
-        if (lrng() < 0.02) drawBulb(g, bx + jx + rr * 0.9, by + jy + (lrng() - 0.5) * rr, rr * 0.8, lrng); // a bulb doubled
+        const d = j * step;
+        const [bx, by, tx, ty] = at(d);
+        const nx = -ty, ny = tx;
+        for (const side of [-1, 1]) {
+          if (lrng() < 0.02) continue; // a dot missed
+          const o = (gpx / 2) * side * (0.94 + lrng() * 0.12);
+          const rr = r0 * (0.86 + lrng() * 0.28);
+          const jx = (lrng() - 0.5) * gpx * 0.12, jy = (lrng() - 0.5) * gpx * 0.12;
+          drawBulb(g, bx + nx * o + jx, by + ny * o + jy, rr, lrng);
+        }
       }
     }
     g.restore();

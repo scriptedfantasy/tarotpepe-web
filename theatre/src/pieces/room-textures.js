@@ -76,71 +76,71 @@ function dot(g, x, y, r, { rng = Math.random, alpha = 0.85, color = INK } = {}) 
   g.restore();
 }
 
-// The wallpaper motif: a sprig — a bent stem, three leaves each drawn as two strokes, a cluster of
-// three berries at the tip. Drawn in local coords, stem base at (0, +s/2), tip at (0, -s/2).
-// Each call is a fresh hand: the leaf angles, the stem bend and the pen weight all vary.
+// The wallpaper motif: a sprig — a bent stem, two pairs of leaves each a single closed stroke (a
+// pointed ellipse), a cluster of three berries at the tip. Drawn in local coords, stem base at
+// (0, +s/2), tip at (0, -s/2). Each call is a fresh hand: the leaf angles, the stem bend and the
+// pen weight all vary. Kept OPEN — big leaves, no midribs — so that from across the room it still
+// reads as a drawn sprig and not a dark fleck.
 function sprig(g, s, rng, { alpha = 0.8, width = 5 } = {}) {
   const w = width * (0.85 + rng() * 0.3);
-  const o = { width: w, wobble: s * 0.01, rng, alpha };
-  const bend = (rng() - 0.5) * s * 0.2;
+  const o = { width: w, wobble: s * 0.012, rng, alpha };
+  const bend = (rng() - 0.5) * s * 0.24;
   // stem: a gentle S, base at the bottom, tip near the top
-  const stem = (t) => [bend * Math.sin(t * Math.PI), s * (0.5 - t * 0.9)]; // t 0..1 → base..tip
+  const stem = (t) => [bend * Math.sin(t * Math.PI), s * (0.5 - t * 0.88)]; // t 0..1 → base..tip
   penCurve(g, [stem(0), stem(0.3), stem(0.6), stem(1)], o);
-  // leaves: five, alternating sides, each one closed loop drawn as a single stroke (a pointed
-  // ellipse), with a faint midrib in most
-  const n = 4 + (rng() < 0.5 ? 1 : 0);
+  // leaves: four, alternating sides, each a closed loop drawn as one stroke
+  const n = 4;
   for (let i = 0; i < n; i++) {
-    const t = 0.16 + (i / n) * 0.7;
+    const t = 0.14 + (i / n) * 0.66;
     const side = i % 2 ? 1 : -1;
     const [bx, by] = stem(t);
-    const tilt = -Math.PI / 2 + side * (1.05 + (rng() - 0.5) * 0.4) - (1 - t) * 0.2 * side; // lower leaves droop more
-    const L = s * (0.3 + rng() * 0.08) * (1 - t * 0.35);
+    const tilt = -Math.PI / 2 + side * (1.0 + (rng() - 0.5) * 0.45) - (1 - t) * 0.25 * side; // lower leaves droop more
+    const L = s * (0.36 + rng() * 0.08) * (1 - t * 0.3);
     const tx = bx + Math.cos(tilt) * L, ty = by + Math.sin(tilt) * L;
-    const nx = -Math.sin(tilt) * L * 0.28, ny = Math.cos(tilt) * L * 0.28;
+    const nx = -Math.sin(tilt) * L * 0.34, ny = Math.cos(tilt) * L * 0.34;
     const mx = (bx + tx) / 2, my = (by + ty) / 2;
-    penCurve(g, [[bx, by], [mx + nx * 0.9, my + ny * 0.9], [tx, ty], [mx - nx * 0.9, my - ny * 0.9], [bx, by]], { ...o, width: w * 0.9 });
-    if (rng() < 0.75) penCurve(g, [[bx, by], [mx, my], [bx + (tx - bx) * 0.8, by + (ty - by) * 0.8]], { ...o, width: w * 0.55, alpha: alpha * 0.6 });
+    penCurve(g, [[bx, by], [mx + nx * 0.95, my + ny * 0.95], [tx, ty], [mx - nx * 0.95, my - ny * 0.95], [bx, by]], { ...o, width: w * 0.9 });
   }
   // a cluster of three berries at the tip, one filled
   const [tipx, tipy] = stem(1);
-  const r = s * 0.05;
-  ring(g, tipx - r * 1.5, tipy - r * 0.5, r, { rng, alpha, width: w * 0.9 });
-  ring(g, tipx + r * 1.5, tipy - r * 0.3, r, { rng, alpha, width: w * 0.9 });
-  ring(g, tipx, tipy - r * 2.1, r, { rng, alpha, width: w * 0.9 });
+  const r = s * 0.055;
+  ring(g, tipx - r * 1.6, tipy - r * 0.4, r, { rng, alpha, width: w * 0.9 });
+  ring(g, tipx + r * 1.6, tipy - r * 0.3, r, { rng, alpha, width: w * 0.9 });
+  ring(g, tipx, tipy - r * 2.2, r, { rng, alpha, width: w * 0.9 });
   const which = Math.floor(rng() * 3);
-  const bx = [tipx - r * 1.5, tipx + r * 1.5, tipx][which], by = [tipy - r * 0.5, tipy - r * 0.3, tipy - r * 2.1][which];
+  const bx = [tipx - r * 1.6, tipx + r * 1.6, tipx][which], by = [tipy - r * 0.4, tipy - r * 0.3, tipy - r * 2.2][which];
   dot(g, bx, by, r * 0.6, { rng, alpha });
 }
 
-// Wallpaper: one motif in loose offset rows on bare paper. Tile 1.02 m; three motifs across
-// (pitch 0.34 m), three rows up, every second row shifted half a pitch; each instance is drawn
+// Wallpaper: one motif in loose offset rows on bare paper. Tile 1.02 m; two motifs across
+// (pitch 0.51 m), two rows up, every second row shifted half a pitch; each instance is drawn
 // separately with its own drift, tilt and pen weight, and one in ten is missing or faded, so the
-// rows visibly wander. Everything between motifs is untouched paper.
+// rows visibly wander. Everything between motifs is untouched paper — well over four fifths of it.
 export function wallpaperTexture({ tile = 1.02, ppm = 1000, seed = 21 } = {}) {
   const size = Math.round(tile * ppm);
-  const cols = 3, rows = 3;
+  const cols = 2, rows = 2;
   const a = size / cols, b = size / rows;
   const tex = drawTexture(
     size,
     size,
     (g, w, h, rng0) => {
       paper(g, w, h, PAPER, { grain: 0.012, seed });
-      const s = px(0.15, ppm); // motif height
+      const s = px(0.21, ppm); // motif height
       // instances (with wrap copies so the tile is seamless: the same hand for each copy)
       for (let j = -1; j <= rows; j++)
         for (let i = -1; i <= cols; i++) {
           const jj = ((j % rows) + rows) % rows, ii = ((i % cols) + cols) % cols;
           const rng = rng0.fork(1000 + jj * 17 + ii * 3);
           const fate = rng();
-          if (fate < 0.07) continue; // the paper-hanger's blank
-          const alpha = fate < 0.16 ? 0.4 : 0.8; // a faded print now and then
-          const cx = a / 2 + i * a + (j % 2 ? a / 2 : 0) + (rng() - 0.5) * 12;
-          const cy = b / 2 + j * b + (rng() - 0.5) * 12;
-          const rot = (rng() - 0.5) * 0.21; // ±6°
+          if (fate < 0.06) continue; // the paper-hanger's blank
+          const alpha = fate < 0.16 ? 0.45 : 0.8; // a faded print now and then
+          const cx = a / 2 + i * a + (j % 2 ? a / 2 : 0) + (rng() - 0.5) * 16;
+          const cy = b / 2 + j * b + (rng() - 0.5) * 16;
+          const rot = (rng() - 0.5) * 0.24; // ±7°
           g.save();
           g.translate(cx, cy);
           g.rotate(rot);
-          sprig(g, s * (0.92 + rng() * 0.16), rng, { alpha, width: 5.2 });
+          sprig(g, s * (0.9 + rng() * 0.2), rng, { alpha, width: 5 });
           g.restore();
         }
     },
@@ -151,10 +151,12 @@ export function wallpaperTexture({ tile = 1.02, ppm = 1000, seed = 21 } = {}) {
   return tex;
 }
 
-// Frieze: a Greek key meander over a base line, along the picture rail. Tile 0.68 m holds four
-// units whose widths differ by ±10%; every corner is left open by a few px; no rules (the rail
-// and cornice above and below give the band its edges). The band is `height` m tall starting at
-// y0; the texture's repeat/offset are set so the canvas spans exactly that band.
+// Frieze: a Greek key meander over a base line, along the picture rail — drawn the way a pen
+// draws one: each unit is ONE continuous stroke (a hooked spiral), the corners rounded off by the
+// wobble and overshot at the start and the end, the units' widths and heights drifting from one
+// to the next, the pen going lighter now and then. Tile 0.68 m holds three units. No rules (the
+// rail and cornice above and below give the band its edges). The band is `height` m tall starting
+// at y0; the texture's repeat/offset are set so the canvas spans exactly that band.
 export function friezeTexture({ tile = 0.68, ppm = 1000, seed = 31, y0: bandY0 = 2.64, height = 0.34 } = {}) {
   const size = Math.round(tile * ppm);
   const bandH = Math.round(height * ppm);
@@ -163,31 +165,41 @@ export function friezeTexture({ tile = 0.68, ppm = 1000, seed = 31, y0: bandY0 =
     bandH,
     (g, w, h, rng) => {
       paper(g, w, h, PAPER, { grain: 0.012, seed });
-      const units = 4;
+      const units = 3;
       const widths = [];
-      for (let i = 0; i < units; i++) widths.push(0.9 + rng() * 0.2);
+      for (let i = 0; i < units; i++) widths.push(0.86 + rng() * 0.28);
       const sum = widths.reduce((p, q) => p + q, 0);
-      const y0 = h * 0.74, y1 = h * 0.26;
-      const kh = y0 - y1;
-      const lw = 6;
-      const o = { width: lw, wobble: 1.6, rng, alpha: 0.82 };
-      // a segment of the key, drawn as its own pen stroke with open corners
-      const seg = (ax, ay, bx, by) => {
-        const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);
-        const gap = 2.5 + rng() * 1.5;
-        const ux = dx / L, uy = dy / L;
-        inkLine(g, ax + ux * gap, ay + uy * gap, bx - ux * gap * 0.4, by - uy * gap * 0.4, { ...o, width: lw * (0.9 + rng() * 0.2), segments: Math.max(3, Math.round(L / 14)) });
-      };
-      // base line: one long stroke, broken once
+      const yBase = h * 0.76, yTop = h * 0.24;
+      const lw = 5.5;
+      // base line: one long stroke, broken once where the pen lifted
       const brk = w * (0.3 + rng() * 0.4);
-      inkLine(g, -4, y0, brk - 6, y0 + (rng() - 0.5) * 3, { ...o, segments: 30 });
-      inkLine(g, brk + 4, y0 + (rng() - 0.5) * 3, w + 4, y0, { ...o, segments: 30 });
+      inkLine(g, -4, yBase, brk - 5, yBase + (rng() - 0.5) * 4, { width: lw, wobble: 2.2, rng, alpha: 0.85, segments: 30 });
+      inkLine(g, brk + 4, yBase + (rng() - 0.5) * 4, w + 4, yBase, { width: lw, wobble: 2.2, rng, alpha: 0.85, segments: 30 });
       let x0 = 0;
       for (let i = 0; i < units; i++) {
         const u = (w * widths[i]) / sum;
-        const P = (fx, fy) => [x0 + fx * u + (rng() - 0.5) * 2, y0 - fy * kh + (rng() - 0.5) * 2];
-        const pts = [P(0.86, 0), P(0.86, 0.84), P(0.14, 0.84), P(0.14, 0.26), P(0.6, 0.26), P(0.6, 0.58), P(0.38, 0.58)];
-        for (let k = 0; k < pts.length - 1; k++) seg(pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1]);
+        const kh = (yBase - yTop) * (0.9 + rng() * 0.12); // this unit's height
+        const lean = (rng() - 0.5) * 0.05; // a little tilt, unit by unit
+        const alpha = rng() < 0.15 ? 0.55 : 0.85; // the pen running dry on one unit in seven
+        const P = (fx, fy) => [x0 + fx * u + (fy * kh) * lean, yBase - fy * kh];
+        // the spiral: up from the base line, across, down, back, up, in — one stroke, with the
+        // start overshooting below the base line and the end running on a little
+        const pts = [P(0.86, -0.06), P(0.86, 0.86), P(0.14, 0.86), P(0.14, 0.26), P(0.62, 0.26), P(0.62, 0.6), P(0.34, 0.6)];
+        // add intermediate knots so the long runs can wobble along their length
+        const dense = [];
+        for (let k = 0; k < pts.length - 1; k++) {
+          const [ax, ay] = pts[k], [bx, by] = pts[k + 1];
+          const n = Math.max(2, Math.round(Math.hypot(bx - ax, by - ay) / 16));
+          for (let s = 0; s < n; s++) dense.push([ax + ((bx - ax) * s) / n, ay + ((by - ay) * s) / n]);
+        }
+        dense.push(pts[pts.length - 1]);
+        penPath(g, dense, { width: lw * (0.9 + rng() * 0.2), wobble: 1.8, rng, alpha });
+        // now and then the pen went over a run twice
+        if (rng() < 0.3) {
+          const k = 1 + Math.floor(rng() * 3);
+          const [ax, ay] = pts[k], [bx, by] = pts[k + 1];
+          inkLine(g, ax + (rng() - 0.5) * 4, ay + 3, bx + (rng() - 0.5) * 4, by + 3, { width: lw * 0.7, wobble: 1.5, rng, alpha: 0.4, segments: 6 });
+        }
         x0 += u;
       }
     },

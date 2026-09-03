@@ -1,10 +1,12 @@
-// PIECE: props — set dressing. A crowded, ordered parlour: a tall shelf of bottles and jars with
-// drawn labels, two bookcases, a chest with a cat asleep on it, a bar cart with a radio under the
-// window, curtains in the window, a floor lamp with a fringed shade, a hat stand, a potted palm,
-// framed ink pictures around a wall clock, a pinboard of notes, hand-lettered signs, a rug with a
-// scrolled border, the three-petal pendant of the kitchen frame. Everything is paper-white geometry
-// with pattern textures; the ink pass draws the lines. Composed frontal and symmetrical for the
-// 'wide' and 'home' shots; nothing in front of Pepe or the table.
+// PIECE: props — set dressing. A crowded, ordered parlour: a tall cabinet of bottles with drawn
+// labels (two thirds of them solid black), two bookcases, a chest with a lamp and an album on it,
+// a cat asleep on the right bookcase, a bar cart under the window carrying the radio and four big
+// bottles, curtains in the window, a floor lamp with a fringed shade, a hat stand with a black
+// coat and a bowler, a potted palm, framed drawings around a wall clock, a pinboard of notes,
+// hand-lettered signs, a rug with a scrolled border, the three-petal pendant of the kitchen frame.
+// Every prop is paper-white geometry or a solid-ink mass with its pattern left in paper; the ink
+// pass draws the lines. Composed frontal and symmetrical for the 'wide' and 'home' shots; nothing
+// in front of Pepe or the table.
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import * as O from './props-objects.js';
@@ -53,7 +55,7 @@ export async function build(ctx) {
     let y = top;
     for (let i = 0; i < 3; i++) {
       const t = 0.028 - i * 0.004;
-      const b = O.book({ w: 0.2 - i * 0.02, h: 0.26 - i * 0.03, t, flat: true, seed: 90 + i, title: ['GRAND ALBUM', 'LE TAROT', 'ORACLES'][i] });
+      const b = O.book({ w: 0.2 - i * 0.02, h: 0.26 - i * 0.03, t, flat: true, seed: 90 + i, title: ['GRAND ALBUM', 'LE TAROT', 'ORACLES'][i], dark: i === 1 });
       b.position.set(-0.1 + i * 0.01, y + t / 2, chest.position.z + 0.02);
       b.rotation.y = (i - 1) * 0.08;
       g.add(b);
@@ -77,10 +79,10 @@ export async function build(ctx) {
       gl.position.set(0, 1.45, 0.02);
       bc.add(gl);
     } else {
-      // the cat, asleep on top of the bookcase
-      const cat = O.cat({ rng });
-      cat.position.set(0.0, 1.45, 0.03);
-      cat.rotation.y = -0.5;
+      // the cat, asleep on top of the bookcase, facing the room
+      const cat = O.cat();
+      cat.position.set(0.0, 1.45, 0.0);
+      cat.rotation.y = -0.2;
       bc.add(cat);
     }
   }
@@ -88,24 +90,41 @@ export async function build(ctx) {
   // ---- the window (stage left): curtains inside the architrave, the bar cart under it, the palm -----
   g.add(O.curtainSet({ x0: win.x0 - 0.03, x1: win.x1 + 0.03, rodY: win.y1 + 0.05, panelW: 0.24, dropTo: win.y0 + 0.02, z: WALL + 0.06 }));
   {
-    const cart = O.barCart({ w: 0.8, d: 0.4, h: 0.8, rng });
-    cart.position.set((win.x0 + win.x1) / 2, 0, WALL + 0.47);
+    const cart = O.barCart({ w: 0.96, d: 0.42, h: 0.8 });
+    cart.position.set((win.x0 + win.x1) / 2, 0, WALL + 0.48);
+    cart.userData.noShadow = true; // its shadow would black out the wall behind it and swallow the bottles
     g.add(cart);
     const top = cart.userData.top;
+    // the radio on the top board, right; four big bottles on the left
+    const r = O.radio({ w: 0.42, h: 0.26, d: 0.18 });
+    r.position.set(0.25, top, 0.0);
+    cart.add(r);
+    cart.add(
+      O.row({
+        x0: -0.48,
+        x1: 0.02,
+        y: top,
+        z: -0.02,
+        rng,
+        gap: 0.01,
+        items: [
+          { kind: 'tall', name: 'VIN', dark: true, scale: 1.2, seed: 201, bodyH: 0.19, neckH: 0.1 },
+          { kind: 'square', name: 'GIN', dark: true, scale: 1.25, seed: 202, bodyH: 0.17 },
+          { kind: 'corked', name: 'MARC', dark: false, scale: 1.2, seed: 203, bodyH: 0.14, neckH: 0.06 },
+          { kind: 'squat', name: 'RHUM', dark: true, scale: 1.2, seed: 204, bodyH: 0.13, neckH: 0.05 },
+        ],
+      }),
+    );
+    // the lower board: the newspapers and the soda siphon
+    const news = O.newspaperStack({ n: 6, rng });
+    news.position.set(0.16, cart.userData.lower, 0.02);
+    cart.add(news);
     const s = O.siphon();
-    s.position.set(-0.31, top, -0.06);
+    s.position.set(-0.2, cart.userData.lower, 0.0);
     cart.add(s);
     const ib = O.iceBucket();
-    ib.position.set(0.29, top, -0.04);
+    ib.position.set(-0.36, cart.userData.lower, 0.04);
     cart.add(ib);
-    cart.add(O.lineup({ x0: -0.2, x1: 0.2, y: top, z: -0.06, rng, kinds: ['bottle', 'flask', 'bottle'], maxH: 0.32, counter: { b: 3, j: 0 } }));
-    cart.add(O.lineup({ x0: -0.34, x1: 0.34, y: top, z: 0.12, rng, kinds: ['glass'], gap: 0.02 }));
-    const r = O.radio({ w: 0.34, h: 0.2, d: 0.15 });
-    r.position.set(-0.18, cart.userData.lower, 0.02);
-    cart.add(r);
-    const news = O.newspaperStack({ n: 6, rng });
-    news.position.set(0.2, cart.userData.lower, 0.0);
-    cart.add(news);
   }
   {
     const stool = new THREE.Group();
@@ -114,16 +133,17 @@ export async function build(ctx) {
     stool.add(seat);
     for (let i = 0; i < 3; i++) {
       const a = (i / 3) * Math.PI * 2 + 0.5;
-      stool.add(O.rod([Math.cos(a) * 0.1, 0.29, Math.sin(a) * 0.1], [Math.cos(a) * 0.15, 0, Math.sin(a) * 0.15], 0.012, M.wood));
+      stool.add(O.rod([Math.cos(a) * 0.1, 0.29, Math.sin(a) * 0.1], [Math.cos(a) * 0.15, 0, Math.sin(a) * 0.15], 0.012, M.solid));
     }
-    stool.position.set(-W / 2 + 0.3, 0, WALL + 0.42);
+    // the palm stands between the cart and the floor lamp, clear of the bottles
+    stool.position.set(-W / 2 + 0.24, 0, -1.45);
     g.add(stool);
-    const p = O.plant({ rng, leaves: 12, kind: 'palm', scale: 1.15 });
-    p.position.set(-W / 2 + 0.3, 0.31, WALL + 0.42);
+    const p = O.plant({ rng, leaves: 12, kind: 'palm', scale: 1.0 });
+    p.position.set(-W / 2 + 0.24, 0.31, -1.45);
     g.add(p);
   }
 
-  // ---- the door (stage right): a lettered board in the transom light, the tall bottle shelf beside it
+  // ---- the door (stage right): a lettered board in the transom light, the tall bottle cabinet beside it
   {
     const cx = (door.x0 + door.x1) / 2;
     const ty = ((door.top ?? 2.12) + 0.05 + door.y1) / 2;
@@ -137,21 +157,51 @@ export async function build(ctx) {
     mat.position.set(cx, 0, WALL + 0.06 + 0.21);
     g.add(mat);
 
-    const unit = O.shelfUnit({ w: 0.48, h: 2.45, d: 0.24, boards: [0.08, 0.48, 0.88, 1.28, 1.68, 2.08], plinth: 0.05 });
-    unit.position.set(W / 2 - 0.04 - 0.24, 0, FLUSH + 0.12);
+    const unit = O.shelfUnit({ w: 0.5, h: 2.45, d: 0.24, boards: [0.08, 0.48, 0.88, 1.28, 1.68, 2.08], plinth: 0.05 });
+    unit.position.set(W / 2 - 0.04 - 0.25, 0, FLUSH + 0.12);
     g.add(unit);
     const { x0, x1, z0 } = unit.userData.inner;
+    // four or five bottles a shelf, silhouettes different, two thirds of them solid black
     const bays = [
-      ['jar', 'jar', 'glass'],
-      ['bottle', 'bottle', 'flask'],
-      ['bottle', 'jar'],
-      ['flask', 'glass', 'jar'],
-      ['bottle', 'bottle'],
-      ['bottle', 'flask'],
+      [
+        { kind: 'square', name: 'GIN', dark: true, bodyH: 0.15 },
+        { kind: 'tall', name: 'MARC', dark: true, bodyH: 0.2, neckH: 0.09 },
+        { kind: 'flask', lines: ['POIRE'], dark: false, neck: 0.06 },
+        { kind: 'squat', name: 'RHUM', dark: true, bodyH: 0.12 },
+      ],
+      [
+        { kind: 'jar', name: 'SEL', h: 0.1 },
+        { kind: 'jar', name: 'THE', h: 0.13 },
+        { kind: 'squat', name: 'ANIS', dark: true, bodyH: 0.14, neckH: 0.05 },
+        { kind: 'corked', name: 'PRUNE', dark: false, bodyH: 0.13 },
+      ],
+      [
+        { kind: 'tall', name: 'VIN', dark: true, bodyH: 0.19, neckH: 0.1 },
+        { kind: 'square', name: 'FINE', dark: false, bodyH: 0.12 },
+        { kind: 'tall', name: 'PORTO', dark: true, bodyH: 0.21, neckH: 0.07 },
+        { kind: 'wine' },
+      ],
+      [
+        { kind: 'flask', lines: ['EAU', 'DE VIE'], dark: true, neck: 0.07 },
+        { kind: 'squat', name: 'SUZE', dark: false, bodyH: 0.13 },
+        { kind: 'jar', name: 'CAFE', h: 0.12 },
+        { kind: 'tall', name: 'BYRRH', dark: true, bodyH: 0.18, neckH: 0.11 },
+      ],
+      [
+        { kind: 'square', name: 'KIRSCH', dark: true, bodyH: 0.17 },
+        { kind: 'corked', name: 'MARC', dark: true, bodyH: 0.15, neckH: 0.06 },
+        { kind: 'tall', name: 'EAU', dark: false, bodyH: 0.17, neckH: 0.09 },
+        { kind: 'squat', name: 'CASSIS', dark: true, bodyH: 0.11 },
+      ],
+      [
+        { kind: 'tall', name: 'COGNAC', dark: true, bodyH: 0.2, neckH: 0.1 },
+        { kind: 'flask', lines: ['EAU', 'DE VIE'], dark: false, neck: 0.08 },
+        { kind: 'square', name: 'GIN', dark: true, bodyH: 0.14 },
+        { kind: 'jar', name: 'MIEL', h: 0.09 },
+      ],
     ];
-    const counter = { b: 6, j: 2 };
     [0.08, 0.48, 0.88, 1.28, 1.68, 2.08].forEach((y, i) => {
-      unit.add(O.lineup({ x0, x1, y, z: z0 + 0.13, rng, kinds: bays[i], maxH: 0.36, counter }));
+      unit.add(O.row({ x0, x1, y, z: z0 + 0.13, rng, gap: 0.01, items: bays[i].map((s, k) => ({ ...s, scale: 1.1, seed: 300 + i * 10 + k })) }));
     });
   }
 
@@ -161,20 +211,21 @@ export async function build(ctx) {
     sign.position.set(0, railY - 0.1, WALL + 0.045);
     g.add(sign);
     for (const sx of [-1, 1]) {
-      const hook = O.sphere(0.009, M.metal, 8, 6);
+      const hook = O.sphere(0.009, M.solid, 8, 6);
       hook.position.set(sx * 0.42, railY - 0.005, WALL + 0.02);
       g.add(hook);
     }
 
+    // two portraits flanking the clock, four small subjects in a row beneath
     const rowA = [
-      [-0.36, 0.22, 0.28, 'bust', true],
-      [0.36, 0.22, 0.28, 'hand', true],
+      [-0.39, 0.34, 0.38, 'portrait', true],
+      [0.39, 0.34, 0.38, 'hand', true],
     ];
     const rowB = [
-      [-0.4, 0.17, 0.2, 'ship', false],
-      [-0.13, 0.15, 0.15, 'eye', false],
-      [0.13, 0.15, 0.15, 'moon', false],
-      [0.4, 0.17, 0.2, 'mountains', false],
+      [-0.43, 0.22, 0.22, 'ship', false],
+      [-0.145, 0.2, 0.2, 'eye', false],
+      [0.145, 0.2, 0.2, 'moon', false],
+      [0.43, 0.22, 0.22, 'house', false],
     ];
     let seed = 100;
     const hang = (list, y) => {
@@ -185,23 +236,20 @@ export async function build(ctx) {
         O.hangCords(g, x, y + h / 2, w / 2 - 0.02, HOOK_Y, WALL + 0.012);
       }
     };
-    hang(rowA, 2.04);
+    hang(rowA, 2.06);
     hang(rowB, 1.66);
     const clock = O.wallClock({ r: 0.17 });
-    clock.position.set(0, 2.04, WALL + 0.03);
+    clock.position.set(0, 2.06, WALL + 0.03);
     g.add(clock);
-    O.hangCords(g, 0, 2.04 + 0.17, 0.1, HOOK_Y, WALL + 0.012);
+    O.hangCords(g, 0, 2.06 + 0.17, 0.1, HOOK_Y, WALL + 0.012);
     g.userData.pendulum = clock.userData.pendulum;
 
-    // between the pictures and the door: a cork board of pinned notes, a small round frame under it
+    // between the pictures and the door: a cork board of pinned notes
     const pbX = (0.5 + door.x0 - 0.1) / 2;
     const pb = O.pinBoard({ w: 0.38, h: 0.5, rng });
     pb.position.set(pbX, 1.98, WALL + 0.012);
     g.add(pb);
     O.hangCords(g, pbX, 1.98 + 0.25, 0.15, HOOK_Y, WALL + 0.01);
-    const rf = O.roundFrame({ r: 0.09, kind: 'sun', seed: 7, depth: 0.03, rim: 0.014 });
-    rf.position.set(pbX, 1.56, WALL + 0.015);
-    g.add(rf);
   }
 
   // ---- the stage-left wall (no window there): two frames in a row and a small shelf of jars -----------
@@ -212,7 +260,7 @@ export async function build(ctx) {
     rf.position.set(x, 1.95, -1.55);
     rf.rotation.y = rot;
     g.add(rf);
-    const pf = O.pictureFrame({ w: 0.26, h: 0.32, kind: 'house', seed: 9, ornate: true });
+    const pf = O.pictureFrame({ w: 0.26, h: 0.32, kind: 'sun', seed: 9, ornate: true });
     pf.position.set(x, 1.95, -2.05);
     pf.rotation.y = rot;
     g.add(pf);
@@ -220,27 +268,57 @@ export async function build(ctx) {
     shelf.position.set(x, 1.3, -2.3);
     shelf.rotation.y = rot;
     g.add(shelf);
-    shelf.add(O.lineup({ x0: -0.28, x1: 0.28, y: 0.01, z: 0.08, rng, kinds: ['jar', 'jar', 'bottle'], maxH: 0.24, counter: { b: 12, j: 6 } }));
+    shelf.add(
+      O.row({
+        x0: -0.28,
+        x1: 0.28,
+        y: 0.01,
+        z: 0.08,
+        rng,
+        items: [
+          { kind: 'jar', name: 'SUCRE', h: 0.1, seed: 401 },
+          { kind: 'squat', name: 'ANIS', dark: true, bodyH: 0.11, seed: 402 },
+          { kind: 'jar', name: 'RIZ', h: 0.12, seed: 403 },
+        ],
+      }),
+    );
+  }
+
+  // ---- the stage-right wall: a key on a nail and a small round picture --------------------------------
+  {
+    const x = W / 2 - 0.02;
+    const rot = -Math.PI / 2;
+    const rf = O.roundFrame({ r: 0.13, kind: 'key', seed: 11 });
+    rf.position.set(x, 1.95, -1.7);
+    rf.rotation.y = rot;
+    g.add(rf);
   }
 
   // ---- in front of the side walls: the floor lamp (left) and the hat stand (right) ---------------------
+  // both a hand's width in from the side walls, so the wide shot keeps them whole
   const lamp = O.floorLamp({ h: 1.62 });
-  lamp.position.set(-W / 2 + 0.32, 0, -0.55);
+  lamp.position.set(-W / 2 + 0.5, 0, -0.55);
   g.add(lamp);
   const stand = O.hatStand({ h: 1.85, rng });
-  stand.position.set(W / 2 - 0.32, 0, -0.75);
+  stand.position.set(W / 2 - 0.5, 0, -0.75);
   g.add(stand);
 
   // ---- overhead: the three-petal pendant over the table -------------------------------------------------
-  const pendant = O.pendantLamp({ ceilY: H, dropTo: 2.5 });
+  // hangs at the height of the window heads, so it clears the sign on the wall behind it
+  const pendant = O.pendantLamp({ ceilY: H, dropTo: 2.72 });
   g.add(pendant);
 
+  // every prop casts the key's crisp shadow, except the groups flagged noShadow (a cast shadow
+  // across the wall behind them would swallow their silhouettes; the film keeps such walls bare)
+  const noShadow = [];
   g.traverse((o) => {
+    if (o.userData.noShadow) noShadow.push(o);
     if (o.isMesh) {
       o.castShadow = true;
       o.receiveShadow = true;
     }
   });
+  for (const grp of noShadow) grp.traverse((o) => { if (o.isMesh) o.castShadow = false; });
   ctx.scene.add(g);
 
   return {
@@ -249,7 +327,7 @@ export async function build(ctx) {
     lamps: {
       floor: lamp.position.clone().add(new THREE.Vector3(0, 1.45, 0)),
       table: new THREE.Vector3(-0.36, 0.82 + 0.2, chest.position.z + 0.02),
-      pendant: new THREE.Vector3(0, 2.3, 0),
+      pendant: new THREE.Vector3(0, 2.5, 0),
     },
     setState() {},
     update(ctx) {

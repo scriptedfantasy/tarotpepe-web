@@ -32,7 +32,7 @@ export async function build(ctx) {
     lips: inkMaterial({ color: LIPS, colorful: true, hatch: 0.3 }),
     ink: inkMaterial({ color: INK, colorful: true, hatch: 0, roughness: 1 }),
     white: inkMaterial({ color: '#faf8f3', colorful: false, hatch: 0.1 }),
-    robe: inkMaterial({ color: PAPER, colorful: false, hatch: 0.45 }),
+    robe: inkMaterial({ color: PAPER, colorful: false, hatch: 0.6 }),
     wood: inkMaterial({ color: PAPER, colorful: false, hatch: 0.6, lineWeight: 1.1 }),
     cushion: inkMaterial({ color: PAPER, colorful: false, hatch: 0.4 }),
     collar: inkMaterial({ color: PAPER, colorful: false, hatch: 0.12 }),
@@ -80,10 +80,17 @@ export async function build(ctx) {
     hands: [body.parts.handL, body.parts.handR],
     parts,
     mats,
-    setState(name) {
-      // one state for now: the reading pose. Deterministic.
+    setState(name, ctx2) {
+      // one judged state: the reading pose. Deterministic. The others are builder debug views.
       head.rotation.set(0, 0, 0);
       head.position.set(0, headY, 0);
+      const pieces = ctx2?.pieces ?? ctx.pieces;
+      const words = name.split('-');
+      if (words.includes('close')) pieces.camera?.cut?.({ pos: [0, 1.2, 1.5], look: [0, 1.04, -0.82], fov: 27 }); // the head at a third of the frame
+      const dressing = [...parts.eyes, ...parts.lids, parts.mouth].filter(Boolean);
+      for (const o of dressing) o.visible = !words.includes('raw');
+      const modes = { lines: 'lines-only', tone: 'tone-only', normals: 'debug-normal', edges: 'debug-edge', albedo: 'debug-albedo', lit: 'debug-lit' };
+      for (const w of words) if (modes[w]) pieces.ink?.setMode?.(modes[w]);
     },
   };
   return api;

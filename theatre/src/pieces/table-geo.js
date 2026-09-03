@@ -62,3 +62,12 @@ export const smooth = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
+
+// The square cloth is laid corner-forward (rotated CLOTH_ROT about y), so a point of the cloth
+// hangs towards the visitor and the hem is two lines dropping out of the frame. World (x, z) on
+// the table top → cloth-local (x, z), for drawing marks into the cloth's texture.
+export const CLOTH_ROT = Math.PI / 4;
+export function clothLocal(x, z) {
+  const c = Math.cos(CLOTH_ROT), s = Math.sin(CLOTH_ROT);
+  return [x * c - z * s, x * s + z * c];
+}

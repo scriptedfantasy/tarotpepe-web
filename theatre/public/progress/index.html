@@ -46,7 +46,7 @@
 <div class="grid" id="grid"></div>
 <div class="log" id="log"></div>
 <script>
-const ORDER = ['ink','room','props','table','pepe','pepeAnim','cards','reveal','lighting','camera','titles','dialogue','sound','flow','whole'];
+const ORDER = ['ink','room','props','table','pepe','pepeAnim','cards','reveal','lighting','camera','titles','dialogue','mind','sound','flow','whole'];
 async function load() {
   let text = '';
   try { text = await (await fetch('/progress/log.jsonl?_=' + Date.now())).text(); } catch {}

@@ -1,15 +1,44 @@
-// table-objects — the still life on the far half of the table (z < -0.12; the strip z < -0.44 at
-// the far edge is left for Pepe's hands). Paper-white with drawn patterns; the ink pass draws the
-// outlines and the tone. Things, left to right: a folded newspaper with a saucer, an espresso cup,
-// a spoon and a sugar cube on it, a pencil across it; a plate with a crumpled napkin, olive stones
-// and a knife; an ashtray with two stubbed cigarettes and a heap of ash; a matchbox; coins; a
-// pair of folded spectacles; a wine glass; a tumbler of water; a candle stuck in a wine bottle.
+// table-objects — the still life: one deliberate row across the middle band of the table, in
+// front of Pepe's hands (which rest at z ≈ -0.40..-0.24, x ≈ ±0.17..0.35) and behind the three
+// card slots (z > 0.02). Low things in the row, tall things at the two sides where they do not
+// hide the hands. Left to right: a plate with a crumpled napkin, olive stones and a knife; a wine
+// glass; a folded newspaper carrying a saucer, an espresso cup, a spoon and a sugar cube; an
+// ashtray with two stubbed cigarettes and a heap of ash; a matchbox with its drawer out and a
+// match beside; a scatter of coins; a pocket watch on its chain; a folded letter; a pair of folded
+// spectacles; a tumbler of water; a candle stuck in a wine bottle. Paper-white with drawn
+// patterns; the ink pass draws the outlines and the tone.
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { lathe, surface, smooth } from './table-geo.js';
-import { bottleLabelTexture, newspaperTexture, matchboxTexture, coinTexture, chinaTexture, glassMaskTexture, wrapRepeat } from './table-textures.js';
+import { bottleLabelTexture, newspaperTexture, matchboxTexture, coinTexture, chinaTexture, glassMaskTexture, noteTexture, watchTexture, wrapRepeat } from './table-textures.js';
 
 const DARK = '#2a2622';
+
+// where things stand on the top (world x, z), shared with the cloth texture for rings and crumbs
+export const PLACES = {
+  plate: [-0.52, 0.02],
+  tumbler: [-0.52, -0.22],
+  newspaper: [-0.38, -0.13],
+  ashtray: [-0.15, -0.13],
+  matchbox: [-0.01, -0.09],
+  watch: [0.14, -0.15],
+  note: [0.3, -0.13],
+  spectacles: [0.45, -0.08],
+  wineGlass: [0.55, -0.1],
+  bottle: [0.44, -0.34],
+  pen: [0.35, -0.07],
+  coins: [
+    [0.04, -0.2, 0.3],
+    [0.075, -0.215, 1.4],
+    [0.1, -0.11, 2.2],
+    [0.16, -0.24, 0.9],
+    [0.22, -0.2, 2.8],
+    [0.2, -0.09, 1.1],
+    [-0.06, -0.21, 0.5],
+    [0.25, -0.24, 1.9],
+    [0.06, -0.14, 2.5],
+  ],
+};
 
 function mesh(geo, mat, { x = 0, y = 0, z = 0, ry = 0, rx = 0, rz = 0, shadow = true } = {}) {
   const m = new THREE.Mesh(geo, mat);
@@ -51,6 +80,12 @@ export function buildStillLife(ctx, top) {
   };
   const china = wrapRepeat(chinaTexture());
   const chinaMat = inkMaterial({ map: china, hatch: 0.35 });
+  const at = (grp, key, y = top) => {
+    const [x, z] = PLACES[key];
+    grp.position.set(x, y, z);
+    g.add(grp);
+    return grp;
+  };
 
   // ---------- wine glass ----------
   {
@@ -90,8 +125,7 @@ export function buildStillLife(ctx, top) {
       [0.0, 0.1],
     ];
     grp.add(mesh(lathe(wine, 36), dark));
-    grp.position.set(0.44, top, -0.1);
-    g.add(grp);
+    at(grp, 'wineGlass');
   }
 
   // ---------- a tumbler of water ----------
@@ -110,8 +144,7 @@ export function buildStillLife(ctx, top) {
     grp.add(mesh(lathe(prof, 28), glassMat([[0, 2 / 6], [3 / 6, 4 / 6]]), { shadow: false }));
     // the water: a flat disc whose edge the pen draws as the level
     grp.add(mesh(lathe([[0, 0.005], [0.0265, 0.005], [0.0275, 0.04], [0, 0.04]], 28), inkMaterial({ hatch: 0.25 }), { shadow: false }));
-    grp.position.set(0.42, top, -0.31);
-    g.add(grp);
+    at(grp, 'tumbler');
   }
 
   // ---------- ashtray with two stubs, a heap of ash ----------
@@ -127,7 +160,7 @@ export function buildStillLife(ctx, top) {
       [0.04, 0.005],
       [0.0, 0.004],
     ];
-    grp.add(mesh(lathe(body, 40), white));
+    grp.add(mesh(lathe(body, 40), dark));
     // the upper rim in three arcs: the gaps are the cigarette rests
     const rim = [
       [0.058, 0.012],
@@ -138,7 +171,7 @@ export function buildStillLife(ctx, top) {
     for (let k = 0; k < 3; k++) {
       const arc = 2 * Math.PI * 0.3;
       const start = (k * 2 * Math.PI) / 3 + Math.PI * 0.05;
-      grp.add(mesh(lathe(rim, 20, arc, start), white));
+      grp.add(mesh(lathe(rim, 20, arc, start), dark));
     }
     const stub = (len, bend, rot) => {
       const s = new THREE.Group();
@@ -162,10 +195,10 @@ export function buildStillLife(ctx, top) {
     s2.position.set(0.025, 0.02, 0.048);
     s2.rotation.z = -0.28;
     grp.add(s2);
-    const heap = mesh(lump(0.013, 1.3, 0.35, 1, 3), dark, { x: 0.008, y: 0.005, z: -0.01 });
+    const heap = mesh(lump(0.013, 1.3, 0.35, 1, 3), whiteThin, { x: 0.008, y: 0.005, z: -0.01 });
     grp.add(heap);
-    grp.position.set(-0.1, top, -0.36);
-    g.add(grp);
+    grp.rotation.y = 0.4;
+    at(grp, 'ashtray');
   }
 
   // ---------- matchbox, with the drawer pushed out and one match beside ----------
@@ -180,9 +213,8 @@ export function buildStillLife(ctx, top) {
     mb.add(mesh(new THREE.BoxGeometry(0.012, 0.011, 0.031), whiteThin, { x: 0.031, y: 0.007 }));
     mb.add(mesh(new THREE.CylinderGeometry(0.0012, 0.0012, 0.04, 6), whiteThin, { rz: Math.PI / 2, ry: 0.4, x: 0.01, y: 0.0012, z: 0.03 }));
     mb.add(mesh(new THREE.SphereGeometry(0.0022, 6, 5), dark, { x: 0.01 + Math.cos(0.4) * 0.02, y: 0.0022, z: 0.03 - Math.sin(0.4) * 0.02 }));
-    mb.position.set(0.04, top, -0.28);
     mb.rotation.y = -0.55;
-    g.add(mb);
+    at(mb, 'matchbox');
   }
 
   // ---------- the candle in a bottle ----------
@@ -248,12 +280,11 @@ export function buildStillLife(ctx, top) {
       [0.0, lipY + 0.121],
     ];
     grp.add(mesh(lathe(flame, 16), inkMaterial({ hatch: 0, lineWeight: 0.8 }), { shadow: false }));
-    grp.position.set(0.5, top, -0.21);
     grp.rotation.y = 0.25;
-    g.add(grp);
+    at(grp, 'bottle');
   }
 
-  // ---------- the folded newspaper, with the saucer set and a pencil on it ----------
+  // ---------- the folded newspaper, with the saucer set on it ----------
   const paperTh = 0.011;
   {
     const np = new THREE.Group();
@@ -269,7 +300,10 @@ export function buildStillLife(ctx, top) {
     for (let i = 0; i < 4; i++) {
       np.add(mesh(new THREE.BoxGeometry(W - 0.004 * i, 0.0016, 0.012), pageMat, { x: 0.002 * i, y: paperTh - 0.0012 - i * 0.0026, z: D / 2 + 0.003 + i * 0.0022 }));
     }
-    // a pencil across the near half of the paper: hexagonal, sharpened, a dark lead
+    np.rotation.y = 0.12;
+    at(np, 'newspaper');
+
+    // a pencil in the far strip between Pepe's wrists: hexagonal, sharpened, a dark lead
     const pencil = new THREE.Group();
     pencil.add(mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 0.11, 6), whiteThin, { rz: Math.PI / 2 }));
     pencil.add(mesh(new THREE.ConeGeometry(0.0035, 0.012, 6), whiteThin, { rz: -Math.PI / 2, x: 0.061 }));
@@ -278,9 +312,6 @@ export function buildStillLife(ctx, top) {
     pencil.position.set(-0.02, top + 0.0035, -0.475);
     pencil.rotation.y = 0.12;
     g.add(pencil);
-    np.position.set(-0.47, top, -0.18);
-    np.rotation.y = 0.15;
-    g.add(np);
 
     const saucer = [
       [0.0, 0.0],
@@ -324,10 +355,11 @@ export function buildStillLife(ctx, top) {
     spoon.rotation.y = -0.45;
     spoon.rotation.z = 0.06;
     set.add(spoon);
-    set.position.set(-0.465, top + paperTh, -0.175);
-    set.rotation.y = 0.15;
+    set.rotation.y = 0.12;
+    set.position.set(PLACES.newspaper[0] + 0.005, top + paperTh, PLACES.newspaper[1] + 0.005);
     g.add(set);
-    g.add(mesh(new THREE.BoxGeometry(0.017, 0.012, 0.017), white, { x: -0.4, y: top + 0.006, z: -0.11, ry: -0.3 }));
+    // a second sugar cube dropped beside the paper
+    g.add(mesh(new THREE.BoxGeometry(0.017, 0.012, 0.017), white, { x: PLACES.newspaper[0] + 0.12, y: top + 0.006, z: PLACES.newspaper[1] + 0.09, ry: -0.3 }));
   }
 
   // ---------- a plate with a crumpled napkin, three olive stones and a knife ----------
@@ -366,41 +398,108 @@ export function buildStillLife(ctx, top) {
     knife.rotation.y = -0.2;
     knife.rotation.z = -0.03;
     grp.add(knife);
-    grp.position.set(-0.5, top, -0.03);
     grp.rotation.y = 0.3;
-    g.add(grp);
+    at(grp, 'plate');
   }
 
-  // ---------- coins and a pair of folded spectacles ----------
+  // ---------- coins: a scatter and a small stack ----------
   {
     const face = inkMaterial({ map: coinTexture(), hatch: 0.3 });
     const rimM = inkMaterial({ hatch: 0.5 });
-    const coin = (x, z, ry, y = top) => {
-      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.0125, 0.0125, 0.0018, 24), [rimM, face, face]);
-      c.position.set(x, y + 0.0009, z);
+    const coin = (x, z, ry, y = top, r = 0.014) => {
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.002, 24), [rimM, face, face]);
+      c.position.set(x, y + 0.001, z);
       c.rotation.y = ry;
       c.castShadow = true;
       c.receiveShadow = true;
       return c;
     };
-    g.add(coin(0.12, -0.35, 0.3));
-    g.add(coin(0.135, -0.338, 1.4, top + 0.0018));
-    g.add(coin(0.155, -0.375, 2.2));
-    g.add(coin(-0.02, -0.2, 0.9));
+    for (const [x, z, r] of PLACES.coins) g.add(coin(x, z, r));
+    // two stacked on the first, and a big one half under the second
+    g.add(coin(PLACES.coins[0][0] + 0.004, PLACES.coins[0][1] - 0.003, 1.9, top + 0.002));
+    g.add(coin(PLACES.coins[0][0] + 0.007, PLACES.coins[0][1] + 0.002, 0.7, top + 0.004));
+    g.add(coin(PLACES.coins[3][0] + 0.02, PLACES.coins[3][1] + 0.012, 2.2, top, 0.017));
+  }
 
+  // ---------- a pocket watch on its chain ----------
+  {
+    const grp = new THREE.Group();
+    const dial = inkMaterial({ map: watchTexture(), hatch: 0.25 });
+    const brass = inkMaterial({ hatch: 0.55 });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.009, 36), [brass, dial, brass]);
+    body.position.y = 0.0045;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    grp.add(body);
+    // bezel ring, crown, bow
+    grp.add(mesh(new THREE.TorusGeometry(0.0235, 0.0016, 8, 40), brass, { y: 0.009, rx: Math.PI / 2 }));
+    grp.add(mesh(new THREE.CylinderGeometry(0.0032, 0.0032, 0.006, 8), brass, { y: 0.0045, z: 0.027, rx: Math.PI / 2 }));
+    grp.add(mesh(new THREE.TorusGeometry(0.0055, 0.0013, 6, 16), brass, { y: 0.0045, z: 0.036, rx: Math.PI / 2 }));
+    // the chain: little links curling away from the bow
+    const link = new THREE.TorusGeometry(0.0038, 0.0009, 5, 12);
+    for (let i = 0; i < 11; i++) {
+      const t = i / 10;
+      const x = 0.006 + t * 0.09 + 0.02 * Math.sin(t * Math.PI);
+      const z = 0.042 + t * 0.03 - 0.03 * Math.sin(t * Math.PI * 1.3);
+      const l = mesh(link, brass, { x, y: 0.001, z, rx: Math.PI / 2 + (i % 2) * 0.8, ry: t * 1.4 });
+      grp.add(l);
+    }
+    // the fob at the chain's end: a small solid disc
+    grp.add(mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.003, 12), dark, { x: 0.118, y: 0.0015, z: 0.06 }));
+    grp.rotation.y = 2.7;
+    at(grp, 'watch');
+  }
+
+  // ---------- a folded letter ----------
+  {
+    const grp = new THREE.Group();
+    const noteMat = inkMaterial({ map: noteTexture(), hatch: 0.25, lineWeight: 0.9 });
+    const pageMat = inkMaterial({ hatch: 0.25, lineWeight: 0.9 });
+    const W = 0.105, D = 0.072, T = 0.0016;
+    const sheet = new THREE.Mesh(new THREE.BoxGeometry(W, T, D), [pageMat, pageMat, noteMat, pageMat, pageMat, pageMat]);
+    sheet.position.y = T / 2;
+    sheet.castShadow = true;
+    sheet.receiveShadow = true;
+    grp.add(sheet);
+    // the folded-over half lies on top, not quite square, with the fold as a rounded edge
+    const flap = mesh(new THREE.BoxGeometry(W * 0.5, T, D * 0.97), pageMat, { x: W * 0.26, y: T * 1.5 + 0.0004, z: 0.002, ry: 0.06, rz: 0.03 });
+    grp.add(flap);
+    grp.add(mesh(new THREE.CylinderGeometry(T, T, D, 8), pageMat, { x: W * 0.5 + 0.001, y: T * 1.2, rx: Math.PI / 2 }));
+    grp.rotation.y = 0.35;
+    at(grp, 'note');
+  }
+
+  // ---------- a black fountain pen, capped, lying by the letter ----------
+  {
+    const pen = new THREE.Group();
+    const barrel = mesh(new THREE.CylinderGeometry(0.0055, 0.005, 0.075, 12), dark, { rz: Math.PI / 2, x: -0.0125 });
+    pen.add(barrel);
+    pen.add(mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.045, 12), dark, { rz: Math.PI / 2, x: 0.0475 }));
+    // the cap's band and the clip, in paper white; a rounded end on the barrel
+    pen.add(mesh(new THREE.CylinderGeometry(0.0063, 0.0063, 0.004, 12), white, { rz: Math.PI / 2, x: 0.027 }));
+    pen.add(mesh(new THREE.BoxGeometry(0.03, 0.0016, 0.003), white, { x: 0.052, y: 0.0068, z: 0.0 }));
+    pen.add(mesh(new THREE.SphereGeometry(0.005, 10, 8), dark, { x: -0.05 }));
+    pen.position.y = 0.006;
+    const grp = new THREE.Group();
+    grp.add(pen);
+    grp.rotation.y = 0.55;
+    at(grp, 'pen');
+  }
+
+  // ---------- a pair of folded spectacles ----------
+  {
     const spec = new THREE.Group();
     const wire = inkMaterial({ hatch: 0.6, lineWeight: 0.7 });
     for (const s of [-1, 1]) {
-      const ring = mesh(new THREE.TorusGeometry(0.017, 0.0013, 6, 24), wire, { x: s * 0.02, rx: Math.PI / 2 });
+      const ring = mesh(new THREE.TorusGeometry(0.019, 0.0015, 6, 24), wire, { x: s * 0.022, rx: Math.PI / 2 });
       spec.add(ring);
     }
-    spec.add(mesh(new THREE.CylinderGeometry(0.0012, 0.0012, 0.008, 6), wire, { rz: Math.PI / 2, y: 0.002 }));
+    spec.add(mesh(new THREE.CylinderGeometry(0.0013, 0.0013, 0.008, 6), wire, { rz: Math.PI / 2, y: 0.002 }));
     // arms folded back across the lenses
-    spec.add(mesh(new THREE.BoxGeometry(0.06, 0.0016, 0.0025), wire, { x: 0.006, y: 0.0035, z: 0.006, ry: 0.22 }));
-    spec.add(mesh(new THREE.BoxGeometry(0.06, 0.0016, 0.0025), wire, { x: -0.006, y: 0.0055, z: 0.009, ry: -0.22 }));
-    spec.position.set(0.06, top + 0.0015, -0.44);
+    spec.add(mesh(new THREE.BoxGeometry(0.066, 0.0018, 0.0028), wire, { x: 0.006, y: 0.0035, z: 0.006, ry: 0.22 }));
+    spec.add(mesh(new THREE.BoxGeometry(0.066, 0.0018, 0.0028), wire, { x: -0.006, y: 0.0055, z: 0.009, ry: -0.22 }));
     spec.rotation.y = -0.2;
-    g.add(spec);
+    at(spec, 'spectacles', top + 0.0016);
   }
 
   return g;

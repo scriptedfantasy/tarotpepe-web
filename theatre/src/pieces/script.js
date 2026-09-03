@@ -199,8 +199,8 @@ const CARDS = {
       'There are cards on the ground under the wheel. Somebody was reading them when it turned.',
     ],
     going: [
-      'The wheel is moving. You are neither at the top nor the bottom, but the part that is hard to see.',
-      'The figure at the side reads a book while it turns. That is one method. It is not a bad one.',
+      'The wheel is turning. You are neither at the top nor the bottom. You are on the hard-to-see part.',
+      'The figure at the side reads a book while it turns. That is one method, and not a bad one.',
     ],
     do: ['Do not push the wheel. Pushing only shows the wheel where your hands are.', 'Write down what is on top today. In a month you will not believe it.'],
   },
@@ -448,7 +448,7 @@ const CARDS = {
   },
   'page-of-cups': {
     brought: [
-      'You brought a cup with a bird in it. You look at the bird. A grey frog looks at you both.',
+      'You brought a cup with a bird in it. You watch the bird. A grey frog watches you both.',
       'You have long hair in this picture, and a ruff. You have dressed for a feeling.',
     ],
     going: [
@@ -605,7 +605,7 @@ const CARDS = {
   'page-of-pentacles': {
     brought: [
       'You brought one coin on a stick and are holding it up to the light, in a field, alone.',
-      'A second coin lies in the water at your feet. You have not seen it; you are busy with the stick.',
+      'A second coin lies in the water by your feet. You missed it; you were busy with the stick.',
     ],
     going: [
       'You have found the start of something practical. You are studying it before it is a thing. Correct order.',
@@ -615,7 +615,7 @@ const CARDS = {
   },
   'knight-of-pentacles': {
     brought: [
-      'You brought a horse and have not moved it. You sit in a field, looking at a coin on a pole.',
+      'You brought a horse you have not moved. You sit in a field, looking at a coin on a pole.',
       'You are in full armour for a job that involves standing still. That is thorough.',
     ],
     going: [
@@ -638,7 +638,7 @@ const CARDS = {
   'king-of-pentacles': {
     brought: [
       'You brought a crown, a castle, a stack of coins by the chair, and bare feet.',
-      'You hold one coin up to the light and turn it. You know its worth. You are checking that it knows.',
+      'You hold one coin to the light and turn it. You know its worth. You are checking that it knows.',
     ],
     going: [
       'It is done, the building of it. The castle is behind you; the coins are counted; the bird is leaving.',
@@ -698,7 +698,7 @@ const CARDS = {
       'There are two others in the picture. One is walking away. One is watching you from the edge.',
     ],
     going: [
-      'You won, and it cost you the people you won in front of. That is the exchange rate in this suit.',
+      'You won, and it cost you the people you won in front of. That is the exchange rate here.',
       'The swords on the ground are the ones nobody wanted to carry home. There are always some.',
     ],
     do: ['Give one sword back. Not as an apology; as a weight you do not need.', 'Then leave the field. Fields where you won are not good places to stay. The grass remembers.'],
@@ -731,14 +731,14 @@ const CARDS = {
       'Eight swords around you and none of them touching you. There is a gap on the left. There always was.',
     ],
     going: [
-      'You are stuck in a way that is mostly cloth. Cloth is not stone. You know this; your eyes are shut.',
+      'You are stuck in a way that is mostly cloth. Cloth is not stone. You know; your eyes are shut.',
       'The moon is full and there are stars on it. Someone drew you a good night to be stuck in.',
     ],
     do: ['Open your eyes. Just that. Do not stand up yet; you will fall.', 'Then turn left. Then walk. The swords do not move; that is the thing about swords stuck in sand.'],
   },
   'nine-of-swords': {
     brought: [
-      'A bed, three in the morning, your hand over your face, nine swords on the wall. You brought all of it.',
+      'A bed, three in the morning, your hand over your face, nine swords on the wall. You brought it all.',
       'There is a small bottle by the bed. You have not opened it. You have moved it closer, twice.',
     ],
     going: [
@@ -753,14 +753,14 @@ const CARDS = {
       'Ten is more than necessary. One does it. Whoever did this wanted to be sure, and it is over.',
     ],
     going: [
-      'It ended as badly as it could. You are at this table. That is all the good news; it is plenty.',
+      'It ended as badly as it could. You are at this table. That is the good news; it is plenty.',
       'The sun is black. That is a picture of a night. Nights are the ones that end.',
     ],
     do: ['Do nothing. Lie there. This is the one card where lying there is the instruction.', 'Tomorrow, remove one sword and keep it. You will want to describe this later; a sword is a good description.'],
   },
   'page-of-swords': {
     brought: [
-      'A sword, a ruff, a hand on your hip and a great deal of wind. The hair came with the card.',
+      'A sword, a ruff, one hand on the hip, a great deal of wind. The hair came with the card.',
       'You are standing up straight with the point in the grass. You are ready. Nobody has told you what for.',
     ],
     going: [
@@ -798,7 +798,7 @@ const CARDS = {
     ],
     going: [
       'You are being asked to decide for other people, and you are right, and being right has made you lonely.',
-      'The sword is straight up, pointed at nobody, held where everyone can see. That is the job; it tires the arm.',
+      'The sword is straight up, pointed at nobody, where everyone can see. That is the job; it tires the arm.',
     ],
     do: ['Decide it. Say the decision in one sentence, then the reason in one more. Then no more sentences.', 'Pick up the coin. Small things on the floor are how kings are judged, later, by the ones who sweep.'],
   },
@@ -810,7 +810,7 @@ const CARDS = {
       'You are not wearing much in this picture. An idea does that. It arrives before the clothes.',
     ],
     going: [
-      'Something new is in your hand and it has roots. It came out of the ground; it is not a wish.',
+      'Something new is in your hand and it has roots. It came from the ground; it is not a wish.',
       'Clouds on both sides and the light in the middle. That is not weather; that is a beginning, drawn honestly.',
     ],
     do: ['Plant it today. Not on the good spot; on the spot you have.', 'Then let go of the stem. It will stand. That is what roots are.'],
@@ -828,12 +828,12 @@ const CARDS = {
   },
   'three-of-wands': {
     brought: [
-      'A view of the sea with ships on it, three wands in a row, and a small frog at your feet.',
+      'A view of the sea with ships on it, three wands in a row, a small frog at your feet.',
       'Your back is to me. Your back is to the frog. You are looking at boats that have already left.',
     ],
     going: [
       'Something you sent is on its way back. The card is the part where it is not here yet.',
-      'Two moons in the sky, a full one and a thin one. You have been waiting long enough to see both.',
+      'Two moons in the sky, one full and one thin. You have been waiting long enough to see both.',
     ],
     do: ['Turn around. The frog has been trying to say something for a while. It is short; frogs are.', 'Then go back to the view. Waiting is work; do it with the wands, not against them.'],
   },
@@ -872,7 +872,7 @@ const CARDS = {
   },
   'seven-of-wands': {
     brought: [
-      'A rock to stand on, a wand to hold, six wands coming up from below, two of them held by frogs.',
+      'A rock to stand on, a wand to hold, six wands coming up from below, two held by frogs.',
       'You are above them. You are also outnumbered, and you have noticed the arithmetic.',
     ],
     going: [
@@ -899,7 +899,7 @@ const CARDS = {
     ],
     going: [
       'You have nearly finished, and it has cost you. The last part looks like the first; you are more tired.',
-      'A small creature on the right is watching you. Not an enemy. It has come to see whether you sit down.',
+      'A small creature on the right watches you. Not an enemy. It has come to see whether you sit down.',
     ],
     do: ['Do not sit down yet. One more. Then sit for a long time; the fence will hold.', 'Move the skull. Not far. Just out of the picture, where you keep looking at it.'],
   },
@@ -920,14 +920,14 @@ const CARDS = {
       'Something is growing at the top of the wand. You have not decided whether you are allowed to be pleased.',
     ],
     going: [
-      'You have a message. It is small and it is yours, and you stand in a large empty place with it.',
+      'You have a message. It is small, it is yours, and you stand in a large empty place with it.',
       'The sun in this picture is not looking at the desert. It is looking at the wand. So is everyone.',
     ],
     do: ['Deliver it. Go the way the sand is flat.', 'Do not improve the message on the road. The road is where messages get improved into nothing.'],
   },
   'knight-of-wands': {
     brought: [
-      'A black horse on its back legs, a wand in the air, and a plan that was made on the horse.',
+      'A black horse on its back legs, a wand in the air, and a plan made on the horse.',
       'The moon is a crescent. You left early. You leave early; the card knows.',
     ],
     going: [
@@ -942,8 +942,8 @@ const CARDS = {
       'You have crossed your legs on the throne. It is your throne. You had it made for crossing legs on.',
     ],
     going: [
-      'People are drawn to you, and you work to be worth it. That is harder, and you do it before breakfast.',
-      'The cat on the right watches the door. It is your cat. It watches so that you do not have to.',
+      'People are drawn to you, and you work to be worth it. That is harder; you do it before breakfast.',
+      'The cat on the right watches the door. It is your cat. It watches so you do not have to.',
     ],
     do: ['Hold the sunflower higher. That is not vanity; it is a flower, and flowers are for pointing.', 'Let the lion sleep. You do not need it awake to be who you are.'],
   },
@@ -956,7 +956,7 @@ const CARDS = {
       'You have been in charge of the fire for some time. The fire assumes you will always be there.',
       'A creature is flying at the top of the picture. Small. Leaving. You have seen it, and let it.',
     ],
-    do: ['Give the small lion something to guard. Something small. It will grow into the guarding.', 'Then sit back in the chair. It has a back. You have been sitting on the edge of it for years.'],
+    do: ['Give the small lion something to guard. Something small. It will grow into the guarding.', 'Then sit back in the chair. It has a back. You have sat on the edge of it for years.'],
   },
 };
 

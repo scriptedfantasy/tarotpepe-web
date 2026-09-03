@@ -837,9 +837,9 @@ export function shadeTexture(seed = 18) {
     (g, W, H, rng) => {
       paper(g, W, H, '#faf7f0', { grain: 0, seed });
       let n = 0, guard = 0;
-      while (n < 620 && guard++ < 6000) {
+      while (n < 400 && guard++ < 6000) {
         const x = rng() * W;
-        const d = Math.pow(Math.abs(Math.sin((x / W) * Math.PI * 2)), 1.6);
+        const d = Math.pow(Math.abs(Math.sin((x / W) * Math.PI * 2)), 2.2);
         if (rng() > d) continue;
         const y = rng() * H;
         const len = 26 + rng() * 60;
@@ -1005,6 +1005,66 @@ export function doilyTexture(seed = 24) {
 }
 
 export { PAPER, INK };
+
+// ---- the overcoat on the hat stand: an alpha cut-out, solid ink, three paper fold lines --------
+export function coatCutTexture(seed = 30) {
+  return drawTexture(
+    256,
+    512,
+    (g, W, H, rng) => {
+      g.clearRect(0, 0, W, H);
+      const j = (v) => v + (rng() - 0.5) * 5;
+      // the silhouette: shoulders, sleeves hanging at the sides, a body that flares at the hem
+      const shape = [
+        [110, 16], [128, 6], [146, 16], [176, 30], [214, 44], [228, 120], [236, 300], [200, 306], [198, 330], [204, 500], [52, 500], [58, 330], [56, 306], [20, 300], [28, 120], [42, 44], [80, 30],
+      ].map(([x, y]) => [j(x), j(y)]);
+      fillPoly(g, shape, INK);
+      const o = { width: 4.5, wobble: 1.8, rng, color: LABEL_PAPER };
+      // three fold lines down the body
+      for (const u of [98, 128, 158]) inkLine(g, u + (rng() - 0.5) * 4, 70, u + (rng() - 0.5) * 12, 486, o);
+      // the collar: a paper V with two lapel strokes
+      inkLine(g, 128, 84, 104, 30, o);
+      inkLine(g, 128, 84, 152, 30, o);
+      inkLine(g, 104, 30, 88, 62, { ...o, width: 3.5 });
+      inkLine(g, 152, 30, 168, 62, { ...o, width: 3.5 });
+      // sleeve seams and cuffs
+      inkLine(g, 58, 60, 52, 296, { ...o, width: 3.5 });
+      inkLine(g, 198, 60, 204, 296, { ...o, width: 3.5 });
+      inkLine(g, 22, 282, 56, 284, { ...o, width: 3.5 });
+      inkLine(g, 200, 284, 234, 282, { ...o, width: 3.5 });
+      // buttons
+      for (const y of [120, 190, 260]) dot(g, 118, y, 6, LABEL_PAPER);
+    },
+    { seed },
+  );
+}
+
+// ---- the cat's head: solid ink, two paper eye slits and whiskers where the sphere faces the room
+// (a SphereGeometry's u = 0.25 faces +z), drawn in the texture so no outline swallows them.
+export function catHeadTexture(seed = 31) {
+  return drawTexture(
+    256,
+    128,
+    (g, W, H, rng) => {
+      g.fillStyle = INK;
+      g.fillRect(0, 0, W, H);
+      const cx = W * 0.25, cy = H * 0.47;
+      for (const s of [-1, 1]) {
+        // a closed eye: a paper crescent
+        g.save();
+        g.fillStyle = LABEL_PAPER;
+        g.beginPath();
+        g.ellipse(cx + s * 17, cy, 11, 4.5, s * 0.18, 0, Math.PI * 2);
+        g.fill();
+        g.restore();
+        // three whiskers
+        for (let i = 0; i < 3; i++) inkLine(g, cx + s * 22, cy + 12 + i * 5, cx + s * 58, cy + 6 + i * 9, { width: 2.2, wobble: 0.6, rng, color: LABEL_PAPER });
+      }
+      dot(g, cx, cy + 10, 3, LABEL_PAPER);
+    },
+    { seed },
+  );
+}
 
 // ---- the cat asleep on the bookcase: a solid ink silhouette with one white eye slit -----------
 export function catTexture(seed = 29) {
