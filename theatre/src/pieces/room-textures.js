@@ -151,70 +151,9 @@ export function wallpaperTexture({ tile = 1.02, ppm = 1000, seed = 21 } = {}) {
   return tex;
 }
 
-// Frieze: a Greek key meander over a base line, along the picture rail — drawn the way a pen
-// draws one: each unit is ONE continuous stroke (a hooked spiral), the corners rounded off by the
-// wobble and overshot at the start and the end, the units' widths and heights drifting from one
-// to the next, the pen going lighter now and then. Tile 0.68 m holds three units. No rules (the
-// rail and cornice above and below give the band its edges). The band is `height` m tall starting
-// at y0; the texture's repeat/offset are set so the canvas spans exactly that band.
-export function friezeTexture({ tile = 0.68, ppm = 1000, seed = 31, y0: bandY0 = 2.64, height = 0.34 } = {}) {
-  const size = Math.round(tile * ppm);
-  const bandH = Math.round(height * ppm);
-  const tex = drawTexture(
-    size,
-    bandH,
-    (g, w, h, rng) => {
-      paper(g, w, h, PAPER, { grain: 0.012, seed });
-      const units = 3;
-      const widths = [];
-      for (let i = 0; i < units; i++) widths.push(0.86 + rng() * 0.28);
-      const sum = widths.reduce((p, q) => p + q, 0);
-      const yBase = h * 0.76, yTop = h * 0.24;
-      const lw = 5.5;
-      // base line: one long stroke, broken once where the pen lifted
-      const brk = w * (0.3 + rng() * 0.4);
-      inkLine(g, -4, yBase, brk - 5, yBase + (rng() - 0.5) * 4, { width: lw, wobble: 2.2, rng, alpha: 0.85, segments: 30 });
-      inkLine(g, brk + 4, yBase + (rng() - 0.5) * 4, w + 4, yBase, { width: lw, wobble: 2.2, rng, alpha: 0.85, segments: 30 });
-      let x0 = 0;
-      for (let i = 0; i < units; i++) {
-        const u = (w * widths[i]) / sum;
-        const kh = (yBase - yTop) * (0.9 + rng() * 0.12); // this unit's height
-        const lean = (rng() - 0.5) * 0.05; // a little tilt, unit by unit
-        const alpha = rng() < 0.15 ? 0.55 : 0.85; // the pen running dry on one unit in seven
-        const P = (fx, fy) => [x0 + fx * u + (fy * kh) * lean, yBase - fy * kh];
-        // the spiral: up from the base line, across, down, back, up, in — one stroke, with the
-        // start overshooting below the base line and the end running on a little
-        const pts = [P(0.86, -0.06), P(0.86, 0.86), P(0.14, 0.86), P(0.14, 0.26), P(0.62, 0.26), P(0.62, 0.6), P(0.34, 0.6)];
-        // add intermediate knots so the long runs can wobble along their length
-        const dense = [];
-        for (let k = 0; k < pts.length - 1; k++) {
-          const [ax, ay] = pts[k], [bx, by] = pts[k + 1];
-          const n = Math.max(2, Math.round(Math.hypot(bx - ax, by - ay) / 16));
-          for (let s = 0; s < n; s++) dense.push([ax + ((bx - ax) * s) / n, ay + ((by - ay) * s) / n]);
-        }
-        dense.push(pts[pts.length - 1]);
-        penPath(g, dense, { width: lw * (0.9 + rng() * 0.2), wobble: 1.8, rng, alpha });
-        // now and then the pen went over a run twice
-        if (rng() < 0.3) {
-          const k = 1 + Math.floor(rng() * 3);
-          const [ax, ay] = pts[k], [bx, by] = pts[k + 1];
-          inkLine(g, ax + (rng() - 0.5) * 4, ay + 3, bx + (rng() - 0.5) * 4, by + 3, { width: lw * 0.7, wobble: 1.5, rng, alpha: 0.4, segments: 6 });
-        }
-        x0 += u;
-      }
-    },
-    { seed },
-  );
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.userData.tile = tile;
-  // v runs in metres / tile; stretch it so one canvas height is one band, and shift so the band's
-  // foot lands on v = 0
-  const ry = tile / height;
-  const v0 = bandY0 / height;
-  tex.repeat.set(1, ry);
-  tex.offset.set(0, -(v0 - Math.floor(v0)));
-  return tex;
-}
+// (The Greek-key frieze that used to live here is gone. The band between the picture rail and the
+// cornice is now bare plaster all round the room — the one big empty area the drawings always keep,
+// as in fd-anim-kitchen-table-cards-hires. room.js paints it with plainTexture: nothing to draw.)
 
 // Wainscot: tongue-and-groove boards, roughly 0.1 m wide but no two alike — a seam for each,
 // a bead beside most, the odd seam doubled where the pen went twice. Tile 0.8 m, eight boards.
@@ -324,17 +263,19 @@ export function floorTexture({ tile = 2.5, ppm = 800, seed = 51, board = 0.2 } =
   return tex;
 }
 
-// Wood grain for the door and shutters: long broken vertical strokes, the way the film draws a
-// plank door. Tile 0.25 m.
-export function grainTexture({ tile = 0.25, ppm = 1536, seed = 61, alpha = 0.7 } = {}) {
+// Wood grain for the door and shutters: a few long broken vertical strokes, the way the film draws
+// a plank door — five or six to a board's width, not fifty. Tile 0.36 m at 1000 ppm, so the strokes
+// sit 55 and 110 mm apart and stay separate lines at every distance the door is seen from; at 7 mm
+// they mip-blended into a flat grey slab.
+export function grainTexture({ tile = 0.36, ppm = 1000, seed = 61, alpha = 0.55 } = {}) {
   const size = Math.round(tile * ppm);
   const tex = drawTexture(
     size,
     size,
     (g, w, h, rng) => {
       paper(g, w, h, PAPER, { grain: 0.012, seed });
-      hatch(g, 0, 0, w, h, { angle: Math.PI / 2, spacing: 40, width: 4.2, wobble: 2.6, broken: 0.8, rng, alpha: alpha * 0.85, jitter: 12 });
-      hatch(g, 0, 0, w, h, { angle: Math.PI / 2, spacing: 76, width: 2.6, wobble: 3.8, broken: 0.9, rng, alpha: alpha * 0.5, jitter: 20 });
+      hatch(g, 0, 0, w, h, { angle: Math.PI / 2, spacing: 55, width: 5, wobble: 3.4, broken: 0.72, rng, alpha: alpha * 0.9, jitter: 16 });
+      hatch(g, 0, 0, w, h, { angle: Math.PI / 2, spacing: 110, width: 3, wobble: 4.6, broken: 0.85, rng, alpha: alpha * 0.5, jitter: 26 });
     },
     { seed },
   );

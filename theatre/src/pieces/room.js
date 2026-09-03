@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 import { Parts, subtractRect, makeWarp } from './room-build.js';
-import { wallpaperTexture, friezeTexture, wainscotTexture, floorTexture, grainTexture, plainTexture } from './room-textures.js';
+import { wallpaperTexture, wainscotTexture, floorTexture, grainTexture, plainTexture } from './room-textures.js';
 
 export const meta = {
   name: 'room',
@@ -39,7 +39,10 @@ const PROFILE = {
 export async function build(ctx) {
   const { width: W, depth: D, height: H } = ctx.layout.room;
   const hx = W / 2, zb = -D / 2; // half width, back wall z
-  const overrun = 1.5; // side walls and floor run past the front of the room towards the camera
+  // The side walls, the floor and the ceiling run well past the front of the room, past every
+  // camera position on the rail (the furthest is z = 6.2), so no shot can ever see the end of the
+  // set: the box always runs off the edge of the frame instead of stopping in blank paper.
+  const overrun = 4.2;
   const g = new THREE.Group();
   g.name = 'room';
 
@@ -54,13 +57,21 @@ export async function build(ctx) {
   const M = {
     paper: mat('wallpaper', wallpaperTexture(), { hatch: 0.3 }),
     side: mat('sidewall', plainTexture({ seed: 77 }), { hatch: 0.34 }),
-    frieze: mat('frieze', friezeTexture({ y0: BAND.frieze[0], height: BAND.frieze[1] - BAND.frieze[0] }), { hatch: 0.15 }), // a printed border: the key, not rain-hatch over it
-    wainscot: mat('wainscot', wainscotTexture(), { hatch: 0.4 }),
+    // The frieze — the band between the picture rail and the cornice, all round the room — is bare
+    // plaster: no pattern, no motif, the lightest hatch in the set. It is the room's one big rest,
+    // the empty upper wall the drawings always keep (fd-anim-kitchen-table-cards-hires), and the
+    // rail below it and the cornice above are its contour.
+    plaster: mat('plaster', plainTexture({ seed: 80 }), { hatch: 0.12 }),
+    wainscot: mat('wainscot', wainscotTexture(), { hatch: 0.36 }),
     floor: mat('floor', floorTexture(), { hatch: 0.35 }),
-    trim: mat('trim', plainTexture({ seed: 72 }), { hatch: 0.5, lineWeight: 1.15 }),
-    reveal: mat('reveal', plainTexture({ seed: 78 }), { hatch: 0.8, lineWeight: 1.1 }), // the inside faces of the openings carry tone
-    wood: mat('wood', grain, { hatch: 0.72, lineWeight: 1.1 }), // the door
-    shutter: mat('shutter', grain, { hatch: 0.58, lineWeight: 1.1 }),
+    // The joinery — cornice, rails, skirting, architraves, sashes, shutters — is PAINTED WOOD and
+    // the drawings leave it white: a cornice is two lines, a shutter is a white leaf with a dozen
+    // strokes across it. These faces are narrow (a 60 mm soffit is ten screen pixels), so any hatch
+    // they take lands as scribble rather than tone. Hence the low numbers: the line does the work.
+    trim: mat('trim', plainTexture({ seed: 72 }), { hatch: 0.22, lineWeight: 1.15 }),
+    reveal: mat('reveal', plainTexture({ seed: 78 }), { hatch: 0.66, lineWeight: 1.1 }), // the inside faces of the openings carry tone
+    wood: mat('wood', grain, { hatch: 0.44, lineWeight: 1.1 }), // the door
+    shutter: mat('shutter', grain, { hatch: 0.24, lineWeight: 1.1 }),
     glass: mat('glass', plainTexture({ tint: '#fbf9f3', seed: 73 }), { hatch: 0.04, lineWeight: 0.8 }),
     ceiling: mat('ceiling', plainTexture({ seed: 74 }), { hatch: 0.08 }),
     metal: mat('metal', plainTexture({ seed: 75 }), { hatch: 0.85, lineWeight: 1.2 }),
@@ -81,6 +92,12 @@ export async function build(ctx) {
   const door = { x0: 1.05, x1: 1.95, y0: 0, y1: 2.45, top: 2.12, depth: 0.1 };
   // a second window on the stage-right wall; its u axis is world z (u = z)
   const sideWin = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.16 };
+  // Downstage on each side wall, level with the visitor's shoulder, a second door: the way in from
+  // the landing (stage right) and the door of a press (stage left). They sit in the stretch of side
+  // wall that only the long door/window/track shots see — in those the lens is a metre from the
+  // wall and it races across a third of the frame, so it has to carry drawing, not bare paper.
+  const sideDoorR = { x0: 0.36, x1: 1.44, y0: 0, y1: 2.12, depth: 0.09 };
+  const sideDoorL = { x0: 0.44, x1: 1.28, y0: 0, y1: 2.12, depth: 0.09 };
 
   // ---- floor and ceiling ----
   P.plane(W, D + overrun, 0, 0, overrun / 2, M.floor, { rx: -Math.PI / 2, receive: true });
@@ -94,25 +111,35 @@ export async function build(ctx) {
   const backBands = [
     ['wainscot', M.wainscot],
     ['field', M.paper],
-    ['frieze', M.frieze],
+    ['frieze', M.plaster],
     ['skirt', M.trim], // wall behind the skirting (keeps the corners closed)
     ['dado', M.trim],
     ['rail', M.trim],
     ['cornice', M.trim],
   ];
+  // The side walls now carry the same dado as the back wall — skirting, boarded wainscot, dado
+  // rail — and the same picture rail and plain frieze above. Frontally they are slivers and it
+  // costs nothing; raked (the door shot) those four long horizontals converge across the frame and
+  // the wall reads as a wall instead of as the end of the paper. The field between them stays plain
+  // plaster: no wallpaper motif on a surface that steep, it would mip into noise.
   const sideBands = [
     ['skirt', M.trim],
-    ['sideField', M.side],
+    ['wainscot', M.wainscot],
+    ['dado', M.trim],
+    ['field', M.side],
+    ['rail', M.trim],
+    ['frieze', M.plaster],
     ['cornice', M.trim],
   ];
-  const BANDS = { ...BAND, sideField: [BAND.skirt[1], BAND.cornice[0]] };
+  const BANDS = { ...BAND };
+  const uEnd = zb + D + overrun;
   const walls = [
     // back wall: u = x, plane at z = zb facing +z
     { u0: -hx, u1: hx, holes: [win, door], bands: backBands, place: (u, y, w, h, m) => P.plane(w, h, u, y, zb, m, { receive: true }) },
     // stage-left wall: u = z, plane at x = -hx facing +x
-    { u0: zb, u1: zb + D + overrun, holes: [], bands: sideBands, place: (u, y, w, h, m) => P.plane(w, h, -hx, y, u, m, { ry: Math.PI / 2, receive: true }) },
+    { u0: zb, u1: uEnd, holes: [sideDoorL], bands: sideBands, place: (u, y, w, h, m) => P.plane(w, h, -hx, y, u, m, { ry: Math.PI / 2, receive: true }) },
     // stage-right wall: u = z, plane at x = +hx facing -x
-    { u0: zb, u1: zb + D + overrun, holes: [sideWin], bands: sideBands, place: (u, y, w, h, m) => P.plane(w, h, hx, y, u, m, { ry: -Math.PI / 2, receive: true }) },
+    { u0: zb, u1: uEnd, holes: [sideWin, sideDoorR], bands: sideBands, place: (u, y, w, h, m) => P.plane(w, h, hx, y, u, m, { ry: -Math.PI / 2, receive: true }) },
   ];
   for (const wall of walls) {
     for (const [band, m] of wall.bands) {
@@ -127,25 +154,26 @@ export async function build(ctx) {
   const backRun = (profile, x0, x1) => {
     for (const [y0, y1, d] of profile) P.boxFrom(x0, x1, y0, y1, zb, zb + d, M.trim, { receive: true });
   };
-  const sideRun = (profile, side) => {
+  // A run along a side wall, in z, optionally broken where a side door's architrave lands.
+  const sideRun = (profile, side, gap = null) => {
     for (const [y0, y1, d] of profile) {
       const x0 = side < 0 ? -hx : hx - d, x1 = side < 0 ? -hx + d : hx;
       // runs into the back-wall moulding (same material, so the overlap is invisible and the
       // corner closes without an end face showing)
-      P.boxFrom(x0, x1, y0, y1, zb, zb + D + overrun, M.trim, { receive: true });
+      const spans = gap ? [[zb, gap[0]], [gap[1], uEnd]] : [[zb, uEnd]];
+      for (const [z0, z1] of spans) if (z1 > z0) P.boxFrom(x0, x1, y0, y1, z0, z1, M.trim, { receive: true });
     }
   };
+  const a0 = 0.1; // the architraves interrupt the skirting and the dado rail
   for (const key of ['skirt', 'dado', 'rail', 'cornice']) {
     const prof = PROFILE[key];
-    if (key === 'skirt' || key === 'dado') {
-      const a = 0.1; // interrupted by the door architrave
-      backRun(prof, -hx, door.x0 - a);
-      backRun(prof, door.x1 + a, hx);
+    const low = key === 'skirt' || key === 'dado';
+    if (low) {
+      backRun(prof, -hx, door.x0 - a0);
+      backRun(prof, door.x1 + a0, hx);
     } else backRun(prof, -hx, hx);
-    if (key === 'skirt' || key === 'cornice') {
-      sideRun(prof, -1);
-      sideRun(prof, 1);
-    }
+    sideRun(prof, -1, low ? [sideDoorL.x0 - a0, sideDoorL.x1 + a0] : null);
+    sideRun(prof, 1, low ? [sideDoorR.x0 - a0, sideDoorR.x1 + a0] : null);
   }
 
   // ---- the openings ----
@@ -156,8 +184,15 @@ export async function build(ctx) {
   // a mouse hole in the skirting, stage right of the door: an arch of solid hatch
   P.add(new THREE.CircleGeometry(0.048, 14, 0, Math.PI), M.dark, { x: door.x1 + 0.1 + 0.42, y: 0.004, z: zb + PROFILE.skirt[0][2] + 0.002 });
   // the side window is the back-wall window rotated onto the stage-right wall: local +z → world −x
-  const sideFrame = new THREE.Matrix4().makeTranslation(hx - Math.abs(zb), 0, 0).multiply(new THREE.Matrix4().makeRotationY(-Math.PI / 2));
-  P.withFrame(sideFrame, () => buildWindow(P, M, sideWin, zb, jit));
+  // (local x → world +z, so a u range reads straight off as a z range)
+  const rightFrame = new THREE.Matrix4().makeTranslation(hx - Math.abs(zb), 0, 0).multiply(new THREE.Matrix4().makeRotationY(-Math.PI / 2));
+  // stage left: local +z → world +x, local x → world −z (so u ranges are negated below)
+  const leftFrame = new THREE.Matrix4().makeTranslation(-hx - zb, 0, 0).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2));
+  P.withFrame(rightFrame, () => {
+    buildWindow(P, M, sideWin, zb, jit);
+    buildSideDoor(P, M, sideDoorR, zb, { knob: 1 });
+  });
+  P.withFrame(leftFrame, () => buildSideDoor(P, M, { ...sideDoorL, x0: -sideDoorL.x1, x1: -sideDoorL.x0 }, zb, { knob: -1, press: true }));
 
   P.build(g, 'room');
   ctx.scene.add(g);
@@ -242,32 +277,36 @@ function buildWindow(P, M, w, zb, jit = Math.random) {
   }
 }
 
-// One louvred shutter leaf: stiles, rails, a mid-rail, and two stacks of angled slats. Each slat
-// is set by hand: its pitch, tilt and level differ a little from its neighbours, so the stack
-// reads as a row of separate pen strokes rather than a ruled grille.
+// One louvred shutter leaf. The film draws a shutter as a WHITE panel with about a dozen bold
+// horizontal strokes across it (fd-anim-stairs-exit-shutters, fd-anim-fountain-square-wide): the
+// leaf is bare paper, the louvres are the drawing. So: a flat leaf, its field recessed inside
+// stiles and rails, and six shallow ribs per field standing proud of it — twelve to a leaf, a
+// hand's breadth apart. Each rib gives the ink pass one line and a sliver of shade; the paper
+// between them is left alone. (Sixty fine slats over a dark backboard, which is what stood here,
+// mip-blended into a grey scribble at every distance the shutter is ever seen from.)
 function buildShutterLeaf(P, M, x0, x1, y0, y1, z0, z1, side, jit = Math.random) {
-  const st = 0.052, rl = 0.075, mid = 0.06;
+  const st = 0.055, rl = 0.085, mid = 0.07;
   const ym = (y0 + y1) / 2;
+  const zf = z0 + (z1 - z0) * 0.45; // the recessed field's face
   P.boxFrom(x0, x0 + st, y0, y1, z0, z1, M.shutter, { cast: true, receive: true });
   P.boxFrom(x1 - st, x1, y0, y1, z0, z1, M.shutter, { cast: true, receive: true });
   P.boxFrom(x0 + st, x1 - st, y1 - rl, y1, z0, z1, M.shutter, { cast: true, receive: true });
   P.boxFrom(x0 + st, x1 - st, y0, y0 + rl, z0, z1, M.shutter, { cast: true, receive: true });
   P.boxFrom(x0 + st, x1 - st, ym - mid / 2, ym + mid / 2, z0, z1, M.shutter, { cast: true, receive: true });
-  // a thin back board so daylight does not show between slats
-  P.boxFrom(x0 + st - 0.004, x1 - st + 0.004, y0 + rl - 0.004, y1 - rl + 0.004, z0, z0 + 0.004, M.shutter, { receive: true });
-  // slats
+  // the two fields, set back from the frame: bare paper between the louvres
+  P.boxFrom(x0 + st, x1 - st, y0 + rl, y1 - rl, z0, zf, M.shutter, { receive: true });
+  // louvres: six ribs to a field, each a shallow angled bar, set by hand so no two sit level
   const iw = x1 - x0 - 2 * st;
-  const pitch = 0.034, slatH = 0.04, slatT = 0.006, tilt = -0.65; // radians about x
-  const zc = (z0 + z1) / 2 + 0.004;
+  const per = 6, slatH = 0.05, slatT = 0.014, tilt = -0.34;
   for (const [ya, yb] of [
     [y0 + rl, ym - mid / 2],
     [ym + mid / 2, y1 - rl],
   ]) {
-    const n = Math.floor((yb - ya - 0.012) / pitch);
-    const start = ya + (yb - ya - (n - 1) * pitch) / 2;
-    for (let i = 0; i < n; i++) {
-      const y = start + i * pitch + (jit() - 0.5) * 0.006;
-      P.box(iw + 0.006, slatH, slatT, (x0 + x1) / 2, y, zc, M.shutter, { rx: tilt + (jit() - 0.5) * 0.16, rz: (jit() - 0.5) * 0.02, cast: true, receive: true, uvSwap: true });
+    const pitch = (yb - ya) / (per + 0.25);
+    const start = ya + (yb - ya - (per - 1) * pitch) / 2;
+    for (let i = 0; i < per; i++) {
+      const y = start + i * pitch + (jit() - 0.5) * 0.01;
+      P.box(iw, slatH, slatT, (x0 + x1) / 2, y, zf + slatT * 0.42, M.shutter, { rx: tilt + (jit() - 0.5) * 0.1, rz: (jit() - 0.5) * 0.012, cast: true, receive: true, uvSwap: true });
     }
   }
   // strap hinges: three flat bars across the hinge stile, a round knuckle at the wall edge
@@ -432,4 +471,66 @@ function buildDoor(P, M, d, zb) {
   }
   // threshold
   P.boxFrom(x0 - 0.01, x1 + 0.01, y0, y0 + 0.018, zr, zb + 0.01, M.trim, { receive: true });
+}
+
+// The two side-wall doors: the same joinery as the front door, drawn with a third of the parts,
+// because they are only ever seen raked and small. Architrave with a cap, a shallow lining, two
+// stiles, three rails, two flat panels with a single bolection step, a knob and a keyhole plate.
+// `press` gives the narrower stage-left leaf a pair of long panels and no threshold, so it reads as
+// a cupboard rather than a way out.
+function buildSideDoor(P, M, d, zb, { knob = 1, press = false } = {}) {
+  const { x0, x1, y0, y1, depth } = d;
+  const zr = zb - depth;
+  // reveal and lining
+  P.boxFrom(x0 - 0.01, x0, y0, y1, zr, zb, M.reveal, { receive: true });
+  P.boxFrom(x1, x1 + 0.01, y0, y1, zr, zb, M.reveal, { receive: true });
+  P.boxFrom(x0 - 0.01, x1 + 0.01, y1, y1 + 0.01, zr, zb, M.reveal, { receive: true });
+  const lin = 0.03;
+  P.boxFrom(x0, x0 + lin, y0, y1, zr + 0.01, zb - 0.01, M.reveal, { receive: true });
+  P.boxFrom(x1 - lin, x1, y0, y1, zr + 0.01, zb - 0.01, M.reveal, { receive: true });
+  P.boxFrom(x0, x1, y1 - lin, y1, zr + 0.01, zb - 0.01, M.reveal, { receive: true });
+  // architrave, plinth blocks, a cap over the head
+  const a = 0.085, ad = 0.024;
+  P.boxFrom(x0 - a, x0, y0 + 0.2, y1 + a, zb, zb + ad, M.trim, { cast: true, receive: true });
+  P.boxFrom(x1, x1 + a, y0 + 0.2, y1 + a, zb, zb + ad, M.trim, { cast: true, receive: true });
+  P.boxFrom(x0 - a, x1 + a, y1, y1 + a, zb, zb + ad, M.trim, { cast: true, receive: true });
+  P.boxFrom(x0 - a - 0.012, x0, y0, y0 + 0.2, zb, zb + ad + 0.008, M.trim, { cast: true });
+  P.boxFrom(x1, x1 + a + 0.012, y0, y0 + 0.2, zb, zb + ad + 0.008, M.trim, { cast: true });
+  P.boxFrom(x0 - a - 0.018, x1 + a + 0.018, y1 + a, y1 + a + 0.03, zb, zb + ad + 0.02, M.trim, { cast: true });
+  // the slab
+  const dz0 = zr + 0.012, dz1 = dz0 + 0.042;
+  const dx0 = x0 + lin + 0.004, dx1 = x1 - lin - 0.004;
+  const dy0 = y0 + 0.006, dy1 = y1 - lin - 0.006;
+  const stile = 0.1;
+  const rails = press
+    ? [[dy1 - 0.11, dy1], [dy0 + 0.9, dy0 + 1.0], [dy0, dy0 + 0.17]]
+    : [[dy1 - 0.11, dy1], [dy0 + 0.86, dy0 + 0.96], [dy0, dy0 + 0.19]];
+  P.boxFrom(dx0, dx0 + stile, dy0, dy1, dz0, dz1, M.wood, { cast: true, receive: true });
+  P.boxFrom(dx1 - stile, dx1, dy0, dy1, dz0, dz1, M.wood, { cast: true, receive: true });
+  for (const [ry0, ry1] of rails) P.boxFrom(dx0 + stile, dx1 - stile, ry0, ry1, dz0, dz1, M.wood, { cast: true, receive: true, uvSwap: true });
+  const px0 = dx0 + stile, px1 = dx1 - stile;
+  for (const [py0, py1] of [[rails[1][1], rails[0][0]], [rails[2][1], rails[1][0]]]) {
+    const fz = dz1 - 0.02;
+    P.boxFrom(px0, px1, py0, py1, dz0, fz, M.wood, { receive: true });
+    const b = 0.028, bd = 0.011;
+    P.boxFrom(px0, px0 + b, py0, py1, fz, fz + bd, M.wood, { cast: true });
+    P.boxFrom(px1 - b, px1, py0, py1, fz, fz + bd, M.wood, { cast: true });
+    P.boxFrom(px0 + b, px1 - b, py1 - b, py1, fz, fz + bd, M.wood, { uvSwap: true, cast: true });
+    P.boxFrom(px0 + b, px1 - b, py0, py0 + b, fz, fz + bd, M.wood, { uvSwap: true, cast: true });
+  }
+  // a knob on the closing stile, an escutcheon under it
+  const kx = knob > 0 ? dx1 - stile / 2 : dx0 + stile / 2;
+  const ky = 1.02;
+  P.cylinder(0.03, 0.03, 0.007, kx, ky, dz1 + 0.004, M.metal, { rx: Math.PI / 2, cast: true });
+  P.cylinder(0.011, 0.011, 0.042, kx, ky, dz1 + 0.026, M.metal, { rx: Math.PI / 2 });
+  P.sphere(0.026, kx, ky, dz1 + 0.052, M.metal, { cast: true });
+  P.box(0.026, 0.06, 0.005, kx, ky - 0.095, dz1 + 0.003, M.metal, { cast: true });
+  // two strap hinges on the hanging stile
+  const hx2 = knob > 0 ? dx0 : dx1;
+  const dir = knob > 0 ? 1 : -1;
+  for (const y of [dy0 + 0.3, dy1 - 0.3]) {
+    P.box(0.2, 0.04, 0.007, hx2 + dir * 0.1, y, dz1 + 0.0035, M.metal, { cast: true });
+    P.cylinder(0.012, 0.012, 0.06, hx2 - dir * 0.002, y, dz1 + 0.0035, M.metal, { cast: true });
+  }
+  if (!press) P.boxFrom(x0 - 0.01, x1 + 0.01, y0, y0 + 0.016, zr, zb + 0.01, M.trim, { receive: true });
 }

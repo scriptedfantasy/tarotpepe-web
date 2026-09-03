@@ -1,159 +1,89 @@
 // PIECE: dialogue — what Tarot Pepe says and how it appears.
 //
-// The writing lives in ./script.js (all data). This file is the presentation: a small paper
-// placard that the line brings with it into the picture, like the protest sign held up in the
-// metro carriage of the Aline sequence — a card of the same paper as the drawing, one wobbly
-// ink rule around it, the words set in Futura capitals, solid ink. No band, no grey, no
-// hairline, nothing at less than full ink. The placard cuts in, reveals its words one at a
-// time on the 12fps clock, holds, and cuts out in one frame. The speaker is named once per
-// beat, in small tracked capitals above the first line, the way a credit names a person once.
-// A card is announced by its own placard (numeral / name / position), held, then cut. The
-// visitor's one text field is a single wobbly ink rule on the placard, nothing else.
+// The writing lives in ./script.js (all data). This file is the presentation, and it follows the
+// bible's rule for text in the drawn world (STYLE.md §1.7, `fd-anim-cast-labels-van`): typewriter
+// serif capitals, letter-spaced, solid ink, centred, standing on the bare paper of the drawing
+// itself. No placard, no card, no band, no background, no rule. The speaker is named once per beat
+// in smaller tracked capitals above the first line, the way a credit names a person once.
 //
-// Placement: bottom centre of the frame by default (above the letterbox bar when one is up),
-// which is the table's bare cloth in every shot, so the picture is never cropped or pushed.
-// `anchors` may name another spot per camera shot: {shot: {x, y, w}} as fractions of the frame.
+// Legibility without a box. Every caption is drawn twice: once wide in paper (`.layer.halo`,
+// a paper stroke around each glyph) and once in ink over it. On bare paper the halo is invisible;
+// where a hatch stroke would run into a letter it knocks the stroke out for a hair's breadth, which
+// is exactly what an inker does — the hatching stops at the lettering. It never becomes an edge,
+// because it has none: it is the shape of the words.
 //
-// Everything here is DOM + inline SVG; there is no canvas and no toDataURL (a readback from the
-// software canvas costs seconds in the judging browser), so the piece builds in a millisecond.
+// Placement. `anchors` names a spot per camera shot — {shot: {x, y, w}}, the centre and the width
+// of the block as fractions of the frame — chosen from the bare passage of paper in each shot
+// (measured off the frame, not guessed). Shots with no entry fall back to the foot of the picture.
+//
+// The visitor's answer is drawn, not typed into a form: a block of the same hand that wraps to as
+// many lines as it needs, with an ink dash for a caret that blinks on the 12 fps clock. A hidden
+// input takes the real keystrokes (and the speech recogniser's words) and nothing else.
+//
+// The microphone is a prop, not an icon: a pen-drawn carbon microphone on a stand that stands on
+// the table beside the ashtray (its world position is projected into the frame, so it sits in the
+// picture and takes the shot's perspective), ringed with ink while it is listening.
 //
 // API (ctx.pieces.dialogue):
 //   say(text, {hold, who, keep}) → Promise     reveals a caption, resolves after it has been read
 //   ask(prompt, {respond, signal, timeout, value, instant}) → Promise<string|null>
-//                                              says the prompt, shows the field (+ the mic toggle), resolves
-//                                              with the text on Return ('' on Escape); null when the signal
-//                                              aborts or `timeout` seconds pass; `instant` shows the prompt
-//                                              at once (judging stills); `value` pre-fills the field
+//                                              says the prompt, opens the visitor's block (+ the mic),
+//                                              resolves with the text on Return ('' on Escape); null when
+//                                              the signal aborts or `timeout` seconds pass; `instant` shows
+//                                              the prompt at once (judging stills); `value` pre-fills it
 //   skip()                                     the visitor's key: the line typed out in full, then (again) cut
-//   asking                                     true while the field is up
-//   voice                                      {on, canListen, canSpeak}; setVoice(on) — when on, the visitor
-//                                              speaks (SpeechRecognition into the field) and Pepe is spoken
-//                                              (speechSynthesis) as well as typed
+//   asking                                     true while the visitor's block is up
+//   voice                                      {on, canListen, canSpeak}; setVoice(on)
 //   reply(answer) → string                     the line that folds the answer back, verbatim
-//   intertitle(slug, position, {hold})         the card's held title placard
+//   intertitle(slug, position, {hold})         the card's held title, on bare paper beside it
 //   read(slug, position) → Promise             intertitle, then the card's lines (speaker named once)
-//   folio(beat)                                names the beat (greeting, question, ...); the speaker is re-named on its first line
-//   lineFor(slug, position) → string           the card's lines for that position as one string
-//   linesFor(slug, position) → [string, ...]
+//   folio(beat)                                names the beat (greeting, question, ...)
+//   lineFor/linesFor(slug, position)           the card's lines for that position
 //   clear()                                    cuts whatever is up
-//   script                                     the whole script (data)
 //   anchors                                    {shot: {x, y, w}} — editable
 //   setState(name)                             greeting | question | reading | farewell (+ any script key)
 import { SCRIPT, lineFor, linesFor, reply as scriptReply, POSITIONS, positionKey } from './script.js';
 import { bySlug } from '../core/deck.js';
 import { INK, PAPER } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
+import { SVGNS, drawCaret, drawMic } from './dialogue-ink.js';
 
 export const meta = {
   name: 'dialogue',
   judge: { shot: 'pepe', states: ['greeting', 'question', 'reading', 'farewell'], dom: true },
-  files: ['src/pieces/dialogue.js', 'src/pieces/script.js'],
+  files: ['src/pieces/dialogue.js', 'src/pieces/dialogue-ink.js', 'src/pieces/script.js'],
 };
 
 const CPS = 28; // characters per second; words appear whole, on the 12fps clock
 const INTER_HOLD = 1.5; // seconds a card's intertitle is held
 const BAR = 0.07; // the titles piece's letterbox bar, fraction of the frame
-const BLEED = 10; // px the rule's svg extends past the placard box, for overshoots
+const BLINK = 6; // frames the caret is on, then off (12fps → half a second each)
+const BLINK_LISTEN = 3; // ... while the microphone is listening: twice as quick
 
-// Where the placard sits, per camera shot: centre (x, y) and width, fractions of the frame.
-// Shots without an entry get the default: bottom centre.
-const ANCHORS = {};
+// Where the caption stands, per camera shot: the centre (x, y) and the width of the block, as
+// fractions of the frame. Every one of these is a passage of bare paper in that shot, measured off
+// the rendered frame (tools/_bare.mjs): the cloth in front of him in the mediums, the wall left of
+// the deck in the wide, the empty corner of the cloth in the top-downs.
+const ANCHORS = {
+  home: { x: 0.5, y: 0.795, w: 0.28 },
+  wide: { x: 0.5, y: 0.8, w: 0.26 },
+  pepe: { x: 0.5, y: 0.822, w: 0.3 },
+  table: { x: 0.5, y: 0.825, w: 0.36 },
+  spread: { x: 0.5, y: 0.06, w: 0.34 },
+  fan: { x: 0.5, y: 0.06, w: 0.34 },
+  card0: { x: 0.78, y: 0.3, w: 0.3 },
+  card1: { x: 0.78, y: 0.3, w: 0.3 },
+  card2: { x: 0.78, y: 0.3, w: 0.3 },
+  deck: { x: 0.5, y: 0.14, w: 0.3 },
+  door: { x: 0.5, y: 0.78, w: 0.28 },
+};
 
-const SVG = 'http://www.w3.org/2000/svg';
+// The microphone's place on the table: beside the ashtray (table-objects PLACES.ashtray is
+// [-0.15, -0.13]), a little towards the visitor. Metres, table space; y is the cloth.
+const MIC_SPOT = [-0.285, -0.01];
+const MIC_TALL = 0.078; // how tall the prop stands in the world; its size in frame follows the shot
+
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-
-// One pen stroke from (x1,y1) to (x2,y2): points every ~14px, drifting off the straight line by
-// a slow random walk (a hand, not a jitter), the ends a little past the corners.
-function stroke(x1, y1, x2, y2, rng, { wobble = 1.7, overshoot = 4 } = {}) {
-  const len = Math.hypot(x2 - x1, y2 - y1) || 1;
-  const dx = (x2 - x1) / len, dy = (y2 - y1) / len;
-  const nx = -dy, ny = dx;
-  const o1 = overshoot * (0.3 + rng()), o2 = overshoot * (0.3 + rng());
-  const n = Math.max(3, Math.round(len / 14));
-  const pts = [];
-  let off = (rng() - 0.5) * wobble;
-  for (let i = 0; i <= n; i++) {
-    const u = i / n;
-    off += (rng() - 0.5) * wobble;
-    off = Math.max(-wobble * 1.6, Math.min(wobble * 1.6, off));
-    const s = -o1 + (len + o1 + o2) * u;
-    pts.push([x1 + dx * s + nx * off, y1 + dy * s + ny * off]);
-  }
-  return pts;
-}
-const d = (pts) => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
-
-// The placard: paper fill inside four separately drawn sides, corners crossing by a few px.
-function drawPlacard(svg, w, h, seed, lw) {
-  const rng = mulberry32(seed);
-  const W = w + 2 * BLEED, H = h + 2 * BLEED;
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  svg.setAttribute('width', W);
-  svg.setAttribute('height', H);
-  const x0 = BLEED, y0 = BLEED, x1 = BLEED + w, y1 = BLEED + h;
-  const sides = [stroke(x0, y0, x1, y0, rng), stroke(x1, y0, x1, y1, rng), stroke(x1, y1, x0, y1, rng), stroke(x0, y1, x0, y0, rng)];
-  // the fill follows the same wobble, trimmed of the overshoots, so no paper shows past the rule
-  const inner = sides.map((pts) => pts.slice(1, -1)).flat();
-  svg.innerHTML =
-    `<path d="${d(inner)}Z" fill="${PAPER}" stroke="none"/>` +
-    sides.map((pts) => `<path d="${d(pts)}" fill="none" stroke="${INK}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
-}
-
-// The one rule the visitor writes on.
-function drawRule(svg, w, seed, lw) {
-  const rng = mulberry32(seed);
-  const H = 10;
-  svg.setAttribute('viewBox', `0 0 ${w} ${H}`);
-  svg.setAttribute('width', w);
-  svg.setAttribute('height', H);
-  svg.innerHTML = `<path d="${d(stroke(4, H / 2, w - 4, H / 2, rng, { wobble: 1.1, overshoot: 1.5 }))}" fill="none" stroke="${INK}" stroke-width="${lw}" stroke-linecap="round"/>`;
-}
-
-// The mic: a small hand-drawn microphone, the same pen. Capsule, a cradle under it, a stem, a foot;
-// solid ink when the voice is on. Two short arcs beside it show while it is listening.
-function drawMic(svg, seed, lw) {
-  const rng = mulberry32(seed);
-  svg.setAttribute('viewBox', '0 0 24 24');
-  const j = () => (rng() - 0.5) * 0.35;
-  const cx = 12;
-  // the capsule: a stadium, its two half-circles drawn point by point with the pen's shake
-  const r = 3.1, yT = 5.2, yB = 9.6;
-  const capsule = [];
-  for (let i = 0; i <= 10; i++) {
-    const a = Math.PI + (i / 10) * Math.PI;
-    capsule.push([cx + Math.cos(a) * r + j(), yT + Math.sin(a) * r + j()]);
-  }
-  for (let i = 0; i <= 10; i++) {
-    const a = (i / 10) * Math.PI;
-    capsule.push([cx + Math.cos(a) * r + j(), yB + Math.sin(a) * r + j()]);
-  }
-  // the cradle under it, the stem, the foot
-  const cradle = [];
-  for (let i = 0; i <= 12; i++) {
-    const a = (0.03 + (0.94 * i) / 12) * Math.PI;
-    cradle.push([cx + Math.cos(a) * 5.3 + j(), yB + Math.sin(a) * 5.3 + j()]);
-  }
-  const stem = stroke(cx, yB + 5.4, cx, 19.8, rng, { wobble: 0.3, overshoot: 0.4 });
-  const foot = stroke(cx - 3.8, 20.2, cx + 3.8, 20.2, rng, { wobble: 0.3, overshoot: 0.5 });
-  // two short arcs either side: the ear, shown while it listens
-  const ear = (s) => {
-    const p = [];
-    for (let i = 0; i <= 8; i++) {
-      const a = (-0.36 + (0.72 * i) / 8) * Math.PI;
-      p.push([cx + s * 8.4 + s * Math.cos(a) * 2.4 + j(), 7.4 + Math.sin(a) * 2.4 + j()]);
-    }
-    return p;
-  };
-  const sw = (lw * 0.55).toFixed(2);
-  const pen = `fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"`;
-  svg.innerHTML =
-    `<path class="cap-fill" d="${d(capsule)}Z" stroke="currentColor" stroke-width="${sw}" stroke-linejoin="round"/>` +
-    `<path d="${d(cradle)}" ${pen}/>` +
-    `<path d="${d(stem)}" ${pen}/>` +
-    `<path d="${d(foot)}" ${pen}/>` +
-    `<path class="ear" d="${d(ear(1))}" ${pen}/>` +
-    `<path class="ear" d="${d(ear(-1))}" ${pen}/>`;
-}
 
 // Pepe's spoken voice: a calm English one, a little slow, a little low.
 let chosenVoice = null;
@@ -175,78 +105,117 @@ window.speechSynthesis?.addEventListener?.('voiceschanged', () => (chosenVoice =
 function buildStyle() {
   const style = document.createElement('style');
   style.textContent = `
-    #dialogue { color: ${INK}; -webkit-font-smoothing: antialiased; font-family: var(--futura); }
-    #dialogue .cap {
-      position: absolute; left: 50%; bottom: 4.4%; transform: translate(-50%, 0);
-      width: max-content; max-width: 26%; box-sizing: border-box; text-align: center;
-      padding: 0.9em 1.25em 0.95em;
-      font-size: clamp(11px, 1.12vw, 22px); line-height: 1.45; letter-spacing: 0.1em; text-indent: 0.1em;
-      font-weight: 500; text-transform: uppercase; color: ${INK};
+    #dialogue {
+      color: ${INK}; -webkit-font-smoothing: antialiased;
+      --typewriter: 'American Typewriter', 'Rockwell', 'Courier New', 'Georgia', serif;
     }
+    /* the caption: type standing on the paper of the drawing. No box, no band, no rule. */
+    #dialogue .cap {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, 0);
+      width: max-content; max-width: 30%; box-sizing: border-box; text-align: center;
+      font-family: var(--typewriter);
+      font-size: clamp(9px, 0.98vw, 19px); line-height: 1.56;
+      letter-spacing: 0.085em; text-indent: 0.085em; text-transform: uppercase;
+      font-weight: 600; color: ${INK};
+    }
+    #dialogue .cap.mid { transform: translate(-50%, -50%); }
+    /* the two passes: paper under, ink over, the same words in the same places */
+    #dialogue .cap .layer.halo {
+      position: absolute; left: 0; top: 0; width: 100%; z-index: 0; pointer-events: none;
+      color: ${PAPER}; -webkit-text-stroke: 0.32em ${PAPER};
+    }
+    #dialogue .cap .layer.ink { position: relative; z-index: 1; }
     #dialogue .cap .g { display: inline-block; }
-    #dialogue .cap.at { bottom: auto; transform: translate(-50%, -50%); }
-    #dialogue .cap > svg.placard { position: absolute; left: ${-BLEED}px; top: ${-BLEED}px; z-index: -1; overflow: visible; display: block; }
-    #dialogue .cap .who { font-size: 0.74em; font-weight: 700; letter-spacing: 0.34em; text-indent: 0.34em; margin-bottom: 0.55em; white-space: nowrap; }
-    #dialogue .cap .line { text-wrap: balance; }
     #dialogue .cap .w { white-space: nowrap; }
     #dialogue .cap .line .w.hid { visibility: hidden; }
-    #dialogue .cap.inter { padding: 1.1em 2.2em 1.15em; max-width: 32%; }
-    #dialogue .cap.inter .n { font-size: 0.8em; letter-spacing: 0.4em; text-indent: 0.4em; font-weight: 500; }
-    #dialogue .cap.inter .name { font-size: 1.5em; font-weight: 700; letter-spacing: 0.22em; text-indent: 0.22em; line-height: 1.25; margin: 0.28em 0 0.3em; }
-    #dialogue .cap.inter .pos { font-size: 0.8em; letter-spacing: 0.3em; text-indent: 0.3em; font-weight: 500; }
-    #dialogue .cap .fieldbox { position: relative; display: block; margin: 0.6em auto 0; width: 100%; min-width: 16em; }
-    #dialogue .cap .fieldbox > svg { position: absolute; left: 0; bottom: -2px; display: block; }
-    #dialogue .cap .field {
-      pointer-events: auto; display: block; width: 100%; box-sizing: border-box;
-      border: 0; outline: 0; border-radius: 0; box-shadow: none; appearance: none; background: transparent;
-      font: inherit; letter-spacing: inherit; text-transform: none; text-indent: 0;
-      color: ${INK}; caret-color: ${INK}; text-align: center; padding: 0 0.4em 0.3em; margin: 0;
+    #dialogue .cap .who {
+      font-size: 0.66em; font-weight: 700; letter-spacing: 0.36em; text-indent: 0.36em;
+      margin-bottom: 0.5em; white-space: nowrap;
     }
-    #dialogue .cap .fieldbox.has-mic .field { padding-right: 2.1em; padding-left: 2.1em; }
-    #dialogue .cap .mic {
-      pointer-events: auto; position: absolute; right: -0.2em; bottom: 0.05em; width: 1.7em; height: 1.7em;
-      padding: 0; margin: 0; border: 0; background: transparent; cursor: pointer; appearance: none; outline: 0;
-      display: block; color: ${INK};
+    /* the card's title, held on bare paper beside the card */
+    #dialogue .cap .n { font-size: 0.76em; letter-spacing: 0.42em; text-indent: 0.42em; font-weight: 500; }
+    #dialogue .cap .name { font-size: 1.5em; font-weight: 700; letter-spacing: 0.2em; text-indent: 0.2em; line-height: 1.2; margin: 0.3em 0 0.34em; }
+    #dialogue .cap .pos { font-size: 0.76em; letter-spacing: 0.32em; text-indent: 0.32em; font-weight: 500; }
+    /* the visitor's own words: the same hand, upper and lower case, wrapping as far as it needs */
+    #dialogue .cap .you {
+      font-size: 0.66em; font-weight: 700; letter-spacing: 0.36em; text-indent: 0.36em;
+      margin: 1.05em 0 0.5em; white-space: nowrap;
     }
-    #dialogue .cap .mic > svg { display: block; width: 100%; height: 100%; overflow: visible; }
-    #dialogue .cap .mic .cap-fill { fill: none; }
-    #dialogue .cap .mic.on .cap-fill { fill: ${INK}; }
-    #dialogue .cap .mic .ear { visibility: hidden; }
-    #dialogue .cap .mic.on.listening .ear { visibility: visible; }
+    #dialogue .cap .answer {
+      font-size: 1em; font-weight: 500; text-transform: none; letter-spacing: 0.045em; text-indent: 0;
+      line-height: 1.5; word-break: break-word;
+    }
+    #dialogue .cap .caret { display: inline-block; width: 0.62em; height: 1em; vertical-align: baseline; margin-left: 0.04em; }
+    #dialogue .cap .caret > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    #dialogue .cap .caret.off { visibility: hidden; }
+    #dialogue .cap .layer.halo .caret path:not(.u) { display: none; }
+    /* the keystrokes land here and nowhere else; nothing of it is ever seen */
+    #dialogue .cap .keys {
+      position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 2;
+      pointer-events: auto; opacity: 0; border: 0; padding: 0; margin: 0; background: transparent;
+      font: 16px var(--typewriter); color: transparent; caret-color: transparent; appearance: none; outline: 0;
+    }
+    /* the microphone: a prop standing on the table */
+    #dialogue .mic {
+      position: absolute; pointer-events: auto; cursor: pointer; padding: 0; margin: 0; border: 0;
+      background: transparent; appearance: none; outline: 0; display: block; color: ${INK};
+    }
+    #dialogue .mic > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    #dialogue .mic .ball { fill: none; }
+    #dialogue .mic.on .ball { fill: ${INK}; }
+    #dialogue .mic.on .grille { display: none; }
+    #dialogue .mic .ring { visibility: hidden; }
+    #dialogue .mic.listening .ring { visibility: visible; }
   `;
   return style;
 }
 
-// Hand-set type: every glyph sits a hair off its baseline and a degree off upright, the way the
-// signage in the drawing does (see strokes.letter). Deterministic per text.
+// Hand-set type: every glyph sits a hair off its baseline and a fraction of a degree off upright,
+// the way a line of hand-set slugs does. Small — the film's labels are set type, not lettering.
+const jitter = (dy, rot) => `transform:translateY(${dy.toFixed(2)}px) rotate(${rot.toFixed(2)}deg)`;
 function letters(word, rng) {
-  return [...word].map((ch) => `<span class="g" style="transform:translateY(${((rng() - 0.5) * 1.1).toFixed(2)}px) rotate(${((rng() - 0.5) * 2.4).toFixed(2)}deg)">${esc(ch)}</span>`).join('');
+  return [...word].map((ch) => `<span class="g" style="${jitter((rng() - 0.5) * 0.7, (rng() - 0.5) * 1.1)}">${esc(ch)}</span>`).join('');
 }
-// A whole string, its words kept unbreakable.
 function glyphs(text, rng) {
-  return text.split(' ').map((w) => `<span class="w">${letters(w, rng)}</span>`).join(' ');
+  return text
+    .split(' ')
+    .map((w) => `<span class="w">${letters(w, rng)}</span>`)
+    .join(' ');
+}
+// The same, but keyed to each character's place in the string, so the jitter of a letter never
+// changes as the visitor types more after it.
+function stableGlyphs(text) {
+  let i = 0;
+  return text
+    .split(' ')
+    .map((w) => {
+      const inner = [...w]
+        .map((ch) => {
+          const h = Math.sin((i++ + 1) * 12.9898 + ch.charCodeAt(0) * 0.317) * 43758.5453;
+          const f = h - Math.floor(h);
+          return `<span class="g" style="${jitter((f - 0.5) * 0.7, (f * 7919) % 1 > 0.5 ? 0.45 : -0.45)}">${esc(ch)}</span>`;
+        })
+        .join('');
+      i++;
+      return `<span class="w">${inner}</span>`;
+    })
+    .join(' ');
 }
 
-// The line as word spans, all present from the start (hidden) so the rag never moves.
-function layoutWords(el, text, rng) {
-  el.innerHTML = '';
-  const words = [];
-  let count = 0;
-  text.split(' ').forEach((w, i) => {
-    if (i) el.appendChild(document.createTextNode(' '));
-    const s = document.createElement('span');
-    s.className = 'w hid';
-    s.innerHTML = letters(w, rng);
-    el.appendChild(s);
-    count += w.length + 1;
-    words.push({ el: s, at: count }); // characters typed by the time this word is complete
-  });
-  return words;
+// The line as word spans, all present from the start (hidden) so the rag never moves and no empty
+// space is ever shown waiting for words.
+function wordMarkup(text) {
+  const rng = mulberry32(17 + text.length * 7);
+  return text
+    .split(' ')
+    .map((w) => `<span class="w hid">${letters(w, rng)}</span>`)
+    .join(' ');
 }
 
 const ORDINAL = ['The first card', 'The second card', 'The third card'];
 
 export async function build(ctx) {
+  const THREE = ctx.THREE;
   const root = ctx.dom.dialogue;
   document.head.appendChild(buildStyle());
 
@@ -254,24 +223,33 @@ export async function build(ctx) {
   cap.className = 'cap';
   cap.hidden = true;
   root.appendChild(cap);
-  const placard = document.createElementNS(SVG, 'svg');
-  placard.setAttribute('class', 'placard');
-  placard.setAttribute('aria-hidden', 'true');
+
+  // the microphone stands in the picture whether or not a caption is up
+  const mic = document.createElement('button');
+  mic.type = 'button';
+  mic.className = 'mic';
+  mic.hidden = true;
+  mic.setAttribute('aria-label', 'Speak instead of typing');
+  mic.title = 'Speak instead of typing';
+  const micSvg = document.createElementNS(SVGNS, 'svg');
+  micSvg.setAttribute('aria-hidden', 'true');
+  drawMic(micSvg, 31);
+  mic.appendChild(micSvg);
+  root.appendChild(mic);
 
   let typing = null; // { words, start, hold, done, keep, chars }
   let inter = null; // { until, done }
-  let field = null;
-  let seed = 23; // the pen's seed for the placard up now (deterministic per text)
+  let field = null; // { input, answer:[el,el], caret:[el,el], submit, dispose }
   let beat = 'idle';
   let named = false; // the speaker has been named in this beat
   let spoke = -Infinity; // clock time the last caption was cut; a long silence re-names the speaker
 
-  // ---- the voice: the visitor's (SpeechRecognition into the field) and Pepe's (speechSynthesis) ----
+  // ---- the voice: the visitor's (SpeechRecognition) and Pepe's (speechSynthesis) ----
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   const canListen = !!Recognition;
   const canSpeak = !!window.speechSynthesis && typeof window.SpeechSynthesisUtterance === 'function';
   let voiceOn = false;
-  let recog = null; // the recognition session while a field is up and the voice is on
+  let recog = null;
   let utterance = null;
   function hush() {
     if (!canSpeak) return;
@@ -280,7 +258,6 @@ export async function build(ctx) {
       window.speechSynthesis.cancel();
     } catch {}
   }
-  // Speak a line; resolves when it has been said (or could not be), never later than its length allows.
   function speak(text) {
     if (!canSpeak || !voiceOn || ctx.shotMode) return Promise.resolve();
     hush();
@@ -318,9 +295,9 @@ export async function build(ctx) {
       r.onerror = null;
       r.abort();
     } catch {}
-    field?.mic?.classList.remove('listening');
+    mic.classList.remove('listening');
   }
-  // Listen into the field: interim words as they come, the final result submitted.
+  // Listen into the visitor's block: interim words as they come, the final result submitted.
   function listen(submit) {
     if (!canListen || !voiceOn || !field || ctx.shotMode) return;
     stopListening();
@@ -343,13 +320,14 @@ export async function build(ctx) {
       }
       if (!field) return;
       field.input.value = text.trim();
+      drawAnswer();
       if (final && text.trim()) submit();
     };
     r.onend = () => {
       if (recog !== r) return;
       recog = null;
-      field?.mic?.classList.remove('listening');
-      // the browser stops after a silence: keep the ear open while the field is up
+      mic.classList.remove('listening');
+      // the browser stops after a silence: keep the ear open while the block is up
       if (voiceOn && field) setTimeout(() => field && voiceOn && !recog && listen(submit), 250);
     };
     r.onerror = (ev) => {
@@ -361,14 +339,14 @@ export async function build(ctx) {
     };
     try {
       r.start();
-      field.mic?.classList.add('listening');
+      mic.classList.add('listening');
     } catch {
       recog = null;
     }
   }
   function setVoice(on) {
     voiceOn = !!on && (canListen || canSpeak);
-    field?.mic?.classList.toggle('on', voiceOn);
+    mic.classList.toggle('on', voiceOn);
     ctx.emit?.('dialogue:voice', { on: voiceOn });
     if (!voiceOn) {
       stopListening();
@@ -376,9 +354,16 @@ export async function build(ctx) {
       if (typing) typing.speaking = false;
     } else if (field?.submit) listen(field.submit);
   }
+  mic.addEventListener('pointerdown', (e) => e.stopPropagation());
+  mic.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setVoice(!voiceOn);
+    field?.input?.focus();
+  });
 
+  // ---- placing the block ------------------------------------------------------------------------
   const shotName = () => ctx.pieces.camera?.current ?? 'home';
-  const penWidth = () => Math.max(1.7, Math.min(3.2, ctx.size.w / 720));
   // How tall the letterbox bar is right now (fraction of the frame), from either piece that draws one.
   function barFrac() {
     const ratio = ctx.pieces.ink?.params?.letterbox;
@@ -386,32 +371,52 @@ export async function build(ctx) {
     const bar = ctx.dom.letterbox?.querySelector?.('.bar.bottom');
     return bar && bar.offsetHeight > 0 ? BAR : 0;
   }
-  // Put the placard on its anchor for the current shot, or at the foot of the frame.
+  // Put the caption on its anchor for the current shot, or at the foot of the picture.
+  // `y` is the TOP of the block (so a line of one sentence and a line of four begin on the same
+  // line of the paper, and nothing moves when the visitor's words grow underneath); an anchor may
+  // ask for `at: 'centre'` instead.
+  let anchored = false;
   function place() {
     const a = ANCHORS[shotName()];
-    cap.classList.toggle('at', !!a);
+    anchored = !!a && a.at !== 'centre';
+    cap.classList.toggle('mid', !!a && a.at === 'centre');
     if (a) {
       cap.style.left = `${a.x * 100}%`;
       cap.style.top = `${a.y * 100}%`;
-      cap.style.maxWidth = `${a.w * 100}%`;
       cap.style.bottom = '';
+      cap.style.maxWidth = `${a.w * 100}%`;
     } else {
-      cap.style.left = cap.style.top = cap.style.maxWidth = '';
-      cap.style.bottom = `${(barFrac() + 0.044) * 100}%`;
+      cap.style.left = '50%';
+      cap.style.top = 'auto';
+      cap.style.maxWidth = '';
+      cap.style.bottom = `${(barFrac() + 0.05) * 100}%`;
     }
   }
-  // Draw the rule around whatever the placard now holds (one layout read).
-  function ink() {
-    if (cap.hidden) return;
-    const w = cap.offsetWidth, h = cap.offsetHeight;
-    if (!placard.isConnected) cap.prepend(placard);
-    drawPlacard(placard, w, h, seed, penWidth());
-    if (field) drawRule(field.svg, field.box.offsetWidth, seed + 7, penWidth() * 0.95);
+  // Keep a growing block inside the picture.
+  function fit() {
+    if (!anchored || cap.hidden) return;
+    const h = ctx.size.h || window.innerHeight;
+    const lo = h * 0.035, hi = h * (1 - barFrac() - 0.02);
+    const r = cap.getBoundingClientRect();
+    let top = r.top;
+    if (r.bottom > hi) top = Math.max(lo, top - (r.bottom - hi));
+    if (top < lo) top = lo;
+    if (Math.abs(top - r.top) > 0.5) cap.style.top = `${(top / h) * 100}%`;
+  }
+
+  // ---- the caption itself ------------------------------------------------------------------------
+  let inkLayer = null, haloLayer = null;
+  // Both passes carry the same markup; the paper one sits behind and knocks the hatching out.
+  function render(html) {
+    cap.innerHTML = `<div class="layer halo" aria-hidden="true">${html}</div><div class="layer ink">${html}</div>`;
+    haloLayer = cap.querySelector('.layer.halo');
+    inkLayer = cap.querySelector('.layer.ink');
   }
   function cut() {
     cap.hidden = true;
-    cap.classList.remove('inter');
     cap.innerHTML = '';
+    inkLayer = haloLayer = null;
+    mic.hidden = true;
     if (field) {
       const f = field;
       field = null;
@@ -422,16 +427,23 @@ export async function build(ctx) {
   function show(text, who) {
     cut();
     place();
-    seed = 23 + text.length * 7 + (who ? 3 : 0);
-    const rng = mulberry32(seed + 1);
-    cap.innerHTML = `${who ? `<div class="who">${glyphs(who, rng)}</div>` : ''}<div class="line"></div>`;
+    const rng = mulberry32(23 + text.length * 7 + (who ? 3 : 0));
+    render(`${who ? `<div class="who">${glyphs(who, rng)}</div>` : ''}<div class="line">${wordMarkup(text)}</div>`);
     cap.hidden = false;
-    const words = layoutWords(cap.querySelector('.line'), text, rng);
-    ink();
+    const a = [...inkLayer.querySelectorAll('.line .w')];
+    const b = [...haloLayer.querySelectorAll('.line .w')];
+    const words = [];
+    let count = 0;
+    text.split(' ').forEach((w, i) => {
+      count += w.length + 1;
+      words.push({ els: [a[i], b[i]], at: count });
+    });
+    fit();
     return words;
   }
   function reveal(words, chars) {
-    for (const w of words) if (w.at - 1 <= chars + 1e-6) w.el.classList.remove('hid');
+    for (const w of words)
+      if (w.at - 1 <= chars + 1e-6) for (const el of w.els) el?.classList.remove('hid');
   }
   // Finish the caption up (typing or intertitle): resolve its promise; cut it unless asked to keep.
   function finish() {
@@ -450,47 +462,80 @@ export async function build(ctx) {
       i.done?.();
     }
   }
-  function makeField(value = '') {
-    const box = document.createElement('div');
-    box.className = 'fieldbox';
+
+  // ---- the visitor's block ------------------------------------------------------------------------
+  function drawAnswer() {
+    if (!field) return;
+    const text = field.input.value;
+    const html = stableGlyphs(text);
+    for (const el of field.answer) {
+      el.innerHTML = html;
+      el.appendChild(el._caret);
+    }
+    fit();
+  }
+  function openBlock(value = '') {
+    // the visitor's name and their words go into both passes, under the line Pepe just said
+    const rng = mulberry32(91);
+    const block = `<div class="you">${glyphs('You', rng)}</div><div class="answer"></div>`;
+    for (const layer of [haloLayer, inkLayer]) layer.insertAdjacentHTML('beforeend', block);
+    const answer = [inkLayer.querySelector('.answer'), haloLayer.querySelector('.answer')];
+    for (const el of answer) {
+      const c = document.createElement('span');
+      c.className = 'caret';
+      const s = document.createElementNS(SVGNS, 'svg');
+      s.setAttribute('aria-hidden', 'true');
+      drawCaret(s, 5);
+      c.appendChild(s);
+      el._caret = c;
+    }
     const input = document.createElement('input');
-    input.className = 'field';
+    input.className = 'keys';
     input.type = 'text';
     input.autocomplete = 'off';
     input.spellcheck = false;
     input.maxLength = 240;
     input.setAttribute('aria-label', 'Your answer');
-    if (value) input.value = value;
-    const svg = document.createElementNS(SVG, 'svg');
-    svg.setAttribute('aria-hidden', 'true');
-    box.appendChild(input);
-    box.appendChild(svg);
-    let mic = null;
-    if (canListen || canSpeak) {
-      box.classList.add('has-mic');
-      mic = document.createElement('button');
-      mic.type = 'button';
-      mic.className = 'mic' + (voiceOn ? ' on' : '');
-      mic.setAttribute('aria-label', 'Speak instead of typing');
-      mic.title = 'Speak instead of typing';
-      const g = document.createElementNS(SVG, 'svg');
-      g.setAttribute('aria-hidden', 'true');
-      drawMic(g, seed + 11, penWidth());
-      mic.appendChild(g);
-      mic.addEventListener('pointerdown', (e) => e.stopPropagation());
-      mic.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setVoice(!voiceOn);
-        input.focus();
-      });
-      box.appendChild(mic);
-    }
-    cap.appendChild(box);
-    field = { input, svg, box, mic };
-    ink();
+    input.value = value;
+    cap.appendChild(input);
+    field = { input, answer, caret: answer.map((el) => el._caret) };
+    drawAnswer();
+    mic.hidden = false;
+    place_mic();
+    input.addEventListener('input', drawAnswer);
     return input;
   }
+
+  // ---- the microphone, standing on the table -------------------------------------------------------
+  const pA = new THREE.Vector3(), pB = new THREE.Vector3(), fwd = new THREE.Vector3();
+  function place_mic() {
+    if (mic.hidden) return;
+    const W = ctx.size.w || window.innerWidth, H = ctx.size.h || window.innerHeight;
+    const y = ctx.layout.table.top + 0.0025;
+    pA.set(MIC_SPOT[0], y, MIC_SPOT[1]).project(ctx.camera);
+    pB.set(MIC_SPOT[0], y + MIC_TALL, MIC_SPOT[1]).project(ctx.camera);
+    ctx.camera.getWorldDirection(fwd);
+    const overhead = -fwd.y > 0.86; // a plan view: a standing prop would read as a mistake
+    const sx = (pA.x * 0.5 + 0.5) * W, sy = (-pA.y * 0.5 + 0.5) * H;
+    const tall = Math.abs((-pB.y * 0.5 + 0.5) * H - sy);
+    const inFrame = pA.z < 1 && sx > W * 0.04 && sx < W * 0.96 && sy > H * 0.1 && sy < H * 0.99;
+    let h, left, top;
+    if (!overhead && inFrame && tall > 12) {
+      h = Math.max(26, Math.min(58, tall * (66 / 54))); // 54 of the 66 drawn units are the prop's body
+      left = sx - (h * 56) / 66 / 2;
+      top = sy - h * (56.5 / 66);
+    } else {
+      // no table under it in this shot: it stands at the near right corner of the picture
+      h = Math.max(34, Math.min(56, H * 0.062));
+      left = W * 0.93 - (h * 56) / 66 / 2;
+      top = H * (1 - barFrac()) - h - H * 0.035;
+    }
+    mic.style.width = `${((h * 56) / 66).toFixed(1)}px`;
+    mic.style.height = `${h.toFixed(1)}px`;
+    mic.style.left = `${left.toFixed(1)}px`;
+    mic.style.top = `${top.toFixed(1)}px`;
+  }
+
   function interLines(slug, position) {
     const card = bySlug[slug];
     const key = positionKey(position);
@@ -551,43 +596,39 @@ export async function build(ctx) {
       });
     },
 
-    // The card's title placard: numeral (or ordinal), name, position. Held, then cut.
+    // The card's title: numeral (or ordinal), name, position, on the bare paper beside the card.
     intertitle(slug, position, { hold = INTER_HOLD } = {}) {
       finish();
       const [n, name, label] = interLines(slug, position);
       cut();
       place();
-      seed = 101 + name.length * 5;
-      const rng = mulberry32(seed + 1);
-      cap.classList.add('inter');
-      cap.innerHTML = `<div class="n">${glyphs(n, rng)}</div><div class="name">${glyphs(name, rng)}</div><div class="pos">${glyphs(label, rng)}</div>`;
+      const rng = mulberry32(101 + name.length * 5);
+      render(`<div class="n">${glyphs(n, rng)}</div><div class="name">${glyphs(name, rng)}</div><div class="pos">${glyphs(label, rng)}</div>`);
       cap.hidden = false;
-      ink();
+      fit();
       ctx.emit?.('dialogue:intertitle', { slug, position });
       return new Promise((res) => {
         inter = { until: ctx.clock.t + hold, done: res };
       });
     },
 
-    // Says the prompt and keeps it up with the field under it. Resolves with the visitor's
-    // text (trimmed) on Return, '' on Escape, null when `signal` aborts or `timeout` seconds
-    // pass with no answer. With respond:true it also says the reply before resolving. With the
-    // voice on the field also listens; a final recognition result submits.
+    // Says the prompt and keeps it up with the visitor's block under it. Resolves with the text
+    // (trimmed) on Return, '' on Escape, null when `signal` aborts or `timeout` seconds pass with
+    // no answer. With respond:true it also says the reply before resolving. With the voice on the
+    // block also listens; a final recognition result submits.
     async ask(prompt = SCRIPT.question[0], { respond = false, who = null, hold = 0.2, signal = null, timeout = 0, value = '', instant = false } = {}) {
       if (signal?.aborted) return null;
       const said = api.say(prompt, { hold, who, keep: true });
       if (instant) finish();
-      // an abort while the prompt is still typing: finish it so the await returns
       const onAbortSay = () => finish();
       signal?.addEventListener('abort', onAbortSay, { once: true });
       await said;
       signal?.removeEventListener('abort', onAbortSay);
       if (signal?.aborted || cap.hidden) {
-        // aborted, or cut from outside while the prompt was typing: no field, no answer
         cut();
         return null;
       }
-      const input = makeField(value);
+      const input = openBlock(value);
       if (!ctx.shotMode) input.focus();
       const answer = await new Promise((res) => {
         let done = false;
@@ -633,7 +674,7 @@ export async function build(ctx) {
     },
 
     // The visitor's key: a line still typing is shown whole and holds a moment; a line already
-    // whole (or a card's title placard) is cut.
+    // whole (or a card's title) is cut.
     skip() {
       if (typing) {
         const t = typing;
@@ -667,7 +708,7 @@ export async function build(ctx) {
     },
     setVoice,
 
-    // A card, read: the intertitle, then its lines, the speaker named on the first.
+    // A card, read: the title, then its lines, the speaker named on the first.
     async read(slug, position, { hold = 1.3 } = {}) {
       await api.intertitle(slug, position);
       const lines = linesFor(slug, position);
@@ -682,7 +723,8 @@ export async function build(ctx) {
     },
 
     // Judging states. Deterministic: the caption is shown in full, no typing.
-    //   ?line=<n>  which line of the beat   ?card=<slug>&pos=<0..2>  the reading   ?inter=1  its intertitle
+    //   ?line=<n>  which line of the beat   ?card=<slug>&pos=<0..2>  the reading   ?inter=1  its title
+    //   ?answer=<text>  what the visitor has written so far
     setState(name) {
       finish();
       cut();
@@ -700,8 +742,10 @@ export async function build(ctx) {
         const lines = linesFor(slug, pos);
         still(lines[i] ?? lines[0], i === 0 ? SCRIPT.speaker : '');
       } else if (name === 'question') {
-        still(SCRIPT.question[i] ?? SCRIPT.question[0], '');
-        makeField();
+        api.ask(SCRIPT.question[i] ?? SCRIPT.question[0], {
+          instant: true,
+          value: p.get('answer') ?? 'I keep starting things and not finishing them.',
+        });
       } else if (name === 'answer') {
         still(scriptReply(p.get('answer') ?? 'my brother has not called since March'), '');
       } else if (name === 'greeting') {
@@ -715,6 +759,13 @@ export async function build(ctx) {
     update(ctx) {
       if (!ctx.clock.stepped) return;
       const t = ctx.clock.t;
+      // the caret: an ink dash, on and off on the 12fps clock; quicker while the ear is open
+      if (field) {
+        const period = mic.classList.contains('listening') ? BLINK_LISTEN : BLINK;
+        const off = !ctx.shotMode && Math.floor(ctx.clock.frame / period) % 2 === 1;
+        for (const c of field.caret) c.classList.toggle('off', off);
+        place_mic();
+      }
       if (inter && t >= inter.until) finish();
       if (!typing) return;
       const chars = Math.floor((t - typing.start) * CPS + 1e-6);
@@ -730,7 +781,8 @@ export async function build(ctx) {
   ctx.on('resize', () => {
     if (cap.hidden) return;
     place();
-    ink();
+    fit();
+    place_mic();
   });
   return api;
 }
