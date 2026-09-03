@@ -1,14 +1,25 @@
-// PIECE: pepe — Tarot Pepe himself: the supplied head, a body in a mustard suit and orange shirt
-// (the only coloured figure in the drawing, as in the reference), hands, a chair. Seated upstage
-// of the table, facing the visitor.
+// PIECE: pepe — Tarot Pepe himself, built to match public/pepe/pepe-meditation.webp: green skin
+// (face, hands, feet — the only coloured skin in the drawing), calm half-lidded eyes, red lips, a
+// plain white long-sleeved robe, cross-legged on a low bench upstage of the table, palms open on
+// the table, facing the visitor. The supplied head GLB is mounted and dressed in pepe-head.js;
+// the robe, limbs, hands, feet and bench are in pepe-body.js.
+//
+// api: { group, head, torso, hands, parts, setState }
+//   parts = { head, face, skull, eyes:[l,r], pupils:[l,r], lids:[l,r], mouth, lips, handL, handR,
+//             arms:{L:{shoulder,elbow,wrist,hand},R:{...}}, torso, neck, legs, feet, bench }
 import * as THREE from 'three';
-import { inkMaterial } from '../core/strokes.js';
+import { inkMaterial, INK, PAPER } from '../core/strokes.js';
+import { buildHead } from './pepe-head.js';
+import { buildBody } from './pepe-body.js';
 
 export const meta = {
   name: 'pepe',
   judge: { shot: 'pepe', states: ['default'] },
-  files: ['src/pieces/pepe.js'],
+  files: ['src/pieces/pepe.js', 'src/pieces/pepe-head.js', 'src/pieces/pepe-body.js'],
 };
+
+export const SKIN = '#5dbb63';
+export const LIPS = '#c9342e';
 
 export async function build(ctx) {
   const { pos, headY } = ctx.layout.pepe;
@@ -16,58 +27,64 @@ export async function build(ctx) {
   g.name = 'pepe';
   g.position.set(...pos);
 
-  // body: a simple seated torso in the yellow suit, orange shirt
-  const suit = inkMaterial({ color: '#d9b64a', colorful: true, hatch: 0.5 });
-  const shirt = inkMaterial({ color: '#e0642a', colorful: true, hatch: 0.4 });
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.5, 0.26), suit);
-  torso.position.y = headY - 0.42;
-  torso.castShadow = true;
-  g.add(torso);
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.34, 0.02), shirt);
-  chest.position.set(0, headY - 0.36, 0.135);
-  g.add(chest);
-  for (const s of [-1, 1]) {
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.42, 0.11), suit);
-    arm.position.set(s * 0.29, headY - 0.45, 0.02);
-    arm.rotation.x = -0.9;
-    g.add(arm);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), inkMaterial({ color: '#4f8f3a', colorful: true, hatch: 0.4 }));
-    hand.position.set(s * 0.3, headY - 0.5, 0.36);
-    g.add(hand);
-  }
+  const mats = {
+    skin: inkMaterial({ color: SKIN, colorful: true, hatch: 0.35 }),
+    lips: inkMaterial({ color: LIPS, colorful: true, hatch: 0.3 }),
+    ink: inkMaterial({ color: INK, colorful: true, hatch: 0, roughness: 1 }),
+    white: inkMaterial({ color: '#faf8f3', colorful: false, hatch: 0.1 }),
+    robe: inkMaterial({ color: PAPER, colorful: false, hatch: 0.45 }),
+    wood: inkMaterial({ color: PAPER, colorful: false, hatch: 0.6, lineWeight: 1.1 }),
+    cushion: inkMaterial({ color: PAPER, colorful: false, hatch: 0.4 }),
+    collar: inkMaterial({ color: PAPER, colorful: false, hatch: 0.12 }),
+  };
 
-  // head from the supplied model
-  const head = new THREE.Group();
-  head.name = 'head';
-  head.position.y = headY;
-  g.add(head);
+  // body first (it does not depend on the head loading)
+  const body = buildBody(ctx, mats, { headY });
+  g.add(body.group);
+
+  // the head: a Group at headY that pepeAnim moves; the dressed skull hangs inside it
+  let head, headParts = null;
   try {
-    const gltf = await ctx.assets.gltf('/pepe/head-lowpoly.glb');
-    const model = gltf.scene;
-    const box = new THREE.Box3().setFromObject(model);
-    const size = box.getSize(new THREE.Vector3());
-    const scale = 0.34 / size.y;
-    model.scale.setScalar(scale);
-    box.setFromObject(model);
-    const center = box.getCenter(new THREE.Vector3());
-    model.position.sub(center);
-    model.traverse((o) => {
-      if (o.isMesh) {
-        o.castShadow = true;
-        const m = o.material;
-        if (m && m.isMeshStandardMaterial) {
-          m.roughness = 0.95;
-          m.metalness = 0;
-          m.userData.ink = { hatch: 0.45, lineWeight: 1, colorful: true };
-        }
-      }
-    });
-    head.add(model);
+    headParts = await buildHead(ctx, mats);
+    head = headParts.head;
   } catch (e) {
     console.error('[pepe] head failed to load, using a placeholder', e);
-    head.add(new THREE.Mesh(new THREE.SphereGeometry(0.17, 24, 20), inkMaterial({ color: '#4f8f3a', colorful: true })));
+    head = new THREE.Group();
+    head.name = 'head';
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.18, 24, 20), mats.skin);
+    ball.scale.set(1.25, 1, 1);
+    ball.castShadow = true;
+    head.add(ball);
   }
+  head.position.y = headY;
+  g.add(head);
 
   ctx.scene.add(g);
-  return { group: g, head, torso, setState() {} };
+
+  const parts = {
+    head,
+    face: headParts?.face ?? null,
+    skull: headParts?.skull ?? null,
+    eyes: headParts?.eyes ?? [],
+    pupils: headParts?.pupils ?? [],
+    lids: headParts?.lids ?? [],
+    mouth: headParts?.mouth ?? null,
+    lips: headParts?.lips ?? null,
+    ...body.parts,
+  };
+
+  const api = {
+    group: g,
+    head,
+    torso: body.parts.torso,
+    hands: [body.parts.handL, body.parts.handR],
+    parts,
+    mats,
+    setState(name) {
+      // one state for now: the reading pose. Deterministic.
+      head.rotation.set(0, 0, 0);
+      head.position.set(0, headY, 0);
+    },
+  };
+  return api;
 }

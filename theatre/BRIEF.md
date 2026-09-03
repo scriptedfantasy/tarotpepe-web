@@ -10,9 +10,12 @@ A browser tarot reading, in Three.js, that looks and moves like the hand-drawn a
 Wes Anderson's *The French Dispatch* (the ink-line chase: black pen on white paper, tone built from
 hatching strokes, flat selective colour, planimetric frontal staging) with the staging and timing
 sensibility of his stop-motion films (*Fantastic Mr. Fox*, *Isle of Dogs*: symmetry, holds, motion on
-twos, miniature tabletop particularity, deadpan). Tarot Pepe — a frog in a mustard-yellow suit and
-orange shirt, the only coloured figure in the drawing — sits behind a small round table in a crowded
-parlour and reads three cards for the visitor. The cards themselves are the other splash of colour.
+twos, miniature tabletop particularity, deadpan). Tarot Pepe — the supplied character in `public/pepe/pepe-meditation.webp` (LOOK AT IT: classic Pepe,
+green skin, calm half-lidded eyes, red lips, a plain white long-sleeved robe, sitting cross-legged,
+palms open) — is the only coloured figure in the drawing. He sits cross-legged on a low bench behind a
+small round table in a crowded parlour and reads three cards for the visitor. The card faces are the
+other splash of colour. The card ART is the supplied deck in `public/cards/`, used as-is, never redrawn;
+the cards piece designs the physical object around it (back, edges, deck, wear), not the pictures.
 
 The bar is "utterly perfect". A critic will put our frame next to a real frame from the film, blind,
 and say which is the better-crafted frame. We keep going until ours wins or ties.
@@ -23,8 +26,9 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   rain-strokes on walls, cross-hatch on dark masses, dash-strokes for floors), never a smooth gradient,
   never a photographic specular highlight, never a soft blurry shadow. Ink is near-black `#1c1a17`,
   paper is `#f6f2ea`.
-- **Selective colour.** Only Pepe (green skin, mustard suit `#d9b64a`-ish, orange shirt `#e0642a`-ish)
-  and the faces of the tarot cards carry colour. Colour is a flat fill with hatching drawn over it.
+- **Selective colour.** Only Pepe (his green skin `#5dbb63`-ish, his red lips; his robe is paper-white
+  with ink) and the faces of the tarot cards carry colour. One single mustard accent in the set is
+  allowed (the smoother decides which object). Colour is a flat fill with hatching drawn over it.
   Everything else is paper-white with ink. Materials flag this via `userData.ink.colorful` (see
   `src/core/strokes.js` → `inkMaterial`).
 - **Frontal, symmetrical, particular.** Camera square to the back wall, subject dead centre, things
@@ -110,7 +114,10 @@ small `node` script with the Write tool and run it.
    look–fix cycles before you return. You are not done when the code runs; you are done when the frame
    would not embarrass the film.
 3. Everything must be drawn by hand: procedural canvas textures via `strokes.js`, not photos, not gradients.
-   Detail is the whole game — the reference is dense with specific, particular things.
+   Detail is the whole game — the reference is dense with specific, particular things. Division of labour:
+   a surface texture is the PATTERN of what a thing is made of (wallpaper motif, floorboards, tiles, a
+   label); the ink pass adds TONE (hatching where the light is not) and OUTLINES. Do not bake shading
+   into textures, and do not draw outlines into textures except for pattern lines.
 4. Keep it fast enough: the frame must render at 60fps on a laptop. No 4K textures on tiny objects.
 5. Before returning: screenshot every judging state of your piece with no page errors, save the main one
    as `public/progress/shots/<piece>-r<round>.png`, and log a builder event with that filename.

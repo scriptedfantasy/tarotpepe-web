@@ -1,24 +1,339 @@
-// PIECE: ink — the look. Turns the 3D scene into a pen drawing on paper: outlines with a
-// hand's wobble, tone built from hatching strokes (never gradients), flat selective colour
-// (materials flagged userData.ink.colorful keep their colour; everything else is paper white),
-// a paper ground, a gentle line "boil" on the 12fps clock, letterbox. Owns the final render.
-// API: render(ctx), setState(name) for judging states.
+// PIECE: ink — the look. Turns the 3D scene into a pen drawing on paper: outlines with a hand's
+// wobble, tone built from hatching strokes (never gradients), flat selective colour (materials
+// flagged userData.ink.colorful keep their colour; everything else is paper white), a paper
+// ground, a gentle line "boil" on the 12fps clock, an optional paper-white letterbox.
+// Owns the final render. API: render(ctx), setState(name), params, setLetterbox(ratio|null).
 //
-// STUB: plain render. The real pipeline replaces this file entirely.
+// Passes per frame (all WebGL2, no EffectComposer):
+//   1. G-buffer  scene with an override ShaderMaterial (per-object uniforms via onBeforeRender):
+//                albedo (sRGB) + packed flags | octahedral world normal + 16-bit object id |
+//                object→camera distance. Depth via the target's depthTexture.
+//   2. Lit       scene with a white MeshStandardMaterial override, real lights + shadows → tone.
+//   3. Edge      seeds from depth (silhouettes), normals (creases), id/distance (boundaries),
+//                sampled through a low-frequency wobble re-seeded on twos. Also a tangent.
+//   4. Extend    the pen overshoots a little past line ends (corners cross).
+//   5. Composite lines (pressure-varied dilation, occasional skips), tone quantised to 4 stroke
+//                levels drawn with world-anchored hatch tiles, selective colour, paper grain.
 import * as THREE from 'three';
+import { INK, PAPER } from '../core/strokes.js';
+import { makeWallTiles, makeFloorTiles, makePaperGrain } from './ink-tiles.js';
+import { GBUF_VERT, GBUF_FRAG, QUAD_VERT, EDGE_FRAG, EXTEND_FRAG, COMPOSITE_FRAG } from './ink-shaders.js';
 
 export const meta = {
   name: 'ink',
   judge: { shot: 'home', states: ['default', 'lines-only', 'tone-only'] },
-  files: ['src/pieces/ink.js'],
+  files: ['src/pieces/ink.js', 'src/pieces/ink-tiles.js', 'src/pieces/ink-shaders.js'],
 };
 
+const MODES = { default: 0, 'lines-only': 1, 'tone-only': 2, 'debug-albedo': 3, 'debug-normal': 4, 'debug-depth': 5, 'debug-lit': 6, 'debug-edge': 7 };
+
 export async function build(ctx) {
-  ctx.scene.background = new THREE.Color('#f6f2ea');
-  return {
-    render(ctx) {
-      ctx.renderer.render(ctx.scene, ctx.camera);
-    },
-    setState() {},
+  const { renderer, scene, camera } = ctx;
+  scene.background = new THREE.Color(PAPER);
+
+  // ── tunables (other pieces may nudge these through ctx.pieces.ink.params) ──
+  const params = {
+    lineBase: 1.2, // css px, the pen's nominal half-width before pressure
+    wobble: 0.9, // css px of hand drift
+    breakAmt: 0.045, // how often the pen skips (0 = never)
+    overshoot: 1, // 0/1 line ends run past corners
+    depthThr: 0.012, // silhouette sensitivity (relative to depth)
+    creaseThr: 0.8, // cos of the fold angle that gets a line
+    lref: 0.5, // linear luminance that counts as "fully lit paper"
+    levels: [0.3, 0.5, 0.68, 0.86], // darkness thresholds → tone levels 1..4
+    paper: 1.0, // paper grain amount
+    hatchBoil: 0.004, // tile-units of hatch shiver on twos
+    letterbox: null, // e.g. 1.85 → paper-white bars; null → none
   };
+
+  // ── textures drawn once ──
+  const wallTiles = makeWallTiles();
+  const floorTiles = makeFloorTiles();
+  const paperGrain = makePaperGrain(512);
+  const white1x1 = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, THREE.RGBAFormat);
+  white1x1.needsUpdate = true;
+
+  // ── render targets ──
+  const size = new THREE.Vector2();
+  let rt = null;
+  function makeTargets(w, h) {
+    if (rt) for (const t of Object.values(rt)) t.dispose?.();
+    const depthTexture = new THREE.DepthTexture(w, h, THREE.UnsignedIntType);
+    depthTexture.format = THREE.DepthFormat;
+    const gbuf = new THREE.WebGLRenderTarget(w, h, { count: 3, depthTexture, depthBuffer: true, stencilBuffer: false });
+    for (const t of gbuf.textures) {
+      t.minFilter = t.magFilter = THREE.NearestFilter;
+      t.generateMipmaps = false;
+    }
+    const lit = new THREE.WebGLRenderTarget(w, h, { depthBuffer: true, stencilBuffer: false });
+    lit.texture.minFilter = lit.texture.magFilter = THREE.LinearFilter;
+    lit.texture.generateMipmaps = false;
+    const mk = () => {
+      const t = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false, stencilBuffer: false });
+      t.texture.minFilter = t.texture.magFilter = THREE.NearestFilter;
+      t.texture.generateMipmaps = false;
+      return t;
+    };
+    rt = { gbuf, lit, edge: mk(), ext: mk() };
+    size.set(w, h);
+  }
+
+  // ── G-buffer override material ──
+  const gMat = new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    vertexShader: GBUF_VERT,
+    fragmentShader: GBUF_FRAG,
+    uniforms: {
+      uMap: { value: white1x1 },
+      uHasMap: { value: 0 },
+      uColor: { value: new THREE.Color(1, 1, 1) },
+      uAlphaTest: { value: 0 },
+      uPacked: { value: 0 },
+      uId: { value: 0 },
+      uDist: { value: 1 },
+      uUvTransform: { value: new THREE.Matrix3() },
+      uCamRot: { value: new THREE.Matrix3() },
+    },
+    side: THREE.DoubleSide,
+  });
+  const _v = new THREE.Vector3(), _c = new THREE.Vector3();
+  const resolveMat = (object, group) => {
+    const m = object.material;
+    return Array.isArray(m) ? m[group ? group.materialIndex : 0] : m;
+  };
+  const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+  gMat.onBeforeRender = (r, s, cam, geometry, object, group) => {
+    const m = resolveMat(object, group);
+    const u = gMat.uniforms;
+    const ink = (m && m.userData && m.userData.ink) || {};
+    const colorful = ink.colorful ? 1 : 0;
+    const hatchIdx = Math.round(clamp(ink.hatch ?? 0.5, 0, 1) * 14);
+    const lineIdx = clamp(Math.round(((ink.lineWeight ?? 1) - 0.5) / 0.25), 0, 7);
+    u.uPacked.value = (colorful * 128 + hatchIdx * 8 + lineIdx) / 255;
+    const map = m && m.map && m.map.isTexture ? m.map : null;
+    u.uHasMap.value = map ? 1 : 0;
+    u.uMap.value = map || white1x1;
+    if (map) {
+      if (map.matrixAutoUpdate) map.updateMatrix();
+      u.uUvTransform.value.copy(map.matrix);
+    } else u.uUvTransform.value.identity();
+    if (m && m.color && m.color.isColor) u.uColor.value.copy(m.color);
+    else u.uColor.value.setRGB(1, 1, 1);
+    u.uAlphaTest.value = m && (m.alphaTest > 0 || (m.transparent && map)) ? Math.max(m.alphaTest || 0, 0.5) : 0;
+    u.uId.value = object.id & 65535;
+    _v.setFromMatrixPosition(object.matrixWorld);
+    _c.setFromMatrixPosition(cam.matrixWorld);
+    u.uDist.value = _v.distanceTo(_c);
+    gMat.side = m && m.side != null ? m.side : THREE.FrontSide;
+    gMat.uniformsNeedUpdate = true;
+  };
+
+  // ── lit override: white paper under the real lights ──
+  const litMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, side: THREE.DoubleSide });
+  litMat.onBeforeRender = (r, s, cam, geometry, object, group) => {
+    const m = resolveMat(object, group);
+    litMat.side = m && m.side != null ? m.side : THREE.FrontSide;
+  };
+
+  // ── fullscreen passes ──
+  const quadGeo = new THREE.BufferGeometry();
+  quadGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
+  const quad = new THREE.Mesh(quadGeo, null);
+  quad.frustumCulled = false;
+  const quadScene = new THREE.Scene();
+  quadScene.add(quad);
+  const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+  const edgeMat = new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    vertexShader: QUAD_VERT,
+    fragmentShader: EDGE_FRAG,
+    uniforms: {
+      tDepth: { value: null },
+      tNorm: { value: null },
+      tMisc: { value: null },
+      uRes: { value: new THREE.Vector2() },
+      uNear: { value: 0.03 },
+      uFar: { value: 60 },
+      uSeed: { value: 0 },
+      uDpr: { value: 1 },
+      uWobble: { value: params.wobble },
+      uDepthThr: { value: params.depthThr },
+      uCreaseThr: { value: params.creaseThr },
+    },
+    depthTest: false,
+    depthWrite: false,
+  });
+  const extMat = new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    vertexShader: QUAD_VERT,
+    fragmentShader: EXTEND_FRAG,
+    uniforms: {
+      tEdge: { value: null },
+      uRes: { value: new THREE.Vector2() },
+      uDpr: { value: 1 },
+      uSeed: { value: 0 },
+      uOvershoot: { value: params.overshoot },
+    },
+    depthTest: false,
+    depthWrite: false,
+  });
+  const compMat = new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    vertexShader: QUAD_VERT,
+    fragmentShader: COMPOSITE_FRAG,
+    uniforms: {
+      tAlbedo: { value: null },
+      tNorm: { value: null },
+      tMisc: { value: null },
+      tDepth: { value: null },
+      tLit: { value: null },
+      tEdge: { value: null },
+      tWall: { value: wallTiles },
+      tFloor: { value: floorTiles },
+      tPaper: { value: paperGrain },
+      uRes: { value: new THREE.Vector2() },
+      uDpr: { value: 1 },
+      uSeed: { value: 0 },
+      uNear: { value: 0.03 },
+      uFar: { value: 60 },
+      uHatchK: { value: 3 },
+      uLref: { value: params.lref },
+      uLineBase: { value: params.lineBase },
+      uBreak: { value: params.breakAmt },
+      uPaperAmt: { value: params.paper },
+      uHatchBoil: { value: params.hatchBoil },
+      uMode: { value: 0 },
+      uInvVP: { value: new THREE.Matrix4() },
+      uInk: { value: new THREE.Color(INK) },
+      uPaper: { value: new THREE.Color(PAPER) },
+      uLevels: { value: new THREE.Vector4(...params.levels) },
+      uLetterbox: { value: new THREE.Vector2(0, 0) },
+    },
+    depthTest: false,
+    depthWrite: false,
+  });
+  // colours are given as sRGB hex and written straight to the canvas: keep them as typed
+  compMat.uniforms.uInk.value.setHex(parseInt(INK.slice(1), 16), THREE.NoColorSpace);
+  compMat.uniforms.uPaper.value.setHex(parseInt(PAPER.slice(1), 16), THREE.NoColorSpace);
+
+  function fullscreen(material, target) {
+    quad.material = material;
+    renderer.setRenderTarget(target);
+    renderer.render(quadScene, orthoCam);
+  }
+
+  const _size = new THREE.Vector2();
+  const _clear = new THREE.Color();
+  let mode = 0;
+
+  function render(ctx) {
+    const cam = ctx.camera;
+    renderer.getDrawingBufferSize(_size);
+    if (!rt || _size.x !== size.x || _size.y !== size.y) makeTargets(_size.x, _size.y);
+    const dpr = renderer.getPixelRatio();
+    const seed = Math.floor(ctx.clock.frame / 2) + ctx.seed * 101;
+
+    const prevRT = renderer.getRenderTarget();
+    renderer.getClearColor(_clear);
+    const prevAlpha = renderer.getClearAlpha();
+    const prevOverride = scene.overrideMaterial;
+    const prevBg = scene.background;
+    const prevAutoUpdate = renderer.shadowMap.autoUpdate;
+
+    // shadows once per frame, not once per pass
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
+    scene.background = null;
+
+    // 1. G-buffer
+    gMat.uniforms.uCamRot.value.setFromMatrix4(cam.matrixWorld);
+    scene.overrideMaterial = gMat;
+    renderer.setClearColor(0x000000, 0);
+    renderer.setRenderTarget(rt.gbuf);
+    renderer.render(scene, cam);
+
+    // 2. lit
+    scene.overrideMaterial = litMat;
+    renderer.setClearColor(0xffffff, 1);
+    renderer.setRenderTarget(rt.lit);
+    renderer.render(scene, cam);
+    scene.overrideMaterial = prevOverride;
+    scene.background = prevBg;
+
+    // 3. edges
+    const eu = edgeMat.uniforms;
+    eu.tDepth.value = rt.gbuf.depthTexture;
+    eu.tNorm.value = rt.gbuf.textures[1];
+    eu.tMisc.value = rt.gbuf.textures[2];
+    eu.uRes.value.copy(size);
+    eu.uNear.value = cam.near;
+    eu.uFar.value = cam.far;
+    eu.uSeed.value = seed;
+    eu.uDpr.value = dpr;
+    eu.uWobble.value = params.wobble;
+    eu.uDepthThr.value = params.depthThr;
+    eu.uCreaseThr.value = params.creaseThr;
+    renderer.setClearColor(0x000000, 0);
+    fullscreen(edgeMat, rt.edge);
+
+    // 4. overshoot
+    const xu = extMat.uniforms;
+    xu.tEdge.value = rt.edge.texture;
+    xu.uRes.value.copy(size);
+    xu.uDpr.value = dpr;
+    xu.uSeed.value = seed;
+    xu.uOvershoot.value = params.overshoot;
+    fullscreen(extMat, rt.ext);
+
+    // 5. composite to the canvas
+    const cu = compMat.uniforms;
+    cu.tAlbedo.value = rt.gbuf.textures[0];
+    cu.tNorm.value = rt.gbuf.textures[1];
+    cu.tMisc.value = rt.gbuf.textures[2];
+    cu.tDepth.value = rt.gbuf.depthTexture;
+    cu.tLit.value = rt.lit.texture;
+    cu.tEdge.value = rt.ext.texture;
+    cu.uRes.value.copy(size);
+    cu.uDpr.value = dpr;
+    cu.uSeed.value = seed;
+    cu.uNear.value = cam.near;
+    cu.uFar.value = cam.far;
+    const cssH = size.y / dpr;
+    cu.uHatchK.value = cssH / (1024 * Math.tan(THREE.MathUtils.DEG2RAD * cam.fov * 0.5));
+    cu.uLref.value = params.lref;
+    cu.uLineBase.value = params.lineBase;
+    cu.uBreak.value = params.breakAmt;
+    cu.uPaperAmt.value = params.paper;
+    cu.uHatchBoil.value = params.hatchBoil;
+    cu.uMode.value = mode;
+    cu.uInvVP.value.multiplyMatrices(cam.matrixWorld, cam.projectionMatrixInverse);
+    cu.uLevels.value.set(...params.levels);
+    if (params.letterbox) {
+      const frameAspect = size.x / size.y;
+      const bar = Math.max(0, (1 - frameAspect / params.letterbox) / 2);
+      cu.uLetterbox.value.set(bar, bar);
+    } else cu.uLetterbox.value.set(0, 0);
+    fullscreen(compMat, null);
+
+    renderer.setRenderTarget(prevRT);
+    renderer.setClearColor(_clear, prevAlpha);
+    renderer.shadowMap.autoUpdate = prevAutoUpdate;
+  }
+
+  const api = {
+    params,
+    render,
+    tiles: { wall: wallTiles, floor: floorTiles, paper: paperGrain },
+    setLetterbox(ratio) {
+      params.letterbox = ratio || null;
+    },
+    setMode(name) {
+      mode = MODES[name] ?? 0;
+    },
+    setState(name) {
+      api.setMode(name);
+    },
+  };
+  return api;
 }
