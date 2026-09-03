@@ -155,8 +155,11 @@ export function wallpaperTexture({ tile = 1.02, ppm = 1000, seed = 21 } = {}) {
 // cornice is now bare plaster all round the room — the one big empty area the drawings always keep,
 // as in fd-anim-kitchen-table-cards-hires. room.js paints it with plainTexture: nothing to draw.)
 
-// Wainscot: tongue-and-groove boards, roughly 0.1 m wide but no two alike — a seam for each,
-// a bead beside most, the odd seam doubled where the pen went twice. Tile 0.8 m, eight boards.
+// Wainscot: tongue-and-groove boards, roughly 0.1 m wide but no two alike — ONE seam for each,
+// with a companion line 20 mm off now and then where the pen went twice. (There used to be a bead
+// 5 mm from every seam and a third line at 13 mm: at the wide shot a board is 26 screen pixels, so
+// those three lines landed inside 3 px and smeared into one fat grey stripe per board.)
+// Tile 0.8 m, eight boards.
 export function wainscotTexture({ tile = 0.8, ppm = 1000, seed = 41 } = {}) {
   const size = Math.round(tile * ppm);
   const tex = drawTexture(
@@ -173,10 +176,9 @@ export function wainscotTexture({ tile = 0.8, ppm = 1000, seed = 41 } = {}) {
         const bw = (w * widths[i]) / sum;
         const lean = (rng() - 0.5) * 6;
         inkLine(g, x, -4, x + lean, h + 4, { width: 6, wobble: 2.6, rng, alpha: 0.9, segments: 26 });
-        if (rng() < 0.22) inkLine(g, x + 5, -4, x + 5 + lean, h + 4, { width: 4, wobble: 2.2, rng, alpha: 0.6, segments: 26 });
-        if (rng() < 0.7) inkLine(g, x + 13, -4, x + 13 + lean * 0.8, h + 4, { width: 3, wobble: 1.8, rng, alpha: 0.32, segments: 26 });
-        // faint grain: a long broken line or two per board
-        if (rng() < 0.8) hatch(g, x + 22, 0, bw - 30, h, { angle: Math.PI / 2, spacing: 34, width: 2.2, wobble: 2.2, broken: 0.9, rng, alpha: 0.13, jitter: 12 });
+        if (rng() < 0.2) inkLine(g, x + 20, -4, x + 20 + lean, h + 4, { width: 4, wobble: 2.4, rng, alpha: 0.5, segments: 26 });
+        // faint grain: one long broken line per board, well clear of the seam
+        if (rng() < 0.55) hatch(g, x + 40, 0, bw - 55, h, { angle: Math.PI / 2, spacing: 46, width: 2.2, wobble: 2.4, broken: 0.92, rng, alpha: 0.11, jitter: 14 });
         x += bw;
       }
     },

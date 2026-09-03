@@ -71,11 +71,11 @@ export async function build(ctx) {
     trim: mat('trim', plainTexture({ seed: 72 }), { hatch: 0.22, lineWeight: 1.15 }),
     reveal: mat('reveal', plainTexture({ seed: 78 }), { hatch: 0.66, lineWeight: 1.1 }), // the inside faces of the openings carry tone
     wood: mat('wood', grain, { hatch: 0.44, lineWeight: 1.1 }), // the door
-    shutter: mat('shutter', grain, { hatch: 0.24, lineWeight: 1.1 }),
+    shutter: mat('shutter', plainTexture({ seed: 81 }), { hatch: 0.24, lineWeight: 1.1 }), // painted: no grain drawn on a shutter
     glass: mat('glass', plainTexture({ tint: '#fbf9f3', seed: 73 }), { hatch: 0.04, lineWeight: 0.8 }),
     ceiling: mat('ceiling', plainTexture({ seed: 74 }), { hatch: 0.08 }),
     metal: mat('metal', plainTexture({ seed: 75 }), { hatch: 0.85, lineWeight: 1.2 }),
-    iron: mat('iron', plainTexture({ seed: 76 }), { hatch: 0.65, lineWeight: 1.1 }),
+    iron: mat('iron', plainTexture({ seed: 76 }), { hatch: 0.42, lineWeight: 1.1 }),
     dark: mat('dark', plainTexture({ seed: 79 }), { hatch: 1, lineWeight: 1 }), // a hole: cross-hatched to black
   };
 
@@ -96,8 +96,8 @@ export async function build(ctx) {
   // the landing (stage right) and the door of a press (stage left). They sit in the stretch of side
   // wall that only the long door/window/track shots see — in those the lens is a metre from the
   // wall and it races across a third of the frame, so it has to carry drawing, not bare paper.
-  const sideDoorR = { x0: 0.36, x1: 1.44, y0: 0, y1: 2.12, depth: 0.09 };
-  const sideDoorL = { x0: 0.44, x1: 1.28, y0: 0, y1: 2.12, depth: 0.09 };
+  const sideDoorR = { x0: 0.86, x1: 1.98, y0: 0, y1: 2.12, depth: 0.09 };
+  const sideDoorL = { x0: 0.94, x1: 1.82, y0: 0, y1: 2.12, depth: 0.09 };
 
   // ---- floor and ceiling ----
   P.plane(W, D + overrun, 0, 0, overrun / 2, M.floor, { rx: -Math.PI / 2, receive: true });
@@ -191,6 +191,7 @@ export async function build(ctx) {
   P.withFrame(rightFrame, () => {
     buildWindow(P, M, sideWin, zb, jit);
     buildSideDoor(P, M, sideDoorR, zb, { knob: 1 });
+    buildSwitch(P, M, sideDoorR.x0 - 0.1 - 0.17, 1.22, zb); // the switch by the way in
   });
   P.withFrame(leftFrame, () => buildSideDoor(P, M, { ...sideDoorL, x0: -sideDoorL.x1, x1: -sideDoorL.x0 }, zb, { knob: -1, press: true }));
 
@@ -295,18 +296,21 @@ function buildShutterLeaf(P, M, x0, x1, y0, y1, z0, z1, side, jit = Math.random)
   P.boxFrom(x0 + st, x1 - st, ym - mid / 2, ym + mid / 2, z0, z1, M.shutter, { cast: true, receive: true });
   // the two fields, set back from the frame: bare paper between the louvres
   P.boxFrom(x0 + st, x1 - st, y0 + rl, y1 - rl, z0, zf, M.shutter, { receive: true });
-  // louvres: six ribs to a field, each a shallow angled bar, set by hand so no two sit level
+  // Louvres: six broad boards to a field, laid almost edge to edge so that what the pen sees
+  // between them is a narrow slot — one bold stroke, a hand's breadth of bare paper, the next
+  // stroke. Set by hand: no two sit quite level or at quite the same pitch.
   const iw = x1 - x0 - 2 * st;
-  const per = 6, slatH = 0.05, slatT = 0.014, tilt = -0.34;
+  const per = 6, slatT = 0.013, tilt = -0.3;
   for (const [ya, yb] of [
     [y0 + rl, ym - mid / 2],
     [ym + mid / 2, y1 - rl],
   ]) {
-    const pitch = (yb - ya) / (per + 0.25);
+    const pitch = (yb - ya) / (per + 0.08);
+    const slatH = (pitch * 0.85) / Math.cos(tilt);
     const start = ya + (yb - ya - (per - 1) * pitch) / 2;
     for (let i = 0; i < per; i++) {
-      const y = start + i * pitch + (jit() - 0.5) * 0.01;
-      P.box(iw, slatH, slatT, (x0 + x1) / 2, y, zf + slatT * 0.42, M.shutter, { rx: tilt + (jit() - 0.5) * 0.1, rz: (jit() - 0.5) * 0.012, cast: true, receive: true, uvSwap: true });
+      const y = start + i * pitch + (jit() - 0.5) * 0.008;
+      P.box(iw, slatH, slatT, (x0 + x1) / 2, y, zf + slatT * 0.42, M.shutter, { rx: tilt + (jit() - 0.5) * 0.07, rz: (jit() - 0.5) * 0.01, cast: true, receive: true, uvSwap: true });
     }
   }
   // strap hinges: three flat bars across the hinge stile, a round knuckle at the wall edge
@@ -332,13 +336,13 @@ function buildRadiator(P, M, w, zb) {
   const cx = (x0 + x1) / 2;
   const width = x1 - x0 - 0.16, y0 = 0.17, y1 = 0.8;
   const z0 = zb + 0.05, depth = 0.13;
-  const n = 14;
+  // nine fat columns, not fourteen thin ones: at the wide shot a 53 mm pitch fell to a dozen screen
+  // pixels and the stack turned into a barcode. Wider columns, wider gaps, one line each.
+  const n = 9;
   const pitch = width / n;
   for (let i = 0; i < n; i++) {
     const x = cx - width / 2 + pitch * (i + 0.5);
-    P.box(pitch * 0.56, y1 - y0 - 0.1, depth, x, (y0 + y1) / 2, z0 + depth / 2, M.iron, { receive: true });
-    // a narrow web between the front and back tubes reads as the second line of each column
-    P.box(pitch * 0.3, y1 - y0 - 0.1, depth * 0.55, x, (y0 + y1) / 2, z0 + depth / 2, M.iron);
+    P.box(pitch * 0.62, y1 - y0 - 0.1, depth, x, (y0 + y1) / 2, z0 + depth / 2, M.iron, { receive: true });
   }
   // manifolds top and bottom
   P.box(width + 0.02, 0.05, depth + 0.01, cx, y1 - 0.025, z0 + depth / 2, M.iron, { receive: true });

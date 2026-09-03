@@ -66,14 +66,15 @@ function twice(groups, lw) {
   return `<g class="under">${under}</g><g class="over">${over}</g>`;
 }
 
-// The caret: a short dash sitting on the baseline, the width of a letter.
-// viewBox is 0 0 20 12; the dash lies at y ≈ 9.
+// The caret: a short dash sitting on the baseline, about the width of a letter.
+// viewBox is 0 0 20 26; the dash lies at y ≈ 20, which is where the baseline falls.
 export function drawCaret(svg, seed = 5) {
   const rng = mulberry32(seed);
-  svg.setAttribute('viewBox', '0 0 20 12');
+  svg.setAttribute('viewBox', '0 0 20 26');
+  const d = pathD(stroke(1.6, 20, 18.4, 20, rng, { wobble: 0.7, overshoot: 0.9 }));
   svg.innerHTML =
-    `<path class="u" d="${pathD(stroke(2.4, 9.1, 17.6, 9.1, rng, { wobble: 0.5, overshoot: 0.7 }))}" fill="none" stroke="${PAPER}" stroke-width="5" stroke-linecap="round"/>` +
-    `<path d="${pathD(stroke(2.4, 9.1, 17.6, 9.1, rng, { wobble: 0.5, overshoot: 0.7 }))}" fill="none" stroke="${INK}" stroke-width="2.1" stroke-linecap="round"/>`;
+    `<path class="u" d="${d}" fill="none" stroke="${PAPER}" stroke-width="7.5" stroke-linecap="round"/>` +
+    `<path d="${d}" fill="none" stroke="${INK}" stroke-width="3.1" stroke-linecap="round"/>`;
 }
 
 // The microphone: a carbon ball head on a yoke, a stem, a turned foot. A ring is drawn on the
@@ -95,7 +96,7 @@ export function drawMic(svg, seed = 31) {
   const stemR = pathD(stroke(cx + 2.1, 38.6, cx + 2.1, 54.4, rng, { wobble: 0.3, overshoot: 0.4 }));
   const footTop = pathD(arc(cx, 55.2, 9.6, 2.8, rng, { wobble: 0.4, n: 26 }));
   const footRim = pathD(arc(cx, 57.0, 11.4, 3.3, rng, { wobble: 0.45, n: 26 }));
-  const ring = pathD(arc(cx, 57.4, 23.5, 7.4, rng, { wobble: 0.9, n: 40 }));
+  const ring = pathD(arc(cx, 58.2, 26.5, 8.8, rng, { wobble: 1.0, n: 44 }));
 
   const groups = [
     { d: head, cls: 'ball', w: lw },

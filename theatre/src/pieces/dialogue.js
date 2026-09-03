@@ -65,10 +65,10 @@ const BLINK_LISTEN = 3; // ... while the microphone is listening: twice as quick
 // the rendered frame (tools/_bare.mjs): the cloth in front of him in the mediums, the wall left of
 // the deck in the wide, the empty corner of the cloth in the top-downs.
 const ANCHORS = {
-  home: { x: 0.5, y: 0.795, w: 0.28 },
-  wide: { x: 0.5, y: 0.8, w: 0.26 },
-  pepe: { x: 0.5, y: 0.822, w: 0.3 },
-  table: { x: 0.5, y: 0.825, w: 0.36 },
+  home: { x: 0.5, y: 0.815, w: 0.28 },
+  wide: { x: 0.5, y: 0.82, w: 0.26 },
+  pepe: { x: 0.5, y: 0.845, w: 0.33 },
+  table: { x: 0.5, y: 0.845, w: 0.36 },
   spread: { x: 0.5, y: 0.06, w: 0.34 },
   fan: { x: 0.5, y: 0.06, w: 0.34 },
   card0: { x: 0.78, y: 0.3, w: 0.3 },
@@ -80,7 +80,7 @@ const ANCHORS = {
 
 // The microphone's place on the table: beside the ashtray (table-objects PLACES.ashtray is
 // [-0.15, -0.13]), a little towards the visitor. Metres, table space; y is the cloth.
-const MIC_SPOT = [-0.285, -0.01];
+const MIC_SPOT = [-0.435, 0.14];
 const MIC_TALL = 0.078; // how tall the prop stands in the world; its size in frame follows the shot
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -114,7 +114,7 @@ function buildStyle() {
       position: absolute; left: 50%; top: 50%; transform: translate(-50%, 0);
       width: max-content; max-width: 30%; box-sizing: border-box; text-align: center;
       font-family: var(--typewriter);
-      font-size: clamp(9px, 0.98vw, 19px); line-height: 1.56;
+      font-size: clamp(9px, 1vw, 20px); line-height: 1.48;
       letter-spacing: 0.085em; text-indent: 0.085em; text-transform: uppercase;
       font-weight: 600; color: ${INK};
     }
@@ -122,7 +122,7 @@ function buildStyle() {
     /* the two passes: paper under, ink over, the same words in the same places */
     #dialogue .cap .layer.halo {
       position: absolute; left: 0; top: 0; width: 100%; z-index: 0; pointer-events: none;
-      color: ${PAPER}; -webkit-text-stroke: 0.32em ${PAPER};
+      color: ${PAPER}; -webkit-text-stroke: 0.38em ${PAPER};
     }
     #dialogue .cap .layer.ink { position: relative; z-index: 1; }
     #dialogue .cap .g { display: inline-block; }
@@ -139,13 +139,13 @@ function buildStyle() {
     /* the visitor's own words: the same hand, upper and lower case, wrapping as far as it needs */
     #dialogue .cap .you {
       font-size: 0.66em; font-weight: 700; letter-spacing: 0.36em; text-indent: 0.36em;
-      margin: 1.05em 0 0.5em; white-space: nowrap;
+      margin: 0.62em 0 0.34em; white-space: nowrap;
     }
     #dialogue .cap .answer {
       font-size: 1em; font-weight: 500; text-transform: none; letter-spacing: 0.045em; text-indent: 0;
       line-height: 1.5; word-break: break-word;
     }
-    #dialogue .cap .caret { display: inline-block; width: 0.62em; height: 1em; vertical-align: baseline; margin-left: 0.04em; }
+    #dialogue .cap .caret { display: inline-block; width: 0.86em; height: 1.12em; vertical-align: baseline; margin-left: 0.06em; }
     #dialogue .cap .caret > svg { display: block; width: 100%; height: 100%; overflow: visible; }
     #dialogue .cap .caret.off { visibility: hidden; }
     #dialogue .cap .layer.halo .caret path:not(.u) { display: none; }
@@ -160,6 +160,7 @@ function buildStyle() {
       position: absolute; pointer-events: auto; cursor: pointer; padding: 0; margin: 0; border: 0;
       background: transparent; appearance: none; outline: 0; display: block; color: ${INK};
     }
+    #dialogue .mic[hidden] { display: none; }
     #dialogue .mic > svg { display: block; width: 100%; height: 100%; overflow: visible; }
     #dialogue .mic .ball { fill: none; }
     #dialogue .mic.on .ball { fill: ${INK}; }
@@ -396,7 +397,7 @@ export async function build(ctx) {
   function fit() {
     if (!anchored || cap.hidden) return;
     const h = ctx.size.h || window.innerHeight;
-    const lo = h * 0.035, hi = h * (1 - barFrac() - 0.02);
+    const lo = h * 0.035, hi = h * (1 - barFrac() - 0.028);
     const r = cap.getBoundingClientRect();
     let top = r.top;
     if (r.bottom > hi) top = Math.max(lo, top - (r.bottom - hi));
@@ -500,7 +501,7 @@ export async function build(ctx) {
     cap.appendChild(input);
     field = { input, answer, caret: answer.map((el) => el._caret) };
     drawAnswer();
-    mic.hidden = false;
+    mic.hidden = !(canListen || canSpeak); // no ear, no prop: a dead object on the table is worse
     place_mic();
     input.addEventListener('input', drawAnswer);
     return input;
