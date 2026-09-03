@@ -33,19 +33,22 @@ export async function build(ctx) {
 
   // ── tunables (other pieces may nudge these through ctx.pieces.ink.params) ──
   const params = {
-    lineBase: 0.2, // threshold on the blurred seed field: lower = heavier pen (0.14 ≈ 3px, 0.28 ≈ 1.5px)
+    lineBase: 0.235, // threshold on the blurred seed field: lower = heavier pen (0.14 ≈ 3px, 0.28 ≈ 1.5px)
     wobble: 0.9, // css px of hand drift
     breakAmt: 0.03, // how often the pen skips (0 = never)
     overshoot: 1, // 0/1 line ends run past corners
     depthThr: 0.012, // silhouette sensitivity (relative to depth)
-    creaseThr: 0.8, // cos of the fold angle that gets a line
+    // cos of the fold angle that gets a line. A draughtsman inks a corner, not a soft bend: only
+    // folds sharper than ≈53° are drawn, so lathed curves and cloth do not fill up with creases.
+    creaseThr: 0.6,
     lref: 0.5, // (unused now; kept for other pieces that may read it)
     // lit luminance: fully dark, fully lit; max darkness from light; grazing amount. With the
-    // levels below a plain-paper material (hatch 0.5) is bare above L≈0.26, rain to 0.20, dense
-    // strokes to 0.15, cross-hatch to 0.085, solid ink below: most of a lit room stays paper.
-    tone: [0.05, 0.4, 1.0, 0.3],
-    levels: [0.36, 0.6, 0.8, 0.97], // darkness thresholds → tone levels 1..4 (4 = solid)
-    paper: 0.7, // paper grain amount (the grain itself is already a whisper)
+    // levels below a plain-paper material (hatch 0.5) is BARE above L≈0.10 — most of the room —
+    // takes clumped rain to L≈0.055, dense strokes to L≈0.022, cross-hatch below. Nothing turns
+    // solid black from want of light: solid ink is reserved for materials flagged hatch ≈ 1.
+    tone: [0.0, 0.5, 1.0, 0.22],
+    levels: [0.55, 0.82, 0.96, 0.14], // thresholds → tone levels 1..3; w = ragged level boundary
+    paper: 0.55, // paper grain amount (the grain itself is already a whisper)
     hatchBoil: 0.003, // tile-units of hatch shiver on twos
     letterbox: null, // e.g. 1.85 → paper-white bars; null → none
   };

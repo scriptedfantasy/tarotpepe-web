@@ -150,45 +150,54 @@ export async function makeFloorTiles() {
   return dataTexture(await bakedLevels('ink-floor', TILE, TILE, drawFloorLevels, { deps: DEPS }));
 }
 
+// One texel is ≈0.9 css px in the frame, so these numbers are pen strokes on the paper: at the
+// folio's density a light wall carries strokes ~40–150 px long, 12–15 px apart, in clumps.
 function drawWallLevels() {
   const V = Math.PI / 2;
   const light = levelCanvas((g, rng) => {
-    // clumps of rain: inside a clump the strokes sit close (the pen thickening at an edge), between
-    // clumps the paper is bare; every stroke long enough to read as one stroke of a pen
-    const dens = clumpField(rng, { count: 11, rx: 48, ry: 105, floor: 0.04, amp: [0.75, 1.4] });
-    strokes(g, rng, { angle: V, spacing: 6.5, width: PEN * 0.95, segMin: 34, segMax: 150, fill: 0.62, jitter: 0.42, lean: 0.04, density: dens });
+    // clumps of rain: inside a clump a few bold verticals sit together (the pen thickening beside
+    // an edge), between clumps the paper is bare. Long strokes, widely spaced: each one must read
+    // as one stroke of a pen at 1600 px, not as texture.
+    const dens = clumpField(rng, { count: 8, rx: 62, ry: 130, floor: 0.0, amp: [0.85, 1.5] });
+    strokes(g, rng, { angle: V, spacing: 11, width: PEN * 1.05, segMin: 26, segMax: 130, fill: 0.52, jitter: 0.42, lean: 0.05, density: dens });
   }, 101);
   const mid = levelCanvas((g, rng) => {
-    strokes(g, rng, { angle: V, spacing: 5.3, width: PEN, segMin: 60, segMax: 280, fill: 0.84, jitter: 0.3, lean: 0.025 });
+    // continuous rain, still openly spaced: the wall against a door jamb, the underside of a shelf
+    strokes(g, rng, { angle: V, spacing: 8, width: PEN * 1.05, segMin: 50, segMax: 240, fill: 0.8, jitter: 0.32, lean: 0.035 });
   }, 102);
   const dark = levelCanvas((g, rng) => {
-    strokes(g, rng, { angle: V, spacing: 4.6, width: PEN, segMin: 90, segMax: 360, fill: 0.92, jitter: 0.25, lean: 0.02 });
-    strokes(g, rng, { angle: Math.PI / 3, spacing: 7.5, width: PEN * 0.95, segMin: 90, segMax: 360, fill: 0.86, jitter: 0.3, lean: 0.03 });
+    // cross-hatch: verticals crossed by one steep diagonal. Dense enough to read as the optical
+    // grey the folios sit at (#646963), open enough that every stroke is still a stroke — the
+    // arch behind La Brique Rouge.
+    strokes(g, rng, { angle: V, spacing: 5.6, width: PEN * 1.05, segMin: 90, segMax: 360, fill: 0.9, jitter: 0.24, lean: 0.02 });
+    strokes(g, rng, { angle: Math.PI / 3, spacing: 7.6, width: PEN, segMin: 90, segMax: 360, fill: 0.86, jitter: 0.28, lean: 0.03 });
   }, 103);
   const darkest = levelCanvas((g, rng) => {
-    strokes(g, rng, { angle: V, spacing: 3.2, width: PEN * 1.3, segMin: 200, segMax: 500, fill: 0.97, jitter: 0.15, lean: 0.01 });
-    strokes(g, rng, { angle: 0, spacing: 3.6, width: PEN * 1.2, segMin: 200, segMax: 500, fill: 0.95, jitter: 0.2, lean: 0.015 });
-    strokes(g, rng, { angle: Math.PI / 4, spacing: 4.5, width: PEN * 1.1, segMin: 200, segMax: 500, fill: 0.9, jitter: 0.2, lean: 0.02 });
+    // black, but drawn: three directions crowding together. The strokes still separate here and
+    // there, which is what gives a black mass its scratchy rim instead of a vector edge.
+    strokes(g, rng, { angle: V, spacing: 4.2, width: PEN * 1.2, segMin: 150, segMax: 460, fill: 0.95, jitter: 0.2, lean: 0.015 });
+    strokes(g, rng, { angle: 0, spacing: 4.8, width: PEN * 1.15, segMin: 150, segMax: 460, fill: 0.93, jitter: 0.24, lean: 0.02 });
+    strokes(g, rng, { angle: Math.PI / 4, spacing: 5.5, width: PEN * 1.1, segMin: 150, segMax: 460, fill: 0.9, jitter: 0.24, lean: 0.025 });
   }, 104);
   return packLevels([light, mid, dark, darkest]);
 }
 
 function drawFloorLevels() {
   const light = levelCanvas((g, rng) => {
-    const dens = clumpField(rng, { count: 10, rx: 95, ry: 55, floor: 0.04, amp: [0.75, 1.4] });
-    dashRows(g, rng, { spacing: 7, width: PEN * 0.95, len: 44, fill: 0.55, density: dens });
+    const dens = clumpField(rng, { count: 8, rx: 130, ry: 62, floor: 0.0, amp: [0.85, 1.5] });
+    dashRows(g, rng, { spacing: 11, width: PEN * 1.05, len: 40, fill: 0.42, density: dens });
   }, 201);
   const mid = levelCanvas((g, rng) => {
-    dashRows(g, rng, { spacing: 5.5, width: PEN, len: 64, fill: 0.8 });
+    dashRows(g, rng, { spacing: 8, width: PEN * 1.05, len: 70, fill: 0.76 });
   }, 202);
   const dark = levelCanvas((g, rng) => {
-    dashRows(g, rng, { spacing: 4.8, width: PEN, len: 90, fill: 0.9 });
-    strokes(g, rng, { angle: Math.PI / 2 + 0.35, spacing: 7.5, width: PEN * 0.95, segMin: 90, segMax: 340, fill: 0.84, jitter: 0.3, lean: 0.04 });
+    dashRows(g, rng, { spacing: 5.8, width: PEN * 1.05, len: 110, fill: 0.9 });
+    strokes(g, rng, { angle: Math.PI / 2 + 0.35, spacing: 8, width: PEN, segMin: 90, segMax: 340, fill: 0.84, jitter: 0.3, lean: 0.04 });
   }, 203);
   const darkest = levelCanvas((g, rng) => {
-    dashRows(g, rng, { spacing: 3.2, width: PEN * 1.3, len: 200, fill: 0.97 });
-    strokes(g, rng, { angle: Math.PI / 2, spacing: 3.6, width: PEN * 1.2, segMin: 200, segMax: 500, fill: 0.95, jitter: 0.2, lean: 0.02 });
-    strokes(g, rng, { angle: -Math.PI / 4, spacing: 4.5, width: PEN * 1.1, segMin: 200, segMax: 500, fill: 0.9, jitter: 0.2, lean: 0.02 });
+    dashRows(g, rng, { spacing: 4.2, width: PEN * 1.2, len: 180, fill: 0.95 });
+    strokes(g, rng, { angle: Math.PI / 2, spacing: 4.8, width: PEN * 1.15, segMin: 150, segMax: 460, fill: 0.93, jitter: 0.22, lean: 0.02 });
+    strokes(g, rng, { angle: -Math.PI / 4, spacing: 5.5, width: PEN * 1.1, segMin: 150, segMax: 460, fill: 0.9, jitter: 0.24, lean: 0.025 });
   }, 204);
   return packLevels([light, mid, dark, darkest]);
 }
@@ -201,7 +210,7 @@ export async function makePaperGrain(size = 512) {
     size,
     size,
     (g, w, h) => {
-      paper(g, w, h, '#ffffff', { grain: 0.028, seed: 17 });
+      paper(g, w, h, '#ffffff', { grain: 0.016, seed: 17 });
     },
     { srgb: false, repeat: [1, 1], anisotropy: 1 },
   );

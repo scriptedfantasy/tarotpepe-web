@@ -68,6 +68,22 @@ function tidy(s) {
 }
 
 // --- the scripted fallback -------------------------------------------------------------------
+// The one beat where the visitor asks something of their own. Without a live voice he still has to
+// answer it, and the only honest material is the three cards that are lying there.
+function followupAnswer(said) {
+  const drawn = spread.filter(Boolean);
+  const mid = drawn[1] ?? drawn[0];
+  const last = drawn[2] ?? drawn[drawn.length - 1];
+  if (!mid) return said ? scriptReply(/\?\s*$/.test(said) ? said : said + '?') : SCRIPT.interjections.question[1].replace('“{answer}” ', '');
+  const q = said ? `“${said}” ` : '';
+  const options = [
+    `${q}The middle one. ${mid.name} is what is actually going on, and it is the one you did not choose to bring.`,
+    `${q}${mid.name}, in the middle. The first card is what you carried in; that one you already knew.`,
+    `${q}Look at ${mid.name} again, then at ${last?.name ?? 'the last card'}. The second names it, the third tells you what to do on Tuesday.`,
+  ];
+  return options[(said.length + drawn.length) % options.length];
+}
+
 function scripted({ beat, user, slug, position, question }) {
   const said = (user ?? question ?? '').trim();
   switch (beat) {
@@ -76,7 +92,9 @@ function scripted({ beat, user, slug, position, question }) {
     case 'answer':
       return scriptReply(said);
     case 'followup':
-      return said ? scriptReply(/\?\s*$/.test(said) ? said : said + '?') : SCRIPT.interjections.question[1].replace('“{answer}” ', '');
+      // He answers with the cards on the table, not with a dodge: the middle card is the one that
+      // matters, and it is named. `spread` is filled in as the cards are read.
+      return followupAnswer(said);
     case 'fan':
       return SCRIPT.draw[0];
     default:
@@ -89,6 +107,8 @@ export async function build(ctx) {
   const spread = [];
   let controller = null;
   let retriedHealth = false;
+  let latchedAt = 0; // when the live voice last failed fatally (0 = not latched)
+  const RELATCH_MS = 60000;
 
   const cardFacts = (slug, position) => {
     const key = positionKey(position);
@@ -214,6 +234,11 @@ export async function build(ctx) {
         retriedHealth = true;
         await api.health();
       }
+      // the live voice went off earlier: ask again once a minute has passed
+      if (!api.available && latchedAt && Date.now() - latchedAt > RELATCH_MS) {
+        latchedAt = 0;
+        await api.health();
+      }
       let count = 0;
       const yielded = [];
       const finish = () => {
@@ -255,8 +280,12 @@ export async function build(ctx) {
         } catch (e) {
           if (!ac.signal.aborted) console.warn('[mind] live reply failed, using the script:', e?.message ?? e);
           if (e?.fatal) {
+            // Key or credit trouble upstream. Fall back to the script now, but do not latch for
+            // ever: a topped-up account or a fixed key should come back on its own, so the next
+            // turn after a minute asks the health endpoint again.
             api.available = false;
-            console.warn('[mind] the live voice is off for the rest of this visit');
+            latchedAt = Date.now();
+            console.warn('[mind] the live voice is off; asking again in a minute');
           }
         } finally {
           if (controller === ac) controller = null;
@@ -283,6 +312,10 @@ export async function build(ctx) {
       api.abort();
       history.length = 0;
       spread.length = 0;
+      // a new visitor deserves a fresh look at the endpoint: a key may have arrived meanwhile
+      latchedAt = 0;
+      retriedHealth = false;
+      api.ready = api.health();
     },
 
     abort() {

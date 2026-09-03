@@ -50,6 +50,8 @@ export function scriptedLines(script, { beat, user = '', slug = null, position =
       text = script.reply(said);
       break;
     case 'followup':
+      // the mind answers this beat with the cards on the table; this fallback only runs if the mind
+      // piece is missing entirely
       text = said ? script.reply(/\?\s*$/.test(said) ? said : said + '?') : script.interjections.question[1].replace('“{answer}” ', '');
       break;
     case 'fan':

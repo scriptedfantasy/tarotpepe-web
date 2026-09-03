@@ -226,7 +226,7 @@ uniform float uDpr, uSeed, uNear, uFar, uHatchK, uLref, uLineBase, uBreak, uPape
 uniform int uMode;          // 0 all, 1 lines only, 2 tone only
 uniform mat4 uInvVP;
 uniform vec3 uInk, uPaper;
-uniform vec4 uLevels;       // darkness thresholds for tone levels 1..4
+uniform vec4 uLevels;       // darkness thresholds for tone levels 1..3, then the ragged-edge amount
 uniform vec4 uTone;         // lit luminance that is fully dark, fully lit; max darkness from light; grazing amount
 uniform vec3 uCamPos;
 uniform vec2 uLetterbox;    // fraction of height covered by each bar (top, bottom)
@@ -239,6 +239,17 @@ float linD(float z01) {
   return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear));
 }
 float lum(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+// The hand does not hatch a shadow-map's speckle: read the lit pass over a small disc so tone
+// arrives in coherent patches with one boundary, not as a scatter of fragments.
+float litL(sampler2D t, vec2 uv) { return lum(texture(t, uv).rgb); }
+float softLit(vec2 uv, vec2 r) {
+  float c = litL(tLit, uv) * 0.28;
+  c += (litL(tLit, uv + vec2(r.x, 0.0)) + litL(tLit, uv - vec2(r.x, 0.0))
+      + litL(tLit, uv + vec2(0.0, r.y)) + litL(tLit, uv - vec2(0.0, r.y))) * 0.12;
+  c += (litL(tLit, uv + r) + litL(tLit, uv - r)
+      + litL(tLit, uv + vec2(r.x, -r.y)) + litL(tLit, uv + vec2(-r.x, r.y))) * 0.06;
+  return c;
+}
 void main() {
   vec2 px = vUv * uRes;
   vec2 cssPx = px / uDpr;
@@ -276,6 +287,60 @@ void main() {
   float zc = texture(tDepth, vUv).x;
   bool bg = zc >= 0.99999;
 
+  // how much drawing the surface's own texture already carries here (louvres, a weave, a printed
+  // border, hand lettering). In the folios the pattern IS the shading, so tone strokes stand back.
+  float texBusy = 0.0;
+  {
+    vec2 r = 3.0 * uDpr / uRes;
+    float s = 1.0 - lum(alb.rgb);
+    s += 1.0 - lum(texture(tAlbedo, vUv + r).rgb);
+    s += 1.0 - lum(texture(tAlbedo, vUv - r).rgb);
+    s += 1.0 - lum(texture(tAlbedo, vUv + vec2(r.x, -r.y)).rgb);
+    s += 1.0 - lum(texture(tAlbedo, vUv + vec2(-r.x, r.y)).rgb);
+    texBusy = s * 0.2;
+  }
+  // …and whether that drawing is a MASS rather than a line: sampled on a ring wider than any pen
+  // stroke or letter, so a 2 px contour and a hand-lettered cap score near zero while a coat, a
+  // cat, a shelf carcass or a hole scores near one. Masses are not filled, they are hatched.
+  float mass = 0.0;
+  {
+    vec2 r = 13.0 * uDpr / uRes;
+    const float D = 0.7071;
+    mass = (1.0 - lum(texture(tAlbedo, vUv + vec2(r.x, 0.0)).rgb))
+         + (1.0 - lum(texture(tAlbedo, vUv - vec2(r.x, 0.0)).rgb))
+         + (1.0 - lum(texture(tAlbedo, vUv + vec2(0.0, r.y)).rgb))
+         + (1.0 - lum(texture(tAlbedo, vUv - vec2(0.0, r.y)).rgb))
+         + (1.0 - lum(texture(tAlbedo, vUv + r * D).rgb))
+         + (1.0 - lum(texture(tAlbedo, vUv - r * D).rgb))
+         + (1.0 - lum(texture(tAlbedo, vUv + vec2(r.x, -r.y) * D).rgb))
+         + (1.0 - lum(texture(tAlbedo, vUv + vec2(-r.x, r.y) * D).rgb));
+    mass *= 0.125;
+  }
+
+  // ── the stroke grid, anchored to the surface in world space ──────────────────────────────
+  // The scale snaps to octaves of the object's distance, so strokes stay the same size on the
+  // paper without swimming when the camera moves, and the whole object shares one scale so the
+  // pattern never crawls across it. Both the tone levels and the hatching of black masses ride
+  // on this grid, which is why a mass and the tone beside it agree.
+  vec2 huv = vec2(0.0);
+  bool up = false;
+  vec3 wp = vec3(0.0), n = vec3(0.0, 0.0, 1.0);
+  if (!bg) {
+    vec4 wp4 = uInvVP * vec4(vUv * 2.0 - 1.0, zc * 2.0 - 1.0, 1.0);
+    wp = wp4.xyz / wp4.w;
+    n = octDecode(texture(tNorm, vUv).rg);
+    vec4 misc = texture(tMisc, vUv);
+    float dObj = 0.25 * exp2((misc.r + misc.g / 255.0) * 8.0);
+    vec3 an = abs(n);
+    up = an.y > max(an.x, an.z);
+    vec2 wuv = up ? wp.xz : (an.x > an.z ? wp.zy : wp.xy);
+    if (!up && an.x > an.z && n.x < 0.0) wuv.x = -wuv.x; // keep handedness so strokes lean the same way
+    if (!up && an.x <= an.z && n.z < 0.0) wuv.x = -wuv.x;
+    huv = wuv * exp2(floor(log2(uHatchK / dObj) + 0.5));
+    huv += (vec2(hash21(vec2(uSeed, 1.0)), hash21(vec2(2.0, uSeed))) - 0.5) * uHatchBoil;
+  }
+  vec4 hTile = bg ? vec4(0.0) : (up ? texture(tFloor, huv) : texture(tWall, huv));
+
   // ── lines: a soft field from the seed map, thresholded by pen pressure → one pen, one weight ──
   float line = 0.0, halo = 0.0;
   if (uMode != 2) {
@@ -298,52 +363,53 @@ void main() {
     line *= 1.0 - step(brk, uBreak) * 0.85;
   }
 
-  // ── tone: the lit pass quantised into four stroke levels, the fourth solid ink ──
+  // ── tone: three stroke levels over bare paper, plus solid ink for things that ARE black ──
+  // The discipline of the folios: most of every surface is bare paper. Tone appears only where
+  // the light is not — under a ledge, in a corner, on the shadow side of a form — and it arrives
+  // in a step, never a ramp. Nothing goes solid black because it is *unlit*; a black mass is a
+  // black OBJECT (a coat, a hole, a hat), and the material says so with hatch ≈ 1.
   float hatchInk = 0.0;
   if (uMode != 1 && !bg) {
-    vec3 lit = texture(tLit, vUv).rgb;
-    float L = lum(lit);
-    // world position + normal → tone terms and anchored stroke coordinates
-    vec4 wp4 = uInvVP * vec4(vUv * 2.0 - 1.0, zc * 2.0 - 1.0, 1.0);
-    vec3 wp = wp4.xyz / wp4.w;
-    vec3 n = octDecode(texture(tNorm, vUv).rg);
-    // darkness = where the light is not (the lit pass, posterised), a little more where a form
-    // turns away from us, scaled by how readily the material takes tone (hatch 0.5 = plain paper,
-    // glass and pictures near 0); a material flagged near 1 is a dark thing: ink whatever the light
+    float L = softLit(vUv, 2.6 * uDpr / uRes);
+    // how dark this pixel wants to be: the light it is missing, a touch more where the form turns
+    // hard away from us, scaled by how readily the material takes tone (hatch 0.5 = plain paper,
+    // glass and pictures near 0), plus a standing bias for a material that is dark in itself
     float shade = 1.0 - smoothstep(uTone.x, uTone.y, L);
     float facing = abs(dot(n, normalize(uCamPos - wp)));
-    float graz = pow(1.0 - facing, 2.0) * uTone.w;
-    float soak = hatchW * 2.0;
-    float solid = smoothstep(0.82, 1.0, hatchW);
-    float d = (shade * uTone.z + graz) * soak + solid * 1.2;
-    float level = step(uLevels.x, d) + step(uLevels.y, d) + step(uLevels.z, d) + step(uLevels.w, d);
-    if (level > 3.5) hatchInk = 1.0;
-    else if (level > 0.5) {
-      vec4 misc = texture(tMisc, vUv);
-      float dlog = misc.r + misc.g / 255.0;
-      float dObj = 0.25 * exp2(dlog * 8.0);
-      vec3 an = abs(n);
-      bool up = an.y > max(an.x, an.z);
-      vec2 wuv = up ? wp.xz : (an.x > an.z ? wp.zy : wp.xy);
-      if (!up && an.x > an.z && n.x < 0.0) wuv.x = -wuv.x; // keep handedness so strokes lean the same way
-      if (!up && an.x <= an.z && n.z < 0.0) wuv.x = -wuv.x;
-      // strokes are the same size on the paper whatever the distance, but the scale snaps to
-      // octaves so the pattern stays nailed to the surface while the camera moves
-      float k = exp2(floor(log2(uHatchK / dObj) + 0.5));
-      vec2 huv = wuv * k;
-      huv += (vec2(hash21(vec2(uSeed, 1.0)), hash21(vec2(2.0, uSeed))) - 0.5) * uHatchBoil;
-      vec4 h = up ? texture(tFloor, huv) : texture(tWall, huv);
-      float cov = level < 1.5 ? h.r : level < 2.5 ? h.g : h.b;
-      hatchInk = smoothstep(0.3, 0.7, cov) * (1.0 - halo);
-    }
+    float graz = pow(1.0 - facing, 3.0) * uTone.w;
+    float soak = clamp(hatchW / 0.45, 0.0, 1.0) * (1.0 - smoothstep(0.16, 0.52, texBusy));
+    float bias = max(0.0, hatchW - 0.5) * 1.0;
+    float d = (shade * uTone.z + graz) * soak + bias;
+    // a hand does not follow a shadow's edge: break the boundary between levels on the stroke
+    // grid so a patch of hatch ends raggedly, the way strokes of unequal length do
+    float rag = vnoise(huv * 2.0 + uSeed * 0.13) * 0.78 + vnoise(huv * 5.0 + 11.0) * 0.22;
+    d += (rag - 0.5) * uLevels.w;
+    float level = step(uLevels.x, d) + step(uLevels.y, d) + step(uLevels.z, d);
+    if (hatchW > 0.9) level = 4.0; // the material declares itself a black thing
+    // even the darkest level is drawn: the three-way hatch is solid at its core and leaves nicks
+    // of paper, so the mass has a scratchy silhouette instead of a vector edge
+    float cov = level > 3.5 ? hTile.a : level < 1.5 ? hTile.r : level < 2.5 ? hTile.g : hTile.b;
+    if (level > 0.5) hatchInk = smoothstep(0.32, 0.62, cov) * (level > 3.5 ? 1.0 : 1.0 - halo);
   }
 
-  // ── ink that lives in a texture (a wallpaper motif, a card back) ──
+  // ── ink that lives in a texture (a wallpaper motif, a card back, a shutter's louvres) ──
+  // One pen, one pressure: a texture's stroke is ink or it is paper, never a grey. And the pen
+  // cannot lay down a fill — so wherever the texture is not a line but a MASS (a bottle, a cat, a
+  // shelf carcass, a black band), the fill is thrown away and the shape is re-drawn on the stroke
+  // grid instead: three-way hatch crowding to solid at the core, opening to cross-hatch at the
+  // rim, so the silhouette breaks into separate strokes the way a drawn black shape does.
   float texInk = 0.0;
   vec3 base = uPaper;
   if (uMode == 0 && !bg) {
     if (colorful) base = alb.rgb;
-    else texInk = smoothstep(0.06, 0.5, 0.95 - lum(alb.rgb));
+    else {
+      texInk = smoothstep(0.15, 0.36, 0.95 - lum(alb.rgb));
+      float carve = smoothstep(0.26, 0.52, mass);
+      if (carve > 0.001) {
+        float cov = mix(hTile.b, hTile.a, smoothstep(0.55, 0.98, mass));
+        texInk = min(texInk, mix(1.0, smoothstep(0.30, 0.60, cov), carve));
+      }
+    }
   }
 
   float ink = max(line, max(hatchInk, texInk));
