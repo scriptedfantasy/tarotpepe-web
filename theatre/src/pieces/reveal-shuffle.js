@@ -1,13 +1,13 @@
-// reveal-shuffle.js — the riffle, drawn on twos.
+// reveal-shuffle.js — the riffle, drawn on twos; and the deck as temporary stacks.
 //
 // The deck piece builds the deck as a few rigid blocks with a hairline per card on their cut
 // sides. A riffle needs the deck in two halves that thin out while a third pile grows between
-// them, so this module borrows the deck's own block geometry and materials (the ink flags come
-// with them) to make three temporary stacks whose thickness is a y-scale and whose side texture
-// window follows the number of cards left in them. The real deck is hidden while they play and
-// comes back, squared, at the end.
+// them, and the fan needs a packet cut off the top that thins as cards leave it, so `deckStacks`
+// borrows the deck's own block geometry and materials (the ink flags come with them) to make
+// temporary stacks whose thickness is a y-scale and whose side texture window follows the number
+// of cards in them. The real deck is hidden while they play and comes back, squared, at the end.
 //
-// Drawings (deck-local metres, the table top at y = 0):
+// Riffle drawings (deck-local metres, the table top at y = 0):
 //   hold · the top half lifts (the cut) · the halves part · both bend up on their outer edges,
 //   inner corners touching · six frames of interleaving, the middle pile growing · the pile
 //   pushed together · lifted and stood on its long edge · tapped square · set down.
@@ -17,8 +17,10 @@ import { hold } from './reveal-takes.js';
 const _v = new THREE.Vector3();
 const _e = new THREE.Euler();
 
-export function buildShuffle(ctx, deck, T, { cues = {} } = {}) {
-  const real = deck.children.filter((c) => c.isMesh);
+// The deck's blocks as a set of temporary stacks. Temp meshes are named 'tmp:*' so a later call
+// (the fan's, the shuffle's) never mistakes one for a real block.
+export function deckStacks(deck, T) {
+  const real = deck.children.filter((c) => c.isMesh && !c.name.startsWith('tmp:'));
   const blocks = real.filter((c) => c.geometry && Array.isArray(c.material) && c.material.length >= 3);
   if (!blocks.length) return null;
   // the template: the thickest block (its geometry is a slab centred on y = 0)
@@ -32,14 +34,13 @@ export function buildShuffle(ctx, deck, T, { cues = {} } = {}) {
   // cards per mesh from its thickness (a single bent card is thicker than T: count it as one)
   const counts = real.map((m) => (heightOf(m) < 4 * T ? 1 : Math.round(heightOf(m) / T)));
   const nTotal = counts.reduce((a, b) => a + b, 0);
-  const nB = Math.max(1, Math.round(heightOf(template) / T)); // the bottom half: the big block
-  const nA = Math.max(1, nTotal - nB); // everything above it: the cut
+  const nBase = Math.max(1, Math.round(heightOf(template) / T)); // the big bottom block
   if (!template.geometry.boundingBox) template.geometry.computeBoundingBox();
   const bb = template.geometry.boundingBox;
   const W = bb.max.x - bb.min.x, H = bb.max.z - bb.min.z;
+  const side = template.material[2];
 
   // a temporary stack of n cards, drawn with the deck's own faces and its cut-side hairlines
-  const side = template.material[2];
   function stack(name) {
     const sideMat = side.clone();
     if (side.map) {
@@ -47,20 +48,18 @@ export function buildShuffle(ctx, deck, T, { cues = {} } = {}) {
       sideMat.map.needsUpdate = true;
     }
     const m = new THREE.Mesh(template.geometry, [template.material[0], template.material[1], sideMat]);
-    m.name = `shuffle-${name}`;
+    m.name = `tmp:${name}`;
     m.castShadow = true;
     m.receiveShadow = true;
     m.visible = false;
+    m.userData.n = 1;
     deck.add(m);
     return m;
   }
-  const A = stack('cut'), B = stack('base'), C = stack('pile'), D = stack('loose');
-  const temps = [A, B, C, D];
-
   // show `n` cards of the strip starting at card `start` (0 = bottom of the deck)
   function cards(m, n, start) {
     m.visible = n > 0;
-    m.scale.y = Math.max(n, 0.5) * T / hTemplate;
+    m.scale.y = (Math.max(n, 0.5) * T) / hTemplate;
     const map = m.material[2].map;
     if (map) {
       map.repeat.y = Math.max(n, 0.5) / nTotal;
@@ -68,7 +67,7 @@ export function buildShuffle(ctx, deck, T, { cues = {} } = {}) {
     }
     m.userData.n = n;
   }
-  // place a stack so that its local point (px, py, pz) (py in card units of the stack's own height:
+  // place a stack so that its local point (px, py, pz) (py in units of the stack's own height:
   // -0.5 bottom, +0.5 top) sits at `target`, with the stack rotated by e
   function pivot(m, target, e, px, py, pz) {
     const h = (m.userData.n ?? 1) * T;
@@ -76,17 +75,38 @@ export function buildShuffle(ctx, deck, T, { cues = {} } = {}) {
     _v.set(px, py * h, pz).applyEuler(e);
     m.position.copy(target).sub(_v);
   }
-  const flat = (m, x, z, ry) => {
+  // flat on the table (or on top of something y0 high), squared to ry
+  const flat = (m, x, z, ry, y0 = 0) => {
     const h = (m.userData.n ?? 1) * T;
     m.rotation.set(0, ry, 0);
-    m.position.set(x, h / 2, z);
+    m.position.set(x, y0 + h / 2, z);
   };
   const showReal = (on) => {
     for (const r of real) r.visible = on;
   };
-  const hideTemps = () => {
-    for (const t of temps) t.visible = false;
+  const hide = (list) => {
+    for (const t of list) t.visible = false;
   };
+  const dispose = (list) => {
+    for (const t of list) {
+      t.material[2].map?.dispose?.();
+      t.material[2].dispose?.();
+      deck.remove(t);
+    }
+  };
+  return { real, nTotal, nBase, W, H, T, hTemplate, stack, cards, pivot, flat, showReal, hide, dispose };
+}
+
+export function buildShuffle(ctx, deck, T, { cues = {} } = {}) {
+  const S = deckStacks(deck, T);
+  if (!S) return null;
+  const { nTotal, W, H, cards, pivot, flat, showReal } = S;
+  const nB = S.nBase; // the bottom half: the big block
+  const nA = Math.max(1, nTotal - nB); // everything above it: the cut
+
+  const A = S.stack('cut'), B = S.stack('base'), C = S.stack('pile'), D = S.stack('loose');
+  const temps = [A, B, C, D];
+  const hideTemps = () => S.hide(temps);
 
   const frames = [];
   const F = (fn) => frames.push(fn);
@@ -185,5 +205,5 @@ export function buildShuffle(ctx, deck, T, { cues = {} } = {}) {
     showReal(true);
     cues.done?.();
   });
-  return { frames, temps, W, H };
+  return { frames, temps, W, H, stacks: S };
 }
