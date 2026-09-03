@@ -53,6 +53,18 @@ page.on('console', (m) => {
   const b = /\[theatre\] built (\w+) in (\d+)ms/.exec(m.text());
   if (b) builds.push([b[1], +b[2]]);
 });
+// Disable Vite's HMR client for the screenshot page: other builders edit files constantly and a full
+// reload mid-shot yields a black frame. The stub keeps import.meta.hot and CSS injection working.
+await page.route('**/@vite/client', (route) =>
+  route.fulfill({
+    contentType: 'application/javascript',
+    body: `export function createHotContext(){ return { accept(){}, acceptExports(){}, dispose(){}, prune(){}, decline(){}, invalidate(){}, on(){}, off(){}, send(){}, data: {} }; }
+export function updateStyle(id, css){ let s = document.querySelector('style[data-vite-dev-id="' + id + '"]'); if (!s) { s = document.createElement('style'); s.setAttribute('data-vite-dev-id', id); document.head.appendChild(s); } s.textContent = css; }
+export function removeStyle(id){ document.querySelector('style[data-vite-dev-id="' + id + '"]')?.remove(); }
+export function injectQuery(url){ return url; }
+export class ErrorOverlay {}`,
+  }),
+);
 const t0 = Date.now();
 await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 // Wait for the app's ready flag (set after the first frames render). Builds can be slow in software
@@ -74,6 +86,9 @@ await page.waitForTimeout(wait);
 
 if (frames <= 1) {
   await page.screenshot({ path: out });
+  let stillReady = false;
+  try { stillReady = await page.evaluate(() => window.__theatreReady === true); } catch {}
+  if (ready && !stillReady) errors.push('the page reloaded or broke while the frame was being captured; retry');
 } else {
   const bufs = [];
   for (let i = 0; i < frames; i++) {

@@ -25,7 +25,7 @@ function lump(r, ax, ay, az, seed = 1) {
   const geo = surface(
     (u, v) => {
       const th = u * Math.PI * 2, ph = v * Math.PI;
-      const n = 1 + 0.16 * Math.sin(5 * th + seed) * Math.sin(3 * ph + 0.5) + 0.12 * Math.sin(9 * th + 2 * seed) * Math.sin(6 * ph) + 0.08 * Math.sin(13 * th + ph * 4);
+      const n = 1 + 0.2 * Math.sin(3 * th + seed) * Math.sin(2 * ph + 0.5) + 0.1 * Math.sin(5 * th + 2 * seed) * Math.sin(3 * ph);
       const rr = r * n;
       return [ax * rr * Math.sin(ph) * Math.cos(th), ay * rr * Math.cos(ph), az * rr * Math.sin(ph) * Math.sin(th)];
     },
@@ -346,8 +346,10 @@ export function buildStillLife(ctx, top) {
       [0.0, 0.007],
     ];
     grp.add(mesh(lathe(plate, 40), chinaMat));
-    const napkin = mesh(lump(0.03, 1.15, 0.55, 0.9, 7), inkMaterial({ hatch: 0.18, lineWeight: 0.9 }), { x: -0.012, y: 0.019, z: -0.008, ry: 0.7 });
+    const napkin = mesh(lump(0.03, 1.15, 0.5, 0.9, 7), inkMaterial({ hatch: 0.2, lineWeight: 0.9 }), { x: -0.012, y: 0.017, z: -0.008, ry: 0.7 });
     grp.add(napkin);
+    // a corner of the napkin trailing onto the plate
+    grp.add(mesh(new THREE.BoxGeometry(0.03, 0.002, 0.022), inkMaterial({ hatch: 0.2, lineWeight: 0.9 }), { x: 0.012, y: 0.009, z: -0.025, ry: 0.5, rz: 0.15 }));
     for (const [x, z, r] of [
       [0.035, 0.02, 0.2],
       [0.042, -0.012, 1.1],

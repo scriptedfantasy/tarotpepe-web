@@ -212,12 +212,12 @@ export function buildBody(ctx, mats, { headY, shoulderY = 0.995 }) {
   parts.neck = neck;
 
   // ---- arms: a posable chain shoulder → elbow → wrist → hand, in wide sleeves with cuffs
-  const armLen1 = 0.22, armLen2 = 0.27;
   const arms = {};
   for (const side of [-1, 1]) {
-    const S = new THREE.Vector3(side * 0.20, shoulderY - 0.02, 0.0);
-    const E = new THREE.Vector3(side * 0.29, 0.83, 0.12);
-    const W = new THREE.Vector3(side * 0.235, 0.776, 0.385);
+    const S = new THREE.Vector3(side * 0.19, shoulderY - 0.05, 0.0);
+    const E = new THREE.Vector3(side * 0.30, 0.82, 0.13);
+    const W = new THREE.Vector3(side * 0.235, 0.776, 0.41);
+    const armLen1 = S.distanceTo(E), armLen2 = E.distanceTo(W);
     const shoulder = new THREE.Group();
     shoulder.name = side < 0 ? 'shoulderL' : 'shoulderR';
     shoulder.position.copy(S);

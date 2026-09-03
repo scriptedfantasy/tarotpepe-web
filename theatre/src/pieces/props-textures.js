@@ -724,8 +724,8 @@ export function leafTexture({ kind = 'palm', seed = 16 } = {}) {
         outline = [...quad([cx, 8], [W * 0.98, H * 0.45], [cx, H - 8], 14), ...quad([cx, H - 8], [W * 0.02, H * 0.45], [cx, 8], 14)];
       }
       fillPoly(g, outline, PAPER);
-      stroke(g, outline, { ...o, close: true });
-      inkLine(g, cx, 10, cx, H - 10, { ...o, width: 1.6 });
+      stroke(g, outline, { ...o, width: 3, close: true });
+      inkLine(g, cx, 10, cx, H - 10, { ...o, width: 2.2 });
       for (let y = 30; y < H - 20; y += 22) {
         const w = Math.sin(((y - 8) / (H - 16)) * Math.PI) * W * 0.36;
         inkLine(g, cx, y, cx + w, y - 14, { ...o, width: 1 });

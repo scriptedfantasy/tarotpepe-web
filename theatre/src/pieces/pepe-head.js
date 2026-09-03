@@ -6,11 +6,53 @@
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export const HEAD_H = 0.36; // metres, crown to jaw
 export const WIDEN = 1.22; // x-stretch of the whole face, drawing proportion
 
 const clamp = THREE.MathUtils.clamp;
+
+// Load the head GLB with its photo textures stripped out of the JSON before parsing: we paint the
+// skin flat, so decoding two 4096² PNGs would only cost seconds of build time for nothing.
+async function loadFlatGlb(url) {
+  const buf = await (await fetch(url)).arrayBuffer();
+  const dv = new DataView(buf);
+  if (dv.getUint32(0, true) !== 0x46546c67) throw new Error('not a GLB');
+  const jsonLen = dv.getUint32(12, true);
+  const json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jsonLen)));
+  delete json.images;
+  delete json.textures;
+  delete json.samplers;
+  for (const m of json.materials ?? []) {
+    if (m.pbrMetallicRoughness) {
+      delete m.pbrMetallicRoughness.baseColorTexture;
+      delete m.pbrMetallicRoughness.metallicRoughnessTexture;
+    }
+    delete m.normalTexture;
+    delete m.occlusionTexture;
+    delete m.emissiveTexture;
+  }
+  let js = new TextEncoder().encode(JSON.stringify(json));
+  const pad = (4 - (js.length % 4)) % 4;
+  if (pad) {
+    const p = new Uint8Array(js.length + pad);
+    p.set(js);
+    p.fill(0x20, js.length);
+    js = p;
+  }
+  const rest = new Uint8Array(buf, 20 + jsonLen);
+  const out = new ArrayBuffer(20 + js.length + rest.length);
+  const odv = new DataView(out);
+  odv.setUint32(0, 0x46546c67, true);
+  odv.setUint32(4, 2, true);
+  odv.setUint32(8, out.byteLength, true);
+  odv.setUint32(12, js.length, true);
+  odv.setUint32(16, 0x4e4f534a, true);
+  new Uint8Array(out, 20).set(js);
+  new Uint8Array(out, 20 + js.length).set(rest);
+  return new Promise((res, rej) => new GLTFLoader().parse(out, '', res, rej));
+}
 
 function flag(mesh) {
   mesh.castShadow = true;
@@ -126,7 +168,13 @@ export async function buildHead(ctx, mats) {
   head.add(face);
   const parts = { head, face, eyes: [], lids: [], pupils: [], mouth: null, skull: null };
 
-  const gltf = await ctx.assets.gltf('/pepe/head-lowpoly.glb');
+  let gltf;
+  try {
+    gltf = await loadFlatGlb('/pepe/head-lowpoly.glb');
+  } catch (e) {
+    console.warn('[pepe] flat GLB load failed, falling back to the tracked loader', e);
+    gltf = await ctx.assets.gltf('/pepe/head-lowpoly.glb');
+  }
   const model = gltf.scene;
   let skull = null, tongue = null, eyesMesh = null;
   model.traverse((o) => {
@@ -188,7 +236,7 @@ export async function buildHead(ctx, mats) {
   }
 
   // eyes: paper-white balls, a black pupil dome, a heavy green lid with a rolled rim
-  const gaze = new THREE.Vector3(0.2, -0.30, 1).normalize();
+  const gaze = new THREE.Vector3(0.32, -0.30, 1).normalize();
   eyeSpec.forEach(({ c, r }, i) => {
     const side = i === 0 ? -1 : 1;
     const eye = new THREE.Group();

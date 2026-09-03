@@ -17,6 +17,7 @@ export function materials() {
     metal: inkMaterial({ hatch: 0.65, lineWeight: 1.1 }),
     glass: inkMaterial({ hatch: 0.22, side: THREE.DoubleSide }),
     darkGlass: inkMaterial({ hatch: 1, lineWeight: 1.1 }),
+    darkCloth: inkMaterial({ map: T.darkTexture(), hatch: 1, lineWeight: 1.1 }),
     cloth: inkMaterial({ map: T.clothTexture(), hatch: 0.5 }),
     pages: inkMaterial({ map: T.pagesTexture(), hatch: 0.15 }),
     cord: inkMaterial({ hatch: 0.7, lineWeight: 0.8 }),
@@ -175,10 +176,17 @@ export function tumbler(h = 0.08, r = 0.03) {
   m.userData.height = h;
   return m;
 }
-export function wineGlass() {
+export function wineGlass({ wine = true } = {}) {
+  const g = new THREE.Group();
   const m = lathe([[0, 0], [0.03, 0], [0.03, 0.004], [0.005, 0.006], [0.005, 0.06], [0.02, 0.07], [0.033, 0.1], [0.03, 0.14]], materials().glass, 14);
-  m.userData.height = 0.14;
-  return m;
+  g.add(m);
+  if (wine) {
+    // the liquid: a small solid-ink shape, as the film draws it
+    const w = lathe([[0, 0.072], [0.021, 0.072], [0.03, 0.09], [0, 0.09]], materials().darkCloth, 14);
+    g.add(w);
+  }
+  g.userData.height = 0.14;
+  return g;
 }
 export function siphon() {
   const g = new THREE.Group();
@@ -457,7 +465,7 @@ export function signBoard({ w, h, depth = 0.02, lines, sizes = null, border = 'd
   return m;
 }
 // two cords from a frame's top corners up to a hook
-export function hangCords(g, cx, topY, halfW, hookY, z, r = 0.003) {
+export function hangCords(g, cx, topY, halfW, hookY, z, r = 0.0016) {
   const M = materials();
   g.add(rod([cx - halfW, topY, z], [cx, hookY, z - 0.005], r, M.cord, 5));
   g.add(rod([cx + halfW, topY, z], [cx, hookY, z - 0.005], r, M.cord, 5));
@@ -467,7 +475,7 @@ export function hangCords(g, cx, topY, halfW, hookY, z, r = 0.003) {
 }
 
 // ---- curtains -------------------------------------------------------------------------------------
-export function curtainPanel({ w = 0.32, h = 1.7, pleats = 6, amp = 0.028 }) {
+export function curtainPanel({ w = 0.32, h = 1.7, pleats = 3, amp = 0.018 }) {
   const geo = new THREE.PlaneGeometry(w, h, pleats * 6, 4);
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
@@ -789,10 +797,10 @@ export function hatStand({ h = 1.85, rng }) {
   const makeHat = (kind) => {
     const hg = new THREE.Group();
     if (kind === 'bowler') {
-      const crown = new THREE.Mesh(new THREE.SphereGeometry(0.085, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.cloth);
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(0.085, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.darkCloth);
       crown.scale.y = 0.85;
       crown.castShadow = true;
-      const brim = cyl(0.125, 0.13, 0.008, M.cloth, 24);
+      const brim = cyl(0.125, 0.13, 0.008, M.darkCloth, 24);
       hg.add(crown, brim);
     } else if (kind === 'boater') {
       const crown = cyl(0.082, 0.085, 0.07, M.paperStack, 24);
@@ -802,10 +810,10 @@ export function hatStand({ h = 1.85, rng }) {
       const brim = cyl(0.14, 0.14, 0.006, M.paperStack, 24);
       hg.add(crown, band, brim);
     } else {
-      const crown = new THREE.Mesh(new THREE.SphereGeometry(0.09, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.cloth);
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(0.09, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.darkCloth);
       crown.scale.set(1.15, 0.6, 1.15);
       crown.castShadow = true;
-      const brim = cyl(0.11, 0.115, 0.01, M.cloth, 24);
+      const brim = cyl(0.11, 0.115, 0.01, M.darkCloth, 24);
       hg.add(crown, brim);
     }
     return hg;
@@ -862,7 +870,7 @@ export function plant({ rng, leaves = 11, kind = 'palm', scale = 1 }) {
   const soil = cyl(0.11, 0.11, 0.01, M.soil, 22);
   soil.position.y = 0.285;
   g.add(soil);
-  const leafMat = alphaMat(T.leafTexture({ kind }), 0.4);
+  const leafMat = alphaMat(T.leafTexture({ kind }), 0.1);
   const up = new THREE.Vector3(0, 1, 0);
   for (let i = 0; i < leaves; i++) {
     const a = (i / leaves) * Math.PI * 2 + rng() * 0.4;

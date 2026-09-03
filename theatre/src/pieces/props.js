@@ -217,7 +217,7 @@ export async function build(ctx) {
     pf.rotation.y = rot;
     g.add(pf);
     const shelf = O.wallShelf({ w: 0.6, d: 0.16 });
-    shelf.position.set(x, 1.36, -2.25);
+    shelf.position.set(x, 1.3, -2.3);
     shelf.rotation.y = rot;
     g.add(shelf);
     shelf.add(O.lineup({ x0: -0.28, x1: 0.28, y: 0.01, z: 0.08, rng, kinds: ['jar', 'jar', 'bottle'], maxH: 0.24, counter: { b: 12, j: 6 } }));
@@ -225,7 +225,7 @@ export async function build(ctx) {
 
   // ---- in front of the side walls: the floor lamp (left) and the hat stand (right) ---------------------
   const lamp = O.floorLamp({ h: 1.62 });
-  lamp.position.set(-W / 2 + 0.32, 0, -1.0);
+  lamp.position.set(-W / 2 + 0.32, 0, -0.7);
   g.add(lamp);
   const stand = O.hatStand({ h: 1.85, rng });
   stand.position.set(W / 2 - 0.32, 0, -0.75);

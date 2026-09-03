@@ -173,22 +173,31 @@ export function clothTopTexture(R) {
 
 // the cloth's all-over pattern: a sprig every 7 cm on a diagonal grid (light, so the cards read)
 function sprigs(g, w, h, pxm, rng, { offset = 0 } = {}) {
-  const step = 0.07 * pxm;
+  const step = 0.095 * pxm;
   let row = 0;
   for (let y = offset; y < h + step; y += step * 0.5, row++) {
     for (let x = row % 2 ? step / 2 : 0; x < w + step; x += step) {
-      const px = x + (rng() - 0.5) * 2, py = y + (rng() - 0.5) * 2;
-      // a sprig: a short stem with two leaves and a dot
-      const a = -Math.PI / 2 + (rng() - 0.5) * 0.4;
-      const L = 7;
-      const o = { width: 1.2, wobble: 0.35, rng, alpha: 0.75, segments: 2 };
+      const px = x + (rng() - 0.5) * 9, py = y + (rng() - 0.5) * 9;
+      // a sprig: a short stem with two leaves and a dot; every fourth one is a lone dot
+      if (rng() < 0.25) {
+        g.fillStyle = INK;
+        g.globalAlpha = 0.55;
+        g.beginPath();
+        g.arc(px, py, 1.4, 0, Math.PI * 2);
+        g.fill();
+        g.globalAlpha = 1;
+        continue;
+      }
+      const a = -Math.PI / 2 + (rng() - 0.5) * 1.6;
+      const L = 5.5;
+      const o = { width: 0.9, wobble: 0.3, rng, alpha: 0.6, segments: 2 };
       inkLine(g, px, py, px + Math.cos(a) * L, py + Math.sin(a) * L, o);
-      inkLine(g, px + Math.cos(a) * L * 0.45, py + Math.sin(a) * L * 0.45, px + Math.cos(a + 0.9) * L * 0.55, py + Math.sin(a + 0.9) * L * 0.55, o);
-      inkLine(g, px + Math.cos(a) * L * 0.65, py + Math.sin(a) * L * 0.65, px + Math.cos(a - 0.9) * L * 0.55, py + Math.sin(a - 0.9) * L * 0.55, o);
+      inkLine(g, px + Math.cos(a) * L * 0.45, py + Math.sin(a) * L * 0.45, px + Math.cos(a + 0.95) * L * 0.5, py + Math.sin(a + 0.95) * L * 0.5, o);
+      inkLine(g, px + Math.cos(a) * L * 0.65, py + Math.sin(a) * L * 0.65, px + Math.cos(a - 0.95) * L * 0.5, py + Math.sin(a - 0.95) * L * 0.5, o);
       g.fillStyle = INK;
-      g.globalAlpha = 0.75;
+      g.globalAlpha = 0.6;
       g.beginPath();
-      g.arc(px + Math.cos(a) * L * 1.15, py + Math.sin(a) * L * 1.15, 1.3, 0, Math.PI * 2);
+      g.arc(px + Math.cos(a) * L * 1.15, py + Math.sin(a) * L * 1.15, 1.1, 0, Math.PI * 2);
       g.fill();
       g.globalAlpha = 1;
     }

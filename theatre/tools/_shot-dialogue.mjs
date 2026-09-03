@@ -42,8 +42,11 @@ const page = await browser.newPage({ viewport: { width, height }, deviceScaleFac
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e && e.stack ? e.stack : e)));
 page.on('console', (m) => {
-  if (m.type() === 'error') errors.push(m.text());
+  // the blocked HMR client logs one ERR_FAILED; that one is ours, not the page's
+  if (m.type() === 'error' && !/net::ERR_FAILED/.test(m.text())) errors.push(m.text());
 });
+// Other builders save files constantly; Vite would reload the page mid-screenshot. Block the HMR client.
+await page.route('**/@vite/client', (r) => r.abort());
 const t0 = Date.now();
 await page.goto(url, { waitUntil: 'load', timeout: 120000 });
 await page.waitForTimeout(wait);
@@ -53,8 +56,17 @@ try {
   console.error('not ready after', Date.now() - t0, 'ms');
 }
 console.error('ready after', Date.now() - t0, 'ms');
-await page.screenshot({ path: out, timeout });
+let ok = false;
+for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+  try {
+    await page.screenshot({ path: out, timeout: Math.min(timeout, 90000) });
+    ok = true;
+  } catch (e) {
+    console.error('screenshot attempt', attempt + 1, 'failed:', e.message.split('\n')[0]);
+  }
+}
 await browser.close();
+if (!ok) process.exit(1);
 if (errors.length && args['allow-errors'] !== 'true') {
   console.error('PAGE ERRORS:\n' + errors.map((e) => ' - ' + e).join('\n'));
   console.error('wrote (with errors):', out);
