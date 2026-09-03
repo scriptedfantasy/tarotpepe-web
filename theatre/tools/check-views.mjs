@@ -13,12 +13,13 @@ const VIEWS = {
   pepe: ['default'],
   pepeAnim: ['idle', 'talk', 'gesture', 'consider'],
   cards: ['default', 'back', 'deck', 'three'],
-  reveal: ['dealt', 'turning', 'revealed'],
+  reveal: ['dealt', 'turning', 'revealed', 'fan', 'shuffle', 'fanning', 'pick', 'gather', 'deal', 'turn'],
   lighting: ['default', 'evening', 'lamp'],
-  camera: ['home', 'wide', 'pepe', 'table', 'spread', 'door'],
+  camera: ['home', 'wide', 'pepe', 'table', 'spread', 'door', 'fan'],
   titles: ['title', 'chapter', 'closing', 'hidden'],
   dialogue: ['greeting', 'question', 'reading', 'farewell'],
-  flow: ['title', 'greeting', 'question', 'shuffle', 'dealt', 'reading', 'farewell'],
+  flow: ['title', 'greeting', 'question', 'shuffle', 'fan', 'dealt', 'reading', 'farewell'],
+  mind: ['greeting', 'question', 'reading', 'transcript'],
 };
 const only = process.argv.slice(2);
 const outDir = process.env.CHECK_OUT ?? '/tmp/theatre-check';

@@ -126,6 +126,7 @@ export function buildFan(ctx, cards, player) {
   const liveRng = () => (!ctx.shotMode && !ctx.clock.frozen && !ctx.params?.has?.('seed') ? ctx.rng.fork(((Date.now() / 1000) & 0xffff) + 1) : ctx.rng);
   function makeEntries() {
     clear();
+    picks.length = 0;
     const list = cards?.DECK?.length ? cards.DECK : [{ slug: 'the-fool' }];
     const order = liveRng().shuffle(list);
     for (let i = 0; i < FAN.n; i++) {
@@ -173,7 +174,8 @@ export function buildFan(ctx, cards, player) {
     const k = e.lift;
     e.mesh.visible = true;
     e.mesh.position.set(r.x + k * FAN.slide * Math.sin(r.th), r.y + k * FAN.lift, r.z + k * FAN.slide * Math.cos(r.th));
-    e.mesh.rotation.set(PI, r.ry, r.roll * (1 - k));
+    // the roll stays: the card is still lying on the cards to its left, under those to its right
+    e.mesh.rotation.set(PI, r.ry, r.roll);
   }
   const remaining = () => entries.filter((e) => !e.removed && !e.flying).sort((a, b) => a.u - b.u);
 
@@ -202,10 +204,10 @@ export function buildFan(ctx, cards, player) {
       e.mesh.rotation.set(PI, s.ry, 0);
     });
   }
+  // the fan gone (the picks stay readable until the next fan is dealt)
   function clear() {
     for (const e of entries) group.remove(e.mesh);
     entries.length = 0;
-    picks.length = 0;
     hover = null;
     armed = false;
     picking = false;

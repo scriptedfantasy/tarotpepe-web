@@ -28,6 +28,7 @@ export const LAYOUT = Object.freeze({
     card1: { pos: [0, 1.25, 0.1401], look: [0, 0.7625, 0.14], fov: 30, up: [0, 0, -1] },
     card2: { pos: [0.36, 1.25, 0.1401], look: [0.36, 0.7625, 0.14], fov: 30, up: [0, 0, -1] },
     deck: { pos: [0.5, 1.15, 0.85], look: [0.5, 0.76, 0.26], fov: 30 },
+    fan: { pos: [0, 1.78, 0.62], look: [0, 0.76, 0.28], fov: 34 }, // the three slots and the fanned deck, for picking
     door: { pos: [0, 1.4, 4.2], look: [0, 1.2, -2.5], fov: 45 },
   },
 });
