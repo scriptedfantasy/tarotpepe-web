@@ -114,6 +114,13 @@ if (view) {
   const mod = PIECES.find((m) => m.meta.name === view);
   const shot = mod?.meta.judge?.shot ?? 'home';
   ctx.pieces.camera?.cut?.(shot);
+  // a 3D piece is judged on its drawing alone: the DOM layers (captions, title cards) stay out
+  // of the frame unless the piece being judged is one of them
+  if (!mod?.meta.judge?.dom && view !== 'flow') {
+    ctx.dom.titles.style.display = 'none';
+    ctx.dom.dialogue.style.display = 'none';
+    ctx.dom.ui.style.display = 'none';
+  }
   try {
     await ctx.pieces[view]?.setState?.(state, ctx);
   } catch (e) {

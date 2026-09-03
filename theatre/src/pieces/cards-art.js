@@ -1,18 +1,25 @@
 // cards-art — everything drawn onto the card: the front (the supplied plate on a paper margin with
-// a printed ink frame and a little wear), the back (a dense ink pattern: a lattice of hatched
-// diamonds carrying frogs, stars and moons around an oval medallion), and the deck's cut edge.
-// All pen work goes through strokes.js so the cards share one hand with the rest of the world.
-import { INK, PAPER, paper, inkLine, hatch, letter, makeCanvas } from '../core/strokes.js';
+// one printed ink rule and a little wear), the back (a dense ink pattern: a lattice of hatched
+// diamonds carrying frogs, stars and moons around an oval medallion, a milled band of ticks), and
+// the deck's cut edge. All pen work goes through strokes.js so the cards share one hand with the
+// rest of the world.
+//
+// Nothing here uses a canvas clip: in the headless judging browser a stroke under a complex clip
+// costs a full-canvas mask each time (round 1 spent 12 s in one hatch pass). Hatching is clipped
+// analytically (hatchPoly) and shapes are covered with paper fills instead.
+import { INK, PAPER, inkLine, letter } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 
-export const STOCK = '#f0e9d8'; // card stock: a shade creamier than the world's paper
+export const STOCK = PAPER; // the card is cut from the world's paper; the ink pass adds the grain
+export const BACK = { w: 640, h: 1120 }; // 4.92 px per mm of card
+// The plate is inset by M on every side; the printed rule sits `border` px inside the cut edge.
+export const FRONT = { M: 40, border: 20, borderW: 6 };
 
 // ---------- pen helpers (wobbly paths; the same hand as inkLine) ----------
 
 // Draw a polyline as pen strokes: each vertex is jittered a little, the line breaks into a few
 // sub-strokes with their own pressure so it does not read as one vector path.
 export function inkPath(g, pts, { closed = false, width = 2, wobble = 0.8, rng = Math.random, color = INK, alpha = 1 } = {}) {
-  const n = pts.length;
   const p = pts.map(([x, y]) => [x + (rng() - 0.5) * 2 * wobble, y + (rng() - 0.5) * 2 * wobble]);
   if (closed) p.push(p[0]);
   g.save();
@@ -20,7 +27,6 @@ export function inkPath(g, pts, { closed = false, width = 2, wobble = 0.8, rng =
   g.globalAlpha = alpha;
   g.lineCap = 'round';
   g.lineJoin = 'round';
-  // sub-strokes of 12..30 points with slightly different widths
   let i = 0;
   while (i < p.length - 1) {
     const len = 12 + Math.floor(rng() * 18);
@@ -33,7 +39,6 @@ export function inkPath(g, pts, { closed = false, width = 2, wobble = 0.8, rng =
     i = j;
   }
   g.restore();
-  return n;
 }
 
 export function roundedRectPts(x, y, w, h, r, { step = 9 } = {}) {
@@ -60,7 +65,7 @@ export function roundedRectPts(x, y, w, h, r, { step = 9 } = {}) {
   return pts;
 }
 
-export function ellipsePts(cx, cy, rx, ry, { n = 96, a0 = 0, a1 = Math.PI * 2 } = {}) {
+export function ellipsePts(cx, cy, rx, ry, { n = 72, a0 = 0, a1 = Math.PI * 2 } = {}) {
   const pts = [];
   for (let k = 0; k <= n; k++) {
     const a = a0 + ((a1 - a0) * k) / n;
@@ -76,7 +81,7 @@ export function inkEllipse(g, cx, cy, rx, ry, opts) {
   inkPath(g, ellipsePts(cx, cy, rx, ry), { ...opts, closed: true });
 }
 
-function fillPath(g, pts, color) {
+export function fillPath(g, pts, color) {
   g.save();
   g.fillStyle = color;
   g.beginPath();
@@ -86,70 +91,121 @@ function fillPath(g, pts, color) {
   g.restore();
 }
 
-function clipPath(g, pts) {
+// Liang–Barsky: the part of a segment inside a rect, or null.
+function clipSegRect(x1, y1, x2, y2, [rx, ry, rw, rh]) {
+  let t0 = 0, t1 = 1;
+  const dx = x2 - x1, dy = y2 - y1;
+  const p = [-dx, dx, -dy, dy], q = [x1 - rx, rx + rw - x1, y1 - ry, ry + rh - y1];
+  for (let i = 0; i < 4; i++) {
+    if (p[i] === 0) {
+      if (q[i] < 0) return null;
+      continue;
+    }
+    const r = q[i] / p[i];
+    if (p[i] < 0) {
+      if (r > t1) return null;
+      if (r > t0) t0 = r;
+    } else {
+      if (r < t0) return null;
+      if (r < t1) t1 = r;
+    }
+  }
+  return [x1 + dx * t0, y1 + dy * t0, x1 + dx * t1, y1 + dy * t1];
+}
+
+// Hatch strokes inside a convex polygon, clipped by arithmetic rather than by the canvas.
+// angle: stroke direction (0 = horizontal). bounds: an optional [x, y, w, h] that also clips.
+export function hatchPoly(g, poly, { angle = Math.PI / 2, spacing = 6, width = 1.5, wobble = 0.5, rng = Math.random, alpha = 1, jitter = 1, inset = 0, bounds = null, color = INK, broken = 0 } = {}) {
+  const dx = Math.cos(angle), dy = Math.sin(angle);
+  const nx = -dy, ny = dx;
+  const n = poly.length;
+  const dv = new Float64Array(n), tv = new Float64Array(n);
+  let dmin = Infinity, dmax = -Infinity;
+  for (let i = 0; i < n; i++) {
+    dv[i] = poly[i][0] * nx + poly[i][1] * ny;
+    tv[i] = poly[i][0] * dx + poly[i][1] * dy;
+    if (dv[i] < dmin) dmin = dv[i];
+    if (dv[i] > dmax) dmax = dv[i];
+  }
+  for (let d = dmin + spacing * (0.4 + rng() * 0.6); d < dmax - spacing * 0.25; d += spacing * (0.85 + rng() * 0.3)) {
+    const dd = d + (rng() - 0.5) * jitter;
+    let t0 = Infinity, t1 = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const a = dv[i] - dd, b = dv[j] - dd;
+      if ((a < 0 && b < 0) || (a > 0 && b > 0) || a === b) continue;
+      const t = tv[i] + (tv[j] - tv[i]) * (a / (a - b));
+      if (t < t0) t0 = t;
+      if (t > t1) t1 = t;
+    }
+    if (!(t1 - t0 > inset * 2 + 1)) continue;
+    t0 += inset;
+    t1 -= inset;
+    let seg = [nx * dd + dx * t0, ny * dd + dy * t0, nx * dd + dx * t1, ny * dd + dy * t1];
+    if (bounds) {
+      seg = clipSegRect(...seg, bounds);
+      if (!seg) continue;
+    }
+    const [x1, y1, x2, y2] = seg;
+    if (broken > 0 && rng() < broken) {
+      const u = 0.3 + rng() * 0.4, gap = 0.07;
+      inkLine(g, x1, y1, x1 + (x2 - x1) * (u - gap), y1 + (y2 - y1) * (u - gap), { width, wobble, rng, alpha, color });
+      inkLine(g, x1 + (x2 - x1) * (u + gap), y1 + (y2 - y1) * (u + gap), x2, y2, { width, wobble, rng, alpha, color });
+    } else inkLine(g, x1, y1, x2, y2, { width, wobble, rng, alpha, color });
+  }
+}
+
+function dot(g, x, y, r, color = INK, alpha = 1) {
+  g.save();
+  g.fillStyle = color;
+  g.globalAlpha = alpha;
   g.beginPath();
-  pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
-  g.closePath();
-  g.clip();
+  g.arc(x, y, r, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
 }
 
 // ---------- motifs ----------
 
-// A frog's face in a few pen lines: the wide head, two big lidded eyes, the long deadpan mouth.
+// A frog's face in a few pen lines: the wide flat head, two big eyes sitting on the crown under
+// heavy lids, the long deadpan mouth with its lower lip.
 export function frogGlyph(g, cx, cy, s, rng, { tone = false, width = 2 } = {}) {
-  const o = { rng, width, wobble: s * 0.012 };
-  // head: wider than tall, a little flat on top where the eyes sit
+  const o = { rng, width, wobble: Math.max(0.3, s * 0.012) };
   const head = [];
-  for (let k = 0; k <= 48; k++) {
+  for (let k = 0; k < 48; k++) {
     const a = (k / 48) * Math.PI * 2;
     const rx = s, ry = s * 0.74;
     let x = Math.cos(a) * rx, y = Math.sin(a) * ry;
-    if (y < 0) y *= 0.82; // flatter crown
-    if (y > 0) x *= 1.06 - 0.12 * (y / ry); // cheeks tuck in below
+    if (y < 0) y *= 0.8; // flatter crown
+    if (y > 0) x *= 1.06 - 0.14 * (y / ry); // cheeks tuck in below
     head.push([cx + x, cy + y + s * 0.05]);
   }
+  if (tone) {
+    // hatching first, the contour over it: under the chin and down the shadow side
+    hatchPoly(g, head, { angle: 0.12, spacing: s * 0.055, width: width * 0.6, rng, alpha: 0.85, bounds: [cx - s * 1.2, cy + s * 0.45, s * 2.4, s * 0.6], inset: 2 });
+    hatchPoly(g, head, { angle: Math.PI / 2 - 0.2, spacing: s * 0.06, width: width * 0.55, rng, alpha: 0.75, bounds: [cx + s * 0.6, cy - s * 0.6, s * 0.6, s * 1.5], inset: 2 });
+  }
   inkPath(g, head, { ...o, closed: true, width: width * 1.2 });
-  // eyes: two ovals sitting on the crown, heavy upper lids
   for (const sx of [-1, 1]) {
     const ex = cx + sx * s * 0.42, ey = cy - s * 0.36;
-    inkEllipse(g, ex, ey, s * 0.3, s * 0.24, { ...o, width });
-    // lid: a heavy stroke across the upper third
-    inkLine(g, ex - s * 0.3, ey - s * 0.06, ex + s * 0.3, ey - s * 0.08, { rng, width: width * 1.5, wobble: s * 0.01 });
-    // pupil under the lid, looking slightly inward
-    g.save();
-    g.fillStyle = INK;
-    g.beginPath();
-    g.ellipse(ex - sx * s * 0.04, ey + s * 0.05, s * 0.075, s * 0.085, 0, 0, Math.PI * 2);
-    g.fill();
-    g.restore();
+    const eye = ellipsePts(ex, ey, s * 0.32, s * 0.26, { n: 28 });
+    if (tone) hatchPoly(g, eye, { angle: 0, spacing: s * 0.05, width: width * 0.5, rng, alpha: 0.8, bounds: [ex - s * 0.4, ey - s * 0.3, s * 0.8, s * 0.2] });
+    inkPath(g, eye, { ...o, closed: true });
+    // the lid: a heavy stroke across the upper third
+    inkLine(g, ex - s * 0.32, ey - s * 0.05, ex + s * 0.32, ey - s * 0.08, { rng, width: width * 1.6, wobble: s * 0.01 });
+    // the pupil under it, looking a little inward
+    dot(g, ex - sx * s * 0.03, ey + s * 0.06, s * 0.085);
   }
   // mouth: long, nearly straight, the ends turned down a hair
   const m = [];
   for (let k = 0; k <= 16; k++) {
     const u = k / 16 - 0.5;
-    m.push([cx + u * s * 1.5, cy + s * 0.32 + Math.abs(u) * Math.abs(u) * s * 0.28]);
+    m.push([cx + u * s * 1.5, cy + s * 0.32 + u * u * s * 0.3]);
   }
   inkPath(g, m, { ...o, width: width * 1.35 });
-  // the lip below the mouth line (a thinner echo)
-  const m2 = m.map(([x, y]) => [x * 0.985 + cx * 0.015, y + s * 0.09]);
-  inkPath(g, m2.slice(2, -2), { ...o, width: width * 0.8 });
-  // nostrils
+  const m2 = m.map(([x, y]) => [x * 0.985 + cx * 0.015, y + s * 0.1]);
+  inkPath(g, m2.slice(3, -3), { ...o, width: width * 0.8 });
   for (const sx of [-1, 1]) inkLine(g, cx + sx * s * 0.12, cy + s * 0.06, cx + sx * s * 0.17, cy + s * 0.1, { rng, width: width * 0.9, wobble: 0.3 });
-  if (tone) {
-    // hatching: under the chin, in the eye sockets, down the side away from the light
-    g.save();
-    clipPath(g, head);
-    hatch(g, cx - s, cy + s * 0.42, s * 2, s * 0.5, { angle: 0.1, spacing: s * 0.05, width: width * 0.7, broken: 0.15, rng, alpha: 0.85 });
-    hatch(g, cx + s * 0.55, cy - s * 0.4, s * 0.55, s * 1.2, { angle: Math.PI / 2 - 0.15, spacing: s * 0.055, width: width * 0.65, broken: 0.2, rng, alpha: 0.75 });
-    g.restore();
-    for (const sx of [-1, 1]) {
-      const ex = cx + sx * s * 0.42, ey = cy - s * 0.36;
-      g.save();
-      clipPath(g, ellipsePts(ex, ey, s * 0.3, s * 0.24));
-      hatch(g, ex - s * 0.3, ey - s * 0.24, s * 0.6, s * 0.18, { angle: 0, spacing: s * 0.045, width: width * 0.6, broken: 0, rng, alpha: 0.8 });
-      g.restore();
-    }
-  }
 }
 
 export function starGlyph(g, cx, cy, s, rng, { width = 2 } = {}) {
@@ -162,19 +218,9 @@ export function starGlyph(g, cx, cy, s, rng, { width = 2 } = {}) {
 }
 
 export function moonGlyph(g, cx, cy, s, rng, { width = 2, stock = STOCK } = {}) {
-  fillPath(g, ellipsePts(cx, cy, s, s, { n: 40 }), INK);
+  fillPath(g, ellipsePts(cx, cy, s, s, { n: 32 }), INK);
   inkEllipse(g, cx, cy, s, s, { rng, width, wobble: 0.6 });
-  fillPath(g, ellipsePts(cx + s * 0.55, cy - s * 0.1, s * 0.82, s * 0.82, { n: 40 }), stock);
-}
-
-export function ringGlyph(g, cx, cy, s, rng, { width = 2 } = {}) {
-  inkEllipse(g, cx, cy, s, s, { rng, width, wobble: 0.6 });
-  g.save();
-  g.fillStyle = INK;
-  g.beginPath();
-  g.arc(cx, cy, s * 0.28, 0, Math.PI * 2);
-  g.fill();
-  g.restore();
+  fillPath(g, ellipsePts(cx + s * 0.55, cy - s * 0.1, s * 0.82, s * 0.82, { n: 32 }), stock);
 }
 
 // Short radial strokes between two radii (a sunburst / milled edge), for an ellipse.
@@ -188,135 +234,106 @@ function rays(g, cx, cy, rx0, ry0, rx1, ry1, { every = 4, rng, width = 2, alt = 
 
 // ---------- the back ----------
 
-// ---------- the back ----------
-
 export function drawBack(g, W, H, rng = mulberry32(21), { stock = STOCK } = {}) {
-  paper(g, W, H, stock, { grain: 0.028, seed: 11 });
-  const R = Math.round((W * 0.005) / 0.13); // geometry corner radius in px
-  // outer printed frame: a heavy line, a milled band of ticks, a hairline inside it
-  inkRounded(g, 24, 24, W - 48, H - 48, R - 10, { width: 9, wobble: 1.4, rng });
-  inkRounded(g, 52, 52, W - 104, H - 104, R - 36, { width: 3.2, wobble: 1.1, rng });
-  {
-    // ticks between the two lines, all the way round
-    const band = roundedRectPts(38, 38, W - 76, H - 76, R - 24, { step: 11 });
-    for (let k = 0; k < band.length; k++) {
-      const a = band[k], b = band[(k + 1) % band.length], c = band[(k - 1 + band.length) % band.length];
-      const dx = b[0] - c[0], dy = b[1] - c[1];
-      const l = Math.hypot(dx, dy) || 1;
-      const nx = -dy / l, ny = dx / l;
-      const len = k % 2 ? 5 : 8;
-      inkLine(g, a[0] - nx * len, a[1] - ny * len, a[0] + nx * len, a[1] + ny * len, { width: 2.2, wobble: 0.4, rng });
-    }
-  }
-  // the field
-  const fx = 70, fy = 70, fw = W - 140, fh = H - 140;
+  g.fillStyle = stock;
+  g.fillRect(0, 0, W, H);
+  const R = (W * 5) / 130; // the cut's corner radius in px
   const cx = W / 2, cy = H / 2;
-  const S = 92; // perpendicular spacing of the lattice lines
-  const D = S * Math.SQRT2; // diamond width/height
-  const fieldPts = roundedRectPts(fx, fy, fw, fh, 10);
-  g.save();
-  clipPath(g, fieldPts);
+  const F = 40; // the pattern field starts here (the inner rule sits on its edge)
+  const fx = F, fy = F, fw = W - 2 * F, fh = H - 2 * F;
+  const field = [fx, fy, fw, fh];
 
-  // lattice cells: (i, j) indexes along the two diagonal families
-  const cellCentre = (i, j) => [cx + ((i + 0.5 + j + 0.5) * D) / 2, cy + ((i + 0.5 - (j + 0.5)) * D) / 2];
-  const cellPoly = (i, j) => {
-    const [x, y] = cellCentre(i, j);
-    return [
-      [x, y - D / 2],
-      [x + D / 2, y],
-      [x, y + D / 2],
-      [x - D / 2, y],
-    ];
-  };
+  // the lattice: two diagonal families of lines, cells alternately hatched and plain
+  const S = 56; // perpendicular spacing of the lattice lines
+  const D = S * Math.SQRT2; // diamond width/height
+  const cellCentre = (i, j) => [cx + ((i + j + 1) * D) / 2, cy + ((i - j) * D) / 2];
+  const cellPoly = (x, y) => [
+    [x, y - D / 2],
+    [x + D / 2, y],
+    [x, y + D / 2],
+    [x - D / 2, y],
+  ];
   const N = Math.ceil(Math.hypot(fw, fh) / D) + 2;
-  const RX = 236, RY = 364;
-  const inMedallion = (x, y) => ((x - cx) / (RX + 60)) ** 2 + ((y - cy) / (RY + 60)) ** 2 < 1;
-  const cornerR = 210;
+  const RX = 150, RY = 230; // the medallion
+  const inMedallion = (x, y, pad) => ((x - cx) / (RX + pad)) ** 2 + ((y - cy) / (RY + pad)) ** 2 < 1;
+  const cornerR = 128;
   const corners = [
     [fx, fy],
     [fx + fw, fy],
     [fx, fy + fh],
     [fx + fw, fy + fh],
   ];
-  const inCorner = (x, y) => corners.some(([px, py]) => Math.hypot(x - px, y - py) < cornerR + 36);
+  const inCorner = (x, y, pad) => corners.some(([px, py]) => Math.hypot(x - px, y - py) < cornerR + pad);
 
-  // 1. hatched diamonds (checkerboard): one clip path of many diamonds, one hatch pass
-  g.save();
-  g.beginPath();
+  // 1. hatched diamonds (checkerboard), the stroke direction alternating row by row so it weaves
   for (let i = -N; i <= N; i++) {
     for (let j = -N; j <= N; j++) {
       if ((i + j) % 2 !== 0) continue;
       const [x, y] = cellCentre(i, j);
-      if (x < fx - D || x > fx + fw + D || y < fy - D || y > fy + fh + D) continue;
-      const poly = cellPoly(i, j);
-      poly.forEach(([px, py], k) => (k ? g.lineTo(px, py) : g.moveTo(px, py)));
-      g.closePath();
+      if (x < fx - D / 2 || x > fx + fw + D / 2 || y < fy - D / 2 || y > fy + fh + D / 2) continue;
+      if (inMedallion(x, y, -D * 0.2) || inCorner(x, y, -D * 0.2)) continue;
+      const vertical = ((((i - j) / 2) % 2) + 2) % 2 === 0;
+      hatchPoly(g, cellPoly(x, y), { angle: vertical ? Math.PI / 2 + 0.04 : 0.05, spacing: 5.6, width: 1.6, wobble: 0.45, jitter: 1.2, rng, alpha: 0.95, inset: 2.5, bounds: field });
     }
   }
-  g.clip();
-  hatch(g, fx, fy, fw, fh, { angle: Math.PI / 2, spacing: 7, width: 2.4, wobble: 0.5, broken: 0, jitter: 1.4, rng, alpha: 0.95 });
-  // a second, sparser pass at a slant so the diamonds read as woven, not ruled
-  hatch(g, fx, fy, fw, fh, { angle: Math.PI / 2 + 0.45, spacing: 15, width: 1.6, wobble: 0.5, broken: 0.3, jitter: 1.2, rng, alpha: 0.7 });
-  g.restore();
-
   // 2. lattice lines
   const half = Math.hypot(fw, fh);
   for (let k = -N; k <= N; k++) {
-    const cA = k * D;
-    inkLine(g, cx + cA / 2 - half, cy + cA / 2 + half, cx + cA / 2 + half, cy + cA / 2 - half, { width: 3.2, wobble: 1, rng, segments: 70 });
-    inkLine(g, cx + cA / 2 - half, cy - cA / 2 - half, cx + cA / 2 + half, cy - cA / 2 + half, { width: 3.2, wobble: 1, rng, segments: 70 });
+    const c = (k * D) / 2;
+    for (const s of [1, -1]) {
+      const seg = clipSegRect(cx + c - half, cy + s * (c + half), cx + c + half, cy + s * (c - half), [fx - 2, fy - 2, fw + 4, fh + 4]);
+      if (seg) inkLine(g, ...seg, { width: 2.6, wobble: 1.1, rng, segments: 36 });
+    }
   }
-
-  // 3. motifs in the plain diamonds: ordered rows of frogs, stars, moons
+  // 3. motifs in the plain diamonds, in ordered rows along one diagonal: frogs, stars, moons
   for (let i = -N; i <= N; i++) {
     for (let j = -N; j <= N; j++) {
       if ((i + j) % 2 === 0) continue;
       const [x, y] = cellCentre(i, j);
-      if (x < fx + 14 || x > fx + fw - 14 || y < fy + 14 || y > fy + fh - 14) continue;
-      if (inMedallion(x, y) || inCorner(x, y)) continue;
-      const m = (((i - j) % 4) + 4) % 4; // constant along the / diagonals → ordered rows
-      if (m === 1) frogGlyph(g, x, y, D * 0.24, rng, { width: 2.4 });
-      else if (m === 3) moonGlyph(g, x, y, D * 0.17, rng, { width: 2.4, stock });
-      else starGlyph(g, x, y, D * 0.21, rng, { width: 2.8 });
+      if (x < fx + 22 || x > fx + fw - 22 || y < fy + 22 || y > fy + fh - 22) continue;
+      if (inMedallion(x, y, 30) || inCorner(x, y, 26)) continue;
+      const m = ((((i - j - 1) / 2) % 3) + 3) % 3;
+      if (m === 0) frogGlyph(g, x, y, D * 0.24, rng, { width: 2.2 });
+      else if (m === 1) starGlyph(g, x, y, D * 0.2, rng, { width: 2.6 });
+      else moonGlyph(g, x, y, D * 0.16, rng, { width: 2.2, stock });
     }
   }
 
-  // 4. corner fans: a quarter disc of paper with rays from the corner and a star
+  // 4. the margin: paper over whatever bled out of the field
+  g.fillStyle = stock;
+  g.fillRect(0, 0, W, fy);
+  g.fillRect(0, fy + fh, W, H - fy - fh);
+  g.fillRect(0, 0, fx, H);
+  g.fillRect(fx + fw, 0, W - fx - fw, H);
+
+  // 5. corner fans: a quarter disc of paper with rays from the corner and a moon and stars
   for (const [px, py] of corners) {
     const sx = px < cx ? 1 : -1, sy = py < cy ? 1 : -1;
     const a0 = sx > 0 ? (sy > 0 ? 0 : 270) : sy > 0 ? 90 : 180;
     const A0 = (a0 * Math.PI) / 180, A1 = ((a0 + 90) * Math.PI) / 180;
-    fillPath(g, ellipsePts(px, py, cornerR, cornerR, { n: 40, a0: A0, a1: A1 }).concat([[px, py]]), stock);
-    inkPath(g, ellipsePts(px, py, cornerR, cornerR, { n: 36, a0: A0, a1: A1 }), { width: 5, wobble: 1.3, rng });
-    inkPath(g, ellipsePts(px, py, cornerR - 18, cornerR - 18, { n: 36, a0: A0, a1: A1 }), { width: 2.4, wobble: 1, rng });
-    rays(g, px, py, 82, 82, cornerR - 28, cornerR - 28, { every: 5, rng, width: 2.6, a0: a0 + 3, a1: a0 + 90 });
-    inkPath(g, ellipsePts(px, py, 70, 70, { n: 30, a0: A0, a1: A1 }), { width: 3.6, wobble: 1, rng });
-    // a small crescent and star tucked in the corner
-    moonGlyph(g, px + sx * 30, py + sy * 30, 14, rng, { width: 2.4, stock });
-    starGlyph(g, px + sx * 56, py + sy * 12, 8, rng, { width: 2 });
-    starGlyph(g, px + sx * 12, py + sy * 56, 8, rng, { width: 2 });
+    fillPath(g, ellipsePts(px, py, cornerR, cornerR, { n: 36, a0: A0, a1: A1 }).concat([[px, py]]), stock);
+    inkPath(g, ellipsePts(px, py, cornerR, cornerR, { n: 32, a0: A0, a1: A1 }), { width: 3.6, wobble: 1.2, rng });
+    inkPath(g, ellipsePts(px, py, cornerR - 11, cornerR - 11, { n: 32, a0: A0, a1: A1 }), { width: 1.8, wobble: 0.9, rng });
+    rays(g, px, py, 50, 50, cornerR - 18, cornerR - 18, { every: 5, rng, width: 2, a0: a0 + 3, a1: a0 + 90 });
+    inkPath(g, ellipsePts(px, py, 44, 44, { n: 24, a0: A0, a1: A1 }), { width: 2.6, wobble: 0.9, rng });
+    moonGlyph(g, px + sx * 19, py + sy * 19, 9, rng, { width: 2, stock });
+    starGlyph(g, px + sx * 35, py + sy * 8, 5, rng, { width: 1.6 });
+    starGlyph(g, px + sx * 8, py + sy * 35, 5, rng, { width: 1.6 });
   }
 
-  // 5. the medallion: an oval of paper, a sunburst, a milled edge, the emblem, the name
-  fillPath(g, ellipsePts(cx, cy, RX + 40, RY + 40), stock);
-  rays(g, cx, cy, RX + 10, RY + 10, RX + 38, RY + 38, { every: 3, rng, width: 2.6 });
-  inkEllipse(g, cx, cy, RX, RY, { width: 8, wobble: 1.4, rng });
-  inkEllipse(g, cx, cy, RX - 16, RY - 16, { width: 2.8, wobble: 1, rng });
-  g.save();
-  g.fillStyle = INK;
+  // 6. the medallion: an oval of paper, a sunburst, a milled edge, the emblem, the name
+  fillPath(g, ellipsePts(cx, cy, RX + 26, RY + 26), stock);
+  rays(g, cx, cy, RX + 6, RY + 6, RX + 24, RY + 24, { every: 3, rng, width: 1.9 });
+  inkEllipse(g, cx, cy, RX, RY, { width: 5, wobble: 1.3, rng });
+  inkEllipse(g, cx, cy, RX - 10, RY - 10, { width: 1.8, wobble: 0.9, rng });
   for (let deg = 0; deg < 360; deg += 4.5) {
     const a = (deg * Math.PI) / 180;
-    g.beginPath();
-    g.arc(cx + (RX - 8) * Math.cos(a), cy + (RY - 8) * Math.sin(a), 2.6, 0, Math.PI * 2);
-    g.fill();
+    dot(g, cx + (RX - 5) * Math.cos(a), cy + (RY - 5) * Math.sin(a), 1.6);
   }
-  g.restore();
   // the emblem: the frog, in tone, with the collar of his robe
-  const hy = cy - 86, hs = 138;
+  const hy = cy - 54, hs = 86;
   {
-    // the robe: round shoulders sloping to the medallion's edge, a V of lapels under the chin,
-    // a few fold strokes; paper-white like Pepe's robe in the world
-    const sh = cy + hs * 0.55; // shoulder line
+    const sh = hy + hs * 0.55; // the shoulder line
     const left = [], right = [];
     for (let k = 0; k <= 12; k++) {
       const u = k / 12;
@@ -325,95 +342,82 @@ export function drawBack(g, W, H, rng = mulberry32(21), { stock = STOCK } = {}) 
       left.push([cx - x, y]);
       right.push([cx + x, y]);
     }
-    inkPath(g, left, { width: 3.4, wobble: 1.1, rng });
-    inkPath(g, right, { width: 3.4, wobble: 1.1, rng });
+    inkPath(g, left, { width: 2.2, wobble: 0.9, rng });
+    inkPath(g, right, { width: 2.2, wobble: 0.9, rng });
     // lapels
-    inkPath(g, [[cx - hs * 0.36, sh + hs * 0.05], [cx - hs * 0.08, sh + hs * 0.62]], { width: 3, wobble: 0.9, rng });
-    inkPath(g, [[cx + hs * 0.36, sh + hs * 0.05], [cx + hs * 0.08, sh + hs * 0.62]], { width: 3, wobble: 0.9, rng });
-    inkPath(g, [[cx - hs * 0.36, sh + hs * 0.05], [cx - hs * 0.46, sh + hs * 0.36]], { width: 2.4, wobble: 0.9, rng });
-    inkPath(g, [[cx + hs * 0.36, sh + hs * 0.05], [cx + hs * 0.46, sh + hs * 0.36]], { width: 2.4, wobble: 0.9, rng });
-    // folds
-    for (const sx of [-1, 1]) for (const f of [0.62, 0.8]) inkLine(g, cx + sx * hs * f, sh + hs * 0.3, cx + sx * hs * (f + 0.06), sh + hs * 0.8, { width: 2, wobble: 0.8, rng, alpha: 0.85 });
-    // the chest in shadow: hatching inside the V
-    g.save();
-    clipPath(g, [[cx - hs * 0.36, sh + hs * 0.05], [cx + hs * 0.36, sh + hs * 0.05], [cx + hs * 0.08, sh + hs * 0.62], [cx - hs * 0.08, sh + hs * 0.62]]);
-    hatch(g, cx - hs * 0.4, sh, hs * 0.8, hs * 0.7, { angle: Math.PI / 2 + 0.2, spacing: 6, width: 1.8, broken: 0.1, rng, alpha: 0.85 });
-    g.restore();
+    const V = [[cx - hs * 0.36, sh + hs * 0.05], [cx + hs * 0.36, sh + hs * 0.05], [cx + hs * 0.08, sh + hs * 0.62], [cx - hs * 0.08, sh + hs * 0.62]];
+    hatchPoly(g, V, { angle: Math.PI / 2 + 0.2, spacing: 4, width: 1.2, rng, alpha: 0.85, inset: 1 });
+    inkPath(g, [V[0], V[3]], { width: 2, wobble: 0.8, rng });
+    inkPath(g, [V[1], V[2]], { width: 2, wobble: 0.8, rng });
+    inkPath(g, [V[0], [cx - hs * 0.46, sh + hs * 0.36]], { width: 1.6, wobble: 0.8, rng });
+    inkPath(g, [V[1], [cx + hs * 0.46, sh + hs * 0.36]], { width: 1.6, wobble: 0.8, rng });
+    for (const sx of [-1, 1]) for (const f of [0.62, 0.8]) inkLine(g, cx + sx * hs * f, sh + hs * 0.3, cx + sx * hs * (f + 0.06), sh + hs * 0.8, { width: 1.3, wobble: 0.8, rng, alpha: 0.85 });
     // a paper gap so the head sits in front of the collar
     fillPath(g, ellipsePts(cx, hy + hs * 0.05, hs * 1.02, hs * 0.76), stock);
   }
-  frogGlyph(g, cx, hy, hs, rng, { tone: true, width: 3.6 });
-  // a small crown of stars and a moon over the head
-  starGlyph(g, cx - 104, cy - 276, 22, rng, { width: 3 });
-  moonGlyph(g, cx + 98, cy - 272, 18, rng, { width: 2.8, stock });
-  starGlyph(g, cx, cy - 306, 15, rng, { width: 2.6 });
-  starGlyph(g, cx - 52, cy - 300, 8, rng, { width: 2 });
-  starGlyph(g, cx + 50, cy - 302, 8, rng, { width: 2 });
+  frogGlyph(g, cx, hy, hs, rng, { tone: true, width: 2.4 });
+  // a crown of stars and a moon over the head
+  starGlyph(g, cx - 65, cy - 172, 14, rng, { width: 2 });
+  moonGlyph(g, cx + 61, cy - 170, 11, rng, { width: 1.8, stock });
+  starGlyph(g, cx, cy - 191, 9, rng, { width: 1.8 });
+  starGlyph(g, cx - 32, cy - 187, 5, rng, { width: 1.4 });
+  starGlyph(g, cx + 31, cy - 188, 5, rng, { width: 1.4 });
   // the name on a ribbon
-  const rb = { x: cx - 156, y: cy + 150, w: 312, h: 64 };
-  fillPath(g, roundedRectPts(rb.x, rb.y, rb.w, rb.h, 6), stock);
-  inkRounded(g, rb.x, rb.y, rb.w, rb.h, 6, { width: 3.4, wobble: 1, rng });
+  const rb = { x: cx - 98, y: cy + 94, w: 196, h: 40 };
+  fillPath(g, roundedRectPts(rb.x, rb.y, rb.w, rb.h, 4), stock);
+  inkRounded(g, rb.x, rb.y, rb.w, rb.h, 4, { width: 2.2, wobble: 0.9, rng });
   for (const sx of [-1, 1]) {
     const ex = sx > 0 ? rb.x + rb.w : rb.x;
     const tail = [
-      [ex, rb.y + 8],
-      [ex + sx * 36, rb.y + 4],
-      [ex + sx * 24, rb.y + rb.h / 2],
-      [ex + sx * 36, rb.y + rb.h - 4],
-      [ex, rb.y + rb.h - 8],
+      [ex, rb.y + 5],
+      [ex + sx * 22, rb.y + 2],
+      [ex + sx * 15, rb.y + rb.h / 2],
+      [ex + sx * 22, rb.y + rb.h - 2],
+      [ex, rb.y + rb.h - 5],
     ];
     fillPath(g, tail, stock);
-    inkPath(g, tail, { width: 3.2, wobble: 0.8, rng });
-    g.save();
-    clipPath(g, tail);
-    hatch(g, sx > 0 ? ex : ex - 36, rb.y + 4, 36, rb.h - 8, { angle: Math.PI / 2, spacing: 5.5, width: 1.8, broken: 0, rng, alpha: 0.85 });
-    g.restore();
+    hatchPoly(g, tail, { angle: Math.PI / 2, spacing: 3.6, width: 1.2, rng, alpha: 0.85, inset: 1 });
+    inkPath(g, tail, { width: 2, wobble: 0.7, rng });
   }
-  letter(g, 'TAROT PEPE', cx, rb.y + rb.h / 2 + 2, { size: 40, weight: 700, tracking: 0.14, jitter: 1.4, rng });
-  letter(g, '78 CARTES', cx, rb.y + rb.h + 42, { size: 22, weight: 600, tracking: 0.2, jitter: 1, rng });
-  for (const dx of [-44, 0, 44]) starGlyph(g, cx + dx, rb.y + rb.h + 88, 10, rng, { width: 2.4 });
+  letter(g, 'TAROT PEPE', cx, rb.y + rb.h / 2 + 1, { size: 25, weight: 700, tracking: 0.14, jitter: 1, rng });
+  letter(g, '78 CARTES', cx, rb.y + rb.h + 26, { size: 14, weight: 600, tracking: 0.2, jitter: 0.8, rng });
+  for (const dx of [-28, 0, 28]) starGlyph(g, cx + dx, rb.y + rb.h + 55, 6, rng, { width: 1.6 });
 
-  g.restore(); // field clip
+  // 7. the printed frame: an inner rule on the field's edge, a milled band of ticks, a heavy
+  // outer rule a hair inside the cut
+  inkRounded(g, F - 2, F - 2, W - 2 * F + 4, H - 2 * F + 4, Math.max(4, R - F + 6), { width: 2, wobble: 0.9, rng });
+  {
+    const band = roundedRectPts(27, 27, W - 54, H - 54, R - 17, { step: 7 });
+    for (let k = 0; k < band.length; k++) {
+      const a = band[k], b = band[(k + 1) % band.length], c = band[(k - 1 + band.length) % band.length];
+      const dx = b[0] - c[0], dy = b[1] - c[1];
+      const l = Math.hypot(dx, dy) || 1;
+      const nx = -dy / l, ny = dx / l;
+      const len = k % 2 ? 3.2 : 5.2;
+      inkLine(g, a[0] - nx * len, a[1] - ny * len, a[0] + nx * len, a[1] + ny * len, { width: 1.6, wobble: 0.35, rng });
+    }
+  }
+  inkRounded(g, 16, 16, W - 32, H - 32, R - 8, { width: 4.5, wobble: 1.3, rng });
 }
 
 // ---------- the front ----------
 
-// Reads the plate's own margin colour so the card stock matches the printed sheet.
-function sampleStock(img) {
-  try {
-    const c = makeCanvas(8, 8);
-    const g2 = c.getContext('2d');
-    g2.drawImage(img, 0, 0, 8, 8);
-    const d = g2.getImageData(0, 0, 8, 8).data;
-    const px = [0, 7, 56, 63].map((i) => [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]]);
-    const avg = px.reduce((a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], [0, 0, 0]).map((v) => Math.round(v / px.length));
-    // lift towards paper a touch so the plate reads as printed on lighter stock
-    const lift = (v, p) => Math.round(v * 0.7 + p * 0.3);
-    return `rgb(${lift(avg[0], 0xf6)},${lift(avg[1], 0xf2)},${lift(avg[2], 0xea)})`;
-  } catch {
-    return STOCK;
-  }
-}
-
-// Layout constants shared with the piece: the plate is inset by M on every side.
-export const FRONT = { M: 44, border: 22, borderW: 5.5 };
-
 export function drawFront(g, W, H, img, rng = mulberry32(5), { wear = 1 } = {}) {
   const { M, border, borderW } = FRONT;
-  const stock = img ? sampleStock(img) : STOCK;
-  paper(g, W, H, stock, { grain: 0.03, seed: 13 });
+  g.fillStyle = STOCK;
+  g.fillRect(0, 0, W, H);
   if (img) g.drawImage(img, M, M, W - 2 * M, H - 2 * M);
-  const R = Math.round((W * 0.005) / 0.13);
-  // the printed frame: one confident line just inside the cut
-  inkRounded(g, border, border, W - 2 * border, H - 2 * border, Math.max(4, R - border + 6), { width: borderW, wobble: 1.1, rng });
-  if (wear > 0) cornerWear(g, W, H, rng, stock, wear);
-  return stock;
+  const R = (W * 5) / 130;
+  // the printed frame: one confident rule a hair inside the cut, paper either side of it
+  inkRounded(g, border, border, W - 2 * border, H - 2 * border, Math.max(6, R - border + 4), { width: borderW, wobble: 1.2, rng });
+  if (wear > 0) cornerWear(g, W, H, rng, STOCK, wear);
+  return STOCK;
 }
 
-// A used deck: the frame rubbed through at the corners, a few specks, one faint fingerprint of
-// dirt along an edge. Small, or the critic reads it as noise.
+// A used deck: the rule rubbed thin at the corners where thumbs go, a few specks, one nick on the
+// cut edge. Small, or the critic reads it as noise.
 function cornerWear(g, W, H, rng, stock, amount) {
-  const { border } = FRONT;
+  const { border, borderW } = FRONT;
   const corners = [
     [border, border, 1, 1],
     [W - border, border, -1, 1],
@@ -421,34 +425,28 @@ function cornerWear(g, W, H, rng, stock, amount) {
     [W - border, H - border, -1, -1],
   ];
   for (const [x, y, sx, sy] of corners) {
-    if (rng() > 0.8 * amount) continue;
-    // rub: paper-coloured dashes across the frame line near the corner, where thumbs go
-    const n = 2 + Math.floor(rng() * 3);
-    for (let k = 0; k < n; k++) {
-      const along = 14 + rng() * 80;
+    if (rng() > 0.85 * amount) continue;
+    // the rub: a scumble of thin paper strokes crossing the rule at a slant, so the ink thins
+    // to flecks rather than breaking cleanly
+    const spots = 1 + Math.floor(rng() * 2);
+    for (let k = 0; k < spots; k++) {
+      const along = 10 + rng() * 70;
       const horiz = rng() < 0.5;
       const px = horiz ? x + sx * along : x;
       const py = horiz ? y : y + sy * along;
-      const len = 8 + rng() * 12;
-      inkLine(g, px - (horiz ? len / 2 : 0), py - (horiz ? 0 : len / 2), px + (horiz ? len / 2 : 0), py + (horiz ? 0 : len / 2), {
-        width: 6 + rng() * 5,
-        wobble: 0.6,
-        rng,
-        color: stock,
-        alpha: 0.85 + rng() * 0.15,
-      });
+      const n = 4 + Math.floor(rng() * 4);
+      for (let q = 0; q < n; q++) {
+        const ox = (rng() - 0.5) * 18, oy = (rng() - 0.5) * 18;
+        const a = (horiz ? Math.PI / 2 : 0) + (rng() - 0.5) * 0.9;
+        const l = borderW * 1.6 + rng() * 6;
+        inkLine(g, px + ox - Math.cos(a) * l, py + oy - Math.sin(a) * l, px + ox + Math.cos(a) * l, py + oy + Math.sin(a) * l, { width: 1.6 + rng() * 1.6, wobble: 0.4, rng, color: stock, alpha: 0.9 });
+      }
     }
     // a couple of specks
-    g.save();
-    g.fillStyle = INK;
     for (let k = 0; k < 4; k++) {
-      if (rng() > 0.6) continue;
-      g.globalAlpha = 0.18 + rng() * 0.3;
-      g.beginPath();
-      g.arc(x + sx * rng() * 60, y + sy * rng() * 60, 1 + rng() * 1.6, 0, Math.PI * 2);
-      g.fill();
+      if (rng() > 0.55) continue;
+      dot(g, x + sx * rng() * 50, y + sy * rng() * 50, 1 + rng() * 1.4, INK, 0.2 + rng() * 0.3);
     }
-    g.restore();
   }
   // a hairline nick on the cut edge, somewhere along a long side
   const y = H * (0.2 + rng() * 0.6), x = rng() < 0.5 ? 2 : W - 2;
@@ -457,19 +455,28 @@ function cornerWear(g, W, H, rng, stock, amount) {
 
 // ---------- the deck's cut edge ----------
 
-// n stacked cards seen from the side: a hairline for each card, none exactly like its neighbour.
+// n stacked cards seen from the side: a hairline for each card, none exactly like its neighbour,
+// none quite parallel. u wraps around the deck's perimeter, so every line is a gentle wave that
+// meets itself at the seam.
 export function drawDeckSide(g, W, H, n, rng = mulberry32(31), { stock = STOCK } = {}) {
-  paper(g, W, H, stock, { grain: 0.03, seed: 17 });
+  g.fillStyle = stock;
+  g.fillRect(0, 0, W, H);
   const pitch = H / n;
   for (let i = 0; i < n; i++) {
-    const y = (i + 0.5) * pitch + (rng() - 0.5) * pitch * 0.25;
-    const thick = rng() < 0.12;
-    inkLine(g, -4, y, W + 4, y, { width: thick ? 2.6 : 1.5 + rng() * 0.6, wobble: 0.45, rng, alpha: thick ? 0.9 : 0.55 + rng() * 0.3, segments: 48 });
+    const y = (i + 0.5) * pitch + (rng() - 0.5) * pitch * 0.3;
+    const amp = (rng() - 0.5) * pitch * 0.5, ph = rng() * Math.PI * 2;
+    const heavy = rng() < 0.12;
+    const pts = [];
+    for (let k = 0; k <= 40; k++) {
+      const x = (W * k) / 40;
+      pts.push([x, y + amp * Math.sin((2 * Math.PI * x) / W + ph)]);
+    }
+    inkPath(g, pts, { width: heavy ? 2.2 : 1.1 + rng() * 0.6, wobble: 0.35, rng, alpha: heavy ? 0.95 : 0.55 + rng() * 0.35 });
   }
   // a few short darker dashes where cards sit proud of the stack
-  for (let k = 0; k < 14; k++) {
-    const y = rng() * H, x = rng() * W;
-    inkLine(g, x, y, x + 20 + rng() * 40, y, { width: 2.2, wobble: 0.4, rng, alpha: 0.9 });
+  for (let k = 0; k < 10; k++) {
+    const y = rng() * H, x = rng() * W * 0.9;
+    inkLine(g, x, y, x + 10 + rng() * 22, y, { width: 1.8, wobble: 0.3, rng, alpha: 0.9 });
   }
 }
 

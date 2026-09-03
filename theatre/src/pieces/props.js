@@ -225,7 +225,7 @@ export async function build(ctx) {
 
   // ---- in front of the side walls: the floor lamp (left) and the hat stand (right) ---------------------
   const lamp = O.floorLamp({ h: 1.62 });
-  lamp.position.set(-W / 2 + 0.32, 0, -0.7);
+  lamp.position.set(-W / 2 + 0.32, 0, -0.55);
   g.add(lamp);
   const stand = O.hatStand({ h: 1.85, rng });
   stand.position.set(W / 2 - 0.32, 0, -0.75);

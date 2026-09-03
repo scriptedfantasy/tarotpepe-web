@@ -128,7 +128,7 @@ export async function build(ctx) {
     } else {
       const dd = d - arc;
       const c = corner(th);
-      const grow = smooth(0.0, 0.035, dd);
+      const grow = smooth(0.0, 0.022, dd);
       const amp = (0.016 + 0.04 * Math.pow(c, 1.4)) * grow;
       const flare = 0.006 * Math.pow(dd / 0.45, 1.3) + 0.03 * c * Math.pow(dd / 0.45, 1.6);
       r = R + 0.003 + flare + amp * fold(th);

@@ -3,7 +3,7 @@
 // bars, with the rules and ornaments drawn by hand in ink (see titles-draw.js). Timing is
 // stepped: a card cuts in, holds, cuts out; a title may type itself on the 12fps clock.
 // API: title(opts), chapter(n | key, name?), closing(), hide(), letterbox(on), setState(name).
-import { grainTile, fit, starRule, border, frog, manicule, cardRow, marquee, marqueeSize, sawtooth } from './titles-draw.js';
+import { fit, starRule, border, frog, manicule, cardRow, marquee, marqueeSize, zigzag, bracket } from './titles-draw.js';
 
 export const meta = {
   name: 'titles',
@@ -17,6 +17,7 @@ const MUSTARD = '#e0a526';
 const OXBLOOD = '#7a2e2a';
 const TEAL = '#7fbfb9';
 const PRUSSIAN = '#2c4a63';
+const STEEL = '#697791';
 const BAR = 0.07; // letterbox bar height, fraction of the frame
 
 // The chapters, in order. `sub` is the deadpan gloss set in guillemets under the name.
@@ -38,7 +39,7 @@ export async function build(ctx) {
     #letterbox .bar.top { top: 0; }
     #letterbox .bar.bottom { bottom: 0; }
     #titles { z-index: 2; font-family: ${font}; }
-    #titles .card { position: absolute; inset: 0; color: var(--fg); background-color: var(--bg); background-image: var(--grain); background-repeat: repeat; }
+    #titles .card { position: absolute; inset: 0; color: var(--fg); background-color: var(--bg); }
     #titles .card > .frame { position: absolute; left: 0; top: 0; }
     #titles .card .stack { position: absolute; left: 0; right: 0; top: ${BAR * 100}%; bottom: ${BAR * 100}%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
     #titles .card .stack > * { margin: 0; }
@@ -46,7 +47,7 @@ export async function build(ctx) {
     #titles .kicker { font-size: 2.2vh; letter-spacing: 0.48em; text-indent: 0.48em; font-weight: 500; }
     #titles h1 { font-size: 16.5vh; line-height: 1; letter-spacing: 0.16em; text-indent: 0.16em; font-weight: 700; white-space: nowrap; margin: 2.2vh 0 1.4vh 0; }
     #titles h1.mid { font-size: 11.5vh; letter-spacing: 0.2em; text-indent: 0.2em; margin: 2.4vh 0 1.8vh 0; }
-    #titles h1.end { font-size: 22vh; letter-spacing: 0.22em; text-indent: 0.22em; margin: 1.6vh 0 2vh 0; }
+    #titles h1.end { font-size: 18vh; letter-spacing: 0.14em; text-indent: 0.14em; margin: 1.6vh 0 2vh 0; }
     #titles h1 .ch.off { visibility: hidden; }
     #titles .sub { font-size: 2.4vh; letter-spacing: 0.36em; text-indent: 0.36em; font-weight: 500; }
     #titles .gloss { font-size: 2.1vh; letter-spacing: 0.14em; font-weight: 400; margin-top: 2.2vh; }
@@ -59,11 +60,12 @@ export async function build(ctx) {
     #titles .orn { display: block; margin-top: 3vh; }
     #titles .mark { display: flex; flex-direction: column; align-items: center; margin-top: 2.6vh; }
     #titles .mark .label { font-size: 1.35vh; letter-spacing: 0.34em; text-indent: 0.34em; font-weight: 500; margin-top: 0.4vh; }
-    #titles canvas.marquee { display: block; margin: 1.2vh 0 0.6vh 0; }
+    #titles canvas.marquee { display: block; margin: 0.6vh 0 0.2vh 0; }
+    #titles canvas.bracket { display: block; margin: 0 0 0.9vh 0; }
     #titles .corner { position: absolute; top: calc(${BAR * 100}% + 4.6vh); font-size: 1.55vh; letter-spacing: 0.28em; font-weight: 500; }
-    #titles .corner.tl { left: 4.2vw; text-align: left; }
-    #titles .corner.tr { right: 4.2vw; text-align: right; }
-    #titles .card.title .corner.tl { left: 8.2vw; }
+    #titles .corner.tl { left: 7.6vw; text-align: left; }
+    #titles .corner.tr { right: 7.6vw; text-align: right; }
+    #titles .card.title .corner.tl { left: 11.4vw; }
     #titles .card.title .corner.tr { right: 8.2vw; }
     #titles .foot { position: absolute; left: 0; right: 0; bottom: calc(${BAR * 100}% + 4.4vh); text-align: center; font-size: 1.55vh; letter-spacing: 0.3em; text-indent: 0.3em; font-weight: 500; }
     #titles .credits { display: flex; flex-direction: column; align-items: center; gap: 2.6vh; margin-top: 1vh; }
@@ -92,7 +94,6 @@ export async function build(ctx) {
     card.className = `card ${kind}`;
     card.style.setProperty('--bg', bg);
     card.style.setProperty('--fg', fg);
-    card.style.setProperty('--grain', `url(${grainTile()})`);
     card.innerHTML =
       `<canvas class="frame"></canvas>` +
       (corner ? `<div class="corner tl caps">${corner[0]}</div><div class="corner tr caps">${corner[1]}</div>` : '') +
@@ -126,14 +127,14 @@ export async function build(ctx) {
     return card;
   }
 
-  const family = font === 'var(--futura)' ? "'Futura', 'Jost', sans-serif" : "'Jost', sans-serif";
   function redrawMarquee(c, count) {
     const w = +c.dataset.w, h = +c.dataset.h;
     const g = fit(c, w, h);
-    marquee(g, w, h, c.dataset.text, { size: +c.dataset.size, ink: c.dataset.ink, bulb: c.dataset.bulb, count, family });
+    marquee(g, w, h, c.dataset.text, { capH: +c.dataset.cap, ink: c.dataset.ink, bulb: c.dataset.bulb, count });
   }
   const DRAW = {
-    marquee: (g, w, h, d) => marquee(g, w, h, d.text, { size: +d.size, ink: d.ink, bulb: d.bulb, count: d.count != null ? +d.count : Infinity, family }),
+    marquee: (g, w, h, d) => marquee(g, w, h, d.text, { capH: +d.cap, ink: d.ink, bulb: d.bulb, count: d.count != null ? +d.count : Infinity }),
+    bracket: (g, w, h, d, fg) => bracket(g, w, h, { color: fg, seed: 13 }),
     rule: (g, w, h, d, fg) => starRule(g, w, h, { color: fg, seed: +(d.seed ?? 5), star: d.star !== '0' }),
     frog: (g, w, h, d, fg) => frog(g, w, h, { color: fg === INK ? INK : INK, seed: 21 }),
     manicule: (g, w, h, d, fg) => manicule(g, w, h, { color: fg }),
@@ -147,26 +148,26 @@ export async function build(ctx) {
     title({ kicker = 'A reading, in miniature', title = 'Tarot Pepe', sub = 'in three cards', type = false, palette = 'mustard' } = {}) {
       const pal = palette === 'oxblood' ? { bg: OXBLOOD, fg: MUSTARD } : { bg: MUSTARD, fg: INK };
       const word = title.toUpperCase();
-      const size = vh(17.5);
-      const ms = marqueeSize(word, size, { family });
+      const capH = vh(15);
+      const ms = marqueeSize(word, capH);
       return show('title', {
         ...pal,
         corner: ['Série I &mdash; N° 1', 'Admission: one question'],
         foot: 'The parlour is open &middot; please come in',
         type: type ? 'marquee' : null,
         frame: (g, w, h) => {
-          // the sawtooth spine down both sides, just inside the double rule
+          // the zig-zag spine: one bold band down the left edge, just inside the double rule
           const inset = Math.round(h * BAR) + Math.round(h * 0.03) + 7;
-          const bw = Math.round(h * 0.016);
-          const y0 = inset + 2, y1 = h - inset - 2;
-          const teeth = palette === 'oxblood' ? MUSTARD : OXBLOOD;
-          sawtooth(g, inset + 3, y0, y1, bw, { color: teeth, ink: pal.fg, seed: 17 });
-          sawtooth(g, w - inset - 3 - bw, y0, y1, bw, { color: teeth, ink: pal.fg, seed: 18, flip: true });
+          const bw = Math.round(w * 0.022);
+          const y0 = inset + 5, y1 = h - inset - 5;
+          const colors = palette === 'oxblood' ? [MUSTARD, STEEL, PAPER] : [OXBLOOD, STEEL, MUSTARD];
+          zigzag(g, inset + 5, y0, y1, bw, { colors, ground: INK, ink: INK, seed: 17 });
         },
         html:
+          `<canvas class="bracket" data-draw="bracket" data-w="${vh(34)}" data-h="${vh(2.2)}"></canvas>` +
           `<div class="kicker caps">${esc(kicker)}</div>` +
           rule(vh(30), 18, 5) +
-          `<canvas class="marquee" data-draw="marquee" data-w="${ms.w}" data-h="${ms.h}" data-size="${size}" data-text="${esc(word)}" data-ink="${pal.fg}" data-bulb="${pal.bg}"${type ? ' data-count="0"' : ''}></canvas>` +
+          `<canvas class="marquee" data-draw="marquee" data-w="${ms.w}" data-h="${ms.h}" data-cap="${capH}" data-text="${esc(word)}" data-ink="${pal.fg}" data-bulb="${pal.bg}"${type ? ' data-count="0"' : ''}></canvas>` +
           rule(vh(30), 18, 6) +
           `<div class="sub caps">${esc(sub)}</div>` +
           `<div class="mark"><canvas data-draw="frog" data-w="${vh(19)}" data-h="${vh(14)}"></canvas><div class="label caps">Proprietor</div></div>`,

@@ -14,7 +14,8 @@ import { DECK, bySlug } from '../core/deck.js';
 import { inkMaterial, makeCanvas, canvasTexture } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 import { cardGeometry } from './cards-geometry.js';
-import { drawBack, drawFront, drawDeckSide, FRONT } from './cards-art.js';
+import { drawBack, drawFront, drawDeckSide, FRONT, frogGlyph, hatchPoly, inkPath } from './cards-art.js';
+import { bakedTexture } from '../core/bake.js';
 
 export const meta = {
   name: 'cards',
@@ -32,14 +33,18 @@ export async function build(ctx) {
   g.name = 'cards';
 
   // ---- shared drawn surfaces ----
+  console.time('cards:fonts');
   try {
     await Promise.all([document.fonts.load('700 38px Jost'), document.fonts.load('600 17px Jost')]);
   } catch {}
+  console.timeEnd('cards:fonts');
+  console.time('cards:back');
 
-  const backCanvas = makeCanvas(1024, 1792);
-  drawBack(backCanvas.getContext('2d'), 1024, 1792, mulberry32(21));
-  const backTex = canvasTexture(backCanvas, { anisotropy: 16 });
+  // the back and the deck's cut edge are dense pen drawings: baked (src/core/bake.js), drawn live
+  // only when the drawing code changed and `node tools/bake.mjs` has not been run yet
+  const backTex = await bakedTexture('card-back', 1024, 1792, (g, w, h) => drawBack(g, w, h, mulberry32(21)), { anisotropy: 16, deps: [drawBack, frogGlyph, hatchPoly, inkPath] });
   const backMat = inkMaterial({ map: backTex, colorful: true, hatch: 0.1, lineWeight: 1 });
+  console.timeEnd('cards:back');
 
   const edgeMat = inkMaterial({ color: '#e1d8c2', hatch: 0.3, lineWeight: 0.6 });
   const stockMat = inkMaterial({ color: '#efe8d7', hatch: 0.2, lineWeight: 0.8 });
@@ -97,8 +102,8 @@ export async function build(ctx) {
   deck.name = 'deck';
   const blocks = [26, 11, 6]; // cards per block, bottom to top; plus one loose card
   const nTotal = blocks.reduce((a, b) => a + b, 0);
-  const sideCanvas = makeCanvas(1024, nTotal * 14);
-  drawDeckSide(sideCanvas.getContext('2d'), 1024, nTotal * 14, nTotal, mulberry32(31));
+  console.time('cards:deck');
+  const sideTexBase = await bakedTexture('deck-side', 1024, nTotal * 14, (g, w, h) => drawDeckSide(g, w, h, nTotal, mulberry32(31)), { anisotropy: 8, deps: [drawDeckSide, inkPath] });
   const perimeter = 2 * (W + H) - 8 * R + 2 * Math.PI * R;
   let y = 0, start = 0;
   const untidy = [
@@ -108,7 +113,8 @@ export async function build(ctx) {
   ];
   blocks.forEach((n, i) => {
     const h = n * T;
-    const tex = canvasTexture(sideCanvas, { anisotropy: 8 });
+    const tex = sideTexBase.clone();
+    tex.needsUpdate = true;
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.repeat.set(perimeter / 0.12, n / nTotal);
@@ -137,6 +143,7 @@ export async function build(ctx) {
   deck.position.set(...ctx.layout.deck.pos);
   deck.rotation.y = ctx.layout.deck.rotY;
   g.add(deck);
+  console.timeEnd('cards:deck');
 
   const drawn = new THREE.Group();
   drawn.name = 'drawn';

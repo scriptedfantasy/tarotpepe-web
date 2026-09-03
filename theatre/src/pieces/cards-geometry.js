@@ -11,7 +11,8 @@ import * as THREE from 'three';
 function makeBend({ w, h, curl = 0, curlX = 0, twist = 0, dogEar = null }) {
   return (x, y) => {
     const u = (2 * x) / w, v = (2 * y) / h; // -1..1
-    let z = curl * v * v + curlX * u * u + twist * u * v;
+    // centred on the mid-plane so a face-down card dips no further than a face-up one rises
+    let z = curl * (v * v - 0.5) + curlX * (u * u - 0.5) + twist * u * v;
     if (dogEar) {
       const cx = (dogEar.sx * w) / 2, cy = (dogEar.sy * h) / 2;
       const d = Math.hypot(x - cx, y - cy) / dogEar.radius;

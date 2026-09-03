@@ -146,10 +146,11 @@ void main() {
   float thr = uDepthThr * c.d + 0.0015;
   float ax = xp.d - c.d, bx = xm.d - c.d, ay = yp.d - c.d, by = ym.d - c.d;
   bool sil = (max(ax, bx) > thr && abs(ax + bx) > thr) || (max(ay, by) > thr && abs(ay + by) > thr);
-  bool crease = dot(c.n, xp.n) < uCreaseThr || dot(c.n, yp.n) < uCreaseThr;
+  float dotMin = min(dot(c.n, xp.n), dot(c.n, yp.n));
+  bool crease = dotMin < uCreaseThr;
   bool idE = abs(c.id - xp.id) > 0.5 || abs(c.id - yp.id) > 0.5 || abs(c.m - xp.m) > 0.002 || abs(c.m - yp.m) > 0.002;
   float seed = 0.0, type = 0.0;
-  if (crease) { seed = 1.0; type = 0.78; }
+  if (crease) { seed = 1.0; type = mix(0.72, 0.95, clamp((1.0 - dotMin) / 0.7, 0.0, 1.0)); }
   if (idE) { seed = 1.0; type = 0.95; }
   if (sil) { seed = 1.0; type = 1.0; }
   // tangent: perpendicular to the gradient of a scalar that jumps at every kind of edge
@@ -215,6 +216,8 @@ uniform int uMode;          // 0 all, 1 lines only, 2 tone only
 uniform mat4 uInvVP;
 uniform vec3 uInk, uPaper;
 uniform vec4 uLevels;       // darkness thresholds for tone levels 1..4
+uniform vec4 uTone;         // lit luminance that is fully dark, fully lit; max darkness from light; grazing amount
+uniform vec3 uCamPos;
 uniform vec2 uLetterbox;    // fraction of height covered by each bar (top, bottom)
 in vec2 vUv;
 layout(location = 0) out vec4 outColor;
@@ -262,22 +265,23 @@ void main() {
   float zc = texture(tDepth, vUv).x;
   bool bg = zc >= 0.99999;
 
-  // ── lines: dilate the seed map with a pressure-varying radius ──
+  // ── lines: a soft field from the seed map, thresholded by pen pressure → smooth strokes ──
   float line = 0.0;
   if (uMode != 2) {
     float pressure = 0.72 + 0.68 * vnoise(cssPx / 120.0 + uSeed * 3.3);
+    float acc = 0.0;
     for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++) {
       vec2 off = vec2(float(i), float(j));
-      float r = length(off);
-      if (r > 2.1) continue;
       vec2 q = vUv + off * uDpr / uRes;
       vec4 e = texture(tEdge, q);
-      if (e.r < 0.5) continue;
+      if (e.r < 0.05) continue;
       int pk = int(texture(tAlbedo, q).a * 255.0 + 0.5);
       float lw = 0.5 + float(pk & 7) * 0.25;
-      float w = uLineBase * pressure * e.g * lw;
-      line = max(line, e.r * (1.0 - smoothstep(w - 0.6, w + 0.6, r)));
+      acc += exp(-dot(off, off) / 2.88) * e.r * e.g * lw;
     }
+    float v = acc / 8.49;
+    float t = uLineBase / pressure;
+    line = smoothstep(t - 0.06, t + 0.06, v);
     // a pen that skips now and then
     float brk = vnoise(cssPx / 19.0 + uSeed * 5.1 + 40.0);
     line *= 1.0 - step(brk, uBreak) * 0.85;
@@ -288,16 +292,20 @@ void main() {
   if (uMode != 1 && !bg) {
     vec3 lit = texture(tLit, vUv).rgb;
     float L = lum(lit);
-    float d = 1.0 - clamp(L / uLref, 0.0, 1.0);
-    d *= hatchW * 2.0;
-    float level = step(uLevels.x, d) + step(uLevels.y, d) + step(uLevels.z, d) + step(uLevels.w, d);
-    // world position + normal → anchored stroke coordinates
+    // world position + normal → tone terms and anchored stroke coordinates
     vec4 wp4 = uInvVP * vec4(vUv * 2.0 - 1.0, zc * 2.0 - 1.0, 1.0);
     vec3 wp = wp4.xyz / wp4.w;
     vec3 n = octDecode(texture(tNorm, vUv).rg);
+    // darkness: where the light is not (quantised lit pass), plus surfaces turning away from us,
+    // plus what the material asks for (hatch > 0.5 is a dark thing even in the light)
+    float dl = (1.0 - smoothstep(uTone.x, uTone.y, L)) * uTone.z;
+    float facing = abs(dot(n, normalize(uCamPos - wp)));
+    float graz = pow(1.0 - facing, 2.0) * uTone.w;
+    float d = (dl + graz) * (hatchW * 2.0) + max(0.0, hatchW - 0.5) * 1.6;
+    float level = step(uLevels.x, d) + step(uLevels.y, d) + step(uLevels.z, d) + step(uLevels.w, d);
     vec4 misc = texture(tMisc, vUv);
-    float dl = misc.r + misc.g / 255.0;
-    float dObj = 0.25 * exp2(dl * 8.0);
+    float dlog = misc.r + misc.g / 255.0;
+    float dObj = 0.25 * exp2(dlog * 8.0);
     vec3 an = abs(n);
     bool up = an.y > max(an.x, an.z);
     vec2 wuv = up ? wp.xz : (an.x > an.z ? wp.zy : wp.xy);

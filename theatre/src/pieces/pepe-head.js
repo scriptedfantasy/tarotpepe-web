@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { bakedJSON } from '../core/bake.js';
 
 export const HEAD_H = 0.36; // metres, crown to jaw
 export const WIDEN = 1.22; // x-stretch of the whole face, drawing proportion
@@ -63,7 +64,7 @@ function flag(mesh) {
 // The mouth. A lens of lips that hugs the real skull: sample points on a muzzle ellipsoid, cast a
 // ray in along its normal to find the skin, bridge across the open grin, then puff the lips out
 // from that surface. Rows near the lens edge tuck under the skin so nothing floats.
-function buildMouth({ skull, face, lipsMat, inkMat }) {
+async function buildMouth({ skull, face, lipsMat, inkMat }) {
   const A = 0.19, B = 0.14, C = 0.182, cy = -0.05, cz = -0.002; // muzzle ellipsoid (face-local, pre-widen)
   const yc0 = -0.094, smile = 0.046, H = 0.046, alphaMax = THREE.MathUtils.degToRad(70);
   const base = (u, v) => {
@@ -90,27 +91,35 @@ function buildMouth({ skull, face, lipsMat, inkMat }) {
     return hits.length ? 0.12 - hits[0].distance : null;
   };
   const NU = 44, NV = 11;
-  const D = [];
-  for (let i = 0; i <= NU; i++) {
-    const u = -1 + (2 * i) / NU;
-    const col = [];
-    for (let j = 0; j <= NV; j++) {
-      const v = -1 + (2 * j) / NV;
-      const { P, N } = base(u, v);
-      col.push(surf(P, N));
-    }
-    const valid = col.map((d) => d != null && d > -0.03 && d < 0.04);
-    for (let j = 0; j <= NV; j++) {
-      if (valid[j]) continue;
-      let a = j - 1;
-      while (a >= 0 && !valid[a]) a--;
-      let b = j + 1;
-      while (b <= NV && !valid[b]) b++;
-      const da = a >= 0 ? col[a] : null, db = b <= NV ? col[b] : null;
-      col[j] = da != null && db != null ? da + ((db - da) * (j - a)) / (b - a) : (da ?? db ?? 0);
-    }
-    D.push(col);
-  }
+  // 540 raycasts against the skull: seconds in the judging browser, so the field is baked
+  const D = await bakedJSON(
+    'pepe-mouth-field',
+    () => {
+      const D = [];
+      for (let i = 0; i <= NU; i++) {
+        const u = -1 + (2 * i) / NU;
+        const col = [];
+        for (let j = 0; j <= NV; j++) {
+          const v = -1 + (2 * j) / NV;
+          const { P, N } = base(u, v);
+          col.push(surf(P, N));
+        }
+        const valid = col.map((d) => d != null && d > -0.03 && d < 0.04);
+        for (let j = 0; j <= NV; j++) {
+          if (valid[j]) continue;
+          let a = j - 1;
+          while (a >= 0 && !valid[a]) a--;
+          let b = j + 1;
+          while (b <= NV && !valid[b]) b++;
+          const da = a >= 0 ? col[a] : null, db = b <= NV ? col[b] : null;
+          col[j] = da != null && db != null ? da + ((db - da) * (j - a)) / (b - a) : (da ?? db ?? 0);
+        }
+        D.push(col);
+      }
+      return D;
+    },
+    { deps: [buildMouth, HEAD_H, WIDEN] },
+  );
   face.scale.copy(savedScale);
   face.updateMatrixWorld(true);
   const field = (u, v) => {
@@ -120,16 +129,16 @@ function buildMouth({ skull, face, lipsMat, inkMat }) {
     return D[i0][j0] * (1 - tu) * (1 - tv) + D[i0 + 1][j0] * tu * (1 - tv) + D[i0][j0 + 1] * (1 - tu) * tv + D[i0 + 1][j0 + 1] * tu * tv;
   };
 
-  const sheet = ({ vMin, vMax, puff, sink, lift, segsU = 64, segsV = 16, uMax = 1 }) => {
+  const sheet = ({ vMin, vMax, puff, sink, lift, segsU = 64, segsV = 16, uMax = 1, hook = 0 }) => {
     const pos = [], idx = [];
     for (let i = 0; i <= segsU; i++) {
       const u = (-1 + (2 * i) / segsU) * uMax;
       for (let j = 0; j <= segsV; j++) {
         const vv = -1 + (2 * j) / segsV;
-        const v = vMin + ((vv + 1) / 2) * (vMax - vMin);
+        const v = vMin + ((vv + 1) / 2) * (vMax - vMin) + hook * u * u * u * u;
         const { P, N } = base(u, v);
         const edge = Math.max(0, Math.abs(vv) - 0.7) / 0.3;
-        const off = field(u, v) + puff * (1 - vv * vv) * (0.35 + 0.65 * (1 - u * u)) - sink * edge * edge + lift;
+        const off = field(u, v) + puff * (1 - vv * vv) * (0.22 + 0.78 * (1 - u * u)) - sink * edge * edge + lift;
         pos.push(P.x + N.x * off, P.y + N.y * off, P.z + N.z * off);
       }
     }
@@ -152,7 +161,7 @@ function buildMouth({ skull, face, lipsMat, inkMat }) {
   lips.name = 'lips';
   mouth.add(lips);
   // the line between the lips sits a little above centre (the lower lip is the fuller one)
-  const line = new THREE.Mesh(sheet({ vMin: 0.12, vMax: 0.36, puff: 0.012, sink: 0, lift: 0.0025, segsV: 4, uMax: 0.985 }), inkMat);
+  const line = new THREE.Mesh(sheet({ vMin: 0.10, vMax: 0.34, puff: 0.012, sink: 0, lift: 0.0025, segsV: 4, uMax: 0.985, hook: 0.22 }), inkMat);
   line.name = 'mouthLine';
   mouth.add(line);
   return { mouth, lips, line };
@@ -271,7 +280,8 @@ export async function buildHead(ctx, mats) {
     parts.lids.push(lid);
   });
 
-  const m = buildMouth({ skull, face, lipsMat: lips, inkMat: ink });
+  const m = await buildMouth({ skull, face, lipsMat: lips, inkMat: ink });
+
   face.add(m.mouth);
   parts.mouth = m.mouth;
   parts.lips = m.lips;

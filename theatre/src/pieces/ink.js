@@ -33,13 +33,14 @@ export async function build(ctx) {
 
   // ── tunables (other pieces may nudge these through ctx.pieces.ink.params) ──
   const params = {
-    lineBase: 1.2, // css px, the pen's nominal half-width before pressure
+    lineBase: 0.2, // threshold on the blurred seed field: lower = heavier pen (0.14 ≈ 3px, 0.28 ≈ 1.5px)
     wobble: 0.9, // css px of hand drift
-    breakAmt: 0.045, // how often the pen skips (0 = never)
+    breakAmt: 0.03, // how often the pen skips (0 = never)
     overshoot: 1, // 0/1 line ends run past corners
     depthThr: 0.012, // silhouette sensitivity (relative to depth)
     creaseThr: 0.8, // cos of the fold angle that gets a line
-    lref: 0.5, // linear luminance that counts as "fully lit paper"
+    lref: 0.5, // (unused now; kept for other pieces that may read it)
+    tone: [0.15, 0.45, 0.55, 0.45], // lit luminance: fully dark, fully lit; max darkness from light; grazing amount
     levels: [0.3, 0.5, 0.68, 0.86], // darkness thresholds → tone levels 1..4
     paper: 1.0, // paper grain amount
     hatchBoil: 0.004, // tile-units of hatch shiver on twos
@@ -47,9 +48,9 @@ export async function build(ctx) {
   };
 
   // ── textures drawn once ──
-  const wallTiles = makeWallTiles();
-  const floorTiles = makeFloorTiles();
-  const paperGrain = makePaperGrain(512);
+  const t0 = performance.now();
+  const [wallTiles, floorTiles, paperGrain] = await Promise.all([makeWallTiles(), makeFloorTiles(), makePaperGrain(512)]);
+  ctx.log(`ink tiles drawn in ${(performance.now() - t0).toFixed(0)}ms`);
   const white1x1 = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, THREE.RGBAFormat);
   white1x1.needsUpdate = true;
 
@@ -208,6 +209,8 @@ export async function build(ctx) {
       uInk: { value: new THREE.Color(INK) },
       uPaper: { value: new THREE.Color(PAPER) },
       uLevels: { value: new THREE.Vector4(...params.levels) },
+      uTone: { value: new THREE.Vector4(...params.tone) },
+      uCamPos: { value: new THREE.Vector3() },
       uLetterbox: { value: new THREE.Vector2(0, 0) },
     },
     depthTest: false,
@@ -309,6 +312,8 @@ export async function build(ctx) {
     cu.uMode.value = mode;
     cu.uInvVP.value.multiplyMatrices(cam.matrixWorld, cam.projectionMatrixInverse);
     cu.uLevels.value.set(...params.levels);
+    cu.uTone.value.set(...params.tone);
+    cu.uCamPos.value.setFromMatrixPosition(cam.matrixWorld);
     if (params.letterbox) {
       const frameAspect = size.x / size.y;
       const bar = Math.max(0, (1 - frameAspect / params.letterbox) / 2);

@@ -1,0 +1,26 @@
+{
+  "card-back-5c1e1df6": {
+    "kind": "png",
+    "file": "card-back-5c1e1df6.png"
+  },
+  "deck-side-be080658": {
+    "kind": "png",
+    "file": "deck-side-be080658.png"
+  },
+  "pepe-mouth-field-813e2367": {
+    "kind": "json",
+    "file": "pepe-mouth-field-813e2367.json"
+  },
+  "ink-paper-75ab771e": {
+    "kind": "png",
+    "file": "ink-paper-75ab771e.png"
+  },
+  "ink-wall-1e0ddbb0": {
+    "kind": "png",
+    "file": "ink-wall-1e0ddbb0.png"
+  },
+  "ink-floor-e255582f": {
+    "kind": "png",
+    "file": "ink-floor-e255582f.png"
+  }
+}

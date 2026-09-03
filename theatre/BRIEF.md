@@ -125,7 +125,12 @@ small `node` script with the Write tool and run it.
    and reuse tiles, avoid per-vertex JS loops over huge geometries, and never load more than a handful
    of card textures up front (the deck is 78 × 500 KB; load faces on demand). A slow build is a black
    frame for every other piece's critic, so this is a hard rule.
-5. Before returning: screenshot every judging state of your piece with no page errors, save the main one
+5. Dense deterministic drawings are BAKED: wrap them in `bakedTexture` / `bakedLevels` / `bakedJSON` from
+   `src/core/bake.js` (see cards.js, ink-tiles.js, pepe-head.js for the pattern) and run `node tools/bake.mjs`
+   after changing the drawing code; the file name carries a hash of the drawing source, so a stale bake
+   simply falls back to live drawing (slow) until you re-bake. Check the whole page with
+   `node tools/check-views.mjs` (every judging state of every piece, errors and build times).
+6. Before returning: screenshot every judging state of your piece with no page errors, save the main one
    as `public/progress/shots/<piece>-r<round>.png`, and log a builder event with that filename.
 
 ## Rules for critics

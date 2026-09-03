@@ -45,35 +45,35 @@ export function buildHand(side, skin) {
   const h = new THREE.Group();
   h.name = side < 0 ? 'handL' : 'handR';
   const palm = flag(new THREE.Mesh(new THREE.SphereGeometry(1, 24, 14), skin));
-  palm.scale.set(0.043, 0.012, 0.055);
-  palm.position.set(0, 0, 0.048);
+  palm.scale.set(0.048, 0.011, 0.062);
+  palm.position.set(0, 0, 0.066);
   h.add(palm);
   const wrist = flag(new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), skin));
-  wrist.scale.set(0.03, 0.013, 0.03);
-  wrist.position.set(0, 0, 0.012);
+  wrist.scale.set(0.032, 0.012, 0.045);
+  wrist.position.set(0, 0, 0.02);
   h.add(wrist);
-  // four long frog fingers, fanned, curling up a little; the thumb out to the side
+  // four long thin frog fingers, fanned wide, curling up a little; the thumb out to the side
   const fingers = [
-    { x: -0.031, len: 0.060, ang: -0.62, up: 0.22 },
-    { x: -0.011, len: 0.074, ang: -0.22, up: 0.18 },
-    { x: 0.010, len: 0.076, ang: 0.14, up: 0.18 },
-    { x: 0.029, len: 0.064, ang: 0.50, up: 0.22 },
+    { x: -0.036, len: 0.072, ang: -0.70, up: 0.20 },
+    { x: -0.013, len: 0.090, ang: -0.26, up: 0.16 },
+    { x: 0.012, len: 0.092, ang: 0.14, up: 0.16 },
+    { x: 0.034, len: 0.078, ang: 0.55, up: 0.20 },
   ];
   for (const f of fingers) {
-    const base = new THREE.Vector3(f.x * (side < 0 ? 1 : -1), 0.001, 0.086);
+    const base = new THREE.Vector3(f.x * (side < 0 ? 1 : -1), 0.001, 0.112);
     const dir = new THREE.Vector3(Math.sin(f.ang) * (side < 0 ? 1 : -1), f.up, Math.cos(f.ang)).normalize();
     const tip = base.clone().addScaledVector(dir, f.len);
-    const fm = capsuleBetween(base, tip, 0.0105, skin, { taper: 0.8 });
+    const fm = capsuleBetween(base, tip, 0.0088, skin, { taper: 0.75 });
     fm.name = 'finger';
     h.add(fm);
     // a knuckle bump at the base so the finger reads as jointed
-    const k = flag(new THREE.Mesh(new THREE.SphereGeometry(0.0125, 10, 8), skin));
-    k.position.copy(base).addScaledVector(dir, 0.004);
+    const k = flag(new THREE.Mesh(new THREE.SphereGeometry(0.0105, 10, 8), skin));
+    k.position.copy(base).addScaledVector(dir, 0.003);
     h.add(k);
   }
-  const tb = new THREE.Vector3(side * 0.034, 0.0, 0.040);
-  const tdir = new THREE.Vector3(side * 0.82, 0.30, 0.48).normalize();
-  const thumb = capsuleBetween(tb, tb.clone().addScaledVector(tdir, 0.052), 0.0115, skin, { taper: 0.85 });
+  const tb = new THREE.Vector3(side * 0.040, 0.0, 0.055);
+  const tdir = new THREE.Vector3(side * 0.85, 0.28, 0.45).normalize();
+  const thumb = capsuleBetween(tb, tb.clone().addScaledVector(tdir, 0.066), 0.0095, skin, { taper: 0.8 });
   thumb.name = 'thumb';
   h.add(thumb);
   return h;
@@ -154,7 +154,7 @@ export function buildBody(ctx, mats, { headY, shoulderY = 0.995 }) {
   legs.add(mound);
   for (const sx of [-1, 1]) {
     const knee = flag(new THREE.Mesh(new THREE.SphereGeometry(0.10, 24, 16), robe));
-    knee.position.set(sx * 0.35, seatY + 0.17, 0.12);
+    knee.position.set(sx * 0.35, seatY + 0.17, 0.08);
     legs.add(knee);
   }
   // shins: left shin in front, crossing to the right; right shin behind it
@@ -216,7 +216,7 @@ export function buildBody(ctx, mats, { headY, shoulderY = 0.995 }) {
   for (const side of [-1, 1]) {
     const S = new THREE.Vector3(side * 0.19, shoulderY - 0.05, 0.0);
     const E = new THREE.Vector3(side * 0.30, 0.82, 0.13);
-    const W = new THREE.Vector3(side * 0.235, 0.776, 0.41);
+    const W = new THREE.Vector3(side * 0.235, 0.776, 0.44);
     const armLen1 = S.distanceTo(E), armLen2 = E.distanceTo(W);
     const shoulder = new THREE.Group();
     shoulder.name = side < 0 ? 'shoulderL' : 'shoulderR';
