@@ -21,7 +21,7 @@ export const LAYOUT = Object.freeze({
   shots: {
     home: { pos: [0, 1.2, 2.55], look: [0, 0.98, -0.45], fov: 30 },
     wide: { pos: [0, 1.35, 3.7], look: [0, 1.15, -0.6], fov: 40 },
-    pepe: { pos: [0, 1.26, 0.95], look: [0, 1.22, -0.82], fov: 26 },
+    pepe: { pos: [0, 1.2, 1.5], look: [0, 1.04, -0.82], fov: 27 }, // head, shoulders, hands on the table
     table: { pos: [0, 1.45, 1.35], look: [0, 0.76, 0.05], fov: 34 },
     spread: { pos: [0, 2.05, 0.1401], look: [0, 0.7625, 0.14], fov: 30, up: [0, 0, -1] }, // planimetric overhead
     card0: { pos: [-0.36, 1.25, 0.1401], look: [-0.36, 0.7625, 0.14], fov: 30, up: [0, 0, -1] },
