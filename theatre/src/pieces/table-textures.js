@@ -540,7 +540,7 @@ function makeGlassCanvas(w, h, solid, band) {
   c.height = h;
   const g = c.getContext('2d');
   g.clearRect(0, 0, w, h);
-  g.fillStyle = '#f6f2ea';
+  g.fillStyle = '#f8f9f4';
   for (const [v0, v1] of solid) g.fillRect(0, Math.round((1 - v1) * h), w, Math.max(1, Math.round((v1 - v0) * h)));
   for (const u of [0.25, 0.75]) g.fillRect(Math.round((u - band) * w), 0, Math.max(2, Math.round(band * 2 * w)), h);
   return c;

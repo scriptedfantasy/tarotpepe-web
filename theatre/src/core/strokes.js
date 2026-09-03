@@ -5,8 +5,10 @@
 import * as THREE from 'three';
 import { mulberry32 } from './rng.js';
 
-export const INK = '#1c1a17';
-export const PAPER = '#f6f2ea';
+// Sampled from the folio scans in reference/ (see STYLE.md §1.1): the sheet is a cool off-white, the
+// ink a near-black that is never pure. One pen, one paper, for every piece.
+export const INK = '#0d0e0d';
+export const PAPER = '#f8f9f4';
 
 export function makeCanvas(w, h) {
   const c = document.createElement('canvas');

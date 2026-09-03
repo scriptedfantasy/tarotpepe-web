@@ -12,7 +12,7 @@ export const meta = {
   files: ['src/pieces/titles.js', 'src/pieces/titles-draw.js', 'src/pieces/titles-vignette.js'],
 };
 
-const INK = '#1c1a17';
+const INK = '#0d0e0d';
 const PAPER = '#f3e7c9';
 const MUSTARD = '#e0a526';
 const OXBLOOD = '#7a2e2a';

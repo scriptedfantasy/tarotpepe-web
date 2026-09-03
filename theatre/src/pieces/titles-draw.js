@@ -5,7 +5,7 @@
 import { inkLine, inkRect, hatch } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 
-export const INK = '#1c1a17';
+export const INK = '#0d0e0d';
 
 // Size a canvas to its CSS box at device resolution and return a 2D context scaled to CSS px.
 export function fit(canvas, w, h, dpr = Math.min(2, window.devicePixelRatio || 1)) {
@@ -326,8 +326,8 @@ export function frog(g, w, h, { seed = 21, green = '#5dbb63', color = INK, lips 
   }
   const whiteL = ellipsePts(...S(66, 47), 24 * sx, 17 * sy, 24);
   const whiteR = ellipsePts(...S(134, 47), 24 * sx, 17 * sy, 24);
-  stroke(g, whiteL, { rng, width: 0.01, wobble: 0, color: '#f6f2ea', fill: '#f6f2ea', close: true });
-  stroke(g, whiteR, { rng, width: 0.01, wobble: 0, color: '#f6f2ea', fill: '#f6f2ea', close: true });
+  stroke(g, whiteL, { rng, width: 0.01, wobble: 0, color: '#f8f9f4', fill: '#f8f9f4', close: true });
+  stroke(g, whiteR, { rng, width: 0.01, wobble: 0, color: '#f8f9f4', fill: '#f8f9f4', close: true });
   const pupL = ellipsePts(...S(72, 53), 6 * sx, 6.5 * sy, 14);
   const pupR = ellipsePts(...S(128, 53), 6 * sx, 6.5 * sy, 14);
   stroke(g, pupL, { rng, width: 0.8, wobble: 0.2, color, fill: color, close: true });

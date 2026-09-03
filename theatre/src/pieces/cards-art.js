@@ -13,7 +13,7 @@ import { mulberry32 } from '../core/rng.js';
 export const STOCK = PAPER; // the card is cut from the world's paper; the ink pass adds the grain
 export const BACK = { w: 640, h: 1120 }; // 4.92 px per mm of card
 // The plate is inset by M on every side; the printed rule sits `border` px inside the cut edge.
-export const FRONT = { M: 40, border: 20, borderW: 6 };
+export const FRONT = { M: 44, border: 26, borderW: 7 };
 
 // ---------- pen helpers (wobbly paths; the same hand as inkLine) ----------
 

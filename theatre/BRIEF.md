@@ -45,8 +45,9 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
 
 - **Ink on paper.** Everything is drawn: outlines with a hand's wobble, tone from hatching (vertical
   rain-strokes on walls, cross-hatch on dark masses, dash-strokes for floors), never a smooth gradient,
-  never a photographic specular highlight, never a soft blurry shadow. Ink is near-black `#1c1a17`,
-  paper is `#f6f2ea`.
+  never a photographic specular highlight, never a soft blurry shadow. Ink is near-black `#0d0e0d`,
+  paper is `#f8f9f4` — both sampled from the folio scans (STYLE.md §1.1). Take them from
+  `src/core/strokes.js` (INK, PAPER); never hard-code a different white or black.
 - **Selective colour.** Only Pepe (his green skin `#5dbb63`-ish, his red lips; his robe is paper-white
   with ink) and the faces of the tarot cards carry colour. One single mustard accent in the set is
   allowed (the smoother decides which object). Colour is a flat fill with hatching drawn over it.

@@ -70,7 +70,7 @@ function tidy(s) {
 // --- the scripted fallback -------------------------------------------------------------------
 // The one beat where the visitor asks something of their own. Without a live voice he still has to
 // answer it, and the only honest material is the three cards that are lying there.
-function followupAnswer(said) {
+function followupAnswer(said, spread = []) {
   const drawn = spread.filter(Boolean);
   const mid = drawn[1] ?? drawn[0];
   const last = drawn[2] ?? drawn[drawn.length - 1];
@@ -84,7 +84,7 @@ function followupAnswer(said) {
   return options[(said.length + drawn.length) % options.length];
 }
 
-function scripted({ beat, user, slug, position, question }) {
+function scripted({ beat, user, slug, position, question, spread = [] }) {
   const said = (user ?? question ?? '').trim();
   switch (beat) {
     case 'reading':
@@ -94,7 +94,7 @@ function scripted({ beat, user, slug, position, question }) {
     case 'followup':
       // He answers with the cards on the table, not with a dodge: the middle card is the one that
       // matters, and it is named. `spread` is filled in as the cards are read.
-      return followupAnswer(said);
+      return followupAnswer(said, spread);
     case 'fan':
       return SCRIPT.draw[0];
     default:
@@ -301,7 +301,7 @@ export async function build(ctx) {
       }
 
       // the script
-      for (const s of splitSentences(scripted(args))) {
+      for (const s of splitSentences(scripted({ ...args, spread }))) {
         yielded.push(s);
         yield s;
       }
@@ -361,11 +361,11 @@ function ensureBlock(ctx) {
     fontFamily: 'var(--futura)',
     fontSize: '22px',
     lineHeight: '1.35',
-    color: '#1c1a17',
-    background: '#f6f2ea',
+    color: '#0d0e0d',
+    background: '#f8f9f4',
     padding: '24px 32px',
     whiteSpace: 'pre-wrap',
-    border: '2px solid #1c1a17',
+    border: '2px solid #0d0e0d',
   });
   ctx.dom.ui.appendChild(el);
   return el;
