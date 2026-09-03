@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Tarot Pepe — build progress</title>
+<meta http-equiv="refresh" content="20" />
+<style>
+  :root { --bg:#f6f2ea; --ink:#1c1a17; --mute:#8a8074; --line:#d9d2c4; --yes:#2e6f6a; --no:#7a2e2a; --mustard:#e0a526; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family: 'Futura', 'Jost', 'Avenir Next', sans-serif; }
+  header { padding: 28px 36px 10px; display:flex; align-items:baseline; gap: 24px; flex-wrap: wrap; }
+  h1 { margin:0; font-size: 22px; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; }
+  header .meta { color: var(--mute); font-size: 13px; letter-spacing: .08em; }
+  header a { color: var(--ink); }
+  .wave { margin: 4px 36px 14px; font-size: 14px; letter-spacing: .06em; color: var(--mute); }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; padding: 0 36px 36px; }
+  .piece { border: 1.5px solid var(--ink); background: #fff; display:flex; flex-direction:column; }
+  .piece .hd { display:flex; justify-content:space-between; align-items:center; padding: 8px 12px; border-bottom: 1.5px solid var(--ink); }
+  .piece .name { font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: 13px; }
+  .piece .status { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; padding: 2px 8px; border: 1px solid var(--ink); }
+  .piece .status.done { background: var(--yes); color: #fff; border-color: var(--yes); }
+  .piece .status.working { background: var(--mustard); }
+  .piece .status.plateau { background: var(--no); color:#fff; border-color: var(--no); }
+  .piece img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display:block; border-bottom: 1px solid var(--line); background:#eee; }
+  .piece .bd { padding: 10px 12px 12px; font-size: 13px; line-height: 1.4; }
+  .piece .score { display:flex; gap: 10px; align-items: baseline; margin-bottom: 6px; }
+  .piece .score b { font-size: 22px; }
+  .piece .score .vs { color: var(--mute); font-size: 12px; }
+  .piece .gap { color: var(--ink); }
+  .piece .gap::before { content: 'Biggest gap: '; color: var(--mute); letter-spacing: .06em; text-transform: uppercase; font-size: 11px; }
+  .piece .spark { display:flex; gap: 3px; align-items: flex-end; height: 28px; margin-top: 8px; }
+  .piece .spark i { display:block; width: 10px; background: var(--ink); opacity: .75; }
+  .piece .spark i.ref { background: var(--no); opacity: .35; }
+  .piece .r { color: var(--mute); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-top: 4px; }
+  .log { padding: 0 36px 48px; font-size: 12px; color: var(--mute); }
+  .log div { padding: 3px 0; border-top: 1px solid var(--line); }
+  .log b { color: var(--ink); font-weight: 500; }
+  .empty { padding: 40px 36px; color: var(--mute); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tarot Pepe · in miniature</h1>
+  <span class="meta"><a href="/">open the scene</a> · <span id="stamp"></span> · refreshes every 20s</span>
+</header>
+<div class="wave" id="wave"></div>
+<div class="grid" id="grid"></div>
+<div class="log" id="log"></div>
+<script>
+const ORDER = ['ink','room','props','table','pepe','pepeAnim','cards','reveal','lighting','camera','titles','dialogue','sound','flow','whole'];
+async function load() {
+  let text = '';
+  try { text = await (await fetch('/progress/log.jsonl?_=' + Date.now())).text(); } catch {}
+  const events = text.split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  document.getElementById('stamp').textContent = new Date().toLocaleTimeString();
+  const byPiece = {};
+  const orch = [];
+  for (const e of events) {
+    if (e.role === 'orchestrator' || e.role === 'smoother') orch.push(e);
+    if (!e.piece) continue;
+    (byPiece[e.piece] ??= []).push(e);
+  }
+  const lastWave = orch.filter((e) => e.wave).pop();
+  document.getElementById('wave').textContent = lastWave ? `Wave ${lastWave.wave} — ${lastWave.note ?? ''}` : 'Waiting for the first wave…';
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  const names = [...ORDER.filter((n) => byPiece[n]), ...Object.keys(byPiece).filter((n) => !ORDER.includes(n))];
+  if (!names.length) grid.innerHTML = '<div class="empty">Nothing judged yet.</div>';
+  for (const name of names) {
+    const evs = byPiece[name];
+    const critics = evs.filter((e) => e.role === 'critic' && e.scoreOurs != null);
+    const last = evs[evs.length - 1];
+    const lastCritic = critics[critics.length - 1];
+    const status = last.status ?? (last.role === 'critic' ? 'judged' : 'working');
+    const shot = [...evs].reverse().find((e) => e.shot)?.shot;
+    const el = document.createElement('div');
+    el.className = 'piece';
+    el.innerHTML = `
+      <div class="hd"><span class="name">${name}</span><span class="status ${status}">${status}</span></div>
+      ${shot ? `<a href="/progress/shots/${shot}" target="_blank"><img src="/progress/shots/${shot}?_=${Date.now()}" alt="" /></a>` : '<div style="height:120px;background:#eee"></div>'}
+      <div class="bd">
+        ${lastCritic ? `<div class="score"><b>${lastCritic.scoreOurs}</b><span class="vs">ours vs ${lastCritic.scoreRef ?? '?'} reference · ${lastCritic.verdict === 'ours' ? 'ours won' : lastCritic.verdict === 'tie' ? 'tie' : 'reference won'}</span></div>` : ''}
+        ${lastCritic?.gap ? `<div class="gap">${lastCritic.gap}</div>` : ''}
+        ${last.note && last.role !== 'critic' ? `<div class="r">${last.role}: ${last.note}</div>` : ''}
+        <div class="spark">${critics.map((c) => `<i style="height:${Math.max(2, c.scoreOurs * 2.6)}px" title="round ${c.round}: ${c.scoreOurs}"></i>`).join('')}</div>
+        <div class="r">round ${last.round ?? '–'} · ${new Date(last.ts).toLocaleTimeString()}</div>
+      </div>`;
+    grid.appendChild(el);
+  }
+  const log = document.getElementById('log');
+  log.innerHTML = events.slice(-40).reverse().map((e) => `<div><b>${new Date(e.ts).toLocaleTimeString()}</b> · ${e.piece ?? ''} ${e.role ?? ''} r${e.round ?? ''} ${e.verdict ? '· ' + e.verdict : ''} ${e.scoreOurs != null ? '· ' + e.scoreOurs + '/' + (e.scoreRef ?? '?') : ''} ${e.gap ? '· ' + e.gap : ''} ${e.note ? '· ' + e.note : ''}</div>`).join('');
+}
+load();
+setInterval(load, 10000);
+</script>
+</body>
+</html>

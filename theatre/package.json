@@ -1,0 +1,22 @@
+{
+  "name": "tarot-pepe-theatre",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview",
+    "shot": "node tools/shot.mjs",
+    "compare": "node tools/compare.mjs",
+    "progress": "node tools/progress.mjs"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0",
+    "playwright": "^1.50.0",
+    "sharp": "^0.33.0"
+  }
+}

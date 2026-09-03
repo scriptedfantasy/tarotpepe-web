@@ -1,0 +1,8 @@
+node_modules
+dist
+.env.local
+reference/
+public/progress/shots/
+public/progress/log.jsonl
+*.log
+.DS_Store

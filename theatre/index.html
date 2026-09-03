@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tarot Pepe — a reading, in miniature</title>
+    <link rel="stylesheet" href="/fonts/jost.css" />
+    <style>
+      :root {
+        --futura: 'Futura', 'Futura PT', 'Jost', 'Avenir Next', 'Century Gothic', sans-serif;
+        --paper: #f3e7c9;
+        --ink: #2b1d17;
+        --mustard: #e0a526;
+        --oxblood: #7a2e2a;
+        --teal: #2e6f6a;
+      }
+      html, body { margin: 0; height: 100%; background: #0d0a08; overflow: hidden; }
+      body { font-family: var(--futura); color: var(--paper); -webkit-font-smoothing: antialiased; }
+      #stage { position: fixed; inset: 0; }
+      #stage canvas { display: block; width: 100%; height: 100%; }
+      /* DOM layers, drawn over the WebGL frame. Pieces own their own child nodes. */
+      #overlay { position: fixed; inset: 0; pointer-events: none; }
+      #overlay > * { position: absolute; inset: 0; }
+      #titles, #dialogue, #letterbox, #ui { pointer-events: none; }
+      #ui { pointer-events: auto; }
+      #ui:empty { pointer-events: none; }
+      #debug { position: fixed; left: 8px; bottom: 6px; font: 11px/1.4 ui-monospace, Menlo, monospace; color: #9b8e7a; opacity: 0.6; pointer-events: none; white-space: pre; }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="overlay">
+      <div id="letterbox"></div>
+      <div id="titles"></div>
+      <div id="dialogue"></div>
+      <div id="ui"></div>
+    </div>
+    <div id="debug"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
