@@ -5,7 +5,11 @@ const args = process.argv.slice(2);
 const outIdx = args.indexOf('--out');
 const out = args[outIdx + 1];
 const shot = new URL('./shot.mjs', import.meta.url).pathname;
+import { unlinkSync } from 'node:fs';
 for (let attempt = 1; attempt <= 6; attempt++) {
+  try {
+    unlinkSync(out);
+  } catch {}
   const r = spawnSync('node', [shot, ...args, '--wait', '4000'], { encoding: 'utf8' });
   process.stdout.write(r.stdout ?? '');
   process.stderr.write(r.stderr ?? '');

@@ -60,12 +60,11 @@ export async function build(ctx) {
       y += t;
     }
     const cs = O.candleStick();
-    cs.position.set(0.12, top, chest.position.z + 0.06);
+    cs.position.set(0.14, top, chest.position.z + 0.06);
     g.add(cs);
-    const cat = O.cat({ rng });
-    cat.position.set(0.33, top, chest.position.z + 0.0);
-    cat.rotation.y = -0.35;
-    g.add(cat);
+    const v = O.vase({ rng });
+    v.position.set(0.4, top, chest.position.z + 0.02);
+    g.add(v);
   }
   for (const side of [-1, 1]) {
     const bc = O.shelfUnit({ w: caseW, h: 1.45, d: 0.28, boards: [0.1, 0.44, 0.78, 1.12], plinth: 0.06 });
@@ -78,9 +77,11 @@ export async function build(ctx) {
       gl.position.set(0, 1.45, 0.02);
       bc.add(gl);
     } else {
-      const v = O.vase({ rng });
-      v.position.set(0.02, 1.45, 0.02);
-      bc.add(v);
+      // the cat, asleep on top of the bookcase
+      const cat = O.cat({ rng });
+      cat.position.set(0.0, 1.45, 0.03);
+      cat.rotation.y = -0.5;
+      bc.add(cat);
     }
   }
 
@@ -126,10 +127,15 @@ export async function build(ctx) {
   {
     const cx = (door.x0 + door.x1) / 2;
     const ty = ((door.top ?? 2.12) + 0.05 + door.y1) / 2;
-    const sign = O.signBoard({ w: door.x1 - door.x0 - 0.12, h: 0.2, depth: 0.015, lines: ['VOYANTE'], border: 'single', texW: 768 });
-    sign.position.set(cx, ty, WALL - 0.05);
+    // hangs in the transom opening, in front of its glazing bars, on two cords from the head lining
+    const sign = O.signBoard({ w: door.x1 - door.x0 - 0.14, h: 0.2, depth: 0.012, lines: ['VOYANTE'], border: 'single', texW: 768 });
+    sign.position.set(cx, ty, WALL - 0.008);
     g.add(sign);
-    for (const sx of [-1, 1]) g.add(O.rod([cx + sx * 0.3, ty + 0.1, WALL - 0.05], [cx + sx * 0.3, door.y1 - 0.02, WALL - 0.05], 0.003, M.cord, 5));
+    for (const sx of [-1, 1]) g.add(O.rod([cx + sx * 0.3, ty + 0.1, WALL - 0.008], [cx + sx * 0.3, door.y1 - 0.02, WALL - 0.02], 0.003, M.cord, 5));
+    // a doormat in front of the door, lettered
+    const mat = O.doorMat({ w: 0.7, d: 0.42 });
+    mat.position.set(cx, 0, WALL + 0.06 + 0.21);
+    g.add(mat);
 
     const unit = O.shelfUnit({ w: 0.48, h: 2.45, d: 0.24, boards: [0.08, 0.48, 0.88, 1.28, 1.68, 2.08], plinth: 0.05 });
     unit.position.set(W / 2 - 0.04 - 0.24, 0, FLUSH + 0.12);
@@ -211,7 +217,7 @@ export async function build(ctx) {
     pf.rotation.y = rot;
     g.add(pf);
     const shelf = O.wallShelf({ w: 0.6, d: 0.16 });
-    shelf.position.set(x, 1.42, -1.8);
+    shelf.position.set(x, 1.36, -2.25);
     shelf.rotation.y = rot;
     g.add(shelf);
     shelf.add(O.lineup({ x0: -0.28, x1: 0.28, y: 0.01, z: 0.08, rng, kinds: ['jar', 'jar', 'bottle'], maxH: 0.24, counter: { b: 12, j: 6 } }));

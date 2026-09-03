@@ -25,7 +25,7 @@ export const meta = {
   files: ['src/pieces/ink.js', 'src/pieces/ink-tiles.js', 'src/pieces/ink-shaders.js'],
 };
 
-const MODES = { default: 0, 'lines-only': 1, 'tone-only': 2, 'debug-albedo': 3, 'debug-normal': 4, 'debug-depth': 5, 'debug-lit': 6, 'debug-edge': 7 };
+const MODES = { default: 0, 'lines-only': 1, 'tone-only': 2, 'debug-albedo': 3, 'debug-normal': 4, 'debug-depth': 5, 'debug-lit': 6, 'debug-edge': 7, 'debug-tiles': 8 };
 
 export async function build(ctx) {
   const { renderer, scene, camera } = ctx;

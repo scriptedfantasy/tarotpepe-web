@@ -114,7 +114,7 @@ export function bottle({ r = 0.036, bodyH = 0.19, shoulder = 0.05, neckR = 0.013
   const tmp = lathe(profile, materials().paper, 18);
   const v0 = tmp.userData.vAt(2), v1 = tmp.userData.vAt(4);
   const half = shape === 'band' ? 0.5 : 0.17 + Math.min(0.08, r);
-  const tex = T.labelTexture({ name, sub, emblem, shape, uRange: [0.5 - half, 0.5 + half], vRange: [v0 + (v1 - v0) * 0.18, v0 + (v1 - v0) * 0.86], seed, w: 256, h: 512, cap });
+  const tex = T.labelTexture({ name, sub, emblem, shape, uRange: [0.5 - half, 0.5 + half], vRange: [v0 + (v1 - v0) * 0.18, v0 + (v1 - v0) * 0.86], seed, w: 256, h: 512, cap, dark });
   tmp.material = inkMaterial({ map: tex, hatch: dark ? 1 : 0.28, lineWeight: 1 });
   tmp.userData.height = top;
   return tmp;
@@ -478,7 +478,7 @@ export function curtainPanel({ w = 0.32, h = 1.7, pleats = 6, amp = 0.028 }) {
     pos.setX(i, x * (0.9 + 0.1 * (1 - (y + h / 2) / h)));
   }
   geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, inkMaterial({ map: T.curtainTexture(), hatch: 0.45, side: THREE.DoubleSide }));
+  const m = new THREE.Mesh(geo, inkMaterial({ map: T.curtainTexture(), hatch: 0.22, side: THREE.DoubleSide }));
   m.castShadow = true;
   m.receiveShadow = true;
   return m;
@@ -720,6 +720,17 @@ export function pinBoard({ w = 0.42, h = 0.52, rng }) {
     }
   }
   return g;
+}
+
+// A coir doormat with a lettered greeting and a striped border.
+export function doorMat({ w = 0.7, d = 0.42 }) {
+  const M = materials();
+  const tex = T.signTexture({ lines: ['BIENVENUE'], w: 512, h: Math.round((512 * d) / w), border: 'single', seed: 41 });
+  const top = inkMaterial({ map: tex, hatch: 0.6 });
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.014, d), [M.paperStack, M.paperStack, top, M.paperStack, M.paperStack, M.paperStack]);
+  m.position.y = 0.007;
+  m.receiveShadow = true;
+  return m;
 }
 
 // A small wall shelf on two brackets.

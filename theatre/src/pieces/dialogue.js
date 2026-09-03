@@ -88,6 +88,13 @@ function buildStyle() {
     }
     #dialogue .text .w { white-space: nowrap; }
     #dialogue .text .c.hid { visibility: hidden; }
+    #dialogue .folio {
+      position: absolute; top: 24px; font-size: 10px; font-weight: 500; letter-spacing: 0.34em; text-transform: uppercase;
+      opacity: 0.58; white-space: nowrap; line-height: 1;
+    }
+    #dialogue .folio.l { left: 3.2%; }
+    #dialogue .folio.r { right: 3.2%; padding-left: 0; }
+    #dialogue .fieldwrap { width: 100%; }
     #dialogue .field {
       pointer-events: auto; display: block; margin: 12px auto 0; width: min(64%, 660px);
       border: 0; outline: 0; border-radius: 0; box-shadow: none;
@@ -144,11 +151,14 @@ export async function build(ctx) {
   const cap = document.createElement('div');
   cap.className = 'caption';
   cap.hidden = true;
-  cap.innerHTML = `<div class="rule"></div><div class="who"><span class="dash"></span><span class="name"></span><span class="dash"></span></div><div class="text"></div>`;
+  cap.innerHTML = `<div class="rule"></div><div class="folio l"></div><div class="folio r"></div><div class="who"><span class="dash"></span><span class="name"></span><span class="dash"></span></div><div class="text"></div>`;
   root.appendChild(cap);
   const whoEl = cap.querySelector('.who');
   const nameEl = cap.querySelector('.name');
   const textEl = cap.querySelector('.text');
+  const folioL = cap.querySelector('.folio.l');
+  const folioR = cap.querySelector('.folio.r');
+  const FOLIO = { greeting: 'I · The greeting', question: 'II · The question', shuffle: 'III · The shuffle', draw: 'III · The draw', reading: 'IV · The reading', farewell: 'V · The farewell' };
 
   let typing = null; // { chars, start, revealed, hold, done }
   let field = null;
@@ -177,6 +187,7 @@ export async function build(ctx) {
   }
   function makeField() {
     const wrap = document.createElement('div');
+    wrap.className = 'fieldwrap';
     const input = document.createElement('input');
     input.className = 'field';
     input.type = 'text';
@@ -198,6 +209,13 @@ export async function build(ctx) {
     linesFor,
     reply: scriptReply,
     positions: POSITIONS,
+
+    // The marginalia printed at the two ends of the band: the place on the left, the beat on the
+    // right. Pass a beat name (greeting, question, shuffle, draw, reading, farewell) or free text.
+    folio(beat, left = 'The parlour · evening') {
+      folioL.textContent = left ?? '';
+      folioR.textContent = FOLIO[beat] ?? beat ?? '';
+    },
 
     say(text, { hold = 1.2, who = SCRIPT.speaker, ref = '' } = {}) {
       finish(); // never leave an earlier promise hanging
@@ -250,6 +268,7 @@ export async function build(ctx) {
       finish();
       const p = ctx.params;
       const i = +(p.get('line') ?? 0);
+      api.folio(name in FOLIO ? name : 'greeting');
       if (name === 'reading') {
         const slug = p.get('card') ?? 'the-moon';
         const pos = p.get('pos') ?? 1;

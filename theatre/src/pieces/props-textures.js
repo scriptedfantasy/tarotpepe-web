@@ -125,12 +125,31 @@ function arc_(cx, cy, r, a0, a1, n = 10) {
 // ---- bottle / jar labels ----------------------------------------------------------------------
 // A wrap-around texture for a lathe: the label sits at u in [u0,u1] (front = u 0.5) and
 // v in [v0,v1] (v = 0 at the bottom). `shape`: 'rect' | 'oval' | 'shield' | 'band'.
-export function labelTexture({ name, sub = '', emblem = 'star', shape = 'rect', uRange = [0.3, 0.7], vRange = [0.25, 0.65], seed = 1, w = 256, h = 256, cap = false, glass = PAPER }) {
+// dense cross-hatch: the pattern of dark glass and black cloth (the film's solid-ink masses)
+export function darkFill(g, x, y, w, h, rng, spacing = 5) {
+  hatch(g, x, y, w, h, { angle: Math.PI / 4, spacing, width: 2, wobble: 0.5, broken: 0, rng, alpha: 0.95, jitter: 0.8 });
+  hatch(g, x, y, w, h, { angle: -Math.PI / 4, spacing, width: 2, wobble: 0.5, broken: 0, rng, alpha: 0.9, jitter: 0.8 });
+  hatch(g, x, y, w, h, { angle: Math.PI / 2, spacing: spacing * 1.6, width: 1.4, wobble: 0.5, broken: 0.3, rng, alpha: 0.8, jitter: 0.8 });
+}
+export function darkTexture(seed = 27) {
+  return drawTexture(
+    128,
+    128,
+    (g, W, H, rng) => {
+      paper(g, W, H, PAPER, { grain: 0, seed });
+      darkFill(g, -4, -4, W + 8, H + 8, rng, 5);
+    },
+    { repeat: [3, 3], seed },
+  );
+}
+
+export function labelTexture({ name, sub = '', emblem = 'star', shape = 'rect', uRange = [0.3, 0.7], vRange = [0.25, 0.65], seed = 1, w = 256, h = 256, cap = false, glass = PAPER, dark = false }) {
   return drawTexture(
     w,
     h,
     (g, W, H, rng) => {
       paper(g, W, H, glass, { grain: 0.02, seed });
+      if (dark) darkFill(g, 0, 0, W, H, rng, 6);
       const x0 = uRange[0] * W, x1 = uRange[1] * W;
       const y0 = (1 - vRange[1]) * H, y1 = (1 - vRange[0]) * H;
       const lw = x1 - x0, lh = y1 - y0;
@@ -726,11 +745,11 @@ export function fringeTexture(seed = 17) {
     (g, W, H, rng) => {
       g.clearRect(0, 0, W, H);
       g.fillStyle = PAPER;
-      g.fillRect(0, 0, W, 8);
-      inkLine(g, 0, 4, W, 4, { width: 2, wobble: 0.4, rng });
-      for (let x = 3; x < W; x += 7) inkLine(g, x, 8, x + (rng() - 0.5) * 4, H - 4 - rng() * 10, { width: 1.6, wobble: 1, rng });
+      g.fillRect(0, 0, W, 10);
+      inkLine(g, 0, 5, W, 5, { width: 3, wobble: 0.4, rng });
+      for (let x = 4; x < W; x += 11) inkLine(g, x, 10, x + (rng() - 0.5) * 6, H - 4 - rng() * 12, { width: 3.2, wobble: 1.2, rng });
     },
-    { repeat: [6, 1], seed },
+    { repeat: [4, 1], seed },
   );
 }
 export function shadeTexture(seed = 18) {
@@ -739,10 +758,10 @@ export function shadeTexture(seed = 18) {
     256,
     (g, W, H, rng) => {
       paper(g, W, H, '#faf7f0', { grain: 0.02, seed });
-      // pleats
-      hatch(g, 0, 0, W, H, { angle: Math.PI / 2, spacing: 16, width: 1.2, wobble: 0.5, broken: 0, rng, alpha: 0.7, jitter: 0.6 });
-      inkLine(g, 0, 10, W, 10, { width: 1.6, wobble: 0.6, rng });
-      inkLine(g, 0, H - 10, W, H - 10, { width: 1.6, wobble: 0.6, rng });
+      // pleats: bold vertical lines, the way the film draws a lampshade
+      hatch(g, 0, 0, W, H, { angle: Math.PI / 2, spacing: 26, width: 2.6, wobble: 0.8, broken: 0, rng, alpha: 1, jitter: 1.5 });
+      inkLine(g, 0, 8, W, 8, { width: 3, wobble: 0.6, rng });
+      inkLine(g, 0, H - 8, W, H - 8, { width: 3, wobble: 0.6, rng });
     },
     { repeat: [3, 1], seed },
   );

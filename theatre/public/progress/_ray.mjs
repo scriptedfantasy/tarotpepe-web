@@ -15,6 +15,11 @@ const out = await page.evaluate((pts) => {
   const ctx = window.__theatre;
   const THREE = ctx.THREE;
   const ray = new THREE.Raycaster();
+  // see back faces too: a plane facing away from the camera still writes depth in the ink pass
+  ctx.scene.traverse((o) => {
+    const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+    for (const m of ms) m.side = THREE.DoubleSide;
+  });
   const res = [];
   for (const [x, y] of pts) {
     const ndc = new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);

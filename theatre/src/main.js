@@ -97,9 +97,11 @@ const ctx = {
 for (const mod of PIECES) {
   const name = mod.meta.name;
   if (only && !only.includes(name)) continue;
+  const t0 = performance.now();
   try {
     ctx.pieces[name] = (await mod.build(ctx)) ?? {};
     ctx.pieces[name].meta = mod.meta;
+    console.log(`[theatre] built ${name} in ${(performance.now() - t0).toFixed(0)}ms`);
   } catch (e) {
     console.error(`[piece:${name}] build failed`, e);
     ctx.pieces[name] = { failed: e, meta: mod.meta };

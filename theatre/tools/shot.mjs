@@ -46,16 +46,31 @@ const browser = await chromium.launch({
 });
 const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
 const errors = [];
+const builds = [];
 page.on('pageerror', (e) => errors.push(String(e && e.stack ? e.stack : e)));
 page.on('console', (m) => {
   if (m.type() === 'error') errors.push(m.text());
+  const b = /\[theatre\] built (\w+) in (\d+)ms/.exec(m.text());
+  if (b) builds.push([b[1], +b[2]]);
 });
+const t0 = Date.now();
 await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+// Wait for the app's ready flag (set after the first frames render). Builds can be slow in software
+// WebGL; poll manually so a Vite reload mid-load does not abort the wait.
+const readyTimeout = +(args['ready-timeout'] ?? 150000);
+let ready = false;
+while (Date.now() - t0 < readyTimeout) {
+  try {
+    ready = await page.evaluate(() => window.__theatreReady === true);
+  } catch {
+    ready = false;
+  }
+  if (ready) break;
+  await page.waitForTimeout(250);
+}
+const readyMs = Date.now() - t0;
+if (!ready) errors.push(`page never became ready within ${readyTimeout}ms (window.__theatreReady stayed false) — a piece build is hanging or throwing`);
 await page.waitForTimeout(wait);
-// Let the app tell us when it is ready, if it exposes a flag.
-try {
-  await page.waitForFunction(() => window.__theatreReady !== false, { timeout: 20000 });
-} catch {}
 
 if (frames <= 1) {
   await page.screenshot({ path: out });
@@ -75,6 +90,10 @@ if (frames <= 1) {
     .toFile(out);
 }
 await browser.close();
+
+const slow = builds.filter(([, ms]) => ms > 1500);
+console.log(`ready in ${(readyMs / 1000).toFixed(1)}s; builds: ${builds.map(([n, ms]) => n + ' ' + ms + 'ms').join(', ')}`);
+if (slow.length) console.log('SLOW BUILDS (> 1500ms each; the budget in BRIEF.md): ' + slow.map(([n, ms]) => n + ' ' + ms + 'ms').join(', '));
 
 if (errors.length && args['allow-errors'] !== 'true') {
   console.error('PAGE ERRORS:\n' + errors.map((e) => ' - ' + e).join('\n'));

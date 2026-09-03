@@ -118,7 +118,13 @@ small `node` script with the Write tool and run it.
    a surface texture is the PATTERN of what a thing is made of (wallpaper motif, floorboards, tiles, a
    label); the ink pass adds TONE (hatching where the light is not) and OUTLINES. Do not bake shading
    into textures, and do not draw outlines into textures except for pattern lines.
-4. Keep it fast enough: the frame must render at 60fps on a laptop. No 4K textures on tiny objects.
+4. Keep it fast enough: the frame must render at 60fps on a laptop, and your piece must BUILD in under
+   1500 ms in the headless screenshot browser (software WebGL, software canvas). shot.mjs prints
+   `builds: <piece> <ms>` for every piece and flags SLOW BUILDS; main.js logs `[theatre] built <piece> in <ms>`.
+   Generate canvas textures at modest sizes (512–1024 px, a few hundred strokes, not thousands), cache
+   and reuse tiles, avoid per-vertex JS loops over huge geometries, and never load more than a handful
+   of card textures up front (the deck is 78 × 500 KB; load faces on demand). A slow build is a black
+   frame for every other piece's critic, so this is a hard rule.
 5. Before returning: screenshot every judging state of your piece with no page errors, save the main one
    as `public/progress/shots/<piece>-r<round>.png`, and log a builder event with that filename.
 

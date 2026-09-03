@@ -245,6 +245,14 @@ void main() {
     else if (uMode == 5) dbg = vec3(fract(linD(texture(tDepth, vUv).x) / 8.0));
     else if (uMode == 6) dbg = texture(tLit, vUv).rgb;
     else if (uMode == 7) { vec4 e = texture(tEdge, vUv); dbg = vec3(1.0 - e.r, 1.0 - e.r * e.g, 1.0 - e.r * (1.0 - e.b)); }
+    else if (uMode == 8 || uMode == 9) {
+      // the tiles at true scale: four levels left→right, wall set top, floor set bottom
+      vec2 tuv = cssPx / 512.0;
+      int lv = int(floor(cssPx.x / (uRes.x / uDpr / 4.0)));
+      vec4 h = (cssPx.y < uRes.y / uDpr * 0.5) ? texture(tWall, tuv) : texture(tFloor, tuv);
+      float cov = lv == 0 ? h.r : lv == 1 ? h.g : lv == 2 ? h.b : h.a;
+      dbg = mix(uPaper, uInk, smoothstep(0.3, 0.7, cov)) * paperGrain;
+    }
     outColor = vec4(dbg, 1.0);
     return;
   }
