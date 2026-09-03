@@ -108,11 +108,13 @@ void main() {
 `;
 
 // Edge seeds: silhouettes (depth), creases (normal), object boundaries (id / distance).
-// Output: r = seed (0/1), g = thickness multiplier by type, b = tangent angle / PI, a = 1
+// Output: r = seed (0/1), g = pen weight (type × the material's lineWeight; where two things meet,
+// the nearer one's — a cut-out with its own drawn outline asks for a light line and gets it on
+// every side), b = tangent angle / PI, a = 1
 export const EDGE_FRAG = /* glsl */ `
 precision highp float;
 precision highp int;
-uniform sampler2D tDepth, tNorm, tMisc;
+uniform sampler2D tDepth, tNorm, tMisc, tAlbedo;
 uniform vec2 uRes;
 uniform float uNear, uFar, uSeed, uDpr, uWobble;
 uniform float uDepthThr, uCreaseThr;
@@ -123,6 +125,10 @@ ${OCT}
 float linD(vec2 uv) {
   float z = texture(tDepth, uv).x * 2.0 - 1.0;
   return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear));
+}
+float lwAt(vec2 uv) {
+  int pk = int(texture(tAlbedo, uv).a * 255.0 + 0.5);
+  return float(pk & 7) * 0.25;
 }
 struct S { float d; vec3 n; float id; float m; };
 S tap(vec2 uv) {
@@ -153,6 +159,11 @@ void main() {
   if (crease) { seed = 1.0; type = mix(0.72, 0.95, clamp((1.0 - dotMin) / 0.7, 0.0, 1.0)); }
   if (idE) { seed = 1.0; type = 0.95; }
   if (sil) { seed = 1.0; type = 1.0; }
+  // the pen weight: the material's own, unless the line is the boundary with something nearer
+  float lw = lwAt(uv);
+  if (abs(c.id - xp.id) > 0.5 || abs(c.m - xp.m) > 0.002 || abs(ax) > thr) lw = min(lw, xp.d < c.d ? lwAt(uv + vec2(o.x, 0.0)) : lw);
+  if (abs(c.id - yp.id) > 0.5 || abs(c.m - yp.m) > 0.002 || abs(ay) > thr) lw = min(lw, yp.d < c.d ? lwAt(uv + vec2(0.0, o.y)) : lw);
+  if (lw <= 0.0) seed = 0.0;
   // tangent: perpendicular to the gradient of a scalar that jumps at every kind of edge
   float gx = feat(xp) - feat(xm);
   float gy = feat(yp) - feat(ym);
@@ -160,7 +171,7 @@ void main() {
   float th = atan(tg.y, tg.x);
   if (th < 0.0) th += 3.14159265;
   if (th >= 3.14159265) th -= 3.14159265;
-  outColor = vec4(seed, type, th / 3.14159265, 1.0);
+  outColor = vec4(seed, type * lw, th / 3.14159265, 1.0);
 }
 `;
 
@@ -253,7 +264,7 @@ void main() {
       vec2 tuv = cssPx / 512.0;
       int lv = int(floor(cssPx.x / (uRes.x / uDpr / 4.0)));
       vec4 h = (cssPx.y < uRes.y / uDpr * 0.5) ? texture(tWall, tuv) : texture(tFloor, tuv);
-      float cov = lv == 0 ? h.r : lv == 1 ? h.g : lv == 2 ? h.b : h.a;
+      float cov = lv == 0 ? h.r : lv == 1 ? h.g : lv == 2 ? h.b : 1.0;
       dbg = mix(uPaper, uInk, smoothstep(0.3, 0.7, cov)) * paperGrain;
     }
     outColor = vec4(dbg, 1.0);
@@ -265,29 +276,29 @@ void main() {
   float zc = texture(tDepth, vUv).x;
   bool bg = zc >= 0.99999;
 
-  // ── lines: a soft field from the seed map, thresholded by pen pressure → smooth strokes ──
-  float line = 0.0;
+  // ── lines: a soft field from the seed map, thresholded by pen pressure → one pen, one weight ──
+  float line = 0.0, halo = 0.0;
   if (uMode != 2) {
-    float pressure = 0.72 + 0.68 * vnoise(cssPx / 120.0 + uSeed * 3.3);
+    float pressure = 0.84 + 0.36 * vnoise(cssPx / 120.0 + uSeed * 3.3);
     float acc = 0.0;
     for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++) {
       vec2 off = vec2(float(i), float(j));
       vec2 q = vUv + off * uDpr / uRes;
       vec4 e = texture(tEdge, q);
       if (e.r < 0.05) continue;
-      int pk = int(texture(tAlbedo, q).a * 255.0 + 0.5);
-      float lw = 0.5 + float(pk & 7) * 0.25;
-      acc += exp(-dot(off, off) / 2.88) * e.r * e.g * lw;
+      acc += exp(-dot(off, off) / 2.88) * e.r * e.g;
     }
     float v = acc / 8.49;
     float t = uLineBase / pressure;
-    line = smoothstep(t - 0.06, t + 0.06, v);
+    line = smoothstep(t - 0.05, t + 0.05, v);
+    // a hair of bare paper either side of every contour: the tone strokes stop short of the line
+    halo = smoothstep(t * 0.12, t * 0.3, v);
     // a pen that skips now and then
     float brk = vnoise(cssPx / 19.0 + uSeed * 5.1 + 40.0);
     line *= 1.0 - step(brk, uBreak) * 0.85;
   }
 
-  // ── tone: the lit pass quantised into strokes ──
+  // ── tone: the lit pass quantised into four stroke levels, the fourth solid ink ──
   float hatchInk = 0.0;
   if (uMode != 1 && !bg) {
     vec3 lit = texture(tLit, vUv).rgb;
@@ -296,28 +307,35 @@ void main() {
     vec4 wp4 = uInvVP * vec4(vUv * 2.0 - 1.0, zc * 2.0 - 1.0, 1.0);
     vec3 wp = wp4.xyz / wp4.w;
     vec3 n = octDecode(texture(tNorm, vUv).rg);
-    // darkness: where the light is not (quantised lit pass), plus surfaces turning away from us,
-    // plus what the material asks for (hatch > 0.5 is a dark thing even in the light)
-    float dl = (1.0 - smoothstep(uTone.x, uTone.y, L)) * uTone.z;
+    // darkness = where the light is not (the lit pass, posterised), a little more where a form
+    // turns away from us, scaled by how readily the material takes tone (hatch 0.5 = plain paper,
+    // glass and pictures near 0); a material flagged near 1 is a dark thing: ink whatever the light
+    float shade = 1.0 - smoothstep(uTone.x, uTone.y, L);
     float facing = abs(dot(n, normalize(uCamPos - wp)));
     float graz = pow(1.0 - facing, 2.0) * uTone.w;
-    float d = (dl + graz) * (hatchW * 2.0) + max(0.0, hatchW - 0.5) * 1.6;
+    float soak = hatchW * 2.0;
+    float solid = smoothstep(0.82, 1.0, hatchW);
+    float d = (shade * uTone.z + graz) * soak + solid * 1.2;
     float level = step(uLevels.x, d) + step(uLevels.y, d) + step(uLevels.z, d) + step(uLevels.w, d);
-    vec4 misc = texture(tMisc, vUv);
-    float dlog = misc.r + misc.g / 255.0;
-    float dObj = 0.25 * exp2(dlog * 8.0);
-    vec3 an = abs(n);
-    bool up = an.y > max(an.x, an.z);
-    vec2 wuv = up ? wp.xz : (an.x > an.z ? wp.zy : wp.xy);
-    if (!up && an.x > an.z && n.x < 0.0) wuv.x = -wuv.x; // keep handedness so strokes lean the same way
-    if (!up && an.x <= an.z && n.z < 0.0) wuv.x = -wuv.x;
-    vec2 huv = wuv * (uHatchK / dObj);
-    huv += (vec2(hash21(vec2(uSeed, 1.0)), hash21(vec2(2.0, uSeed))) - 0.5) * uHatchBoil;
-    vec4 hw = texture(tWall, huv);
-    vec4 hf = texture(tFloor, huv);
-    vec4 h = up ? hf : hw;
-    float cov = level < 0.5 ? 0.0 : level < 1.5 ? h.r : level < 2.5 ? h.g : level < 3.5 ? h.b : h.a;
-    hatchInk = smoothstep(0.3, 0.7, cov);
+    if (level > 3.5) hatchInk = 1.0;
+    else if (level > 0.5) {
+      vec4 misc = texture(tMisc, vUv);
+      float dlog = misc.r + misc.g / 255.0;
+      float dObj = 0.25 * exp2(dlog * 8.0);
+      vec3 an = abs(n);
+      bool up = an.y > max(an.x, an.z);
+      vec2 wuv = up ? wp.xz : (an.x > an.z ? wp.zy : wp.xy);
+      if (!up && an.x > an.z && n.x < 0.0) wuv.x = -wuv.x; // keep handedness so strokes lean the same way
+      if (!up && an.x <= an.z && n.z < 0.0) wuv.x = -wuv.x;
+      // strokes are the same size on the paper whatever the distance, but the scale snaps to
+      // octaves so the pattern stays nailed to the surface while the camera moves
+      float k = exp2(floor(log2(uHatchK / dObj) + 0.5));
+      vec2 huv = wuv * k;
+      huv += (vec2(hash21(vec2(uSeed, 1.0)), hash21(vec2(2.0, uSeed))) - 0.5) * uHatchBoil;
+      vec4 h = up ? texture(tFloor, huv) : texture(tWall, huv);
+      float cov = level < 1.5 ? h.r : level < 2.5 ? h.g : h.b;
+      hatchInk = smoothstep(0.3, 0.7, cov) * (1.0 - halo);
+    }
   }
 
   // ── ink that lives in a texture (a wallpaper motif, a card back) ──

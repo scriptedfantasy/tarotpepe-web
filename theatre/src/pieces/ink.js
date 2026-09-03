@@ -40,10 +40,13 @@ export async function build(ctx) {
     depthThr: 0.012, // silhouette sensitivity (relative to depth)
     creaseThr: 0.8, // cos of the fold angle that gets a line
     lref: 0.5, // (unused now; kept for other pieces that may read it)
-    tone: [0.15, 0.45, 0.55, 0.45], // lit luminance: fully dark, fully lit; max darkness from light; grazing amount
-    levels: [0.3, 0.5, 0.68, 0.86], // darkness thresholds → tone levels 1..4
-    paper: 1.0, // paper grain amount
-    hatchBoil: 0.004, // tile-units of hatch shiver on twos
+    // lit luminance: fully dark, fully lit; max darkness from light; grazing amount. With the
+    // levels below a plain-paper material (hatch 0.5) is bare above L≈0.26, rain to 0.20, dense
+    // strokes to 0.15, cross-hatch to 0.085, solid ink below: most of a lit room stays paper.
+    tone: [0.05, 0.4, 1.0, 0.3],
+    levels: [0.36, 0.6, 0.8, 0.97], // darkness thresholds → tone levels 1..4 (4 = solid)
+    paper: 0.7, // paper grain amount (the grain itself is already a whisper)
+    hatchBoil: 0.003, // tile-units of hatch shiver on twos
     letterbox: null, // e.g. 1.85 → paper-white bars; null → none
   };
 
@@ -109,7 +112,8 @@ export async function build(ctx) {
     const ink = (m && m.userData && m.userData.ink) || {};
     const colorful = ink.colorful ? 1 : 0;
     const hatchIdx = Math.round(clamp(ink.hatch ?? 0.5, 0, 1) * 14);
-    const lineIdx = clamp(Math.round(((ink.lineWeight ?? 1) - 0.5) / 0.25), 0, 7);
+    // lineWeight in quarter steps 0..1.75 (0 = no line of its own; a cut-out with a drawn outline wants ~0.25)
+    const lineIdx = clamp(Math.round((ink.lineWeight ?? 1) * 4), 0, 7);
     u.uPacked.value = (colorful * 128 + hatchIdx * 8 + lineIdx) / 255;
     const map = m && m.map && m.map.isTexture ? m.map : null;
     u.uHasMap.value = map ? 1 : 0;
@@ -153,6 +157,7 @@ export async function build(ctx) {
       tDepth: { value: null },
       tNorm: { value: null },
       tMisc: { value: null },
+      tAlbedo: { value: null },
       uRes: { value: new THREE.Vector2() },
       uNear: { value: 0.03 },
       uFar: { value: 60 },
@@ -269,6 +274,7 @@ export async function build(ctx) {
     eu.tDepth.value = rt.gbuf.depthTexture;
     eu.tNorm.value = rt.gbuf.textures[1];
     eu.tMisc.value = rt.gbuf.textures[2];
+    eu.tAlbedo.value = rt.gbuf.textures[0];
     eu.uRes.value.copy(size);
     eu.uNear.value = cam.near;
     eu.uFar.value = cam.far;
