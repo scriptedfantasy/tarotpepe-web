@@ -19,7 +19,16 @@
 //
 // API (ctx.pieces.dialogue):
 //   say(text, {hold, who, keep}) → Promise     reveals a caption, resolves after it has been read
-//   ask(prompt, {respond}) → Promise<string>   says the prompt, shows the field, resolves on Return
+//   ask(prompt, {respond, signal, timeout, value, instant}) → Promise<string|null>
+//                                              says the prompt, shows the field (+ the mic toggle), resolves
+//                                              with the text on Return ('' on Escape); null when the signal
+//                                              aborts or `timeout` seconds pass; `instant` shows the prompt
+//                                              at once (judging stills); `value` pre-fills the field
+//   skip()                                     the visitor's key: the line typed out in full, then (again) cut
+//   asking                                     true while the field is up
+//   voice                                      {on, canListen, canSpeak}; setVoice(on) — when on, the visitor
+//                                              speaks (SpeechRecognition into the field) and Pepe is spoken
+//                                              (speechSynthesis) as well as typed
 //   reply(answer) → string                     the line that folds the answer back, verbatim
 //   intertitle(slug, position, {hold})         the card's held title placard
 //   read(slug, position) → Promise             intertitle, then the card's lines (speaker named once)
@@ -100,6 +109,69 @@ function drawRule(svg, w, seed, lw) {
   svg.innerHTML = `<path d="${d(stroke(4, H / 2, w - 4, H / 2, rng, { wobble: 1.1, overshoot: 1.5 }))}" fill="none" stroke="${INK}" stroke-width="${lw}" stroke-linecap="round"/>`;
 }
 
+// The mic: a small hand-drawn microphone, the same pen. Capsule, a cradle under it, a stem, a foot;
+// solid ink when the voice is on. Two short arcs beside it show while it is listening.
+function drawMic(svg, seed, lw) {
+  const rng = mulberry32(seed);
+  svg.setAttribute('viewBox', '0 0 24 24');
+  const j = () => (rng() - 0.5) * 0.35;
+  const cx = 12;
+  // the capsule: a stadium, its two half-circles drawn point by point with the pen's shake
+  const r = 3.1, yT = 5.2, yB = 9.6;
+  const capsule = [];
+  for (let i = 0; i <= 10; i++) {
+    const a = Math.PI + (i / 10) * Math.PI;
+    capsule.push([cx + Math.cos(a) * r + j(), yT + Math.sin(a) * r + j()]);
+  }
+  for (let i = 0; i <= 10; i++) {
+    const a = (i / 10) * Math.PI;
+    capsule.push([cx + Math.cos(a) * r + j(), yB + Math.sin(a) * r + j()]);
+  }
+  // the cradle under it, the stem, the foot
+  const cradle = [];
+  for (let i = 0; i <= 12; i++) {
+    const a = (0.03 + (0.94 * i) / 12) * Math.PI;
+    cradle.push([cx + Math.cos(a) * 5.3 + j(), yB + Math.sin(a) * 5.3 + j()]);
+  }
+  const stem = stroke(cx, yB + 5.4, cx, 19.8, rng, { wobble: 0.3, overshoot: 0.4 });
+  const foot = stroke(cx - 3.8, 20.2, cx + 3.8, 20.2, rng, { wobble: 0.3, overshoot: 0.5 });
+  // two short arcs either side: the ear, shown while it listens
+  const ear = (s) => {
+    const p = [];
+    for (let i = 0; i <= 8; i++) {
+      const a = (-0.36 + (0.72 * i) / 8) * Math.PI;
+      p.push([cx + s * 8.4 + s * Math.cos(a) * 2.4 + j(), 7.4 + Math.sin(a) * 2.4 + j()]);
+    }
+    return p;
+  };
+  const sw = (lw * 0.55).toFixed(2);
+  const pen = `fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"`;
+  svg.innerHTML =
+    `<path class="cap-fill" d="${d(capsule)}Z" stroke="currentColor" stroke-width="${sw}" stroke-linejoin="round"/>` +
+    `<path d="${d(cradle)}" ${pen}/>` +
+    `<path d="${d(stem)}" ${pen}/>` +
+    `<path d="${d(foot)}" ${pen}/>` +
+    `<path class="ear" d="${d(ear(1))}" ${pen}/>` +
+    `<path class="ear" d="${d(ear(-1))}" ${pen}/>`;
+}
+
+// Pepe's spoken voice: a calm English one, a little slow, a little low.
+let chosenVoice = null;
+function pickVoice() {
+  if (chosenVoice) return chosenVoice;
+  const voices = window.speechSynthesis?.getVoices?.() ?? [];
+  if (!voices.length) return null;
+  const en = voices.filter((v) => /^en/i.test(v.lang));
+  const prefer = ['Daniel', 'Google UK English Male', 'Microsoft George', 'Oliver', 'Arthur', 'Google US English', 'Alex', 'Samantha'];
+  chosenVoice =
+    prefer.map((name) => en.find((v) => v.name === name || v.name.startsWith(name))).find(Boolean) ??
+    en.find((v) => /GB/i.test(v.lang)) ??
+    en[0] ??
+    voices[0];
+  return chosenVoice;
+}
+window.speechSynthesis?.addEventListener?.('voiceschanged', () => (chosenVoice = null));
+
 function buildStyle() {
   const style = document.createElement('style');
   style.textContent = `
@@ -130,6 +202,17 @@ function buildStyle() {
       font: inherit; letter-spacing: inherit; text-transform: none; text-indent: 0;
       color: ${INK}; caret-color: ${INK}; text-align: center; padding: 0 0.4em 0.3em; margin: 0;
     }
+    #dialogue .cap .fieldbox.has-mic .field { padding-right: 2.1em; padding-left: 2.1em; }
+    #dialogue .cap .mic {
+      pointer-events: auto; position: absolute; right: -0.2em; bottom: 0.05em; width: 1.7em; height: 1.7em;
+      padding: 0; margin: 0; border: 0; background: transparent; cursor: pointer; appearance: none; outline: 0;
+      display: block; color: ${INK};
+    }
+    #dialogue .cap .mic > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    #dialogue .cap .mic .cap-fill { fill: none; }
+    #dialogue .cap .mic.on .cap-fill { fill: ${INK}; }
+    #dialogue .cap .mic .ear { visibility: hidden; }
+    #dialogue .cap .mic.on.listening .ear { visibility: visible; }
   `;
   return style;
 }
@@ -183,6 +266,117 @@ export async function build(ctx) {
   let named = false; // the speaker has been named in this beat
   let spoke = -Infinity; // clock time the last caption was cut; a long silence re-names the speaker
 
+  // ---- the voice: the visitor's (SpeechRecognition into the field) and Pepe's (speechSynthesis) ----
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  const canListen = !!Recognition;
+  const canSpeak = !!window.speechSynthesis && typeof window.SpeechSynthesisUtterance === 'function';
+  let voiceOn = false;
+  let recog = null; // the recognition session while a field is up and the voice is on
+  let utterance = null;
+  function hush() {
+    if (!canSpeak) return;
+    utterance = null;
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
+  }
+  // Speak a line; resolves when it has been said (or could not be), never later than its length allows.
+  function speak(text) {
+    if (!canSpeak || !voiceOn || ctx.shotMode) return Promise.resolve();
+    hush();
+    return new Promise((res) => {
+      let done = false;
+      const end = () => {
+        if (done) return;
+        done = true;
+        if (utterance === u) utterance = null;
+        res();
+      };
+      const u = new SpeechSynthesisUtterance(text);
+      const v = pickVoice();
+      if (v) u.voice = v;
+      u.rate = 0.9;
+      u.pitch = 0.85;
+      u.onend = end;
+      u.onerror = end;
+      utterance = u;
+      setTimeout(end, 1500 + (text.length / 9) * 1000); // a stuck synthesiser never holds the show
+      try {
+        window.speechSynthesis.speak(u);
+      } catch {
+        end();
+      }
+    });
+  }
+  function stopListening() {
+    if (!recog) return;
+    const r = recog;
+    recog = null;
+    try {
+      r.onend = null;
+      r.onresult = null;
+      r.onerror = null;
+      r.abort();
+    } catch {}
+    field?.mic?.classList.remove('listening');
+  }
+  // Listen into the field: interim words as they come, the final result submitted.
+  function listen(submit) {
+    if (!canListen || !voiceOn || !field || ctx.shotMode) return;
+    stopListening();
+    let r;
+    try {
+      r = new Recognition();
+    } catch {
+      return;
+    }
+    recog = r;
+    r.lang = navigator.language || 'en-GB';
+    r.interimResults = true;
+    r.continuous = false;
+    r.maxAlternatives = 1;
+    r.onresult = (ev) => {
+      let text = '', final = false;
+      for (let i = 0; i < ev.results.length; i++) {
+        text += ev.results[i][0].transcript;
+        if (ev.results[i].isFinal) final = true;
+      }
+      if (!field) return;
+      field.input.value = text.trim();
+      if (final && text.trim()) submit();
+    };
+    r.onend = () => {
+      if (recog !== r) return;
+      recog = null;
+      field?.mic?.classList.remove('listening');
+      // the browser stops after a silence: keep the ear open while the field is up
+      if (voiceOn && field) setTimeout(() => field && voiceOn && !recog && listen(submit), 250);
+    };
+    r.onerror = (ev) => {
+      if (recog !== r) return;
+      if (ev?.error === 'not-allowed' || ev?.error === 'service-not-allowed') {
+        recog = null;
+        setVoice(false);
+      }
+    };
+    try {
+      r.start();
+      field.mic?.classList.add('listening');
+    } catch {
+      recog = null;
+    }
+  }
+  function setVoice(on) {
+    voiceOn = !!on && (canListen || canSpeak);
+    field?.mic?.classList.toggle('on', voiceOn);
+    ctx.emit?.('dialogue:voice', { on: voiceOn });
+    if (!voiceOn) {
+      stopListening();
+      hush();
+      if (typing) typing.speaking = false;
+    } else if (field?.submit) listen(field.submit);
+  }
+
   const shotName = () => ctx.pieces.camera?.current ?? 'home';
   const penWidth = () => Math.max(1.7, Math.min(3.2, ctx.size.w / 720));
   // How tall the letterbox bar is right now (fraction of the frame), from either piece that draws one.
@@ -218,7 +412,12 @@ export async function build(ctx) {
     cap.hidden = true;
     cap.classList.remove('inter');
     cap.innerHTML = '';
-    field = null;
+    if (field) {
+      const f = field;
+      field = null;
+      stopListening();
+      f.dispose?.(); // an ask() still waiting resolves null
+    }
   }
   function show(text, who) {
     cut();
@@ -251,7 +450,7 @@ export async function build(ctx) {
       i.done?.();
     }
   }
-  function makeField() {
+  function makeField(value = '') {
     const box = document.createElement('div');
     box.className = 'fieldbox';
     const input = document.createElement('input');
@@ -261,12 +460,34 @@ export async function build(ctx) {
     input.spellcheck = false;
     input.maxLength = 240;
     input.setAttribute('aria-label', 'Your answer');
+    if (value) input.value = value;
     const svg = document.createElementNS(SVG, 'svg');
     svg.setAttribute('aria-hidden', 'true');
     box.appendChild(input);
     box.appendChild(svg);
+    let mic = null;
+    if (canListen || canSpeak) {
+      box.classList.add('has-mic');
+      mic = document.createElement('button');
+      mic.type = 'button';
+      mic.className = 'mic' + (voiceOn ? ' on' : '');
+      mic.setAttribute('aria-label', 'Speak instead of typing');
+      mic.title = 'Speak instead of typing';
+      const g = document.createElementNS(SVG, 'svg');
+      g.setAttribute('aria-hidden', 'true');
+      drawMic(g, seed + 11, penWidth());
+      mic.appendChild(g);
+      mic.addEventListener('pointerdown', (e) => e.stopPropagation());
+      mic.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setVoice(!voiceOn);
+        input.focus();
+      });
+      box.appendChild(mic);
+    }
     cap.appendChild(box);
-    field = { input, svg, box };
+    field = { input, svg, box, mic };
     ink();
     return input;
   }
@@ -317,8 +538,16 @@ export async function build(ctx) {
       ctx.pieces.pepeAnim?.say?.(text, seconds + 0.2);
       ctx.emit?.('dialogue:say', { text, who: name, seconds });
       return new Promise((res) => {
-        typing = { words, start: ctx.clock.t, hold, done: res, keep, chars: -1 };
+        typing = { words, start: ctx.clock.t, hold, done: res, keep, chars: -1, speaking: false };
         if (ctx.clock.frozen) reveal(words, Infinity);
+        // with the voice on the caption also waits for the line to be said
+        if (voiceOn && canSpeak) {
+          const t = typing;
+          t.speaking = true;
+          speak(text).then(() => {
+            if (typing === t) t.speaking = false;
+          });
+        }
       });
     },
 
@@ -341,25 +570,102 @@ export async function build(ctx) {
     },
 
     // Says the prompt and keeps it up with the field under it. Resolves with the visitor's
-    // text (trimmed) on Return. With respond:true it also says the reply before resolving.
-    async ask(prompt = SCRIPT.question[0], { respond = false, who = null, hold = 0.2 } = {}) {
-      await api.say(prompt, { hold, who, keep: true });
-      const input = makeField();
+    // text (trimmed) on Return, '' on Escape, null when `signal` aborts or `timeout` seconds
+    // pass with no answer. With respond:true it also says the reply before resolving. With the
+    // voice on the field also listens; a final recognition result submits.
+    async ask(prompt = SCRIPT.question[0], { respond = false, who = null, hold = 0.2, signal = null, timeout = 0, value = '', instant = false } = {}) {
+      if (signal?.aborted) return null;
+      const said = api.say(prompt, { hold, who, keep: true });
+      if (instant) finish();
+      // an abort while the prompt is still typing: finish it so the await returns
+      const onAbortSay = () => finish();
+      signal?.addEventListener('abort', onAbortSay, { once: true });
+      await said;
+      signal?.removeEventListener('abort', onAbortSay);
+      if (signal?.aborted || cap.hidden) {
+        // aborted, or cut from outside while the prompt was typing: no field, no answer
+        cut();
+        return null;
+      }
+      const input = makeField(value);
       if (!ctx.shotMode) input.focus();
       const answer = await new Promise((res) => {
-        input.addEventListener('keydown', (e) => {
-          e.stopPropagation();
-          if (e.key !== 'Enter') return;
-          e.preventDefault();
-          const v = input.value.trim().replace(/\s+/g, ' ');
+        let done = false;
+        let timer = null;
+        const settle = (v) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          window.removeEventListener('keydown', refocus, true);
+          signal?.removeEventListener('abort', onAbort);
           cut();
           res(v);
+        };
+        const submit = () => settle(input.value.trim().replace(/\s+/g, ' '));
+        const onAbort = () => settle(null);
+        // a click on the picture takes the focus; the next typed character brings it back
+        const refocus = (e) => {
+          if (!field || e.target === input || e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return;
+          input.focus();
+        };
+        input.addEventListener('keydown', (e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            settle('');
+          }
         });
+        window.addEventListener('keydown', refocus, true);
+        signal?.addEventListener('abort', onAbort, { once: true });
+        if (timeout > 0) timer = setTimeout(() => settle(null), timeout * 1000);
+        if (field) {
+          field.submit = submit;
+          field.dispose = () => settle(null); // cut from outside (clear, the next say): no answer
+          if (voiceOn) listen(submit);
+        }
       });
-      ctx.emit?.('dialogue:answer', { answer });
-      if (respond) await api.say(scriptReply(answer), { hold: 1.4, who: '' });
+      if (answer != null) ctx.emit?.('dialogue:answer', { answer });
+      if (respond && answer != null) await api.say(scriptReply(answer), { hold: 1.4, who: '' });
       return answer;
     },
+
+    // The visitor's key: a line still typing is shown whole and holds a moment; a line already
+    // whole (or a card's title placard) is cut.
+    skip() {
+      if (typing) {
+        const t = typing;
+        const last = t.words[t.words.length - 1];
+        const total = last ? last.at - 1 : 0;
+        const whole = t.chars >= total;
+        if (t.speaking) {
+          hush();
+          t.speaking = false;
+        }
+        if (!whole) {
+          reveal(t.words, Infinity);
+          t.chars = total;
+          t.start = ctx.clock.t - total / CPS;
+          t.hold = Math.min(t.hold, 0.7);
+        } else finish();
+        return true;
+      }
+      if (inter) {
+        finish();
+        return true;
+      }
+      return false;
+    },
+
+    get asking() {
+      return !!field;
+    },
+    get voice() {
+      return { on: voiceOn, canListen, canSpeak };
+    },
+    setVoice,
 
     // A card, read: the intertitle, then its lines, the speaker named on the first.
     async read(slug, position, { hold = 1.3 } = {}) {
@@ -369,6 +675,8 @@ export async function build(ctx) {
     },
 
     clear() {
+      hush();
+      if (typing) typing.speaking = false;
       finish();
       cut();
     },
@@ -416,7 +724,7 @@ export async function build(ctx) {
       }
       const last = typing.words[typing.words.length - 1];
       const typed = typing.start + (last ? last.at - 1 : 0) / CPS;
-      if (t >= typed + typing.hold) finish();
+      if (t >= typed + typing.hold && !typing.speaking) finish();
     },
   };
   ctx.on('resize', () => {

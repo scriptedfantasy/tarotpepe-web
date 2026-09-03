@@ -1,94 +1,255 @@
-// PIECE: pepe — Tarot Pepe himself, built to match public/pepe/pepe-meditation.webp: green skin
-// (face, hands, feet — the only coloured skin in the drawing), calm half-lidded eyes, red lips, a
-// plain white long-sleeved robe, cross-legged on a low bench upstage of the table, palms open on
-// the table, facing the visitor. The supplied head GLB is mounted and dressed in pepe-head.js;
-// the robe, limbs, hands, feet and bench are in pepe-body.js.
+// PIECE: pepe — Tarot Pepe himself, a PAPER CUT-OUT PUPPET made from the user's drawing
+// (public/pepe/pepe-meditation.webp): a flat figure standing on a small bench upstage of the
+// table, facing the visitor, hinged the way a paper-theatre puppet is. The layers are cut from
+// the drawing at print resolution by tools/pepe-cutout.mjs (run once; the PNGs and the manifest
+// public/pepe/cutout.json are committed):
 //
-// api: { group, head, torso, hands, parts, setState }
-//   parts = { head, face, skull, eyes:[l,r], pupils:[l,r], lids:[l,r], mouth, lips, handL, handR,
-//             arms:{L:{shoulder,elbow,wrist,hand},R:{...}}, torso, neck, legs, feet, bench }
+//   body (robe, legs, feet, sleeves with their cuff lines)     z 0
+//   handL / handR, hinged at the wrist, tucked UNDER the sleeve  z -0.5 mm
+//   head, from the chin line up, hinged at the neck              z +1 mm
+//     with its overlays as material groups of the same mesh (no seam lines from the ink pass):
+//     pupils (moved by uv offset), the eye ink over them, closed lids, three mouths (rest / o / flat)
+//
+// api: { group, root, head, headPivot, body, hands, parts, anchors, scale, setState,
+//        setMouth(name), setLids(closed), setGaze(dx, dy), lift(head, hands) }
+//   parts = { head, headPivot, headMesh, body, handL, handR, bench, lids:[L,R], pupils:[L,R],
+//             eyelines, mouths:{rest,o,flat}, eyes:[L,R] }     (lids/pupils/mouths: { mat, show() })
 import * as THREE from 'three';
-import { inkMaterial, INK, PAPER } from '../core/strokes.js';
-import { buildHead } from './pepe-head.js';
-import { buildBody } from './pepe-body.js';
+import { inkMaterial, PAPER } from '../core/strokes.js';
 
 export const meta = {
   name: 'pepe',
   judge: { shot: 'pepe', states: ['default'] },
-  files: ['src/pieces/pepe.js', 'src/pieces/pepe-head.js', 'src/pieces/pepe-body.js'],
+  files: ['src/pieces/pepe.js', 'tools/pepe-cutout.mjs', 'public/pepe/cutout.json'],
 };
 
-export const SKIN = '#5dbb63';
-export const LIPS = '#d24b3e';
+export const SKIN = '#69b964';
+export const LIPS = '#d37a6c';
+
+// the drawing's scale on the stage: one source pixel (474 across) is 1.8 mm → the figure is
+// 0.85 m across the hands, the head 0.27 m tall, the crossed legs on a bench behind the table
+const M_PER_SRC_PX = 0.0018;
+const Z_STEP = 0.0005;
+
+// geometry for a layer: one quad per occupied cell of the manifest's grid (tight to the alpha, so
+// the lit pass sees a silhouette not a card), or a single quad for the small overlays
+function layerGeometry(L, pivot, z, m, geo = null) {
+  const [bx, by, bw, bh] = L.box;
+  const quads = [];
+  if (L.quad || !L.cells) quads.push([bx, by, bx + bw, by + bh]);
+  else
+    for (let k = 0; k < L.cells.length; k += 2) {
+      const x0 = bx + L.cells[k] * L.cell, y0 = by + L.cells[k + 1] * L.cell;
+      quads.push([x0, y0, Math.min(x0 + L.cell, bx + bw), Math.min(y0 + L.cell, by + bh)]);
+    }
+  const g = geo ?? { pos: [], uv: [], nrm: [], idx: [], groups: [] };
+  const start = g.idx.length;
+  for (const [x0, y0, x1, y1] of quads) {
+    const base = g.pos.length / 3;
+    for (const [x, y] of [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]) {
+      g.pos.push((x - pivot[0]) * m, -(y - pivot[1]) * m, z);
+      g.uv.push((x - bx) / bw, 1 - (y - by) / bh);
+      g.nrm.push(0, 0, 1);
+    }
+    g.idx.push(base, base + 3, base + 2, base, base + 2, base + 1);
+  }
+  g.groups.push({ start, count: g.idx.length - start });
+  return g;
+}
+function toBuffer(g) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(g.pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(g.nrm, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(g.uv, 2));
+  geo.setIndex(g.idx);
+  g.groups.forEach((gr, i) => geo.addGroup(gr.start, gr.count, i));
+  geo.computeBoundingSphere();
+  return geo;
+}
 
 export async function build(ctx) {
   const { pos, headY } = ctx.layout.pepe;
-  const g = new THREE.Group();
-  g.name = 'pepe';
-  g.position.set(...pos);
+  const man = await (await fetch('/pepe/cutout.json')).json();
+  const m = M_PER_SRC_PX / man.K; // metres per manifest (hi-res) pixel
+  const A = man.anchors;
+  const L = man.layers;
+  // the figure hangs from the neck anchor; the head's centre sits at layout.pepe.headY
+  const neckY = headY - (A.neck[1] - A.headCentre[1]) * m;
+  const rowY = (y) => neckY - (y - A.neck[1]) * m; // world y (in the root) of an image row
+  const colX = (x) => (x - A.neck[0]) * m; // world x of an image column
+  const feetY = rowY(man.hiSize[1]);
 
-  const mats = {
-    skin: inkMaterial({ color: SKIN, colorful: true, hatch: 0.35 }),
-    lips: inkMaterial({ color: LIPS, colorful: true, hatch: 0.3 }),
-    ink: inkMaterial({ color: INK, colorful: true, hatch: 0, roughness: 1 }),
-    white: inkMaterial({ color: '#faf8f3', colorful: false, hatch: 0.1 }),
-    robe: inkMaterial({ color: PAPER, colorful: false, hatch: 0.64 }),
-    wood: inkMaterial({ color: PAPER, colorful: false, hatch: 0.6, lineWeight: 1.1 }),
-    cushion: inkMaterial({ color: PAPER, colorful: false, hatch: 0.4 }),
-    collar: inkMaterial({ color: PAPER, colorful: false, hatch: 0.12 }),
+  const root = new THREE.Group();
+  root.name = 'pepe';
+  root.position.set(...pos);
+
+  // ── materials: the drawing's own colour, alpha-cut, a light hand for the ink pass ──
+  const textures = [];
+  const cutMat = (layer, { hatch = 0.35, lineWeight = 0.4 } = {}) => {
+    const mat = inkMaterial({ color: '#ffffff', colorful: true, hatch, lineWeight, roughness: 1 });
+    mat.alphaTest = 0.5;
+    mat.name = layer;
+    const p = ctx.assets.texture(`/pepe/${L[layer].file}`).then((t) => {
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      mat.map = t;
+      mat.needsUpdate = true;
+      return t;
+    });
+    textures.push(p);
+    return mat;
   };
 
-  // body first (it does not depend on the head loading)
-  const body = buildBody(ctx, mats, { headY });
-  g.add(body.group);
+  // ── body: hangs from the neck, standing on the bench ──
+  const bodyMat = cutMat('body');
+  const body = new THREE.Mesh(toBuffer(layerGeometry(L.body, A.neck, 0, m)), bodyMat);
+  body.name = 'body';
+  body.position.set(0, neckY, 0);
+  body.castShadow = body.receiveShadow = true;
+  root.add(body);
 
-  // the head: a Group at headY that pepeAnim moves; the dressed skull hangs inside it
-  let head, headParts = null;
-  try {
-    headParts = await buildHead(ctx, mats);
-    head = headParts.head;
-  } catch (e) {
-    console.error('[pepe] head failed to load, using a placeholder', e);
-    head = new THREE.Group();
-    head.name = 'head';
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.18, 24, 20), mats.skin);
-    ball.scale.set(1.25, 1, 1);
-    ball.castShadow = true;
-    head.add(ball);
+  // ── hands: hinged at the wrist, behind the body so the seam hides under the cuff line ──
+  const hands = {};
+  for (const side of ['L', 'R']) {
+    const wrist = A['wrist' + side];
+    const grp = new THREE.Group();
+    grp.name = 'hand' + side;
+    grp.position.set(colX(wrist[0]), rowY(wrist[1]), -Z_STEP);
+    const mesh = new THREE.Mesh(toBuffer(layerGeometry(L['hand' + side], wrist, 0, m)), cutMat('hand' + side));
+    mesh.castShadow = mesh.receiveShadow = true;
+    grp.add(mesh);
+    grp.userData.rest = { x: grp.position.x, y: grp.position.y };
+    root.add(grp);
+    hands[side] = grp;
   }
-  head.position.y = headY;
-  g.add(head);
 
-  ctx.scene.add(g);
+  // ── head: a Group at headY (lifts), a pivot at the neck (turns), the mesh with its overlays ──
+  const head = new THREE.Group();
+  head.name = 'head';
+  head.position.set(0, headY, 2 * Z_STEP);
+  const headPivot = new THREE.Group();
+  headPivot.name = 'headPivot';
+  headPivot.position.set(0, neckY - headY, 0);
+  head.add(headPivot);
+  root.add(head);
 
-  const parts = {
-    head,
-    face: headParts?.face ?? null,
-    skull: headParts?.skull ?? null,
-    eyes: headParts?.eyes ?? [],
-    pupils: headParts?.pupils ?? [],
-    lids: headParts?.lids ?? [],
-    mouth: headParts?.mouth ?? null,
-    lips: headParts?.lips ?? null,
-    ...body.parts,
+  const overlayOrder = [
+    ['head', 0],
+    ['pupilL', 0.6 * Z_STEP],
+    ['pupilR', 0.6 * Z_STEP],
+    ['eyelines', 1.2 * Z_STEP],
+    ['lidL', 1.8 * Z_STEP],
+    ['lidR', 1.8 * Z_STEP],
+    ['mouthRest', 1.8 * Z_STEP],
+    ['mouthO', 1.8 * Z_STEP],
+    ['mouthFlat', 1.8 * Z_STEP],
+  ];
+  let hg = null;
+  const headMats = [];
+  for (const [name, z] of overlayOrder) {
+    hg = layerGeometry(L[name], A.neck, z, m, hg);
+    headMats.push(cutMat(name, name === 'head' ? {} : { hatch: 0.35, lineWeight: 0.4 }));
+  }
+  const headMesh = new THREE.Mesh(toBuffer(hg), headMats);
+  headMesh.name = 'headMesh';
+  headMesh.castShadow = headMesh.receiveShadow = true;
+  headPivot.add(headMesh);
+  const matOf = (name) => headMats[overlayOrder.findIndex(([n]) => n === name)];
+  const overlay = (name) => {
+    const mat = matOf(name);
+    return {
+      mat,
+      show(v = true) {
+        mat.visible = !!v;
+      },
+      get visible() {
+        return mat.visible;
+      },
+    };
   };
+  const lids = [overlay('lidL'), overlay('lidR')];
+  const mouths = { rest: overlay('mouthRest'), o: overlay('mouthO'), flat: overlay('mouthFlat') };
+  const eyelines = overlay('eyelines');
+  const pupils = ['L', 'R'].map((side) => {
+    const o = overlay('pupil' + side);
+    const [, , bw, bh] = L['pupil' + side].box;
+    // dx, dy in metres: the disc slides on its field by a uv offset (right / up = positive)
+    o.offset = (dx, dy) => {
+      if (!o.mat.map) return;
+      o.mat.map.offset.set(-dx / (bw * m), -dy / (bh * m));
+    };
+    return o;
+  });
+  for (const l of lids) l.show(false);
+  mouths.o.show(false);
+  mouths.flat.show(false);
 
+  // eye anchors (for a look-at or a caption), parented to the pivot so they ride the head
+  const eyes = ['L', 'R'].map((side) => {
+    const e = new THREE.Object3D();
+    e.name = 'eye' + side;
+    const c = A['eye' + side];
+    e.position.set(colX(c[0]), -(c[1] - A.neck[1]) * m, 3 * Z_STEP);
+    headPivot.add(e);
+    return e;
+  });
+  const mouthAnchor = new THREE.Object3D();
+  mouthAnchor.name = 'mouth';
+  mouthAnchor.position.set(colX(A.mouth[0]), -(A.mouth[1] - A.neck[1]) * m, 3 * Z_STEP);
+  headPivot.add(mouthAnchor);
+
+  // ── the bench: a plain paper-white block he sits on; the table hides it in the home shot ──
+  const benchW = 0.94, benchD = 0.36;
+  const bench = new THREE.Mesh(new THREE.BoxGeometry(benchW, feetY, benchD), inkMaterial({ color: PAPER, hatch: 0.55, lineWeight: 1 }));
+  bench.name = 'bench';
+  bench.position.set(0, feetY / 2, 0);
+  bench.castShadow = bench.receiveShadow = true;
+  root.add(bench);
+
+  ctx.scene.add(root);
+
+  const parts = { head, headPivot, headMesh, body, handL: hands.L, handR: hands.R, bench, lids, pupils, eyelines, mouths, eyes, mouth: mouthAnchor };
   const api = {
-    group: g,
+    group: root,
+    root,
     head,
-    torso: body.parts.torso,
-    hands: [body.parts.handL, body.parts.handR],
+    headPivot,
+    body,
+    hands: [hands.L, hands.R],
     parts,
-    mats,
-    setState(name, ctx2) {
-      // one judged state: the reading pose. Deterministic. The others are builder debug views.
-      head.rotation.set(0, 0, 0);
-      head.position.set(0, headY, 0);
+    anchors: A,
+    scale: m,
+    headY,
+    neckY,
+    feetY,
+    textures: Promise.all(textures),
+    setMouth(name = 'rest') {
+      for (const k in mouths) mouths[k].show(k === name);
+    },
+    setLids(closed = false) {
+      for (const l of lids) l.show(closed);
+    },
+    setGaze(dx = 0, dy = 0) {
+      for (const p of pupils) p.offset(dx, dy);
+    },
+    // the rest pose, deterministic; extra words are builder checks: raw (no overlays), lines, tone, albedo, edges
+    setState(name = 'default', ctx2) {
+      const words = String(name).split('-');
+      head.position.set(0, headY, 2 * Z_STEP);
+      headPivot.rotation.set(0, 0, 0);
+      for (const side of ['L', 'R']) {
+        const h = hands[side];
+        h.rotation.set(0, 0, 0);
+        h.position.set(h.userData.rest.x, h.userData.rest.y, -Z_STEP);
+      }
+      api.setMouth(words.includes('o') ? 'o' : words.includes('flat') ? 'flat' : 'rest');
+      api.setLids(words.includes('blink'));
+      api.setGaze(0, 0);
+      if (words.includes('raw')) {
+        api.setMouth('none');
+        eyelines.show(false);
+        for (const p of pupils) p.show(false);
+      }
       const pieces = ctx2?.pieces ?? ctx.pieces;
-      const words = name.split('-');
-      if (words.includes('close')) pieces.camera?.cut?.({ pos: [0, 1.2, 1.5], look: [0, 1.04, -0.82], fov: 27 }); // the head at a third of the frame
-      const dressing = [...parts.eyes, ...parts.lids, parts.mouth].filter(Boolean);
-      for (const o of dressing) o.visible = !words.includes('raw');
       const modes = { lines: 'lines-only', tone: 'tone-only', normals: 'debug-normal', edges: 'debug-edge', albedo: 'debug-albedo', lit: 'debug-lit' };
       for (const w of words) if (modes[w]) pieces.ink?.setMode?.(modes[w]);
     },
