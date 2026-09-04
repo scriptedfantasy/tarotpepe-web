@@ -7,17 +7,25 @@
 // big displacement and a hard stop, no blur (stop-motion has no blur). Tracks and pushes run in
 // ctx.clock.raw (the camera is not a puppet); the whip runs on the 12fps frame count.
 //
+// ROUND 5 — the shots are no longer written here as lenses. A shot is a position and a list of
+// things that must be IN THE PICTURE, and the lens is solved for the window the film is being shown
+// in: see camera-shots.js (what each frame must contain, and why) and camera-frame.js (the
+// arithmetic). Two things follow that this file has to do: the table is rebuilt on every resize,
+// and the camera goes back onto its current shot when it is, so a window dragged from 16:9 to a
+// phone re-frames instead of cropping.
+//
 // API: shots (the named shots; every layout name is kept, others added), current, cut(shot),
 //      move(shot, {kind: 'cut'|'push'|'track'|'whip', duration}), sequence([{shot, kind, duration, hold}]),
 //      stop(), setState(name).
 // A shot is {pos, look, fov, up?, shift?: [x, y]} — shift in fractions of the frame, +y = the frame
 // drops (shows more floor) while the camera keeps looking straight ahead.
 import * as THREE from 'three';
+import { buildShots } from './camera-shots.js';
 
 export const meta = {
   name: 'camera',
   judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'track', 'whip'] },
-  files: ['src/pieces/camera.js'],
+  files: ['src/pieces/camera.js', 'src/pieces/camera-shots.js', 'src/pieces/camera-frame.js'],
 };
 
 // Motor speeds of the rail: a lateral track, a push. Metres per second.
@@ -29,105 +37,18 @@ const WHIP_FRAMES = [0.34, 0.74, 1];
 export async function build(ctx) {
   const cam = ctx.camera;
   const L = ctx.layout;
-  const zb = -L.room.depth / 2; // back wall
-  const spreadY = L.spread.y;
-  const [sx0, , sz0] = L.spread.slots[1];
-  const winX = -1.5, doorX = 1.5; // the openings on the back wall (room.js: window x -1.95..-1.05, door 1.05..1.95)
-
-  // Square to the back wall: the look point is dead ahead at the camera's own height.
-  const ahead = (pos) => [pos[0], pos[1], zb];
-  const flat = (pos, fov, shift, extra = {}) => ({ pos, look: ahead(pos), fov, shift, ...extra });
-  // Straight down: the lens axis vertical, the frame's up towards Pepe (-z), so the cards read upright.
-  const down = (x, y, z, fov) => ({ pos: [x, y, z], look: [x, spreadY, z], fov, up: [0, 0, -1] });
-  // Down at an angle, on the table's own axis — the one kind of shot that is neither square to the
-  // wall nor square to the cloth, and it exists for one reason: a card standing on its edge. The
-  // reveal piece holds a turning card at 78° and riffles the deck in profile, and from directly
-  // overhead both of those are a hairline. `deg` is the lens's height above the cloth, `dist` its
-  // distance from the point it looks at, and the frame's up stays world-up so the row reads level.
-  const rake = (target, deg, dist, fov) => {
-    const a = (deg * Math.PI) / 180;
-    return { pos: [target[0], target[1] + dist * Math.sin(a), target[2] + dist * Math.cos(a)], look: [...target], fov };
+  const aspect = () => {
+    const w = ctx.size?.w || window.innerWidth || 1600, h = ctx.size?.h || window.innerHeight || 900;
+    return w / h;
   };
 
-  // Every name from the layout survives (other pieces cut to them); the values are ours.
-  //
-  // ROUND 4 — the rule the frames are cut to: an object is either wholly in the frame or wholly
-  // out of it; the TOP edge never bisects one. In a room this crowded that is a real constraint,
-  // and it is what decides the three frontal shots. The back wall carries its furniture between
-  // y = 1.0 and y = 2.59 (window and door heads at 2.45, the VOYANTE board 2.21–2.41, the pictures
-  // and the clock to 2.27, the TAROT board 2.41–2.59), then bare plaster to the cornice at 2.98
-  // and the ceiling at 3.10; the pendant hangs over the table's own centre from 3.10 down to 2.45.
-  // So a frontal shot may put its top edge in exactly two places: ABOVE the pendant's rose (3.10 at
-  // z = 0 — which is `wide` and `home`, the box closed), or in the bare plaster between 2.59 and
-  // 2.98 at the back wall with the pendant wholly above the frame (which is `pepe`). Anywhere
-  // between slices the door head, the shutters and the sign, which is what round 3 did.
-  //
-  // The arithmetic, since it is not obvious: closing the box over the pendant means the frame must
-  // hold 0.76 m (the cards) to 3.10 m (the rose) at almost the same depth, so it cannot be a close
-  // frame — the tightest lens that does it is a long one from the back of the room. That is why
-  // `home` is not a medium: there is no medium that closes this box. The close work is `pepe`
-  // (the plaster band) and the overheads.
-  const shots = {
-    ...L.shots,
-    // the parlour, and the visitor is in it: ceiling, cornice, the whole pendant dead centre, both
-    // side walls, the coat stand, the umbrella, the tiles and both rugs. The lens sits at a seated
-    // visitor's eye height so the floor reads; Pepe is small, the way the film keeps a figure small
-    // in a big frame. The rose stands 3.5% of the frame height below the top edge.
-    wide: flat([0, 1.45, 6.4], 31, [0, 0]),
-    // the same box a size closer and a head higher, so the cloth reads from above and the table
-    // cuts the bottom edge: the frame the conversation is played in. Still closed at the top — the
-    // pendant whole, the cornice whole, the cards 10% of the frame height above the bottom edge.
-    // 1.28× tighter than `wide`, which is as tight as the pendant allows (see above).
-    home: flat([0, 1.80, 6.4], 24.5, [0, 0]),
-    // Pepe: head, shoulders, the open hands on the cloth, and the whole of the wall he sits
-    // against — window, door, board, clock, pictures — with the top edge in the bare plaster at
-    // 2.70 and the pendant wholly out of frame. 1.82× tighter than `home`: a cut, not a nudge.
-    pepe: flat([0, 1.30, 2.9], 30, [0, 0]),
-    // the table: frontal, the lens dropped so the cloth is seen from above and Pepe's hands come in
-    // from the top. The one frame here whose top edge crosses the wall (it must: a frontal lens low
-    // enough to see the cloth cannot also clear the door head) — so the film does not use it; it is
-    // kept because other pieces are judged from it. The cards are read from `turn` instead.
-    table: flat([0, 1.86, 2.55], 28, [0, 0.64]),
-    // the spread: exactly 90° down, the three cards in a row across the middle of the cloth with an
-    // even hand's breadth of cloth above and below them. The planimetric plate of the row; the film
-    // turns the cards in `turn`, where a card on its edge is not a hairline.
-    spread: down(sx0, 2.12, sz0, 30),
-    card0: down(L.spread.slots[0][0], 1.32, L.spread.slots[0][2], 30),
-    card1: down(L.spread.slots[1][0], 1.32, L.spread.slots[1][2], 30),
-    card2: down(L.spread.slots[2][0], 1.32, L.spread.slots[2][2], 30),
-    // the deck: square on, close, the lens dropped onto the stack
-    deck: flat([L.deck.pos[0], 1.06, L.deck.pos[2] + 0.86], 24, [0, 0.5]),
-    // the riffle: the deck filling the frame while it is cut, parted and interleaved, from 58°
-    // above the cloth — the angle the reveal piece's own shuffle lens uses, squared onto the deck's
-    // axis so the halves read in profile. The shuffle is an event and not a rumour; round 3 played
-    // it in a wide of the parlour where the deck is nine millimetres of the picture behind a bottle.
-    riffle: rake([...L.deck.pos], 58, 0.6, 32),
-    // the turn: the same cloth from 46°, because a card standing on its edge — which is how the
-    // reveal piece turns one, held at 78° — is a hairline seen from straight down, and that is the
-    // money frame of the whole evening. The reveal piece asks for 40–55°; its drawn hand withdraws
-    // below 37°, so this band keeps the hand in the picture as well.
-    turn: rake([0, spreadY, sz0], 46, 1.15, 32),
-    // the fan, and the row the picked cards go to: 90° down, both wholly inside the frame with an
-    // even margin. The old frame was cropped at both ends at once — the fan's bottom row ran off
-    // the foot and the three slots were off the head — and this is the one frame in the evening
-    // that has to show everything at once. It holds the reveal piece's whole footprint (z −0.05 to
-    // 0.64, x ±0.45) and the deck beside it (z −0.18 to 0.06), which is what keeps the slot row at
-    // 0.40 of the height rather than a third: with the deck where the layout puts it, a top edge at
-    // z = −0.06 would cut the deck in half, and no edge in this film cuts an object in half. See
-    // the contract note: move the deck upstage and this frame tightens onto the fan alone.
-    fan: down(0, 2.32, 0.23, 33),
-    // the door: the doormat to the VOYANTE board, the door on the axis. The lens stands 8 cm inboard
-    // of the door's centre and is a little wider than it was: at 19° on the door's own axis the left
-    // edge fell at x = -0.39 in Pepe's plane and sliced him and his table down the middle, which is
-    // the one thing a frame must never do to a figure. At 20° from x = 1.42 the edge falls at -0.57:
-    // he sits whole, small, at the left, the table runs off the frame the way a foreground table
-    // should, and the door still stands within 1.5% of the middle of the picture. Any wider or any
-    // further back and the frame overruns the front edge of the stage-right wall.
-    door: flat([doorX - 0.08, 1.45, 6.0], 20, [0, 0.09]),
-    // the window: the same frame slid across to the window (the track runs between these two)
-    window: flat([winX + 0.08, 1.45, 6.0], 20, [0, 0.09]),
-    // from the threshold: the visitor's first look into the parlour, before the wide
-    threshold: flat([0, 1.55, 6.2], 22, [0, 0.05]),
+  // Every name from the layout survives (other pieces cut to them); the values are solved in
+  // camera-shots.js for the window we are in, and solved again when it changes shape.
+  const shots = buildShots(L, aspect());
+  const reframe = () => {
+    const next = buildShots(L, aspect());
+    for (const k of Object.keys(shots)) delete shots[k];
+    Object.assign(shots, next);
   };
 
   // ---- poses ----
@@ -161,9 +82,16 @@ export async function build(ctx) {
   function currentPose() {
     return { pos: cam.position.clone(), q: cam.quaternion.clone(), fov: cam.fov, shift: [...shift] };
   }
+  // A new window shape is a new set of frames. Rebuild them, and put the camera back on the one it
+  // is holding — unless it is mid-move, where the two poses it is blending were solved for the old
+  // window and the move finishes in the shape it started in.
   ctx.on?.('resize', () => {
-    applyShift(shift[0], shift[1]);
-    cam.updateProjectionMatrix();
+    reframe();
+    if (!move && api.current && shots[api.current]) applyPose(poseOf(shots[api.current]));
+    else {
+      applyShift(shift[0], shift[1]);
+      cam.updateProjectionMatrix();
+    }
   });
 
   // ---- moves ----

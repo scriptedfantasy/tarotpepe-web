@@ -56,42 +56,46 @@ const LANDING_S = 3.0; // the parlour, held, before anybody says anything
 // listening after the third sentence and drops the rest, so a long turn simply ends on time.
 const MAX_SENTENCES = 3;
 
-// Where the lettering stands, per shot: x is the centre, y the TOP of the block, w its width, all
-// fractions of the frame. Not one of these is a taste: each is the barest caption-sized block of
-// paper in a real frame of that beat, found with tools/_bare.mjs and then measured exactly
-// (tools/_bare-at.mjs) with the ink percentage under the block noted below. The props piece cleared
-// the plaster over his head for exactly this, so the mediums put the words up there, on the wall,
-// beside the speaker the way the film sets a name beside a figure — not down on the tablecloth,
-// where the same block of words sits on 18% ink and every hatch stroke fights the letters.
-const ANCHORS = {
-  // Round 4 raised the top edge of all three frontal frames, so the wall behind the lettering moved
-  // with them — and in `home` and `wide` the pendant now hangs INTO the frame, which sets a second
-  // limit these anchors did not have before: the block sits between the pendant's lowest bulb and
-  // Pepe's crown, and its `floor` is far enough above his head that a five-line block (his line
-  // plus the visitor's own, typed underneath) grows down into the wall rather than up into the lamp.
-  // The pendant's bulbs end at 0.266 of the frame in `home` and 0.218 in `wide`; his crown is at
-  // 0.637 and 0.520; in `pepe` the lamp is out of frame and the crown is at 0.465.
-  pepe: { x: 0.52, y: 0.28, w: 0.34, floor: 0.44 },
-  home: { x: 0.5, y: 0.29, w: 0.32, floor: 0.55 },
-  wide: { x: 0.5, y: 0.235, w: 0.25, floor: 0.5 },
-  // straight down at the table there is no wall, so the words lie on the cloth between the spread
-  // and the table's front edge: 2.7%, the barest block in that frame.
-  table: { x: 0.5, y: 0.81, w: 0.34 },
-  // straight down on the row: the cloth below the three cards is the bare half of the frame
-  spread: { x: 0.5, y: 0.76, w: 0.34 },
-  // the raked frame the cards are turned in: the same bare cloth, below the row and above the edge
-  turn: { x: 0.5, y: 0.72, w: 0.34 },
-  // the deck sits in the lower two thirds of the riffle frame; the cloth above it is empty
-  riffle: { x: 0.5, y: 0.045, w: 0.4, floor: 0.17 },
-  // the fan's frame now holds the slot row AND the fan with an even margin; the clear band is the
-  // cloth above the slot row, which the row's own top edge fixes at 0.155.
-  fan: { x: 0.5, y: 0.03, w: 0.4, floor: 0.27 },
-  // the insert: the card stands in the middle of the frame and the label stands beside it, on the
-  // bare cloth to its right — 0.0% (card 0 and 1), 1.2% (card 2, one seam of the cloth).
-  card0: { x: 0.78, y: 0.3, w: 0.3 },
-  card1: { x: 0.78, y: 0.3, w: 0.3 },
-  card2: { x: 0.78, y: 0.3, w: 0.3 },
+// WHERE THE LETTERING STANDS — round 5, and it is the user's decision, not a taste of ours:
+//
+//   "place the text box under pepe's table, rather than over its head … if the text box were always
+//    centered at the bottom, that may look more logical — its where movies have their captions too"
+//
+// So there is now ONE anchor and every shot has it: centred, at the foot of the picture, in the
+// frame's own bottom margin. This deliberately reverses rounds 3 and 4, which measured the barest
+// block of paper in each frame and put the words there — on the plaster over his head in the
+// mediums, on the cloth in the overheads. That was defensible while the caption was bare lettering
+// standing on the drawing; it stopped being defensible when the caption became a drawn placard
+// (BRIEF.md: the user's decision, not open to a critic), because an opaque card needs no bare paper
+// under it, and because a card that lands in a different place in every shot is a card that jumps
+// about the screen all evening. A film's caption does not move. Neither does this one.
+//
+// The contract in dialogue.js is that `y` is the TOP of the block and `floor` the lowest line its
+// bottom edge may reach; a block that would cross the floor is lifted until it does not. So a `y`
+// BELOW the floor pins the block by its bottom edge instead of its top — every caption, of one line
+// or of five, stands on the same line of the picture and grows upwards. That is the whole trick.
+//
+// The camera piece keeps a band of the frame clear under the lowest thing that matters in each shot
+// (camera-shots.js, `pad`) so the placard has somewhere to stand: the floorboards in front of the
+// table in `home` and `wide`, the table's near edge in `pepe`, the bare cloth beyond the fan.
+const CAPTION = {
+  x: 0.5,
+  y: 0.99, // below the floor: the block is hung by its BOTTOM edge, wherever its top ends up
+  floor: 0.945, // the line its bottom edge stands on — a 5.5% margin under it, as a film has
 };
+// Every shot the evening cuts to. They are all the same anchor; naming them is how the table says
+// so, and it keeps any shot from falling through to dialogue.js's own default.
+const SHOTS = ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'deck', 'card0', 'card1', 'card2', 'door', 'window', 'threshold'];
+
+// The measure of the block, as a fraction of the frame. The caption face is clamp(9px, 1vw, 20px),
+// so on a wide window the type scales with the picture and a third of the width is a comfortable
+// forty-odd characters — but below 900 px the clamp holds the type at 9 px while the window keeps
+// shrinking, and a third of a phone's width is four words a line. Measured in characters instead:
+// ~46 of them, plus the placard's own padding, capped so it never runs to the edges of the paper.
+function measure(w) {
+  const fs = Math.min(20, Math.max(9, w / 100));
+  return Math.min(0.86, Math.max(0.3, (34.5 * fs) / Math.max(1, w)));
+}
 
 // What the mind may report for a turn. Anything else is talk, which is the safe answer.
 const INTENTS = ['talk', 'draw', 'farewell'];
@@ -99,7 +103,16 @@ const INTENTS = ['talk', 'draw', 'farewell'];
 export async function build(ctx) {
   const P = ctx.pieces;
   const D = P.dialogue, R = P.reveal, C = P.camera, T = P.titles, M = P.mind, S = P.sound, K = P.cards;
-  if (D?.anchors) Object.assign(D.anchors, ANCHORS);
+  // the caption's place, for every shot, remade whenever the window changes shape (the measure is
+  // the only part of it that depends on the window)
+  function anchors() {
+    if (!D?.anchors) return;
+    const w = ctx.size?.w || window.innerWidth || 1600;
+    const a = { ...CAPTION, w: measure(w) };
+    for (const shot of SHOTS) D.anchors[shot] = { ...a };
+  }
+  anchors();
+  ctx.on?.('resize', anchors);
 
   let run = 0; // the visit's token: a restart bumps it and every wait in the old visit lets go
   let skips = 0; // skip gestures (a key, a click) so far; a skippable hold ends when it changes
