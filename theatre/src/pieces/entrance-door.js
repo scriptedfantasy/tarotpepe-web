@@ -63,6 +63,12 @@ const BOARD_PAD = 0.026;
 // how far the eye stands from the sheet, in leaf widths: the recession of the swinging leaf
 const EYE = 2.55;
 
+// The number the marks were placed with, once and for all: 17, the shut door's own drawing number,
+// so the sheet the visitor waits in front of is the sheet it has always been. It does not depend on
+// which drawing is being struck, which is what keeps the rain-strokes on the wall and the bristles
+// in the mat from jumping to a new scatter on the frame the latch goes.
+const PLACED = 17;
+
 // ---- where the drawing sits on the sheet -----------------------------------------------------------
 // Two numbers decide the whole composition. The case and its mat stand in `span` of the frame's
 // height with its cornice at `top`; everything else — all that bare paper — follows.
@@ -111,10 +117,19 @@ export function cutName(place, dpr = 2) {
 }
 
 // ---- the sheet ---------------------------------------------------------------------------------------
-// theta: the swing, in radians (0 = shut). jolt: px of latch-shiver on the whole case. seed: the boil.
-export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = null, marks = true, zoom = 1 } = {}) {
+// theta: the swing, in radians (0 = shut). jolt: px of latch-shiver on the whole case.
+// seed: the drawing's number. boil: which strike of that drawing this is — pass floor(frame / 2).
+//
+// Two hands, not one. `rng` PLACES every mark: where the rain-strokes fall on the wall, where the
+// mat's bristles sit, how the tone breaks up. It is fixed (`PLACED`) and depends on neither the
+// drawing nor the clock, so those marks stay where they were put. `nib` is the PEN: how far each
+// contour wanders off its ideal line, how heavily it is laid down, how round a small ring comes
+// out. It re-rolls with `boil`, six times a second, and that is the difference between a boil — the
+// same drawing struck again — and a fizz, which is what you get when the marks themselves move.
+export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, boil = 0, name = null, marks = true, zoom = 1 } = {}) {
   const P = placement(w, h, { zoom });
-  const rng = mulberry32(seed);
+  const rng = mulberry32(PLACED);
+  const nib = mulberry32((Math.imul(seed | 0, 2654435761) ^ Math.imul((boil | 0) + 1, 40503)) >>> 0);
   const mx = (x) => P.ox + x * P.s + jolt;
   const my = (y) => P.oy - y * P.s;
   const px = (m) => m * P.s; // a length in metres → px
@@ -162,7 +177,7 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
   };
   const edges = (q, wd = pen, wob = 1.0) => {
     if (!onScreen(q)) return;
-    for (let i = 0; i < 4; i++) inkLine(g, q[i][0], q[i][1], q[(i + 1) % 4][0], q[(i + 1) % 4][1], { width: wd, wobble: wob, rng });
+    for (let i = 0; i < 4; i++) inkLine(g, q[i][0], q[i][1], q[(i + 1) % 4][0], q[(i + 1) % 4][1], { width: wd, wobble: wob, rng: nib });
   };
   const shade = (q, { spacing, alpha = 0.75, angle = Math.PI / 2, broken = 0.4, width = pen * 0.5 } = {}) => {
     if (!onScreen(q)) return;
@@ -252,7 +267,7 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
   // stiles and rails over their own tone
   const line = (u0, v0, u1, v1, wd = pen) => {
     const a = L(u0, v0), b = L(u1, v1);
-    inkLine(g, a[0], a[1], b[0], b[1], { width: wd, wobble: 1.0, rng });
+    inkLine(g, a[0], a[1], b[0], b[1], { width: wd, wobble: 1.0, rng: nib });
   };
   line(stileU, 0, stileU, 1);
   line(1 - stileU, 0, 1 - stileU, 1);
@@ -305,7 +320,7 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
     const pts = [];
     for (let i = 0; i <= 22; i++) {
       const a = (i / 22) * Math.PI * 2;
-      pts.push([c[0] + Math.cos(a) * rx * (1 + (rng() - 0.5) * 0.05), c[1] + Math.sin(a) * ry * (1 + (rng() - 0.5) * 0.05)]);
+      pts.push([c[0] + Math.cos(a) * rx * (1 + (nib() - 0.5) * 0.05), c[1] + Math.sin(a) * ry * (1 + (nib() - 0.5) * 0.05)]);
     }
     if (fill) {
       g.beginPath();
@@ -314,7 +329,7 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
       g.fillStyle = fill;
       g.fill();
     }
-    for (let i = 0; i < 22; i++) inkLine(g, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], { width: wd, wobble: 0.3, rng, alpha, segments: 2 });
+    for (let i = 0; i < 22; i++) inkLine(g, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], { width: wd, wobble: 0.3, rng: nib, alpha, segments: 2 });
     return { c, rx, ry };
   };
   const knobU = uOf(D.leafX1 - D.stile / 2 - 0.006), knobV = vOf(KNOB_Y);
@@ -333,12 +348,12 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
     const kv = vOf(KNOB_Y - 0.1);
     ring(knobU, kv, 0.012, pen * 0.8, 1, INK); // the keyhole
     const a = L(knobU, kv), b = L(knobU, vOf(KNOB_Y - 0.195));
-    inkLine(g, a[0], a[1], b[0], b[1], { width: pen * 1.1, wobble: 0.35, rng }); // the shaft
+    inkLine(g, a[0], a[1], b[0], b[1], { width: pen * 1.1, wobble: 0.35, rng: nib }); // the shaft
     ring(knobU, vOf(KNOB_Y - 0.238), 0.03, pen * 1.0, 1, PAPER); // the bow
     const c1 = L(knobU, vOf(KNOB_Y - 0.152)), c2 = L(knobU - 0.03 / D.leafW, vOf(KNOB_Y - 0.152));
-    inkLine(g, c1[0], c1[1], c2[0], c2[1], { width: pen * 1.1, wobble: 0.3, rng }); // the bit
+    inkLine(g, c1[0], c1[1], c2[0], c2[1], { width: pen * 1.1, wobble: 0.3, rng: nib }); // the bit
     const c3 = L(knobU - 0.03 / D.leafW, vOf(KNOB_Y - 0.152)), c4 = L(knobU - 0.03 / D.leafW, vOf(KNOB_Y - 0.185));
-    inkLine(g, c3[0], c3[1], c4[0], c4[1], { width: pen * 1.0, wobble: 0.3, rng });
+    inkLine(g, c3[0], c3[1], c4[0], c4[1], { width: pen * 1.0, wobble: 0.3, rng: nib });
   }
   // the letter plate in the lock rail, and the spyhole above the middle panel
   {
@@ -350,7 +365,7 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
     g.fill();
     edges(q, pen * 0.85, 0.8);
     const a = L(uOf(0.45 - 0.108), v), b = L(uOf(0.45 + 0.108), v);
-    inkLine(g, a[0], a[1], b[0], b[1], { width: pen * 0.8, wobble: 0.4, rng });
+    inkLine(g, a[0], a[1], b[0], b[1], { width: pen * 0.8, wobble: 0.4, rng: nib });
     shade(q, { spacing: Math.max(1.6, hs(0.011)), alpha: 0.55, angle: Math.PI / 4, broken: 0.15, width: pen * 0.45 });
   }
   // the spyhole. room.js puts it high in the top panel; here the name board has that panel, so it
@@ -396,11 +411,13 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
     rect(D.lining + ff, ty0 + ff, D.opening - D.lining - ff, ty1 - ff, pen * 0.62);
     // the glass: two strokes at the near end and nothing else, clear of the lettering
     for (const u of [0.03, 0.1]) {
-      inkLine(g, mx(D.lining + ff + u), my(ty0 + ff + 0.012), mx(D.lining + ff + u + 0.07), my(ty1 - ff - 0.012), { width: pen * 0.5, wobble: 0.7, rng, alpha: 0.55 });
+      inkLine(g, mx(D.lining + ff + u), my(ty0 + ff + 0.012), mx(D.lining + ff + u + 0.07), my(ty1 - ff - 0.012), { width: pen * 0.5, wobble: 0.7, rng: nib, alpha: 0.55 });
     }
     // his name, and only his name: one term on the door. It stands in the glass of the fanlight
     // where the trade word used to be, so the visitor reads it once, above the handle.
-    signCaps(g, 'TAROT PEPE', mx(D.opening / 2), my((ty0 + ty1) / 2), { size: px(0.086), rng, tracking: 0.18, weight: 700 });
+    // The sorts are re-cut with the pen, not re-set: `boil` moves each letter's width by 3% and its
+    // stand by two degrees and nothing else, so the word is the same word on every strike.
+    signCaps(g, 'TAROT PEPE', mx(D.opening / 2), my((ty0 + ty1) / 2), { size: px(0.086), rng, boil, tracking: 0.18, weight: 700 });
   }
   // architrave, plinth blocks, the cap over the head
   const archL = rect(-D.arch, D.plinth, 0, D.head + D.archHead, pen, { fill: PAPER });
@@ -413,16 +430,16 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
   shade(archR, { spacing: hs(0.026), alpha: 0.55, broken: 0.5, width: pen * 0.5 });
   shade(archT, { spacing: hs(0.03), angle: 0, alpha: 0.5, broken: 0.55, width: pen * 0.5 });
   // the bead: one line run inside each band
-  inkLine(g, mx(-0.016), my(D.plinth), mx(-0.016), my(D.head + D.archHead - 0.016), { width: pen * 0.62, wobble: 0.9, rng, alpha: 0.9 });
-  inkLine(g, mx(D.opening + 0.016), my(D.plinth), mx(D.opening + 0.016), my(D.head + D.archHead - 0.016), { width: pen * 0.62, wobble: 0.9, rng, alpha: 0.9 });
-  inkLine(g, mx(-D.arch + 0.016), my(D.head + 0.016), mx(D.opening + D.arch - 0.016), my(D.head + 0.016), { width: pen * 0.62, wobble: 0.9, rng, alpha: 0.9 });
+  inkLine(g, mx(-0.016), my(D.plinth), mx(-0.016), my(D.head + D.archHead - 0.016), { width: pen * 0.62, wobble: 0.9, rng: nib, alpha: 0.9 });
+  inkLine(g, mx(D.opening + 0.016), my(D.plinth), mx(D.opening + 0.016), my(D.head + D.archHead - 0.016), { width: pen * 0.62, wobble: 0.9, rng: nib, alpha: 0.9 });
+  inkLine(g, mx(-D.arch + 0.016), my(D.head + 0.016), mx(D.opening + D.arch - 0.016), my(D.head + 0.016), { width: pen * 0.62, wobble: 0.9, rng: nib, alpha: 0.9 });
   // a bell push on the architrave, and its little enamel plate: the second invitation
   {
     const bx = D.opening + D.arch / 2, by = 1.2;
     const plate = rect(bx - 0.044, by - 0.056, bx + 0.044, by - 0.006, pen * 0.7, { fill: PAPER, wob: 0.7 });
     // whatever is engraved on it is too small to read from the landing, so it is drawn the way the
     // film draws small signage: two ruled lines and the sense of a word
-    for (const dy of [-0.022, -0.04]) inkLine(g, mx(bx - 0.031), my(by + dy), mx(bx + 0.031), my(by + dy), { width: pen * 0.6, wobble: 0.5, rng, alpha: 0.8 });
+    for (const dy of [-0.022, -0.04]) inkLine(g, mx(bx - 0.031), my(by + dy), mx(bx + 0.031), my(by + dy), { width: pen * 0.6, wobble: 0.5, rng: nib, alpha: 0.8 });
     const c = [mx(bx), my(by + 0.03)], r = px(0.022);
     const pts = [];
     for (let i = 0; i <= 18; i++) {
@@ -434,7 +451,7 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
     g.closePath();
     g.fillStyle = PAPER;
     g.fill();
-    for (let i = 0; i < 18; i++) inkLine(g, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], { width: pen * 0.7, wobble: 0.3, rng, segments: 2 });
+    for (let i = 0; i < 18; i++) inkLine(g, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], { width: pen * 0.7, wobble: 0.3, rng: nib, segments: 2 });
     g.beginPath();
     g.arc(c[0], c[1], Math.max(1.1, r * 0.42), 0, Math.PI * 2);
     g.fillStyle = INK;
@@ -482,7 +499,9 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
   // first thing anyone sees is a door on a bare sheet, and the invitation under it. It is also what
   // survives a phone, where a caption in each top corner would crowd the frame.
   if (marks && P.zoom < 1.04) {
-    signCaps(g, 'PLEASE COME IN', w / 2, my(-D.mat) + h * 0.058, { capH: Math.max(14, h * 0.02), rng, tracking: 0.34 });
+    // Re-cut on the same strike as the rest: one cel, one hand. Checked letter by letter at 15 px
+    // caps (the phone frame) over a full cycle — the sorts change width and stand, never shape.
+    signCaps(g, 'PLEASE COME IN', w / 2, my(-D.mat) + h * 0.058, { capH: Math.max(14, h * 0.02), rng, boil, tracking: 0.34 });
   }
 }
 

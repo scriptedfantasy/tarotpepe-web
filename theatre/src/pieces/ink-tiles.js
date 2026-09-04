@@ -16,7 +16,14 @@ import { mulberry32 } from '../core/rng.js';
 import { bakedLevels, hashSource, BAKING } from '../core/bake.js';
 
 export const TILE = 512; // texels; shown at ~1 texel per css px (the composite snaps the scale to octaves)
-const PEN = 2.0; // texels: the same pen as the outlines (≈2 px at 1080p in the reference)
+// ROUND 6: 1.5, down from 2.0, and every spacing below closed in the same proportion. The
+// contour narrowed this round because our frame draws three times as many things as the film's
+// does, and a hatch stroke twice the width of a contour is not the same pen. Coverage per level is
+// unchanged (width/spacing is held), so the tone the four levels state is what it was — but it is
+// now stated with a third more strokes, each finer, which is where the film gets its mid-tone:
+// measured on the kitchen folio, 14.7% of the frame sits between grey 64 and 224, and almost none
+// of that is contour shoulder. More strokes, thinner, is the way to it; a fatter pen is not.
+const PEN = 1.5; // texels: the same pen as the outlines
 
 function wrappedStroke(g, x1, y1, x2, y2, opts, rng) {
   const seed = Math.floor(rng() * 1e9) + 1;
@@ -209,18 +216,18 @@ function drawWallLevels() {
     // window, and in the folios that is a handful of separate strokes with a lot of paper round
     // them — measured, a patch of it must still blur to a clean sheet, not to a grey.
     const dens = clumpField(rng, { count: 7, rx: 58, ry: 130, floor: 0.0, amp: [0.8, 1.5] });
-    strokes(g, rng, { angle: V, spacing: 15, width: PEN * 1.05, segMin: 26, segMax: 130, fill: 0.44, jitter: 0.46, lean: 0.05, density: dens });
+    strokes(g, rng, { angle: V, spacing: 11, width: PEN * 1.05, segMin: 26, segMax: 130, fill: 0.44, jitter: 0.46, lean: 0.05, density: dens });
   }, 101);
   const mid = levelCanvas((g, rng) => {
     // continuous rain, still openly spaced: the wall against a door jamb, the underside of a shelf
-    strokes(g, rng, { angle: V, spacing: 8, width: PEN * 1.05, segMin: 50, segMax: 240, fill: 0.8, jitter: 0.32, lean: 0.035 });
+    strokes(g, rng, { angle: V, spacing: 5.9, width: PEN * 1.05, segMin: 50, segMax: 240, fill: 0.8, jitter: 0.32, lean: 0.035 });
   }, 102);
   const dark = levelCanvas((g, rng) => {
     // cross-hatch: verticals crossed by one steep diagonal. Dense enough to read as the optical
     // grey the folios sit at (#646963), open enough that every stroke is still a stroke — the
     // arch behind La Brique Rouge.
-    strokes(g, rng, { angle: V, spacing: 5.6, width: PEN * 1.05, segMin: 90, segMax: 360, fill: 0.9, jitter: 0.24, lean: 0.02 });
-    strokes(g, rng, { angle: Math.PI / 3, spacing: 7.6, width: PEN, segMin: 90, segMax: 360, fill: 0.86, jitter: 0.28, lean: 0.03 });
+    strokes(g, rng, { angle: V, spacing: 4.2, width: PEN * 1.05, segMin: 90, segMax: 360, fill: 0.9, jitter: 0.24, lean: 0.02 });
+    strokes(g, rng, { angle: Math.PI / 3, spacing: 5.7, width: PEN, segMin: 90, segMax: 360, fill: 0.86, jitter: 0.28, lean: 0.03 });
   }, 103);
   const darkest = levelCanvas((g, rng) => {
     // Black, but drawn — the arch behind La Brique Rouge, the man in the black suit at the card
@@ -228,8 +235,8 @@ function drawWallLevels() {
     // it blurs to a solid mass, open enough that you can still count the strokes and that the rim
     // breaks into separate strokes instead of ending on a vector edge. At a 4.0/4.6 pitch this
     // level only reached ~73% and a black coat drawn with it read as a mid grey.
-    strokes(g, rng, { angle: V, spacing: 3.1, width: PEN * 1.2, segMin: 160, segMax: 480, fill: 0.97, jitter: 0.1, lean: 0.012 });
-    strokes(g, rng, { angle: Math.PI * 0.31, spacing: 3.4, width: PEN * 1.15, segMin: 160, segMax: 480, fill: 0.96, jitter: 0.12, lean: 0.016 });
+    strokes(g, rng, { angle: V, spacing: 2.3, width: PEN * 1.2, segMin: 160, segMax: 480, fill: 0.97, jitter: 0.1, lean: 0.012 });
+    strokes(g, rng, { angle: Math.PI * 0.31, spacing: 2.5, width: PEN * 1.15, segMin: 160, segMax: 480, fill: 0.96, jitter: 0.12, lean: 0.016 });
   }, 104);
   return packLevels([light, mid, dark, darkest]);
 }
@@ -237,20 +244,20 @@ function drawWallLevels() {
 function drawFloorLevels() {
   const light = levelCanvas((g, rng) => {
     const dens = clumpField(rng, { count: 7, rx: 130, ry: 58, floor: 0.0, amp: [0.8, 1.5] });
-    dashRows(g, rng, { spacing: 15, width: PEN * 1.05, len: 40, fill: 0.36, density: dens });
+    dashRows(g, rng, { spacing: 11, width: PEN * 1.05, len: 40, fill: 0.36, density: dens });
   }, 201);
   const mid = levelCanvas((g, rng) => {
-    dashRows(g, rng, { spacing: 8, width: PEN * 1.05, len: 70, fill: 0.76 });
+    dashRows(g, rng, { spacing: 5.9, width: PEN * 1.05, len: 70, fill: 0.76 });
   }, 202);
   const dark = levelCanvas((g, rng) => {
-    dashRows(g, rng, { spacing: 5.8, width: PEN * 1.05, len: 110, fill: 0.9 });
-    strokes(g, rng, { angle: Math.PI / 2 + 0.35, spacing: 8, width: PEN, segMin: 90, segMax: 340, fill: 0.84, jitter: 0.3, lean: 0.04 });
+    dashRows(g, rng, { spacing: 4.3, width: PEN * 1.05, len: 110, fill: 0.9 });
+    strokes(g, rng, { angle: Math.PI / 2 + 0.35, spacing: 5.9, width: PEN, segMin: 90, segMax: 340, fill: 0.84, jitter: 0.3, lean: 0.04 });
   }, 203);
   const darkest = levelCanvas((g, rng) => {
     // the pool of dark a table stands in, seen on the boards: dashes crowded to black, crossed
     // twice so the patch blurs to a solid mass with a torn edge
-    dashRows(g, rng, { spacing: 3.1, width: PEN * 1.2, len: 190, fill: 0.97 });
-    strokes(g, rng, { angle: -Math.PI * 0.31, spacing: 3.4, width: PEN * 1.15, segMin: 160, segMax: 480, fill: 0.96, jitter: 0.12, lean: 0.016 });
+    dashRows(g, rng, { spacing: 2.3, width: PEN * 1.2, len: 190, fill: 0.97 });
+    strokes(g, rng, { angle: -Math.PI * 0.31, spacing: 2.5, width: PEN * 1.15, segMin: 160, segMax: 480, fill: 0.96, jitter: 0.12, lean: 0.016 });
   }, 204);
   return packLevels([light, mid, dark, darkest]);
 }

@@ -340,6 +340,8 @@ uniform float uColorInk;    // 1 = the drawn marks inside a coloured surface get
 uniform vec4 uTex;          // the wash a drawn pattern must reach for tone 1/2/3, then for a fill
 uniform vec4 uTexPen;       // texels/px where a drawn mark stops being drawable (lo, hi), then the
                             // darkness a mark must reach to be ink at all (lo, hi)
+uniform float uTexBias;     // where the paper ends and a drawn mark begins, as a fraction of the
+                            // way from the middle of the nib-wide field up to its darkest point
 uniform int uMode;          // 0 all, 1 lines only, 2 tone only
 uniform mat4 uInvVP;
 uniform vec3 uInk, uPaper;
@@ -560,6 +562,16 @@ void main() {
     // The ramp is symmetric about R, so widening it moves ink from the core into the shoulder and
     // leaves the stroke's total mass (2R px per unit length) exactly where it was.
     float w = max(uLineSoft, 0.2);
+    // …and the SHAPE of that shoulder, which round 6 had to fix to get the tone back after
+    // narrowing the pen. A straight ramp spends equal distance at every value, so a stroke goes
+    // from solid to paper through one grey pixel and nothing else: measured, our contour put 5.5%
+    // of the frame below grey 32 and only 1.5% between 32 and 63, where the folio puts 8.1% and
+    // 4.0% — its stroke is nearly solid for a good way out and only then lets go. That is what ink
+    // does in paper: it wicks along the fibre, so the deposit stays heavy well past the nib's own
+    // edge and then thins away quickly. 1 - (1-u)^1.9 is that curve, and it is the tone the film
+    // gets from its line for free. The radius above is cut by 0.155 × w to pay for it, so the
+    // stroke carries the same total ink per unit length as a straight ramp of the same width would
+    // — the mark is not fatter, its middle is blacker and its rim is softer.
     line = clamp((R + w * 0.5 - nearest) / w, 0.0, 1.0);
     // a hair of bare paper either side of every contour: the tone strokes stop short of the line
     halo = 1.0 - smoothstep(R + 0.7, R + 2.2, nearest);
@@ -658,7 +670,17 @@ void main() {
     // as one solid blot with its lettering swallowed. So the bar for a flat fill rises with the
     // minification: close to, a coat at 0.64 is a coat; across the room only what is still ink at
     // 0.93 is filled, and everything between is hatched like the mass it is.
-    blackArea = step(mix(uTex.w, 0.93, smoothstep(1.0, 5.0, minif)), wash);
+    // ROUND 6, and this was the blot the user saw. The wash is an AVERAGE over 5.5 px, and an
+    // average cannot tell a black mass from a drawing of stripes: a radio's louvred grille, a shelf
+    // label's block of type, a book's spine, the ticks on a dial all average past the bar and were
+    // FILLED — which is why the sideboard arrived with its lettering gone and its grille as five
+    // black bars. A pen tells them apart by looking at the paper, not at the average: in a black
+    // mass there is no paper within reach of the nib, and in a drawing there always is. tightLo is
+    // the lightest thing within 1.8 px — a nib's reach — so this asks the question. A fold or
+    // a lapel drawn in paper INSIDE a black coat still stops the fill, which is what it should do:
+    // the film leaves those lines as paper (STYLE §1.3, the coats in the metro carriage).
+    float noPaperNear = smoothstep(0.30, 0.52, tightLo);
+    blackArea = step(mix(uTex.w, 0.93, smoothstep(1.0, 5.0, minif)), wash) * noPaperNear;
     // A stroke is drawn when it still stands clear of its field and is still dark enough to be a
     // stroke. As the drawing recedes the pen does not draw the same marks fainter — it draws
     // FEWER of them, at the same weight, and leaves the paper between: so what a receding pattern
@@ -687,7 +709,14 @@ void main() {
     // darker than the midpoint of its own nib-wide field, or dark in absolute terms; otherwise it
     // is paper. Never anything between.
     float con = tightHi - tightLo;                      // is there a mark here at all, or one flat field?
-    float mid = (tightHi + tightLo) * 0.5;              // …and where the paper ends and the mark begins
+    // …and where the paper ends and the mark begins. ROUND 6: at the MIDDLE of that field, which is
+    // what round 5 used, exactly half of every plaque is darker than the threshold and is inked —
+    // and on a label whose letters cover a third of it, "half the plaque" is a black rectangle with
+    // the letters lost inside. A drawn mark is not half its neighbourhood; it is the dark core of
+    // it. Sliding the threshold a fraction of the way toward the darkest thing within a nib keeps
+    // every real stroke (its own core is that darkest thing, so it always passes) and gives the
+    // halo of nearly-paper around it back to the paper. This is what lets VIN read as VIN.
+    float mid = mix((tightHi + tightLo) * 0.5, tightHi, uTexBias);
     // ROUND 5. The decision above is right and stays; what was wrong was the RASTER of it. a hard step
     // is a hard threshold, so this pass laid down 6.2% of the frame as pure black with 0.01% of a
     // shoulder anywhere — a bitmap of a drawing, not a drawing. The mark in the map is already a
@@ -697,8 +726,13 @@ void main() {
     // only the half pixel where the stroke's own edge falls stays between. That is the anti-alias
     // the film's line has and the "grey wash" the world's rules forbid is still gone, because a
     // flat mid field never passes the contrast gate at all.
+    // The ramp is the mark's OWN soft pixel restated, and no wider. Round 5 spread it over 0.29 of
+    // the darkness range at full contrast, which is most of the range: every louvre and every
+    // letter stem then carried a grey skirt a pixel and a half out, and a grey skirt on a mark two
+    // pixels wide IS the blur. It rides on uLineSoft so the drawn marks and the pen's own contour
+    // keep the same edge; both narrowed this round.
     float aa = max(0.042 * uLineSoft, con * 0.15 * uLineSoft);
-    float lo = min(mid + 0.015, uTexPen.w);
+    float lo = min(mid, uTexPen.w);
     // How much contrast a drawing must still have HERE before the pen will copy it out. This is the
     // measurement that says whether there is a mark left at all: a drawn line the frame has shrunk
     // to a quarter of a pixel does not arrive as a thin line, it arrives as the average of itself
@@ -712,7 +746,7 @@ void main() {
     float local = step(uTexPen.z, con) * smoothstep(lo - aa, lo + aa, tHere);
     // and every mark must have a neighbour — see tightNbr above. A letter's stem, a louvre bar, a
     // floorboard seam all run on into the next pixel; a filter artefact does not.
-    float support = smoothstep(mid - 0.02, mid + 0.07, tightNbr);
+    float support = smoothstep(lo - 0.02, lo + 0.07, tightNbr);
     stroke = max(local, smoothstep(uTexPen.w - aa, uTexPen.w + aa, tHere)) * support * keep * draw;
     // …and what the pen can no longer draw — because the marks have closed up OR because they have
     // shrunk under the nib — states its tone instead of being smeared out as a grey. Below the
@@ -738,13 +772,14 @@ void main() {
     // chroma and stays exactly as painted, so a card's red robe or a green face is never inked
     // over. And a mark must stand clear of its own field, so a flat area of colour — which has no
     // contrast at a nib's width — is left alone whatever its value.
+    // …with the same nib and the same threshold as the paper-white set: one pen everywhere.
     float con = tightHi - tightLo;
-    float mid = (tightHi + tightLo) * 0.5;
+    float mid = mix((tightHi + tightLo) * 0.5, tightHi, uTexBias);
     float aa = max(0.042 * uLineSoft, con * 0.15 * uLineSoft);
     float sat = max(max(alb.r, alb.g), alb.b) - min(min(alb.r, alb.g), alb.b);
     float achromatic = 1.0 - smoothstep(0.20, 0.42, sat);
     float support = smoothstep(mid - 0.02, mid + 0.07, tightNbr);
-    stroke = step(uTexPen.z, con) * smoothstep(mid + 0.015 - aa, mid + 0.015 + aa, tHere)
+    stroke = step(uTexPen.z, con) * smoothstep(mid - aa, mid + aa, tHere)
            * achromatic * support * drawable;
   }
   if (drawMode == 1) { texLevel = 0.0; matLevel = 0.0; blackArea = 0.0; } // lines-only: no tone
@@ -756,7 +791,14 @@ void main() {
   float level = max(max(lightLevel, texLevel), matLevel);
   if (solid > 0.5) level = 4.0;
   float cov = level > 3.5 ? hTile.a : level < 1.5 ? hTile.r : level < 2.5 ? hTile.g : hTile.b;
-  float tone = level > 0.5 ? smoothstep(0.32, 0.62, cov) * (level > 3.5 ? 1.0 : 1.0 - halo) : 0.0;
+  // A HATCH STROKE IS A DRAWN LINE AND KEEPS ITS OWN SOFT PIXEL — the same rule the contour lives
+  // by, applied to the tone. The tile already holds strokes the pen drew with anti-aliased edges;
+  // re-thresholding them over a 0.30-wide window threw that edge away and laid the tone down as a
+  // bitmap. Measured, our hatching put 2.2% of the frame at pure black and 1.3% anywhere in the
+  // mid range, where the folio spreads 14.7% across it and gets there almost entirely from strokes.
+  // Widening the window hands each stroke its shoulder back; it does not make a grey wash, because
+  // the tile between strokes is bare paper and stays bare.
+  float tone = level > 0.5 ? smoothstep(0.24, 0.72, cov) * (level > 3.5 ? 1.0 : 1.0 - halo) : 0.0;
   if (level > 3.5) tone = max(tone, solid * (1.0 - halo));
 
   vec3 base = (drawMode == 0 && !bg && colorful) ? alb.rgb : uPaper;

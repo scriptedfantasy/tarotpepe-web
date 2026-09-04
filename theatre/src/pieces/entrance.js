@@ -1,7 +1,9 @@
 // PIECE: entrance — the film opens on a door.
 //
 // One drawn door, dead centre on a bare sheet, with TAROT PEPE cut into its top panel in the
-// masthead's own alphabet. Nothing else: no title card, no chapter, no picture. The visitor clicks;
+// masthead's own alphabet. Nothing else: no title card, no chapter, no picture. It is not a still:
+// the sheet is struck again on every 12 fps two, so the door is alive before anything happens to
+// it and the visitor is looking at a drawing rather than a picture. The visitor clicks;
 // the latch goes, the leaf shivers one frame, and then it swings in eight stepped drawings on twos
 // — and through the widening doorway the parlour is there, because the doorway is punched clean out
 // of this layer and what shows through it is the live drawing underneath (the camera waiting at
@@ -93,17 +95,26 @@ export async function build(ctx) {
     return { w, h, dpr };
   }
 
-  // One drawing per pose, drawn once: the seed is the drawing's number, not the clock, so a held
-  // door is one cel and not a field of strokes re-scattering six times a second.
+  // The drawing boils while it waits. A held door is not a still: the same door is struck again on
+  // every second frame, so its lines are never twice the same line — which is the one thing about
+  // the film everybody recognises, and it is true before the visitor does anything.
+  //
+  // What re-rolls is the PEN only (drawEntrance's `boil`): how far each contour wanders off its
+  // ideal line, how heavily it goes down, how round a small ring comes out. The marks themselves —
+  // the rain-strokes on the wall, the mat's bristles, where the tone breaks — are placed once and
+  // do not move, for a field of marks re-scattering six times a second is a fizz, not a boil. The
+  // door stays the same door; it only refuses to sit still. `seed` still numbers the drawing, so
+  // every pose of the swing gets its own pen, and the click continues the boil instead of popping.
+  let boilNow = 0;
   function paint(p) {
     zoomNow = p.zoom;
-    const key = `${p.k}`;
+    const key = `${p.k}|${boilNow}`;
     if (key === drawnAt) return;
     drawnAt = key;
     const { w, h, dpr } = size();
     const g = canvas.getContext('2d');
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawEntrance(g, w, h, { theta: p.theta, jolt: p.jolt, zoom: p.zoom, seed: 17 + p.k * 131, name });
+    drawEntrance(g, w, h, { theta: p.theta, jolt: p.jolt, zoom: p.zoom, seed: 17 + p.k * 131, boil: boilNow, name });
   }
 
   // What a held cel does under a rostrum camera: it sits a whisker off its pegs, differently every
@@ -237,6 +248,10 @@ export async function build(ctx) {
 
     update(c) {
       if (mode === 'hidden') return;
+      // One number for the whole re-photograph: the cel is drawn again AND laid down again on the
+      // same twos, so the boil and the peg-wobble are one event and not two beating against each
+      // other. 12 fps, never the render clock — at 60 the boil is a fizz.
+      boilNow = c.clock.frame >> 1;
       // the cel sits a whisker off its pegs, differently every second frame — but only while the
       // sheet is still: a truck-in is movement enough
       if (zoomNow < 1.05) wobble(c.clock.frame);

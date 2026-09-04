@@ -16,6 +16,16 @@
 //                stroke levels drawn with world-anchored hatch tiles, selective colour, paper grain.
 //   6. Despeckle a dark pixel with paper on all four sides is not a mark a pen could make.
 //
+// HOW TO MEASURE THIS PASS AGAINST THE FOLIO, because round 6 spent a cycle being misled by it.
+// tools/_ink-r5.mjs resizes both images to 1600 px wide before it counts, and the folio is a
+// 2361 px scan: lanczos puts every one of its edges through a resampling filter that spreads ink
+// across the mid bands, while our 1600 px frame is measured native and never goes through one. So
+// a native frame ALWAYS reads short of mid-tone against a downsampled folio, and chasing that gap
+// by widening the pen is chasing an artefact of the ruler. Shoot the frame at the folio's own
+// 2362 px and let the probe downsample it the same way and the two agree: 14.2% mid-tone against
+// its 14.7%, spread 3.2 / 3.0 / 2.8 / 2.8 / 2.7 / 2.9 across the bands against its
+// 4.0 / 3.1 / 2.8 / 2.7 / 2.9 / 3.2. Quote both numbers or neither.
+//
 // THE ONE RULE THIS PASS EXISTS TO KEEP, and the one round 4 broke: "no grey" is about TONE, not
 // about rasterisation. There is no grey WASH — tone is strokes over paper, a mark is ink or it is
 // paper — but a drawn line, rasterised, HAS a soft edge, and the folio's has more than a pixel of
@@ -57,11 +67,25 @@ export async function build(ctx) {
     // its length whatever the seeds did, and this is the half-width of every contour in the frame.
     // Nothing else changes it: one pen, one pressure (STYLE §1.2 — no thick-and-thin, and no change
     // of weight between foreground and background).
-    // With lineSoft 1.9 below, 1.15 draws a stroke about 3.6 px across: roughly 1.2 px of solid ink
-    // in the middle and 1.2 px of shoulder either side. Measured against the kitchen folio at a
-    // matched 1600 px (tools/_ink-r5.mjs): ink below grey 64 12.1% against its 12.1%, mid-tone
-    // 64–224 13.9% against its 14.7%, isolated dark pixels 0.06% against its 0.00%.
-    lineBase: 1.15,
+    //
+    // ROUND 6, and this is the round. Round 5 sized this nib to the FOLIO'S OWN stroke — 1.1 px of
+    // core and 2.8 px at half coverage, measured on the kitchen folio resampled to our 1600. That
+    // reasoning is the error. The film draws FEW things BIG: a table, three cards, two figures. We
+    // draw a parlour — a sideboard, five bottles with labels, a radio with two dials, a shelf of
+    // books, a clock, a coat, a rug border — so every object in our frame is a third the size of
+    // anything in the folio's. Matching the film's ABSOLUTE stroke width while drawing three times
+    // the content per frame is what turned a labelled bottle into a blot, the panel's stripes into
+    // bars, and two edges 3 px apart into one. Our pen must be narrower in PIXELS than the film's
+    // because our objects are smaller in pixels; "one pen, one weight" is a rule about consistency
+    // across the frame, not about a particular width.
+    //
+    // With lineSoft 1.3 below this draws a stroke 3.3 px across at its widest reach against round
+    // 5's 4.2: 0.7 px of solid core, half coverage at 2.0 px, and bare paper 1.65 px either side of
+    // the centre — so a pair of edges 3 px apart (a glazing bar, a bottle's shoulder against its
+    // neighbour, two balusters of the sideboard's panel) has clean paper between them, which at
+    // round 5's reach it did not: there the two shoulders met at a third of full ink and the pair
+    // arrived as one bar with a smear down it.
+    lineBase: 1.00,
     // THE SHOULDER, in css px: how wide the ramp from full ink to bare paper is at the edge of
     // every mark. Round 4 had no ramp worth the name — the mark's boundary could only land on the
     // pixel lattice, so the contour came out as a 1 px stair-stepped raster of a vector with two
@@ -72,7 +96,23 @@ export async function build(ctx) {
     // 32 and 63, and 14.7% spread evenly from 64 to 224 — a third of its ink lives in the shoulder
     // and half as much again beyond it. Widening this moves ink out of the core and into that
     // shoulder without changing the stroke's total mass (2 × lineBase px per unit length).
-    lineSoft: 1.9,
+    //
+    // ROUND 6 narrowed it, because the shoulder is what "blurry" actually means. Measured on the
+    // round-5 frame and on the folio resampled to the same 1600 px, our stroke was DARKER-CENTRED
+    // and GREYER-EDGED than the film's at once: our core reached 0.84 px against the folio's 1.15,
+    // while 2 px out from the centre we sat at grey 177 against its 190 and 3 px out at 212 against
+    // its 227. Less black in the middle and more grey around it is the definition of a soft line. A
+    // narrower ramp about a slightly smaller radius puts the ink back in the core and gives the
+    // paper 2 px out back to the paper.
+    //
+    // Two settings were tried and thrown away on the way here, and both are worth knowing about.
+    // 1.5 with a 0.90 radius matched the folio's share of solid black almost exactly (8.5% against
+    // 8.1%) but left the door's panel mouldings as broken grey hairlines: the ramp is symmetric, so
+    // a wide one about a small radius leaves a core only 0.15 px across and the peak coverage of a
+    // typical stroke falls to 0.77. 1.1 with 0.95 went the other way and gave 11.7% solid black — a
+    // photocopy. 1.3 about 1.00 puts the peak back at 0.88, and it is the peak, not the width, that
+    // decides whether a line reads as drawn or as smudged.
+    lineSoft: 1.3,
     wobble: 0.9, // css px of hand drift
     breakAmt: 0.03, // how often the pen skips (0 = never)
     overshoot: 1, // 0/1 line ends run past corners
@@ -92,6 +132,15 @@ export async function build(ctx) {
     // room — a far worse fault than the doubled line it was written to cure, which at the pen's
     // present width barely shows. Measured at home: thin 3 gives ink 11.1% and dashes; thin 0 gives
     // 12.5% against the folio's 12.1% and continuous strokes.
+    //
+    // Retested in round 6 against the narrower pen, in case the narrower pen had made the choice
+    // stable: it has not. thin 2 does what it says on the measurement — the slivers of paper
+    // pinched between two contours fall from 39% of the paper runs at the shelf to 32%, and solid
+    // black from 10.6% of the frame to 9.7% — and the door's stiles come back as dashes, plainly
+    // visible at 3x. The wobble is ±0.9 px, so a nominal 3 px pair is 2.2 px apart at one pixel of
+    // its length and 3.8 px at the next; the survivor test fires on one and not the other, and the
+    // line that gives way gives way in patches. The doubled line is cured by the nib being too
+    // narrow to bridge the gap, not by deleting one of the pair. Leave this at 0.
     thin: 0,
     // A stroke RUNS. How far along its own tangent, in px, a contour must continue for the pen to
     // draw it at all; 0 turns the test off. A crowded set projects hundreds of things two pixels
@@ -142,7 +191,24 @@ export async function build(ctx) {
     // The last pair is the pressure: one pen, so a mark is ink or it is paper. The lower number is
     // no longer a ramp's foot — the composite makes the call against the mark's OWN field — and
     // the upper one is the absolute floor above which anything is ink whatever its surroundings.
-    texPen: [9, 20, 0.3, 0.5],
+    //
+    // ROUND 6 raised that floor from 0.5 to 0.8, and it was half the blot. 0.5 is not "black"; it
+    // is the average a WELL DRAWN object reaches once the frame has minified it — a bottle's label,
+    // a radio's louvred grille, a book's spine type all pass 0.5 as soon as their marks are a
+    // couple of texels a pixel. Everything above the floor is inked "whatever its surroundings",
+    // so every one of them arrived as a solid black rectangle with its lettering inside it. The
+    // floor is for a mark that is genuinely ink — a solid tick, a filled ornament — and at 0.8
+    // (albedo 0.2) that is what it catches; the local test below decides everything else.
+    texPen: [9, 20, 0.3, 0.8],
+    // WHERE THE PAPER ENDS AND THE MARK BEGINS, as a fraction of the way from the middle of the
+    // nib-wide field up to the darkest thing inside it. 0 is round 5's rule — ink everything darker
+    // than the local average — and that is the other half of the blot: a label whose letters cover
+    // a third of it has an average that sits well INSIDE the paper, so half the plaque was inked
+    // and six letters arrived as one mass. A hand inks the stem and leaves the paper beside it. At
+    // 0.3 the pen still takes every mark's core at full pressure (a stroke's core IS the darkest
+    // thing within a nib of itself, so it always passes) and hands back the halo of nearly-paper
+    // that was fattening every letter, every louvre and every rule in the set.
+    texBias: 0.3,
     // How much sharper than the hardware would the G-buffer looks at a surface's own drawing, in
     // mip levels. 0 is the trilinear average, which is where the lettering went: at the door's
     // distance VIN, PROVERBES and BIENVENUE are 3–5 px tall, the mip chain hands the pass a grey
@@ -348,6 +414,7 @@ export async function build(ctx) {
       uColorInk: { value: params.colorInk },
       uTex: { value: new THREE.Vector4(...params.texLevels) },
       uTexPen: { value: new THREE.Vector4(...params.texPen) },
+      uTexBias: { value: params.texBias },
       uMode: { value: 0 },
       uInvVP: { value: new THREE.Matrix4() },
       uInk: { value: new THREE.Color(INK) },
@@ -472,6 +539,7 @@ export async function build(ctx) {
     cu.uColorInk.value = params.colorInk;
     cu.uTex.value.set(...params.texLevels);
     cu.uTexPen.value.set(...params.texPen);
+    cu.uTexBias.value = params.texBias;
     cu.uMode.value = mode;
     cu.uInvVP.value.multiplyMatrices(cam.matrixWorld, cam.projectionMatrixInverse);
     cu.uLevels.value.set(...params.levels);
