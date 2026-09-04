@@ -28,7 +28,7 @@ import { INK, PAPER, inkLine, letter } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 
 export const STOCK = PAPER; // the card is cut from the world's paper; the ink pass adds the grain
-export const BACK = { w: 640, h: 1120 }; // 4.92 px per mm of card
+// The back is drawn at 1024 x 1792 — 7.88 px per mm of a 130 x 227.5 mm card.
 // The plate is inset by M on every side of a canvas cut to the card's own aspect; the one printed
 // rule is a keyline laid keyPad px outside the plate, where the print ends and the stock begins.
 export const FRONT = { M: 42, keyW: 7.5, keyPad: 5 };
@@ -270,7 +270,7 @@ export function frogGlyph(g, cx, cy, s, rng, { tone = false, width = 2, simple =
   const mL = [cx - s * 0.34, cy + s * 0.3];
   const mR = [cx + s * 0.82, cy + s * 0.16];
   inkPath(g, [...qbez([cx - s * 0.04, cy - s * 0.08], [cx - s * 0.24, cy + s * 0.12], mL, 8), ...qbez(mL, [cx + s * 0.08, cy + s * 0.6], mR, 16)], { ...o, width: width * 1.25 });
-  inkPath(g, qbez(mL, [cx + s * 0.12, cy + s * 0.88], mR, 16), { ...o, width: width * (simple ? 1.25 : 1.05) }); // the lower lip
+  inkPath(g, qbez(mL, [cx + s * 0.12, cy + s * 0.88], mR, 16), { ...o, width: width * 1.02 }); // the lower lip
   if (!simple) {
     inkPath(g, qbez(mR, [cx + s * 0.9, cy + s * 0.04], [cx + s * 0.72, cy - s * 0.06], 6), { ...o, width: width * 0.85 }); // the corner, turned up
     inkPath(g, qbez([cx - s * 0.46, cy + s * 0.36], [cx - s * 0.4, cy + s * 0.58], [cx - s * 0.22, cy + s * 0.64], 9), { ...o, width: width * 0.8 }); // the jowl
@@ -310,7 +310,11 @@ export const BAND = {
   out: 28, // the cut rule
   comb0: 38, combL: 32, combS: 18, combP: 84, // the comb of ticks
   rule: 82, // the fine rule
-  brdC: 126, brdA: 32, brdP: 240, // the braid: two waves crossing about brdC
+  // the braid: two waves crossing about brdC. brdP is a TARGET — each side nudges it so an odd
+  // number of half-periods fits the run exactly. 260 is the value at which the long side (11 half
+  // periods) and the short side (5) land within 2 % of the same unit, so the ornament is one size
+  // all the way round the card instead of two.
+  brdC: 126, brdA: 34, brdP: 260,
   in: 170, // the field's rule
   corner: 182, // the runs stop here; a lozenge caps each corner
   field: 200,
@@ -377,7 +381,7 @@ export function drawBack(g, W, H, rng = mulberry32(21), { stock = STOCK } = {}) 
   const D = 157; // four across the field
   const cellCentre = (i, j) => [cx + ((i + j + 1) * D) / 2, cy + ((i - j) * D) / 2];
   const N = Math.ceil(Math.hypot(fw, fh) / D) + 2;
-  const RX = 178, RY = 266; // the medallion
+  const RX = 192, RY = 284; // the medallion
   const inMedallion = (x, y, pad) => ((x - cx) / (RX + pad)) ** 2 + ((y - cy) / (RY + pad)) ** 2 < 1;
 
   const half = Math.hypot(fw, fh);
@@ -396,7 +400,7 @@ export function drawBack(g, W, H, rng = mulberry32(21), { stock = STOCK } = {}) 
       if ((a + b) % 2 !== 0) continue;
       const x = cx + ((a + b) * D) / 2, y = cy + ((a - b) * D) / 2;
       if (x < fx + 10 || x > fx + fw - 10 || y < fy + 10 || y > fy + fh - 10) continue;
-      if (inMedallion(x, y, 38)) continue;
+      if (inMedallion(x, y, 52)) continue; // clear of the medallion's paper by more than its own size
       lozenge(g, x, y, 8);
     }
   }
@@ -407,10 +411,10 @@ export function drawBack(g, W, H, rng = mulberry32(21), { stock = STOCK } = {}) 
       if ((i + j) % 2 === 0) continue;
       const [x, y] = cellCentre(i, j);
       if (x < fx + 42 || x > fx + fw - 42 || y < fy + 42 || y > fy + fh - 42) continue;
-      if (inMedallion(x, y, 32)) continue;
+      if (inMedallion(x, y, 78)) continue; // a motif is never half-eaten by the medallion's paper
       const n = (i - j - 1) / 2;
       const mo = ((n >= 0 ? n : -n - 1) + 1) % 3;
-      if (mo === 0) frogGlyph(g, x, y, D * 0.2, rng, { width: 3.4, simple: true, stock });
+      if (mo === 0) frogGlyph(g, x, y, D * 0.21, rng, { width: 3.1, simple: true, stock });
       else if (mo === 1) starGlyph(g, x, y, D * 0.15, rng, { width: 4.4 });
       else moonGlyph(g, x, y, D * 0.115, rng, { width: 3.8, stock });
     }

@@ -74,7 +74,7 @@ const STATES = {
     fill: { sky: '#ffffff', ground: '#565046', intensity: 0.36 },
     bounce: 0.14,
     floorBounce: 0.1,
-    corners: -0.62,
+    corners: -0.95,
     pools: -0.3,
     pendant: 0,
     table: 0,
@@ -87,7 +87,7 @@ const STATES = {
     // weighting the light term (1.22) makes the SAME shadows land one level of strokes on the
     // papered field and the wainscot, two under a ledge, three inside the window reveal, and
     // still leaves the frieze and the ceiling bare — the drawings' big rest.
-    ink: { tone: [0.02, 0.62, 1.4, 0.22], levels: [0.55, 0.82, 0.96, 0.15] },
+    ink: { tone: [0.02, 0.62, 1.5, 0.22], levels: [0.55, 0.82, 0.96, 0.15] },
   },
   // Night is not a darker paper. The key is gone; the open room sits just inside the ink pass's
   // rain band, so plaster carries a sparse vertical shower; the three lamps lift their own pools
@@ -223,12 +223,13 @@ export async function build(ctx) {
     pools.push(l);
     g.add(l);
   };
-  pool(0.22, 0.1, 0.1, 1.5, 1); // under the table, offset the way the key throws it
-  pool(0.15, 0.12, -0.92, 1.1, 0.8); // under the bench Pepe sits on
-  pool(-1.5, 0.1, -1.5, 1.2, 0.7); // under the trolley, stage left
-  pool(1.6, 0.1, -1.7, 1.2, 0.7); // under the shelf unit, stage right
-  pool(0.62, 0.26, 0.72, 1.15, 0.9); // the hem of the cloth, stage right: the bottom of the frame
-  pool(-0.66, 0.24, 0.68, 0.9, 0.5); // and a lighter one on the near side
+  // Kept low and well away from any surface the overhead shots look straight down on: a pool set
+  // close to the boards turns them solid under the fan camera, which is not a shadow, it is a
+  // blot. (That is why there is none at the hem of the cloth.)
+  pool(0.24, 0.06, -0.02, 1.5, 1); // under the table, offset the way the key throws it
+  pool(0.15, 0.08, -0.95, 1.1, 0.8); // under the bench Pepe sits on
+  pool(-1.5, 0.08, -1.55, 1.2, 0.7); // under the trolley, stage left
+  pool(1.6, 0.08, -1.75, 1.2, 0.7); // under the shelf unit, stage right
 
   // ── practicals: a point light at each drawn lamp. A bulb is a point; a shade is drawn, not
   //    simulated — and the small negative above the pendant is what keeps its light off the

@@ -57,11 +57,16 @@ export async function build(ctx) {
   // the back and the deck's cut edge are pen drawings: baked (src/core/bake.js), drawn live only
   // when the drawing code changed and `node tools/bake.mjs` has not been run yet.
   //
-  // colorful:false is deliberate. A colourful material is composited by the ink pass exactly as its
-  // texture stands, so a pattern of fine strokes mip-filters to a flat grey the moment the card is
-  // small — twenty-one grey tiles in the fan. Ink on paper is not a colour, it is a threshold: with
-  // the flag off the pass reads the texture as strokes and lays them down at one pressure, so the
-  // lattice and the medallion stay black on paper at ninety pixels wide.
+  // Two things keep the back's ink BLACK when the card is small or turned away, and both are
+  // needed:
+  //   * colorful:false — a colourful material is composited exactly as its texture stands, so a
+  //     grey texel stays grey. With the flag off the ink pass reads the texture as strokes and
+  //     lays them down at one pressure: ink on paper is a threshold, not a colour.
+  //   * inkFilter (cards-mips.js) — that threshold still needs something to bite on, and the mip
+  //     chain the GPU generates by averaging turns a lattice covering a tenth of the paper into a
+  //     ten-per-cent grey. Our own chain keeps a stroke a stroke at every level, and takes all the
+  //     anisotropy the machine has. This is what stopped the lattice thinning out in the deck
+  //     close-up, where the back is seen almost edge-on.
   const backMat = inkMaterial({ colorful: false, hatch: 0.2, lineWeight: 1 });
   const backReady = attach(
     bakedTexture('card-back', 1024, 1792, (g, w, h) => drawBack(g, w, h, mulberry32(21)), { anisotropy: 16, deps: [drawBack, frogGlyph, starGlyph, moonGlyph, lozenge, qbez, ellArc, hatchPoly, inkPath, JSON.stringify(BAND)] }).then((t) => inkFilter(t, ctx.renderer)),
