@@ -216,7 +216,9 @@ export class ErrorOverlay {}`,
   // other builders are saving files constantly; a Vite restart mid-load just means: go again
   for (let attempt = 0; ; attempt++) {
     try {
-      await page.goto(url, { waitUntil: 'load', timeout: 45000 });
+      // domcontentloaded, not load: the whole evening pulls card faces for a minute and `load`
+      // waits for every one of them. What we actually wait for is __theatreReady, below.
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
       break;
     } catch (e) {
       if (attempt >= 3) throw e;
@@ -239,8 +241,18 @@ export class ErrorOverlay {}`,
   return page;
 }
 
-const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'title', 'closing', 'creak', 'street', 'type'];
-const SECONDS = (n) => (n === 'title' || n === 'closing' ? 2.0 : n === 'street' ? 1.0 : n === 'riffle' || n === 'creak' ? 0.8 : 0.4);
+const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall'];
+const SECONDS = (n) => (n === 'title' || n === 'closing' ? 2.0 : n === 'street' ? 1.0 : n === 'riffle' || n === 'creak' || n === 'hinge' ? 0.8 : 0.4);
+// the door's five cues and where they belong across the 2.6 s swing (src/pieces/entrance.js:
+// LATCH 1/12, SHUT_AFTER_LATCH 2/12, eight drawings on twos, a beat's rest, then the walk in)
+const HOLD = 2 / 12, SWING_AT = 3 / 12, SWING_END = SWING_AT + 8 * HOLD, TRUCK_AT = SWING_END + HOLD;
+const DOOR = [
+  [0, 'latch'],
+  [SWING_AT + HOLD, 'hinge'],
+  [SWING_AT + 4 * HOLD, 'hinge'],
+  [SWING_END, 'knock'],
+  [TRUCK_AT + 2 * HOLD, 'footfall'],
+];
 
 const page = await openPage(BASE + '?view=sound&state=default');
 await page.mouse.click(600, 350); // the gesture the browser insists on
@@ -314,6 +326,53 @@ const liveAfter = await page.evaluate((t0) => {
   return { ticks: s.stats.ticks, mutedPlayed, muted: s.muted, ctxAdvanced };
 }, t0ctx);
 
+// ---- the door, measured where it is heard: on the audio clock --------------------------------------
+// The film opens on a shut door. The visitor clicks; the latch goes, the hinges twice, the leaf
+// arrives against its stop and a board takes his weight — five cues that must be SPREAD over the
+// 2.6 s swing. They used to be drained frame by frame from `while (u >= CUES[fired][0])`, so on a
+// machine slower than the swing (this headless browser renders at about 1 fps) the whole door fired
+// in one frame, within 2 ms. Now the entrance lays them on the AudioContext timeline in one go and
+// this reads them back from sound.timeline, in audio seconds from the latch.
+let door = null;
+{
+  // one heavy WebGL page at a time: two software-rendered theatres in one headless browser starve
+  // each other so badly the second never reaches domcontentloaded
+  await page.close();
+  const dp = await openPage(BASE);
+  const t0 = Date.now();
+  while (Date.now() - t0 < 40000) {
+    if (await dp.evaluate(() => window.__theatre?.pieces?.entrance?.mode === 'closed').catch(() => false)) break;
+    await dp.waitForTimeout(250);
+  }
+  await dp.mouse.click(600, 350); // the knock
+  // The swing itself is 2.6 s, but this browser renders the parlour at about one frame a second
+  // (less when other builders are screenshotting), and the figure is laid down on the first frame
+  // the entrance sees in swing mode — so wait for the latch rather than for a stopwatch.
+  const t1 = Date.now();
+  while (Date.now() - t1 < 45000) {
+    if (await dp.evaluate(() => (window.__theatre.pieces.sound.timeline ?? []).some((e) => e.name === 'latch')).catch(() => false)) break;
+    await dp.waitForTimeout(250);
+  }
+  await dp.waitForTimeout(500); // the other four go down in the same tick; let the read settle
+  const fired = await dp.evaluate(() => (window.__theatre.pieces.sound.timeline ?? []).map((e) => [e.name, e.at]));
+  const veil = await dp.evaluate(() => window.__theatre.pieces.sound.door ?? null);
+  await dp.close();
+  const names = DOOR.map((d) => d[1]);
+  const i0 = fired.findIndex((e) => e[0] === 'latch');
+  const got = i0 < 0 ? [] : fired.slice(i0, i0 + 5);
+  door = {
+    got,
+    veil,
+    ok: got.length === 5 && got.every((e, i) => e[0] === names[i]),
+    offsets: got.map((e) => e[1] - (got[0]?.[1] ?? 0)),
+  };
+  console.log(
+    `\nthe door: ${door.got.map((e, i) => `${e[0]} ${(door.offsets[i] * 1000).toFixed(0)}ms`).join(' · ')}` +
+      `\n  intended: ${DOOR.map(([s, n]) => `${n} ${(s * 1000).toFixed(0)}ms`).join(' · ')}` +
+      (veil ? `\n  the parlour was behind the leaf for ${((veil.to - veil.from) * 1000).toFixed(0)} ms` : ''),
+  );
+}
+
 // ---- an actual visit, if asked: the evening plays and the cues arrive from the other pieces --------
 let visit = null;
 if (args.visit) {
@@ -381,7 +440,7 @@ console.log(`\nTRIM (measured; worst cue is ${(offBy * 100).toFixed(0)}% off its
 console.log('export const TRIM = {\n' + Object.entries(suggest).map(([k, v]) => `  ${k}: ${v},`).join('\n') + '\n};\n');
 
 // ---- assertions -------------------------------------------------------------------------------------
-const MAXLEN = { cut: 0.03, snap: 0.13, deal: 0.11, settle: 0.15, pick: 0.15, flip: 0.09, riffle: 0.47, tap: 0.12, title: 1.5, closing: 1.5, creak: 0.44, street: 0.62, type: 0.02, clock: 0.055 };
+const MAXLEN = { cut: 0.03, snap: 0.13, deal: 0.11, settle: 0.15, pick: 0.15, flip: 0.09, riffle: 0.47, tap: 0.12, title: 1.5, closing: 1.5, creak: 0.44, street: 0.62, type: 0.03, clock: 0.055, latch: 0.06, hinge: 0.42, knock: 0.14, footfall: 0.17 };
 const fails = [];
 const ok = (cond, msg) => {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`);
@@ -419,6 +478,30 @@ ok(Math.abs(M.title.peak - M.closing.peak) < 0.12 * M.title.peak, `title and clo
 ok(Math.abs(notes.title[1] / notes.title[0] - 1.5) < 0.05, `the title figure is a fifth up (${notes.title[0].toFixed(1)} → ${notes.title[1].toFixed(1)} Hz)`);
 ok(Math.abs(notes.closing[1] / notes.closing[0] - 1 / 1.5) < 0.03, `the closing figure is its inversion, a fifth down (${notes.closing[0].toFixed(1)} → ${notes.closing[1].toFixed(1)} Hz)`);
 ok(Math.abs(notes.title[0] - notes.closing[0]) < 4, `both figures start on the same note (${notes.title[0].toFixed(1)} / ${notes.closing[0].toFixed(1)} Hz)`);
+// the door: four voices of its own, and the shape of the swing
+ok(M.latch.centroid > M.tap.centroid, `the latch is brass, brighter than wood on wood (${M.latch.centroid.toFixed(0)} > tap ${M.tap.centroid.toFixed(0)} Hz)`);
+ok(M.latch.dur < 0.07, `the latch is over in a twentieth of a second (${M.latch.dur.toFixed(3)}s)`);
+ok(M.latch.transients >= 2, `the latch is two events, the thumb-piece and the tongue (${M.latch.transients})`);
+ok(M.hinge.dur > 0.3, `the hinge is a sweep, not a click (${M.hinge.dur.toFixed(3)}s)`);
+ok(M.hinge.transients >= 6, `the hinge is stick-slip, not a tone (${M.hinge.transients} grains)`);
+ok(M.hinge.cSecondHalf > M.hinge.cFirstHalf * 1.08, `the hinge climbs as the leaf swings (${M.hinge.cFirstHalf.toFixed(0)} → ${M.hinge.cSecondHalf.toFixed(0)} Hz)`);
+ok(M.hinge.centroid > M.creak.centroid, `the hinge is drier than the chair (${M.hinge.centroid.toFixed(0)} > creak ${M.creak.centroid.toFixed(0)} Hz)`);
+ok(M.knock.centroid < 900, `the knock is a panel, low and hollow (centroid ${M.knock.centroid.toFixed(0)} Hz)`);
+ok(M.knock.peak > M.footfall.peak * 2, `the leaf against its stop is the loudest the door gets (${M.knock.peak.toFixed(3)} vs board ${M.footfall.peak.toFixed(3)})`);
+ok(M.footfall.centroid < M.knock.centroid, `the board under him is softer than the door (${M.footfall.centroid.toFixed(0)} < ${M.knock.centroid.toFixed(0)} Hz)`);
+ok(door.ok, `the door fires its five cues in order (${door.got.map((e) => e[0]).join(' ') || 'none'})`);
+if (door.ok) {
+  const worst = Math.max(...DOOR.map(([s], i) => Math.abs(door.offsets[i] - s)));
+  ok(door.offsets[4] > 2.0, `the door is spread over its swing, not one click (${(door.offsets[4] * 1000).toFixed(0)} ms end to end)`);
+  ok(worst < 0.03, `every door cue lands on its drawing (worst ${(worst * 1000).toFixed(0)} ms off)`);
+  ok(Math.min(...door.offsets.slice(1).map((o, i) => o - door.offsets[i])) > 0.3, `no two door cues are the same moment (closest ${(Math.min(...door.offsets.slice(1).map((o, i) => o - door.offsets[i])) * 1000).toFixed(0)} ms)`);
+  // and the room behind it: the parlour is heard through the leaf from the latch to the stop
+  const v = door.veil;
+  ok(
+    !!v && Math.abs(v.from - door.got[0][1]) < 0.02 && Math.abs(v.to - door.got[3][1]) < 0.02,
+    `the parlour is behind the leaf from the latch to the stop (${v ? ((v.to - v.from) * 1000).toFixed(0) : '?'} ms, the swing is ${(door.offsets[3] * 1000).toFixed(0)} ms)`,
+  );
+}
 ok(M.type.peak < clock.peak, `the caption's pen is under the clock (${M.type.peak.toFixed(4)} < ${clock.peak.toFixed(4)})`);
 ok(M.street.peak < M.deal.peak, `the street is distant (${M.street.peak.toFixed(4)} < ${M.deal.peak.toFixed(4)})`);
 ok(live.running && live.contexts === 1, `one AudioContext, opened by the gesture (${live.contexts})`);
@@ -431,23 +514,34 @@ ok(shot.played === 0 && shot.rendered === 'null' && !shot.running, `shot mode is
 ok(errors.length === 0, `no page errors${errors.length ? ':\n  ' + errors.slice(0, 6).join('\n  ') : ''}`);
 
 // ---- the waveform sheet -------------------------------------------------------------------------------
-const W = 1600, H = 900, COLS = 4, ROWS = 3;
+RAW['clock-run'] = run;
+M['clock-run'] = analyse('clock-run', run);
+const W = 1600, H = 1380, COLS = 4, ROWS = 5;
 const PAD = { l: 46, t: 96, r: 30, b: 34 };
-const PW = Math.floor((W - PAD.l - PAD.r) / COLS), PH = Math.floor((H - PAD.t - PAD.b) / ROWS);
+const STRIP = 176; // the door's own timeline, across the foot of the sheet
+const PW = Math.floor((W - PAD.l - PAD.r) / COLS), PH = Math.floor((H - PAD.t - PAD.b - STRIP) / ROWS);
 const SCALE = 0.15; // one vertical scale for every panel, so the balance is visible
 const sheet = [
   ['room tone (x10)', 'room', 3.0, 10],
   ['clock tick', 'clock', 0.06, 1],
-  ['settle — the card lands', 'settle', 0.2, 1],
+  ['the escapement, running', 'clock-run', 4.2, 1],
+  ["type — the caption's pen", 'type', 0.05, 1],
+  ['street — through the shutters', 'street', 1.0, 1],
+  ['creak — the chair', 'creak', 0.6, 1],
+  ['cut — the frame changes', 'cut', 0.06, 1],
+  ['snap — a title card', 'snap', 0.2, 1],
   ['deal — the card slides', 'deal', 0.2, 1],
+  ['settle — the card lands', 'settle', 0.2, 1],
+  ['pick — out of the fan', 'pick', 0.25, 1],
+  ['flip — turned face up', 'flip', 0.2, 1],
   ['riffle', 'riffle', 0.55, 1],
   ['tap — the deck squared', 'tap', 0.2, 1],
-  ['flip — turned face up', 'flip', 0.2, 1],
-  ['snap — a title card', 'snap', 0.2, 1],
-  ['pick — out of the fan', 'pick', 0.25, 1],
-  ['creak — the chair', 'creak', 0.6, 1],
   ['title — two notes, up a fifth', 'title', 1.7, 1],
   ['closing — the inversion, down', 'closing', 1.7, 1],
+  ['latch — brass, the tongue', 'latch', 0.09, 1],
+  ['hinge — dry, climbing', 'hinge', 0.5, 1],
+  ['knock — the leaf on its stop', 'knock', 0.25, 1],
+  ['footfall — a board', 'footfall', 0.3, 1],
 ];
 let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="${PAPER}"/>`;
 svg += `<text x="${PAD.l}" y="46" font-family="Futura, Jost, sans-serif" font-size="26" letter-spacing="3" fill="${INK}">TAROT PEPE — THE SOUND OF THE PARLOUR</text>`;
@@ -482,6 +576,54 @@ sheet.forEach(([label, key, seconds, mag], i) => {
   svg += `<text x="${cx}" y="${cy + ih + 31}" font-family="Futura, Jost, sans-serif" font-size="11" letter-spacing="1" fill="${INK}" opacity="0.65">${nums}</text>`;
   svg += `<text x="${cx + iw}" y="${cy - 5}" text-anchor="end" font-family="Futura, Jost, sans-serif" font-size="10" letter-spacing="1" fill="${INK}" opacity="0.5">${seconds}s</text>`;
 });
+// the door, as one figure: the four voices laid at the offsets the live page actually scheduled
+{
+  const sr = RAW.latch.sampleRate;
+  const SPAN = 2.7;
+  const total = Math.round(SPAN * sr);
+  const mix = new Float64Array(total);
+  const put = (key, off) => {
+    const src = RAW[key].l, m = M[key];
+    const s0 = Math.max(0, m.first - Math.round(sr * 0.003));
+    const n = Math.min(src.length - s0, Math.round((m.dur + 0.06) * sr));
+    const base = Math.round(off * sr);
+    for (let j = 0; j < n; j++) {
+      const k = base + j;
+      if (k >= 0 && k < total) mix[k] += src[s0 + j];
+    }
+  };
+  const laid = door.ok ? door.got.map((e, i) => [e[0], door.offsets[i]]) : DOOR.map(([s, n]) => [n, s]);
+  for (const [n, off] of laid) put(n, off);
+  const cx = PAD.l, cy = H - PAD.b - STRIP + 34, iw = W - PAD.l - PAD.r, ih = STRIP - 76, mid = cy + ih / 2;
+  svg += `<text x="${cx}" y="${cy - 12}" font-family="Futura, Jost, sans-serif" font-size="14" letter-spacing="1.6" fill="${INK}">THE DOOR — FIVE CUES ACROSS THE 2.6 S SWING, AT THE OFFSETS THE LIVE PAGE SCHEDULED ON THE AUDIO CLOCK</text>`;
+  svg += `<rect x="${cx}" y="${cy}" width="${iw}" height="${ih}" fill="none" stroke="${INK}" stroke-width="1" opacity="0.35"/>`;
+  svg += `<line x1="${cx}" y1="${mid}" x2="${cx + iw}" y2="${mid}" stroke="${INK}" stroke-width="0.6" opacity="0.3"/>`;
+  for (let s = 0; s <= SPAN; s += 0.5) {
+    const x = (cx + (s / SPAN) * iw).toFixed(1);
+    svg += `<line x1="${x}" y1="${cy + ih}" x2="${x}" y2="${cy + ih - 6}" stroke="${INK}" stroke-width="0.8" opacity="0.4"/>`;
+    svg += `<text x="${x}" y="${cy + ih + 16}" text-anchor="middle" font-family="Futura, Jost, sans-serif" font-size="10" letter-spacing="1" fill="${INK}" opacity="0.5">${s.toFixed(1)}S</text>`;
+  }
+  const cols = 1200;
+  let d = '';
+  for (let c = 0; c < cols; c++) {
+    const a = Math.floor((c * total) / cols), b = Math.floor(((c + 1) * total) / cols);
+    let lo = 0, hi = 0;
+    for (let j = a; j < b; j++) {
+      lo = Math.min(lo, mix[j]);
+      hi = Math.max(hi, mix[j]);
+    }
+    const x = (cx + (c * iw) / cols).toFixed(1);
+    const y1 = (mid - (Math.max(-SCALE, Math.min(SCALE, hi)) / SCALE) * (ih / 2)).toFixed(1);
+    const y2 = (mid - (Math.max(-SCALE, Math.min(SCALE, lo)) / SCALE) * (ih / 2)).toFixed(1);
+    d += `M${x} ${y1}L${x} ${Math.max(+y2, +y1 + 0.6).toFixed(1)}`;
+  }
+  svg += `<path d="${d}" stroke="${INK}" stroke-width="1.1" fill="none"/>`;
+  laid.forEach(([n, off], i) => {
+    const x = cx + (off / SPAN) * iw;
+    svg += `<line x1="${x.toFixed(1)}" y1="${cy}" x2="${x.toFixed(1)}" y2="${(cy + ih).toFixed(1)}" stroke="${MUSTARD}" stroke-width="1.2" opacity="0.9"/>`;
+    svg += `<text x="${(x + 5).toFixed(1)}" y="${(cy + 14 + (i % 2) * 15).toFixed(1)}" font-family="Futura, Jost, sans-serif" font-size="11" letter-spacing="1.1" fill="${INK}">${n.toUpperCase()} ${(off * 1000).toFixed(0)}MS</text>`;
+  });
+}
 svg += '</svg>';
 mkdirSync(dirname(PLOT), { recursive: true });
 await sharp(Buffer.from(svg)).png().toFile(PLOT);

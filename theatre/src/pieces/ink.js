@@ -24,7 +24,7 @@ import * as THREE from 'three';
 // (Reported upward: src/core/strokes.js PAPER/INK should be moved to match.)
 const PAPER = '#f8f9f4';
 const INK = '#0d0e0d';
-import { makeWallTiles, makeFloorTiles, makePaperGrain } from './ink-tiles.js';
+import { makeTiles, makePaperGrain } from './ink-tiles.js';
 import { GBUF_VERT, GBUF_FRAG, QUAD_VERT, EDGE_FRAG, EXTEND_FRAG, COMPOSITE_FRAG } from './ink-shaders.js';
 
 export const meta = {
@@ -56,16 +56,34 @@ export async function build(ctx) {
     // solid black from want of light: solid ink is reserved for materials flagged hatch ≈ 1.
     tone: [0.0, 0.5, 1.0, 0.18],
     levels: [0.55, 0.82, 0.96, 0.14], // thresholds → tone levels 1..3; w = ragged level boundary
-    pocket: 0.6, // how much a fold in the set (under a ledge, into a corner) asks for strokes
+    // How much a fold in the set (under a ledge, into a corner) asks for strokes. In a set this
+    // crowded a pocket sits behind every prop, so at 0.6 the pass put a ring of tone round each of
+    // thirty objects and the tone stopped being a decision. Halved: the pen still hatches the
+    // corners of the room and the underside of a shelf, and leaves the rest to the contour.
+    pocket: 0.32,
+    // A drawn pattern the frame has become too small to draw (a wainscot's seams across the room,
+    // a shutter's louvres, a rug's border) is not smeared out as a mip-grey: below the first number
+    // the pen simply stops drawing it and the paper stays bare — which is what strips the upper
+    // wall, the wainscot and the middle of the cloth. Between the first and the last it states the
+    // tone it averages to, on the same stroke grid as the light. Above the last it is a black AREA
+    // (a coat, a cat, a doorway) and is filled flat, the way the film fills a black coat.
+    texLevels: [0.34, 0.48, 0.58, 0.64],
     paper: 0.55, // paper grain amount (the grain itself is already a whisper)
     hatchBoil: 0.003, // tile-units of hatch shiver on twos
     letterbox: null, // e.g. 1.85 → paper-white bars; null → none
   };
 
   // ── textures drawn once ──
+  // Nothing here is awaited. The hatch tiles come off the bake through ctx.assets, which is TRACKED
+  // — main.js's `await ctx.assets.settle()` waits for them before the first judged frame — so the
+  // tone is always there when a screenshot is taken, while ink's build no longer sits on a file
+  // request. It used to: ink was the first piece in the build order to await one, and the dev
+  // server's first static request costs 7 s on an idle machine and 41 s on a loaded one, which is
+  // the whole of the "ink builds in 2.9–5.5 s" the critic measured. The real work is ~60 ms.
   const t0 = performance.now();
-  const [wallTiles, floorTiles, paperGrain] = await Promise.all([makeWallTiles(), makeFloorTiles(), makePaperGrain(512)]);
-  ctx.log(`ink tiles drawn in ${(performance.now() - t0).toFixed(0)}ms`);
+  const paperGrain = makePaperGrain(512);
+  const { wall: wallTiles, floor: floorTiles, ready: tilesReady } = makeTiles(ctx);
+  tilesReady.then(() => ctx.log(`ink tiles ready ${(performance.now() - t0).toFixed(0)}ms after the build started`));
   const white1x1 = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, THREE.RGBAFormat);
   white1x1.needsUpdate = true;
 
@@ -222,6 +240,7 @@ export async function build(ctx) {
       uPaperAmt: { value: params.paper },
       uHatchBoil: { value: params.hatchBoil },
       uPocket: { value: params.pocket },
+      uTex: { value: new THREE.Vector4(...params.texLevels) },
       uMode: { value: 0 },
       uInvVP: { value: new THREE.Matrix4() },
       uInk: { value: new THREE.Color(INK) },
@@ -329,6 +348,7 @@ export async function build(ctx) {
     cu.uPaperAmt.value = params.paper;
     cu.uHatchBoil.value = params.hatchBoil;
     cu.uPocket.value = params.pocket;
+    cu.uTex.value.set(...params.texLevels);
     cu.uMode.value = mode;
     cu.uInvVP.value.multiplyMatrices(cam.matrixWorld, cam.projectionMatrixInverse);
     cu.uLevels.value.set(...params.levels);

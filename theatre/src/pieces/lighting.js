@@ -100,7 +100,7 @@ const STATES = {
     // papered field and the wainscot, two under a ledge, three inside the window reveal — and
     // still leaves the frieze and the ceiling bare, which is the drawings' big rest. Held at 1.4:
     // at 1.5 Pepe's bowed cut-out starts to fill with strokes and his robe goes grey.
-    ink: { tone: [0.02, 0.62, 1.4, 0.22], levels: [0.55, 0.82, 0.96, 0.15] },
+    ink: { tone: [0.02, 0.62, 1.05, 0.22], levels: [0.55, 0.82, 0.96, 0.15] },
   },
   // Night is not a darker paper. The key is gone; the open room sits just inside the ink pass's
   // rain band, so plaster carries a sparse vertical shower; the three lamps lift their own pools
@@ -211,16 +211,21 @@ export async function build(ctx) {
     g.add(l);
     return l;
   };
+  // A corner is a corner: every one of these sits within half a metre of a junction and reaches
+  // about that far. Four of them used to march across the back wall under the cornice at 1.4 m of
+  // reach, which is not a corner, it is a band across the whole width — the upper wall is the
+  // drawings' one big rest and it stays bare.
   const inset = 0.24;
   for (const sx of [-1, 1]) {
     // the two vertical corners of the back wall, and the cornice above them
-    for (const y of [0.7, 1.7, 2.72]) corner(sx * (hx - inset), y, zb + inset, y > 2.5 ? 1.2 : 1, 1.9);
-    // the ceiling's long edge over each side wall
-    for (const z of [-1.2, 0.3, 1.8]) corner(sx * (hx - inset), H - inset, z, 0.85, 1.4);
+    for (const y of [0.7, 1.7, 2.72]) corner(sx * (hx - inset), y, zb + inset, y > 2.5 ? 1.2 : 1, 1.5);
+    // the ceiling's long edge over each side wall: only the stretch near the back corner
+    for (const z of [-1.9, -1.0]) corner(sx * (hx - inset), H - inset, z, 0.8, 1.1);
   }
-  // the ceiling's edge over the back wall, and the skirting line under it
-  for (const x of [-1.9, -0.65, 0.65, 1.9]) corner(x, H - inset, zb + inset, 0.85, 1.4);
-  for (const x of [-2.0, 2.0]) corner(x, 0.18, zb + inset, 0.55, 1.2);
+  // the cornice, a short reach either side of the two back corners only
+  for (const x of [-2.05, 2.05]) corner(x, H - inset, zb + inset, 0.8, 1.1);
+  // and the skirting where the back wall meets the boards, again at the corners
+  for (const x of [-2.05, 2.05]) corner(x, 0.16, zb + inset, 0.5, 1.0);
 
   // ── the pools: the dark a piece of furniture stands in ──
   // The ink pass will not hatch a surface it sees edge-on, and at the camera's height the floor is

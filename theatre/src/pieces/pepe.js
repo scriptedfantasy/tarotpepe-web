@@ -1,8 +1,25 @@
 // PIECE: pepe — Tarot Pepe himself, a PAPER CUT-OUT PUPPET made from the user's drawing
 // (public/pepe/pepe-meditation.webp): a flat figure standing on a small bench upstage of the
-// table, facing the visitor, hinged the way a paper-theatre puppet is. The layers are cut from
-// the drawing at print resolution by tools/pepe-cutout.mjs (run once; the PNGs and the manifest
-// public/pepe/cutout.json are committed):
+// table, facing the visitor, hinged the way a paper-theatre puppet is.
+//
+// ONE PEN, AND THE PAPER IS THE LIGHT. Two rules govern how he is drawn, and both are enforced
+// half here and half in tools/pepe-cutout.mjs:
+//   · His contour is the INK PASS's line, at the room's lineWeight (1.15), and nothing else. The
+//     generator peels the drawing's own marker — three times the room's weight, smooth, and unable
+//     to boil because it lives in a texture — off the outside and erodes the alpha to where its
+//     middle ran, so the silhouette the ink pass finds is his true contour and is drawn in the
+//     same hand as the wainscot. Every interior line of the drawing is re-cut to the same weight.
+//     `?view=pepe&state=lines` is the check: one pen across the whole picture.
+//   · The robe is BARE PAPER (85% of it), with drawn tone in three places only — under each
+//     forearm, along the hem the bench holds up, and down the shoulder the key cannot see. He
+//     takes no tone at all from the ink pass (hatch 0.02): a flat card facing the visitor reads
+//     one lit value across the whole of him, and one even density of hatch edge to edge is a grey
+//     wash, which is the one thing the folios never do.
+// The flat colour is printed a hair out of register under the line (skin, lips and all), the way
+// a cheap plate slips — STYLE.md §1.4, and the mustard suit in fd-anim-courtyard-three-figures.
+//
+// The layers are cut from the drawing at print resolution by tools/pepe-cutout.mjs (run once; the
+// PNGs and the manifest public/pepe/cutout.json are committed):
 //
 //   body (robe, legs, feet, sleeves with their cuff lines)     z 0
 //   handL / handR, hinged at the wrist, tucked UNDER the sleeve  z -0.5 mm
@@ -103,9 +120,27 @@ export async function build(ctx) {
   root.name = 'pepe';
   root.position.set(...pos);
 
-  // ── materials: the drawing's own colour, alpha-cut, a light hand for the ink pass ──
+  // ── materials: the drawing's own colour, alpha-cut, and ONE PEN ─────────────────────────────
+  // He is drawn with the room's pen or he is a second drawing pasted into the first. Two numbers
+  // do that, and they are the whole of it:
+  //
+  //   lineWeight 1.1  the room's own weight (room.js: trim 1.15, wood and shutters 1.1). His
+  //                   contour is now the INK PASS's line and nothing else — tools/pepe-cutout.mjs
+  //                   peels the drawing's fat marker off the outside and erodes the alpha to where
+  //                   its middle ran, so the silhouette the ink pass finds is his true contour and
+  //                   it is drawn in the room's hand, with the room's wobble and the room's boil.
+  //                   (?view=pepe&state=lines is the proof: one pen across the whole picture.)
+  //   hatch 0.02      and NO tone from the ink pass. He is a flat card facing the visitor, so the
+  //                   lit pass reads one value across the whole of him and lays one even density
+  //                   of diagonal hatch edge to edge — a grey wash, the exact thing the folios
+  //                   never do. A cut-out's tone is DRAWN ON THE PAPER, in the three places the
+  //                   light is not (the generator's wedges), and nowhere else.
+  //
+  // The overlays (pupils, eye lines, lids, mouths) sit a fraction of a millimetre in front of the
+  // head; at lineWeight 0 the edge pass drops their seed entirely, so no line is drawn round a
+  // pupil or a mouth that is already drawn.
   const textures = [];
-  const cutMat = (layer, { hatch = 0.35, lineWeight = 0.4 } = {}) => {
+  const cutMat = (layer, { hatch = 0.02, lineWeight = 1.15 } = {}) => {
     const mat = inkMaterial({ color: '#ffffff', colorful: true, hatch, lineWeight, roughness: 1 });
     mat.alphaTest = 0.5;
     mat.name = layer;
@@ -171,7 +206,7 @@ export async function build(ctx) {
   const headMats = [];
   for (const [name, z] of overlayOrder) {
     hg = layerGeometry(L[name], A.neck, z, m, hg);
-    headMats.push(cutMat(name, name === 'head' ? {} : { hatch: 0.35, lineWeight: 0.4 }));
+    headMats.push(cutMat(name, name === 'head' ? {} : { hatch: 0, lineWeight: 0 }));
   }
   const headMesh = new THREE.Mesh(toBuffer(hg), headMats);
   headMesh.name = 'headMesh';
@@ -222,6 +257,19 @@ export async function build(ctx) {
   mouthAnchor.position.set((A.mouth[0] - A.neck[0]) * m * HEAD_S, -(A.mouth[1] - A.neck[1]) * m * HEAD_S, 3 * Z_STEP);
   headPivot.add(mouthAnchor);
 
+  // WHY HE IS NOT MOVED FORWARD FOR HIS SHADOW. He does cast — he is in the key's caster list and
+  // in the lit pass — but the key runs stage-left and downstage (lighting.js KEY_DIR
+  // (−0.48, 0.56, 0.68)), so the light TRAVELS right, down and UPSTAGE, and his silhouette is
+  // thrown to about (+0.86, 0, −2.0): the strip of floor between the bench and the back wall,
+  // which the console and the table hide from every shot. Measured, not argued:
+  // tools/_pepe-shadow.mjs renders the lit buffer with him in the room and again with him taken
+  // out of it and diffs the two. At his place: nothing but occlusion. Half a metre upstage (the
+  // lighting piece's suggestion): still nothing, and his hands leave the table. Downstage is not
+  // available — the table's back edge is 0.2 m in front of the bench. So he stays, and the ask
+  // goes to lighting instead: the table lamp sits UPSTAGE of him at (−0.36, 1.02, −2.29), and if
+  // it cast, the shadow of his crossed legs would fall DOWNSTAGE across the cloth at about
+  // (−0.12, 0.76, −0.04) — a paper puppet's silhouette lying on the table, in view, for free.
+  //
   // ── the bench: a plain paper-white block he sits on; the table hides it in the home shot ──
   const benchW = 0.94 * BODY_X, benchD = 0.36;
   const bench = new THREE.Mesh(new THREE.BoxGeometry(benchW, feetY, benchD), inkMaterial({ color: PAPER, hatch: 0.55, lineWeight: 1 }));

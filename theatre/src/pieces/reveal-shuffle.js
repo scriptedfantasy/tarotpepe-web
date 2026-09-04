@@ -12,7 +12,7 @@
 //   inner corners touching · six frames of interleaving, the middle pile growing · the pile
 //   pushed together · lifted and stood on its long edge · tapped square · set down.
 import * as THREE from 'three';
-import { hold } from './reveal-takes.js';
+import { hold, compose, handFrames } from './reveal-takes.js';
 
 const _v = new THREE.Vector3();
 const _e = new THREE.Euler();
@@ -97,7 +97,14 @@ export function deckStacks(deck, T) {
   return { real, nTotal, nBase, W, H, T, hTemplate, stack, cards, pivot, flat, showReal, hide, dispose };
 }
 
-export function buildShuffle(ctx, deck, T, { cues = {} } = {}) {
+// The whole shuffle. It used to be eighteen drawings — a second and a half — which the flow then
+// sat on for nine seconds, so what a visitor actually saw was a small stack not moving. It is now
+// three riffles and a square-up, about four and a half seconds of continuous motion, with HIS
+// HAND on the deck for every drawing of it: on the packet as it is cut, over the bridge as the
+// halves go into each other, pressing the pile flat, on the stood packet as it is tapped square.
+// (The drawn hand only lies on the cloth for a lens above the table — reveal-hand.js — so this
+// beat has to be cut to an overhead; reveal.js stages the judging state that way.)
+export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, rounds = 3 } = {}) {
   const S = deckStacks(deck, T);
   if (!S) return null;
   const { nTotal, W, H, cards, pivot, flat, showReal } = S;
@@ -108,84 +115,125 @@ export function buildShuffle(ctx, deck, T, { cues = {} } = {}) {
   const temps = [A, B, C, D];
   const hideTemps = () => S.hide(temps);
 
-  const frames = [];
-  const F = (fn) => frames.push(fn);
+  // deck-local → world, for putting his hand on what the drawing is doing
+  const toWorld = (x, y, z) => {
+    deck.updateMatrixWorld(true);
+    const p = _v.clone().set(x, y, z);
+    deck.localToWorld(p);
+    return p;
+  };
+  const yaw = () => -(deck.rotation?.y ?? 0);
+  // a hand spec on the deck: `y` is metres above the CLOTH, which is where the deck sits
+  // `yw` turns the hand across the deck. At nought his hand comes straight down the frame and its
+  // palm ends up BEHIND the raised half of the bridge, so all that shows of him is two fingertips;
+  // turned three quarters of a radian the wrist swings out to the left of the deck, where his
+  // shoulder is anyway, and the whole hand is in the picture with its fingers coming down onto
+  // the cards.
+  const on = (x, z, y, pose = 'splay', yw = 0.16) => {
+    const p = toWorld(x, 0, z);
+    return { x: p.x, y: Math.max(0.003, y), z: p.z, yaw: yaw() + yw, pose, side: 'R' };
+  };
+  const handSpecs = [];
+  const H2 = (s) => handSpecs.push(s); // one spec per drawing, in step with `frames`
 
-  // 0-1: the deck as it is
+  const frames = [];
+  const F = (fn, spec) => {
+    frames.push(fn);
+    H2(spec ?? { off: true });
+  };
+
+  // 0-1: the deck as it is, his hand coming in from the top of the frame
+  const top = () => nTotal * T;
+  F(
+    () => {
+      showReal(true);
+      hideTemps();
+    },
+    { ...on(-0.03, -0.24, 0.075), pose: 'splay' },
+  );
   F(() => {
     showReal(true);
     hideTemps();
-  });
-  hold(frames, 1);
-  // 2: the cut — the top half lifted clear, tilted by the thumb
-  F(() => {
-    showReal(false);
-    hideTemps();
-    cards(B, nB, 0);
-    flat(B, 0, 0, 0);
-    cards(A, nA, nB);
-    pivot(A, _v.clone().set(-0.02, nB * T + 0.024, 0.006), _e.set(0, 0.1, 0.14), -W / 2, -0.5, 0);
-    cues.cut?.();
-  });
-  // 3: the halves part, flat, a hand's width apart
-  F(() => {
-    showReal(false);
-    hideTemps();
-    cards(B, nB, 0);
-    flat(B, -0.082, 0.012, -0.3);
-    cards(A, nA, nB);
-    flat(A, 0.082, 0.012, 0.3);
-  });
-  // 4: both bend up on their outer edges, inner corners touching at the middle
-  const bent = (u) => {
+  }, on(-0.02, -0.10, 0.03));
+
+  // ---- one riffle: the cut, the halves parted, the bridge, the interleave, the pile ------------
+  const bent = (u, k) => {
     const rA = Math.round(nA * (1 - u)), rB = Math.round(nB * (1 - u)), rC = nTotal - rA - rB;
     showReal(false);
     hideTemps();
     if (rC > 0) {
       cards(C, rC, 0);
-      flat(C, 0.002 * (u > 0.5 ? -1 : 1), 0.008, 0.05 * (Math.round(u * 6) % 2 ? -1 : 1));
+      flat(C, 0.002 * (u > 0.5 ? -1 : 1), 0.008, 0.05 * (k % 2 ? -1 : 1));
     }
-    const top = rC * T;
+    const t0 = rC * T;
+    // the halves are bent up hard on their outer edges and their inner corners meet over the pile:
+    // the bridge. The steeper they stand, the more of each half's cut side the lens sees, which is
+    // the only place the interleave can be read from.
     if (rA > 0) {
       cards(A, rA, nB + nA - rA);
-      pivot(A, _v.clone().set(0.02, top, 0.01), _e.set(0, 0.3, 0.44), -W / 2, -0.5, 0);
+      pivot(A, _v.clone().set(0.026, t0 + 0.002, 0.012), _e.set(0, 0.34, 0.58), -W / 2, -0.5, 0);
     }
     if (rB > 0) {
       cards(B, rB, 0);
-      pivot(B, _v.clone().set(-0.02, top, 0.01), _e.set(0, -0.3, -0.44), W / 2, -0.5, 0);
+      pivot(B, _v.clone().set(-0.026, t0 + 0.002, 0.012), _e.set(0, -0.34, -0.58), W / 2, -0.5, 0);
     }
   };
-  F(() => {
-    bent(0);
-    cues.riffle?.();
-  });
-  // 5-10: the riffle, six drawings
-  for (let j = 1; j <= 6; j++) {
-    const u = j / 6;
-    F(() => bent(u));
-  }
-  // 11: the pile, untidy: a few cards sit crooked on top
   const loose = 5;
-  F(() => {
-    showReal(false);
-    hideTemps();
-    cards(C, nTotal - loose, 0);
-    flat(C, 0.004, 0.006, 0.08);
-    cards(D, loose, nTotal - loose);
-    flat(D, 0.011, 0.003, -0.17);
-    D.position.y = (nTotal - loose) * T + (loose * T) / 2 + 0.0004;
-  });
-  // 12: pushed together
-  F(() => {
-    showReal(false);
-    hideTemps();
-    cards(C, nTotal - loose, 0);
-    flat(C, 0.001, 0.003, 0.02);
-    cards(D, loose, nTotal - loose);
-    flat(D, 0.003, 0.002, -0.05);
-    D.position.y = (nTotal - loose) * T + (loose * T) / 2 + 0.0003;
-  });
-  // 13: lifted and stood on its long edge, the low edge a finger above the table
+  const RIFFLE = 8; // drawings of interleave: long enough to see the cards go into each other
+  function riffle() {
+    // the cut: the top half lifted clear, tilted by the thumb
+    F(() => {
+      showReal(false);
+      hideTemps();
+      cards(B, nB, 0);
+      flat(B, 0, 0, 0);
+      cards(A, nA, nB);
+      pivot(A, _v.clone().set(-0.024, nB * T + 0.03, 0.006), _e.set(0, 0.1, 0.16), -W / 2, -0.5, 0);
+      cues.cut?.();
+    }, on(-0.03, 0.004, nB * T + 0.036, 'pinch'));
+    // the halves part, flat, a hand's width apart
+    F(() => {
+      showReal(false);
+      hideTemps();
+      cards(B, nB, 0);
+      flat(B, -0.095, 0.014, -0.3);
+      cards(A, nA, nB);
+      flat(A, 0.095, 0.014, 0.3);
+    }, on(0.082, 0.02, nA * T + 0.012, 'splay', 0.42));
+    // the bridge, then the interleave
+    F(() => {
+      bent(0, 0);
+      cues.riffle?.();
+    }, on(0.016, -0.03, 0.132, 'splay', 0.42));
+    for (let j = 1; j <= RIFFLE; j++) {
+      const u = j / RIFFLE;
+      // the hand rides the bridge down as the pile grows under it
+      F(() => bent(u, j), on(0.016 - 0.014 * u, -0.03, 0.128 - 0.036 * u, 'splay', 0.42));
+    }
+    // the pile, untidy: a few cards sit crooked on top
+    F(() => {
+      showReal(false);
+      hideTemps();
+      cards(C, nTotal - loose, 0);
+      flat(C, 0.004, 0.006, 0.08);
+      cards(D, loose, nTotal - loose);
+      flat(D, 0.011, 0.003, -0.17);
+      D.position.y = (nTotal - loose) * T + (loose * T) / 2 + 0.0004;
+    }, on(0.006, 0.012, top() + 0.014, 'splay'));
+    // pushed together under the flat of his hand
+    F(() => {
+      showReal(false);
+      hideTemps();
+      cards(C, nTotal - loose, 0);
+      flat(C, 0.001, 0.003, 0.02);
+      cards(D, loose, nTotal - loose);
+      flat(D, 0.003, 0.002, -0.05);
+      D.position.y = (nTotal - loose) * T + (loose * T) / 2 + 0.0003;
+    }, on(0.002, 0.008, top() + 0.004, 'splay'));
+  }
+  for (let r = 0; r < Math.max(1, rounds); r++) riffle();
+
+  // ---- the square-up: the packet stood on its long edge and tapped -----------------------------
   const stood = (yLow, tilt, cue) => () => {
     showReal(false);
     hideTemps();
@@ -193,17 +241,31 @@ export function buildShuffle(ctx, deck, T, { cues = {} } = {}) {
     pivot(C, _v.clone().set(-0.028, yLow, 0.004), _e.set(0, 0.02, tilt), -W / 2, -0.5, 0);
     cue?.();
   };
-  F(stood(0.014, 0.62));
-  // 14: the tap
-  F(stood(0.0, 0.62, cues.tap));
-  // 15: a second tap, a hair higher
-  F(stood(0.006, 0.6));
-  F(stood(0.0, 0.62, cues.tap));
-  // 17: set down, square: the real deck again
+  const grip = (y) => on(-0.028, 0.004, y, 'pinch');
+  F(stood(0.022, 0.62), grip(0.03));
+  F(stood(0.0, 0.62, cues.tap), grip(0.012));
+  F(stood(0.012, 0.6), grip(0.022));
+  F(stood(0.0, 0.62, cues.tap), grip(0.012));
+  F(stood(0.008, 0.62), grip(0.018));
+  F(stood(0.0, 0.62, cues.tap), grip(0.012));
+  // set down, square: the real deck again, and his hand off the top of the frame
   F(() => {
     hideTemps();
     showReal(true);
     cues.done?.();
+  }, on(-0.01, -0.03, 0.03));
+  F(() => {
+    hideTemps();
+    showReal(true);
+  }, on(-0.02, -0.22, 0.08));
+  F(() => {
+    hideTemps();
+    showReal(true);
   });
-  return { frames, temps, W, H, stacks: S };
+  hold(frames, 2);
+  H2(null);
+  H2(null);
+
+  if (!hand) return { frames, temps, W, H, stacks: S };
+  return { frames: compose([{ offset: 0, frames }, { offset: 0, frames: handFrames(hand, handSpecs) }]), temps, W, H, stacks: S };
 }

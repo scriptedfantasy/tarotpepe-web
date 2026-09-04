@@ -7,16 +7,12 @@
     "kind": "png",
     "file": "deck-side-01d6eeba.png"
   },
-  "ink-paper-7df40bfd": {
+  "ink-wall-7f452b83": {
     "kind": "png",
-    "file": "ink-paper-7df40bfd.png"
+    "file": "ink-wall-7f452b83.png"
   },
-  "ink-wall-3efc07d7": {
+  "ink-floor-ca17220b": {
     "kind": "png",
-    "file": "ink-wall-3efc07d7.png"
-  },
-  "ink-floor-1b6701e4": {
-    "kind": "png",
-    "file": "ink-floor-1b6701e4.png"
+    "file": "ink-floor-ca17220b.png"
   }
 }

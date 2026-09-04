@@ -1,21 +1,23 @@
 // PIECE: table — the reading table: a round café table on a turned pedestal, dressed with a square
 // fringed café cloth laid corner-forward so a point hangs towards the visitor and the hem is two
-// lines dropping out of the frame. The cloth's check is drawn thread by thread and is not
-// everywhere: it is full at the rim and across the far half and thins to almost bare paper through
-// the middle, where the three cards and the fan lie (see table-textures.js). The still life sits in
+// lines dropping out of the frame. The cloth's check is a field of short dashes in rows that bend
+// with the drape — never a ruled thread, never one that crosses more than a fifth of the table —
+// full round the rim and across the far half, thinning to a whisper through the middle where the
+// three cards and the fan lie, with an embroidered hem band round the edge and three fold creases
+// the cloth kept from the drawer (see table-weave.js and table-textures.js). The still life sits in
 // one row across the far band — a wine glass, an ashtray, a candle stuck in a bottle, a saucer with
 // an espresso cup, a folded newspaper, coins, a pocket watch, a folded letter, a matchbox — and the
 // whole near half is clear for the three card slots and the deck (ctx.layout.spread / deck).
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
-import { surface, lathe, merge, smooth, CLOTH_ROT } from './table-geo.js';
+import { surface, lathe, merge, smooth, CLOTH_ROT, pleatFold, SKIRT_DROP } from './table-geo.js';
 import { clothTopTexture, skirtTexture, fringeTexture, woodTexture, wrapRepeat } from './table-textures.js';
 import { buildStillLife, PLACES } from './table-objects.js';
 
 export const meta = {
   name: 'table',
   judge: { shot: 'table', states: ['default'] },
-  files: ['src/pieces/table.js', 'src/pieces/table-geo.js', 'src/pieces/table-textures.js', 'src/pieces/table-objects.js'],
+  files: ['src/pieces/table.js', 'src/pieces/table-geo.js', 'src/pieces/table-textures.js', 'src/pieces/table-objects.js', 'src/pieces/table-weave.js'],
 };
 
 export async function build(ctx) {
@@ -115,13 +117,11 @@ export async function build(ctx) {
   const corner = (th) => (rho(th) / W - 1) / (Math.SQRT2 - 1); // 0 at edge middles, 1 at corners
   const hang = (th) => rho(th) - R + 0.006 * Math.sin(9 * th + 1.3) + 0.004 * Math.sin(17 * th + 0.4) + 0.008 * Math.sin(2 * th + 0.6);
   // pleats: knife pleats — a sawtooth with a long gentle face and a short steep one, so every
-  // pleat has a real crease (a dihedral the ink pass draws as one fold line). The excess fabric of
-  // a square cloth gathers towards the corners, so the amplitude follows `corner`.
-  const saw = (x, steep = 0.14) => {
-    const p = x / (Math.PI * 2) - Math.floor(x / (Math.PI * 2)); // 0..1 within the period
-    return p < 1 - steep ? -1 + (2 * p) / (1 - steep) : 1 - (2 * (p - (1 - steep))) / steep;
-  };
-  const fold = (th) => 0.8 * saw(24 * th + 0.8) + 0.2 * Math.sin(9 * th + 2.0);
+  // pleat has a real crease (a dihedral the ink pass draws as one fold line). PLEATS of them, not
+  // two dozen: a skirt ruled with fine folds is all line and can never take tone, and this is the
+  // largest camera-facing surface at the bottom of the frame. The excess fabric of a square cloth
+  // gathers towards the corners, so the amplitude follows `corner`.
+  const fold = pleatFold;
   const arc = S * (Math.PI / 2);
   // position on the skirt for angle th and drop fraction v (0 at the top edge, 1 at the hem)
   function skirtPoint(th, v) {
@@ -142,11 +142,11 @@ export async function build(ctx) {
       // the pleats lift the hem a touch where the fabric doubles back
       y = top - S - dd + 0.005 * c * grow * Math.max(0, fold(th));
     }
-    return [r * Math.sin(th), y, r * Math.cos(th), (th / (Math.PI * 2)) * 2, 1 - (H - d) / 0.5];
+    return [r * Math.sin(th), y, r * Math.cos(th), (th / (Math.PI * 2)) * 2, 1 - (H - d) / SKIRT_DROP];
   }
-  // 720 around so the steep face of each pleat (≈2° wide) gets its own facets; flat normals so
-  // the crease is a true dihedral.
-  const skirtGeo = surface((u, v) => skirtPoint(u * Math.PI * 2, v), 720, 36).toNonIndexed();
+  // 384 around: the steep face of each of the 13 pleats (≈4.4° wide) still gets three facets, and
+  // flat normals keep every crease a true dihedral.
+  const skirtGeo = surface((u, v) => skirtPoint(u * Math.PI * 2, v), 384, 26).toNonIndexed();
   skirtGeo.computeVertexNormals();
   const skirtMat = inkMaterial({ map: wrapRepeat(skirtTexture(W, R - S)), hatch: 0.45, side: THREE.DoubleSide });
   const skirt = new THREE.Mesh(skirtGeo, skirtMat);
@@ -182,7 +182,7 @@ export async function build(ctx) {
         const rr = Math.hypot(p[0], p[2]) + 0.002 + v * 0.004;
         return [Math.sin(th) * rr, p[1] + 0.004 - v * FR, Math.cos(th) * rr, u * REP, 1 - v];
       },
-      720,
+      384,
       2,
     );
     const fringeMat = inkMaterial({ map: fringeTexture(), hatch: 0, lineWeight: 0.5, side: THREE.DoubleSide, transparent: true });

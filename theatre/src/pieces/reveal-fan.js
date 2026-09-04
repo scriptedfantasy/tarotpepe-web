@@ -19,12 +19,22 @@ import { compose, dealTrack, handFrames, handSide } from './reveal-takes.js';
 import { deckStacks } from './reveal-shuffle.js';
 
 // The arc: pivot at (0, zMid - R), radius R, half-angle A. Every corner stays on the cloth and
-// clear of the deck's footprint and of the slot cards' near edge (searched in tools/_fan-geom.mjs).
+// clear of the slot cards' near edge (searched in tools/_fan-geom2.mjs).
+//
+// `rake` is how much harder each card is turned than the path it sits on. The two used to be the
+// same number, which is why the ribbon read as a slightly bent ROW: at half-angle 0.32 the end
+// cards were only 18° off square, and a fan is a fan because its cards splay. Raking them 2.1×
+// the path angle puts the end cards 30° over while the path itself stays a shallow bow, so the
+// ribbon splays without getting any deeper — and depth is the whole problem here, the cloth
+// between the slot row (which ends at z = 0.254) and the table's rim (0.62) being barely wider
+// than one card is long. The arc now runs z 0.265 … 0.571, which leaves 5 cm of cloth in front of
+// it instead of running off the near edge of the table and out of the bottom of the frame.
+//
 // lift/slide: the hover pose. A card in a ribbon lies under the cards to its right, so a hover
 // does not lift it through them: it slides it out of the fan toward the visitor, a finger's
 // length, the way a card is offered from a fan; the pinch that lifts it is the pick's first drawing.
 // under: how many cards lie under a card's left edge once the ribbon is established.
-export const FAN = { n: 21, zMid: 0.44, R: 0.85, A: 0.32, lift: 0.0, slide: 0.04, under: 5 };
+export const FAN = { n: 21, zMid: 0.425, R: 0.94, A: 0.25, rake: 2.1, lift: 0.0, slide: 0.026, under: 5 };
 
 const PI = Math.PI;
 const lerp = (a, b, u) => a + (b - a) * u;
@@ -164,7 +174,7 @@ export function buildFan(ctx, cards, player, hand = null) {
     out.x = FAN.R * Math.sin(th) + e.jx;
     out.z = zp + FAN.R * Math.cos(th) + e.jz;
     out.y = Y + T / 2 + h / 2;
-    out.ry = -th + e.jr;
+    out.ry = -th * FAN.rake + e.jr; // raked harder than the path it sits on: see FAN above
     out.roll = Math.asin(Math.min(1, h / W));
     return out;
   }
@@ -392,7 +402,7 @@ export function buildFan(ctx, cards, player, hand = null) {
     const rem = entries.filter((e) => !e.removed).sort((a, b) => a.u - b.u);
     const R = rem.length;
     const rests = rem.map((e) => restPose(e, {}));
-    const closed = (r) => ({ x: FAN.R * Math.sin(FAN.A) + 0.004, y: Y + T / 2 + r * T, z: zp + FAN.R * Math.cos(FAN.A), ry: -FAN.A });
+    const closed = (r) => ({ x: FAN.R * Math.sin(FAN.A) + 0.004, y: Y + T / 2 + r * T, z: zp + FAN.R * Math.cos(FAN.A), ry: -FAN.A * FAN.rake });
     const onDeck = (r) => {
       const p = deckToWorld(0.003, nRest() * T + r * T + T / 2, 0.002);
       return { x: p.x, y: p.y, z: p.z, ry: -(deckYaw() + 0.04) };
@@ -447,9 +457,9 @@ export function buildFan(ctx, cards, player, hand = null) {
     const dk = deckToWorld(0.003, 0, 0.002);
     const sweep = (f) => {
       const th = FAN.A * (2 * f - 1);
-      return { x: FAN.R * Math.sin(th), y: 0.004 + f * 0.008, z: zp + FAN.R * Math.cos(th), yaw: -th, pose: 'splay' };
+      return { x: FAN.R * Math.sin(th), y: 0.004 + f * 0.008, z: zp + FAN.R * Math.cos(th), yaw: -th * FAN.rake, pose: 'splay' };
     };
-    const packet = { x: closed(0).x, y: R * T + 0.004, z: closed(0).z, yaw: -FAN.A, pose: 'splay' };
+    const packet = { x: closed(0).x, y: R * T + 0.004, z: closed(0).z, yaw: -FAN.A * FAN.rake, pose: 'splay' };
     const specs = [{ ...sweep(0), y: 0.09, z: sweep(0).z - 0.3 }];
     for (let k = 0; k < SWEEP; k++) specs.push(sweep(k / (SWEEP - 1)));
     specs.push(packet, { ...packet, y: 0.05, z: packet.z - 0.05, pose: 'pinch' }, { x: dk.x, y: nRest() * T + R * T + 0.004, z: dk.z, yaw: -0.16, pose: 'pinch' }, { x: dk.x, y: 0.1, z: dk.z - 0.3, yaw: -0.16, pose: 'pinch' }, { off: true });
@@ -548,7 +558,7 @@ export function buildFan(ctx, cards, player, hand = null) {
   // the shot the whole time the visitor is deciding.
   // It waits to the right of the spread, clear of the slots and just below the deck, far enough
   // into the picture that the whole drawing is in frame.
-  const WAIT = { x: 0.395, z: 0.225, yaw: -0.26 };
+  const WAIT = { x: 0.44, z: 0.30, yaw: -0.30 };
   function waiting() {
     if (!hand) return;
     const k = ctx.clock.frame % 30;

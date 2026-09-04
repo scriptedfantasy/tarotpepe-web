@@ -8,10 +8,12 @@
 // brief, no winking. Every one of them is a line said with the field open underneath it, so each
 // has to be a thing a person can answer — never a dead end.
 export const PROMPTS = {
+  // Short, because at the fan the lettering stands on the band of cloth above the slot row and
+  // that band is a sixth of the frame: three lines fit there, five sit on the cards.
   pick: [
-    'Choose a card. Click one, or say which: the third from the left, the one on the far right.',
-    'A second. Any of them. They are all face down, which is the point.',
-    'And the third. Take your time. Not too much of it.',
+    'Choose a card. Click one, or name it: third from the left.',
+    'A second. They are all face down, which is the point.',
+    'And the third. Take your time; not too much of it.',
   ],
   pickAgain: ['I did not follow. Point at one, or count from the left.', 'Once more. A number, or left, right, middle.'],
   pickForYou: 'Very well. I will choose. People do not like it when I choose.',

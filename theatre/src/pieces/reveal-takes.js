@@ -126,7 +126,11 @@ export function turnEdge(phi, H) {
 // the fingers riding the edge up, and lets go as it falls over. The card never moves on its own.
 // hand: the reveal-hand api, or null (then the card turns alone, as before).
 // dx / yaw: where on the near edge the fingers land, and how far his arm is turned across.
-export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 0.02, yaw = -0.3 } = {}) {
+// dx / yaw: his fingers land on the OUTER corner of the near edge, not in the middle of it, and
+// the hand is turned across so its arm runs up past the side of the card. Reaching for the middle
+// of the near edge means reaching over the whole card, and a hand that lies over the card it is
+// about to turn is a hand you cannot see: the card rears up in front of it and swallows it.
+export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 0.058, yaw = -0.46 } = {}) {
   const at = (phi, ry, cue, extraY = 0, extraZ = 0) => () => {
     const { rx, y, dz } = turnPose(phi, H);
     mesh.visible = true;
@@ -143,12 +147,20 @@ export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 
     at(0, slot.ry), // as dealt
     at(0, slot.ry), // still as dealt: the hand is on its way
     at(0, slot.ry),
-    at(1.2, slot.ry, cues.touch, 0.0008, 0.003), // the fingers land: a hair up, slid toward the visitor
-    at(1.2, slot.ry, null, 0.0008, 0.003), // and hold
-    at(28, slot.ry, cues.lift),
-    at(64, slot.ry + 0.02),
-    at(90, slot.ry + 0.03), // on edge: the face shown to the visitor
-    at(90, slot.ry + 0.03), // held one frame
+    at(0, slot.ry, cues.touch, 0.0006, 0.003), // the fingertip lands on the near edge: a hair up, slid over
+    // THE FIRST DRAWING OF THE TURN. The card does not rise off the cloth by itself: the near edge
+    // rides up and upstage OVER the fingertip that landed under it, so the last few millimetres of
+    // the finger go under the card and the rest of it stays in the picture. Everything after this
+    // is that same edge climbing the same finger.
+    at(12, slot.ry, cues.lift),
+    at(34, slot.ry),
+    at(62, slot.ry + 0.02),
+    // On edge — but 78°, not 90°. Straight up, the card is a plane containing the lens axis of any
+    // near-overhead frame and vanishes to a hairline in the very drawing the whole beat exists
+    // for. Tipped twelve degrees back toward the visitor it still reads as a card stood on its
+    // edge from a level lens and shows its face from a steep one.
+    at(78, slot.ry + 0.03), // on edge: the face shown to the visitor
+    at(78, slot.ry + 0.03), // held one frame
     at(138, slot.ry + 0.02),
     at(176, landed.ry + 0.02, cues.land, 0.005), // the bounce: 5 mm up, almost flat
     settled,
@@ -160,10 +172,16 @@ export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 
   const s = side === 'L' ? -1 : 1;
   const X = slot.p.x + s * dx;
   const base = { yaw, side, pose: 'point' };
-  // the fingers on the near edge, drawing it up; they let go at 90° and come back to the cloth
-  const on = (phi) => {
+  // The fingers on the near edge, drawing it up. `tuck` is how far UPSTAGE of the edge the
+  // fingertip sits — that is, how much of the fingertip the card overhangs. It is what makes the
+  // turn read as a hand lifting a card rather than a card levitating next to a hand.
+  // `ride` is how far up the edge the finger has come. It starts near nought: the finger slides
+  // UNDER the near edge and stays on the cloth while the card tips over it, which is what puts the
+  // last few millimetres of the fingertip behind the card instead of on top of it — a cut-out at
+  // the edge's own height draws over the card and reads as a hand lying on it.
+  const on = (phi, tuck = 0, ride = 1) => {
     const e = turnEdge(phi, H);
-    return { ...base, x: X, y: Math.min(e.y, 0.9 * hand.HAND.reach) + 0.002, z: slot.p.z + e.z };
+    return { ...base, x: X, y: Math.min(e.y * ride, 0.9 * hand.HAND.reach) + 0.002, z: slot.p.z + e.z - tuck };
   };
   const near = slot.p.z + H / 2;
   return compose([
@@ -172,17 +190,17 @@ export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 
       offset: 0,
       frames: handFrames(hand, [
         { off: true }, // before this card's turn: another card's hand may be on the cloth
-        { ...base, x: X, y: 0.06, z: near - 0.26 }, // in from the top of the frame
-        { ...base, x: X, y: 0.02, z: near - 0.09 },
-        on(1.2), // the fingers land on the near edge
-        on(1.2), // and hold
-        on(28),
-        on(64),
-        on(90),
-        on(90),
-        { ...base, x: X, y: 0.012, z: slot.p.z + 0.02 }, // let go
-        { ...base, x: X + s * 0.01, y: 0.03, z: near - 0.14 }, // drawn back
-        { ...base, x: X + s * 0.02, y: 0.06, z: near - 0.28 },
+        { ...base, x: X, y: 0.055, z: near - 0.24 }, // in from the top of the frame
+        { ...base, x: X, y: 0.018, z: near - 0.08 },
+        on(0), // the fingertip lands on the near edge
+        on(12, 0.009, 0.12), // and the edge comes up OVER it: the finger is still on the cloth
+        on(34, 0.007, 0.5),
+        on(62, 0.005, 0.85),
+        on(78, 0.004),
+        on(78, 0.004),
+        { ...base, x: X, y: 0.010, z: slot.p.z + 0.02 }, // let go
+        { ...base, x: X + s * 0.01, y: 0.028, z: near - 0.13 }, // drawn back
+        { ...base, x: X + s * 0.02, y: 0.055, z: near - 0.26 },
         { off: true },
       ]),
     },

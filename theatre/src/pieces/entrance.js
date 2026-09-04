@@ -133,16 +133,13 @@ export async function build(ctx) {
   const SHUT = { k: 0, theta: 0, jolt: 0, zoom: 1 };
   const WIDE = { k: 3 + SWING.length, theta: OPEN, jolt: 0, zoom: 1 };
 
-  // the cues, fired once each as the swing passes them
-  // The sound piece has no latch, no hinge and no footfall of its own (see contractRequests): the
-  // latch borrows the deck's tap, the hinges borrow the chair's creak — dry wood under load, which
-  // is what a hinge is — and the stop borrows a card's settle.
+  // the cues, laid across the swing in one go when it begins (see update)
   const CUES = [
-    [0, 'tap'], // the latch
-    [SWING_AT + HOLD, 'creak'], // the hinges take the weight
-    [SWING_AT + 4 * HOLD, 'creak'],
-    [SWING_END, 'settle'], // it comes to rest against the stop
-    [TRUCK_AT + 2 * HOLD, 'creak'], // a board under the visitor, going in
+    [0, 'latch'], // the thumb-piece, then the tongue off the strike plate
+    [SWING_AT + HOLD, 'hinge'], // the hinges take the weight
+    [SWING_AT + 4 * HOLD, 'hinge'],
+    [SWING_END, 'knock'], // the leaf comes to rest against the stop: wood on wood
+    [TRUCK_AT + 2 * HOLD, 'footfall'], // a board under the visitor, going in
   ];
   let fired = 0;
 
@@ -250,7 +247,15 @@ export async function build(ctx) {
       if (mode === 'loop') return paint(poseAt(c.clock.raw % LOOP));
       // the real thing
       const u = c.clock.raw - t0;
-      while (fired < CUES.length && u >= CUES[fired][0]) cue(CUES[fired++][1]);
+      // The five cues are put down together, once, on the swing's own clock: sound.at() schedules
+      // them on the AudioContext timeline, which is the one clock that does not stutter, so the
+      // door stays a 2.6 s figure however slowly the frames arrive. Draining them frame by frame
+      // made the whole door one click on a slow machine.
+      if (fired === 0) {
+        fired = CUES.length;
+        const S = ctx.pieces.sound;
+        for (const [when, n] of CUES) (S?.at ? S.at(when, n) : cue(n));
+      }
       paint(poseAt(u));
     },
   };

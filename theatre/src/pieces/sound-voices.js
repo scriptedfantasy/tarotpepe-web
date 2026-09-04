@@ -42,6 +42,11 @@ export const LEVEL = {
   creak: 0.045,
   street: 0.024,
   type: 0.02,
+  // the door, which is nearer the lens than anything else in the film and louder for it
+  latch: 0.072,
+  hinge: 0.058,
+  knock: 0.122,
+  footfall: 0.05,
 };
 
 // A filter eats most of a noise burst, and how much depends on its Q, so LEVEL above is a wish and
@@ -62,7 +67,11 @@ export const TRIM = {
   closing: 0.748,
   creak: 24.194,
   street: 1.3,
-  type: 2.161,
+  type: 4.621,
+  latch: 2.241,
+  hinge: 29.544,
+  knock: 1.569,
+  footfall: 1.599,
 };
 
 // how long each cue is allowed to be, in seconds; the probe asserts the rendered length against it
@@ -79,8 +88,12 @@ export const LENGTH = {
   closing: 1.5,
   creak: 0.44,
   street: 0.62,
-  type: 0.02,
+  type: 0.03,
   clock: 0.055,
+  latch: 0.06,
+  hinge: 0.42,
+  knock: 0.14,
+  footfall: 0.17,
 };
 
 // ---- the two primitives --------------------------------------------------------------------------
@@ -158,6 +171,12 @@ export function tick(ac, dest, t, { level = LEVEL.clock, pan = 0, tock = false, 
 // ---- the room itself ------------------------------------------------------------------------------
 // Band-limited noise, cut in at level and left there, with two slow drifts on it: the filter opens
 // and closes over 40 s, the level breathes over 90 s. It is meant to be forgotten.
+//
+// One thing in front of it: a door. The evening begins outside the parlour, on the landing, and
+// until the leaf reaches its stop the room is heard through two inches of wood — the same tone
+// behind a lowpass at 250 Hz and half the level. It does not fade open; it is cut open, at the
+// exact audio time the door arrives (`veil(false, when)`).
+export const VEIL = { hz: 250, gain: 0.5, open: 18000 };
 export function roomTone(ac, dest, { level: want = LEVEL.room } = {}) {
   const level = want * TRIM.room;
   const t = ac.currentTime;
@@ -174,12 +193,17 @@ export function roomTone(ac, dest, { level: want = LEVEL.room } = {}) {
   const lp2 = ac.createBiquadFilter();
   lp2.type = 'lowpass';
   lp2.frequency.value = 900;
+  const door = ac.createBiquadFilter(); // the leaf, when there is one between us and the parlour
+  door.type = 'lowpass';
+  door.frequency.setValueAtTime(VEIL.open, t);
+  door.Q.value = 0.6;
   const g = ac.createGain();
   g.gain.setValueAtTime(level, t); // cut in, no fade
   src.connect(hp);
   hp.connect(lp);
   lp.connect(lp2);
-  lp2.connect(g);
+  lp2.connect(door);
+  door.connect(g);
   g.connect(dest);
   src.start(t);
 
@@ -202,6 +226,10 @@ export function roomTone(ac, dest, { level: want = LEVEL.room } = {}) {
   return {
     gain: g,
     base: level,
+    // put the door in front of the room, or take it away, at an absolute time on the audio clock
+    veil(on, when = ac.currentTime) {
+      door.frequency.setValueAtTime(on ? VEIL.hz : VEIL.open, Math.max(when, ac.currentTime));
+    },
     stop() {
       try {
         src.stop();
@@ -340,9 +368,65 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.street;
     }
 
-    // the caption's pen, one tick a word
+    // ---- the door the film opens on. It is a foot from the lens, so it is the nearest, driest,
+    // loudest thing in the picture, and it is all wood and one small piece of brass.
+
+    // the latch: the thumb-piece drops, then the tongue clears the strike plate 18 ms later.
+    // Brass, so it is the brightest thing in the film, and it is over in a twentieth of a second.
+    case 'latch': {
+      burst(ac, dest, { t, dur: 0.006, level: L('latch'), freq: 3500, q: 1.5, pan, seed });
+      struck(ac, dest, { t, dur: 0.03, level: L('latch') * 0.26, freq: 2240, type: 'triangle', partials: [[1.63, 0.5, 0.4], [2.41, 0.26, 0.24]], pan });
+      burst(ac, dest, { t: t + 0.018, dur: 0.009, level: L('latch') * 0.72, freq: 2700, q: 1.3, pan, seed: seed + 1 });
+      burst(ac, dest, { t: t + 0.018, dur: 0.03, level: L('latch') * 0.3, freq: 430, q: 1.1, type: 'lowpass', pan, seed: seed + 2 });
+      return LENGTH.latch;
+    }
+
+    // the hinges: an unoiled pin under the weight of the leaf. Stick-slip like the chair, but the
+    // resonance climbs as the door swings — the grains thin out because the pin is breaking loose
+    // hardest at the first inch and is only turning after that.
+    case 'hinge': {
+      const n = 14;
+      for (let i = 0; i < n; i++) {
+        const u = i / (n - 1);
+        // the grains crowd the first inch, where the pin is breaking loose, and thin out as it
+        // turns; the spacing is scattered because stick-slip is not a rhythm
+        const at = t + 0.36 * Math.pow(u, 1.25) + (rng() - 0.5) * 0.022;
+        const f = 470 + 760 * u + rng() * 220;
+        const lv = L('hinge') * (i === 0 ? 1 : (0.2 + 0.46 * Math.pow(1 - u, 1.4)) * (0.55 + rng() * 0.6));
+        burst(ac, dest, { t: Math.max(t, at), dur: 0.012 + rng() * 0.017, level: lv, freq: f, q: 9 + rng() * 7, pan, seed: seed + i });
+      }
+      // the leaf itself, a wide board moving air
+      burst(ac, dest, { t, dur: 0.22, level: L('hinge') * 0.2, freq: 210, q: 0.7, type: 'lowpass', pan, seed: seed + 60 });
+      return LENGTH.hinge;
+    }
+
+    // a knuckle on a door panel — and the same voice for the leaf arriving against its stop, which
+    // is the identical event: hard wood struck once, a big thin panel ringing low behind it.
+    case 'knock': {
+      burst(ac, dest, { t, dur: 0.008, level: L('knock') * 0.5, freq: 1750, q: 1.1, pan, seed });
+      burst(ac, dest, { t, dur: 0.07, level: L('knock'), freq: 250, q: 0.9, type: 'lowpass', pan, seed: seed + 1 });
+      struck(ac, dest, { t, dur: 0.12, level: L('knock') * 0.46, freq: 128 + rng() * 12, type: 'sine', partials: [[2.42, 0.26, 0.35]], pan });
+      return LENGTH.knock;
+    }
+
+    // a board under the visitor: soft, low, and then the board letting go of the weight in two
+    // little grains. Quieter than anything else the door does — he is not stamping.
+    case 'footfall': {
+      burst(ac, dest, { t, dur: 0.1, level: L('footfall'), freq: 150 + rng() * 40, q: 0.8, type: 'lowpass', pan, seed });
+      struck(ac, dest, { t, dur: 0.16, level: L('footfall') * 0.5, freq: 68 + rng() * 12, type: 'sine', pan });
+      burst(ac, dest, { t: t + 0.045, dur: 0.035, level: L('footfall') * 0.34, freq: 340 + rng() * 90, q: 6.5, pan, seed: seed + 1 });
+      burst(ac, dest, { t: t + 0.095, dur: 0.04, level: L('footfall') * 0.24, freq: 270, q: 7.5, pan, seed: seed + 2 });
+      return LENGTH.footfall;
+    }
+
+    // the caption's pen, one tick a word. Now that the evening is a conversation this is the sound
+    // the film mostly makes, so it is a nib and not a typewriter: the pitch moves letter to letter,
+    // there is a little paper under it, and about a third of the strokes have a second touch.
     case 'type': {
-      burst(ac, dest, { t, dur: 0.008, level: L('type'), freq: 2500 + rng() * 900, q: 1.2, pan, seed });
+      const f = 1900 + rng() * 1700;
+      burst(ac, dest, { t, dur: 0.006 + rng() * 0.004, level: L('type'), freq: f, q: 1.1 + rng() * 0.8, pan, seed });
+      burst(ac, dest, { t, dur: 0.014, level: L('type') * 0.3, freq: 640, q: 1, type: 'lowpass', pan, seed: seed + 1 });
+      if (rng() < 0.34) burst(ac, dest, { t: t + 0.012 + rng() * 0.008, dur: 0.005, level: L('type') * 0.55, freq: f * 0.82, q: 1.4, pan, seed: seed + 2 });
       return LENGTH.type;
     }
 
@@ -351,4 +435,4 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'title', 'closing', 'creak', 'street', 'type'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall'];

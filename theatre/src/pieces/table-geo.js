@@ -71,3 +71,26 @@ export function clothLocal(x, z) {
   const c = Math.cos(CLOTH_ROT), s = Math.sin(CLOTH_ROT);
   return [x * c - z * s, x * s + z * c];
 }
+
+// ---------- the cloth's knife pleats ----------
+// Few and broad rather than many and fine: every pleat is a crease the ink pass draws as a line,
+// and a skirt ruled with two dozen of them can never take tone. Shared by the geometry (table.js)
+// and by the drawing (table-textures.js), so the weave crowds exactly on the folds that are drawn.
+// How much cloth the skirt's texture covers from the hem upwards. The deepest corner of the square
+// cloth hangs 0.513 m, so at 0.5 m the uv wrapped and printed a sliver of the hem band up under
+// the table's rim at each corner.
+export const SKIRT_DROP = 0.58;
+export const PLEATS = 13;
+const STEEP = 0.16; // the short steep face of each pleat, as a fraction of its width
+const frac = (x) => x - Math.floor(x);
+export function saw(x, steep = STEEP) {
+  const p = frac(x / (Math.PI * 2));
+  return p < 1 - steep ? -1 + (2 * p) / (1 - steep) : 1 - (2 * (p - (1 - steep))) / steep;
+}
+export const pleatFold = (th) => 0.8 * saw(PLEATS * th + 0.8) + 0.2 * Math.sin(9 * th + 2.0);
+// how near angle `th` is to a pleat's crease, 1 on it and 0 a third of a pleat away
+export function pleatCrease(th) {
+  const p = frac((PLEATS * th + 0.8) / (Math.PI * 2));
+  const d = Math.abs(p - (1 - STEEP));
+  return 1 - smooth(0.0, 0.16, Math.min(d, 1 - d));
+}

@@ -224,6 +224,7 @@ uniform sampler2D tAlbedo, tNorm, tMisc, tDepth, tLit, tEdge, tWall, tFloor, tPa
 uniform vec2 uRes;
 uniform float uDpr, uSeed, uNear, uFar, uHatchK, uLref, uLineBase, uBreak, uPaperAmt, uHatchBoil;
 uniform float uPocket;      // how much a fold in the set darkens: under a ledge, into a corner
+uniform vec4 uTex;          // the wash a drawn pattern must reach for tone 1/2/3, then for a fill
 uniform int uMode;          // 0 all, 1 lines only, 2 tone only
 uniform mat4 uInvVP;
 uniform vec3 uInk, uPaper;
@@ -288,39 +289,39 @@ void main() {
   float zc = texture(tDepth, vUv).x;
   bool bg = zc >= 0.99999;
 
-  // how much drawing the surface's own texture already carries here (louvres, a weave, a printed
-  // border, hand lettering). In the folios the pattern IS the shading, so tone strokes stand back.
-  float texBusy = 0.0;
-  {
-    vec2 r = 3.0 * uDpr / uRes;
-    float s = 1.0 - lum(alb.rgb);
-    s += 1.0 - lum(texture(tAlbedo, vUv + r).rgb);
-    s += 1.0 - lum(texture(tAlbedo, vUv - r).rgb);
-    s += 1.0 - lum(texture(tAlbedo, vUv + vec2(r.x, -r.y)).rgb);
-    s += 1.0 - lum(texture(tAlbedo, vUv + vec2(-r.x, r.y)).rgb);
-    texBusy = s * 0.2;
-  }
-  // …and whether that drawing is a MASS rather than a stroke. A ring wider than any pen stroke,
-  // louvre bar or hand-lettered cap: the ring's MINIMUM says "dark in every direction", so a
-  // 2 px contour, a 5 px louvre and a letter all score zero and are left exactly as drawn, while
-  // the inside of a coat, a cat, a shelf carcass or a hole scores one. The ring's MEAN says how
-  // deep inside the shape we are. Masses are never filled; they are re-drawn as strokes.
-  // Two rings at incommensurate radii, so a regular pattern (louvres, a weave, floorboards) can
-  // never line up with both and pass itself off as a mass.
-  float massMin = 1.0, massMean = 0.0;
+  // ── what the surface's own drawing says here ────────────────────────────────────────────────
+  // Read the albedo over two rings, at radii too far apart for a regular pattern (louvres, a weave,
+  // floorboards) to line up with both.
+  //   wash     what the drawing averages to over a pen's width. 0 on a bare wall; on a pattern the
+  //            frame is too small to resolve, the grey the mip filter made of it; 1 inside a black
+  //            shape. This is the number that decides whether the pen draws the pattern or states
+  //            the tone instead.
+  // A ring a pen's width across is the whole test: a 2 px contour, a louvre bar, a hand-lettered
+  // cap and a wallpaper sprig all sit in a clear field and score low, so they are left exactly as
+  // drawn; a wainscot minified until its seams touch scores mid; the inside of a coat, a cat, a
+  // shelf carcass or a doorway scores one.
+  float wash = 0.0, ringLo = 1.0, ringHi = 0.0;
+  float tHere = 1.0 - lum(alb.rgb);
   {
     const float D = 0.7071;
     vec2 dirs[8] = vec2[8](vec2(1, 0), vec2(-1, 0), vec2(0, 1), vec2(0, -1),
                            vec2(D, D), vec2(-D, -D), vec2(D, -D), vec2(-D, D));
-    vec2 r0 = 5.5 * uDpr / uRes, r1 = 11.0 * uDpr / uRes;
+    vec2 r0 = 5.5 * uDpr / uRes;
     for (int i = 0; i < 8; i++) {
-      massMin = min(massMin, 1.0 - lum(texture(tAlbedo, vUv + dirs[i] * r0).rgb));
-      float dk = 1.0 - lum(texture(tAlbedo, vUv + dirs[i] * r1).rgb);
-      massMin = min(massMin, dk);
-      massMean += dk;
+      float dk = 1.0 - lum(texture(tAlbedo, vUv + dirs[i] * r0).rgb);
+      wash += dk;
+      ringLo = min(ringLo, dk);
+      ringHi = max(ringHi, dk);
     }
-    massMean *= 0.125;
+    wash = (wash + tHere) / 9.0;
   }
+  // Is the drawing still DRAWABLE here, or has the frame shrunk it below the pen? If the ring
+  // holds both paper and ink the marks are still separate and the pen draws them; if the ring is
+  // one flat value the minifier has already averaged them away and there is nothing left to draw,
+  // only a tone to state. This is the difference between a shutter a metre off — every louvre a
+  // stroke — and the same shutter across the room, which a draughtsman would give two or three
+  // strokes and a lot of paper, not sixty grey ones.
+  float resolved = smoothstep(0.26, 0.56, ringHi - ringLo);
 
   // ── the stroke grid, anchored to the surface in world space ──────────────────────────────
   // The scale snaps to octaves of the object's distance, so strokes stay the same size on the
@@ -373,19 +374,26 @@ void main() {
     line *= 1.0 - step(brk, uBreak) * 0.85;
   }
 
-  // ── tone: three stroke levels over bare paper, plus solid ink for things that ARE black ──
-  // The discipline of the folios: most of every surface is bare paper. Tone appears only where
-  // the light is not — under a ledge, in a corner, on the shadow side of a form — and it arrives
-  // in a step, never a ramp. Nothing goes solid black because it is *unlit*; a black mass is a
-  // black OBJECT (a coat, a hole, a hat), and the material says so with hatch ≈ 1.
-  float hatchInk = 0.0;
+  // ── ONE tone scale, four levels, and the darkest claim on a pixel wins ──────────────────────
+  // The discipline of the folios is not "a little tone everywhere"; it is a few decisions. Most of
+  // every surface is bare paper, three or four things in the frame are near-solid, and there is
+  // almost nothing in between. Three parties may ask a pixel for tone:
+  //   the LIGHT     a cast shadow, a pocket the broad lights cannot see, a form turning away
+  //   the MATERIAL  a thing that is black in itself — a coat, a hole, an iron ornament
+  //   the DRAWING   a pattern the frame has become too small to draw, which states the tone it
+  //                 averages to instead of being smeared out as a mip-grey
+  // They are combined with a MAX, never a product. A cloth with drawn folds still darkens where
+  // the table's shadow falls across it; a shadow on a papered wall is not doubled by the motif.
+
+  // The material's own darkness, in levels: 0.5 is plain paper, 0.625 → 1, 0.75 → 2, 0.875 → 3,
+  // 0.95+ → solid. Materials have always declared this; the pass used to add it as a hundredth of
+  // a threshold and so never heard it, which is why nothing in the set was ever black.
+  float matLevel = floor(clamp((hatchW - 0.5) * 8.0, 0.0, 4.0));
+
+  float lightLevel = 0.0;
   if (uMode != 1 && !bg) {
     float L = softLit(vUv, 2.6 * uDpr / uRes);
-    // how dark this pixel wants to be: the light it is missing, a touch more where the form turns
-    // hard away from us, scaled by how readily the material takes tone (hatch 0.5 = plain paper,
-    // glass and pictures near 0), plus a standing bias for a material that is dark in itself
     float shade = 1.0 - smoothstep(uTone.x, uTone.y, L);
-    float graz = pow(1.0 - facing, 3.0) * uTone.w;
     // where the set folds in on itself — under every shelf board, into the top corners, beside the
     // door architrave. Broad lights cannot see these pockets; a draughtsman hatches them every
     // time. Only a NEAR fold counts, so a figure standing well clear of a wall casts no ring.
@@ -402,47 +410,79 @@ void main() {
       }
       pocket = pocket * 0.125 * uPocket;
     }
-    // A surface turned well away from us is left bare and the contour does the work — which is
-    // what the folios' frontal interiors do with their side walls and ceilings. Tone belongs to
-    // the planes we are square to.
-    float edgeOn = smoothstep(0.24, 0.62, facing);
-    float soak = clamp(hatchW / 0.45, 0.0, 1.0) * (1.0 - smoothstep(0.16, 0.52, texBusy)) * edgeOn;
-    float bias = max(0.0, hatchW - 0.5) * 1.0;
-    float d = (shade * uTone.z + graz + pocket) * soak + bias;
+    // A WALL seen almost edge-on is left bare and the contour does the work — the folios' frontal
+    // interiors do exactly that with their side walls and the ceiling, and opening this up filled
+    // both side walls with rain. But a surface that faces UP is a floor or a table top, and the
+    // dense patch of shadow lying under a table is one of the few cast shadows the film does draw.
+    // In a frontal set the floor is edge-on everywhere past a metre, so this test used to make a
+    // shadow on the boards invisible and put the folios' dash-stroke floors out of reach.
+    float edgeOn = up ? 1.0 : smoothstep(0.22, 0.58, facing);
+    // How readily the material takes tone from the light. A curve, not a gate: 'hatch / 0.45'
+    // clipped put plaster (0.12) and the ceiling (0.08) out of reach of ANY shadow however black —
+    // precisely the surfaces a draughtsman hatches under a cornice or a picture rail — while a
+    // shadow is a shadow whatever it falls on. So the low end is lifted (0.08 → 0.30, 0.12 → 0.53,
+    // the wainscot 0.24 → 0.72) and only what genuinely refuses tone — glass at 0.04, a lit
+    // lampshade, a flame — is cut away below 0.11. Plain paper (0.5) is still exactly 1.0 and
+    // Pepe's cut-out (0.35 → 0.79) lands where the lighting piece tuned it, so his robe stays
+    // white. Plaster at 0.12 now reads 0.42: a black shadow reaches the first stroke level, a half
+    // one does not, which is the difference between hatching under the cornice and greying a wall.
+    float soak = smoothstep(0.03, 0.11, hatchW) * pow(clamp(hatchW / 0.5, 0.0, 1.0), 0.72);
+    // The form turning away: a rim of strokes down the side of a round thing. It sits OUTSIDE
+    // edgeOn — it is about the shape, not about the light — where multiplying it by edgeOn (which
+    // is what 'soak' used to carry) meant it could never fire on the surfaces it is written for.
+    float d = ((shade * uTone.z + pocket) * edgeOn + pow(1.0 - facing, 3.0) * uTone.w) * soak;
     // a hand does not follow a shadow's edge: break the boundary between levels on the stroke
     // grid so a patch of hatch ends raggedly, the way strokes of unequal length do
     float rag = vnoise(huv * 2.0 + uSeed * 0.13) * 0.78 + vnoise(huv * 5.0 + 11.0) * 0.22;
     d += (rag - 0.5) * uLevels.w;
-    float level = step(uLevels.x, d) + step(uLevels.y, d) + step(uLevels.z, d);
-    if (hatchW > 0.9) level = 4.0; // the material declares itself a black thing
-    // even the darkest level is drawn: a crowded two-direction lattice, black across a shape but
-    // still leaving nicks of paper, so the mass has a scratchy silhouette instead of a vector edge
-    float cov = level > 3.5 ? hTile.a : level < 1.5 ? hTile.r : level < 2.5 ? hTile.g : hTile.b;
-    if (level > 0.5) hatchInk = smoothstep(0.32, 0.62, cov) * (level > 3.5 ? 1.0 : 1.0 - halo);
+    lightLevel = step(uLevels.x, d) + step(uLevels.y, d) + step(uLevels.z, d);
   }
 
-  // ── ink that lives in a texture (a wallpaper motif, a card back, a shutter's louvres) ──
-  // One pen, one pressure: a texture's stroke is ink or it is paper, never a grey. And the pen
-  // cannot lay down a fill — so wherever the texture is not a line but a MASS (a bottle, a cat, a
-  // shelf carcass, a black band), the fill is thrown away and the shape is re-drawn on the stroke
-  // grid instead: strokes crowding to near-solid at the core, opening to cross-hatch at the rim,
-  // so the silhouette breaks into separate strokes the way a drawn black shape does.
-  float texInk = 0.0;
-  vec3 base = uPaper;
-  if (uMode == 0 && !bg) {
-    if (colorful) base = alb.rgb;
-    else {
-      texInk = smoothstep(0.15, 0.36, 0.95 - lum(alb.rgb));
-      float carve = smoothstep(0.25, 0.65, massMin); // a stroke is left alone; a mass is re-drawn
-      if (carve > 0.001) {
-        float core = smoothstep(0.55, 0.97, massMean); // 0 just inside the rim, 1 deep inside
-        float cov = mix(hTile.b, hTile.a, core);       // cross-hatch at the rim → crowded at the core
-        texInk = min(texInk, mix(1.0, smoothstep(0.30, 0.60, cov), carve));
-      }
-    }
+  // ── the drawing: its strokes where they can still be drawn, its tone where they cannot ──────
+  // One pen, one pressure: a texture's stroke is ink or it is paper, never a grey. Two things used
+  // to break that. A pattern minified below the pen — a wainscot's seams, a shutter's louvres, a
+  // rug's border seen across the room — arrived as a flat mid-grey and was inked as a flat mid-
+  // grey, which is how an even engraving gets laid over every square inch of the frame. And a
+  // MASS (a coat, a cat, a hole) cannot be a pen-stroke at all. So: where the drawing is still
+  // coarse enough to draw, its strokes are drawn at full ink; where it has closed up below the
+  // pen, the pen stops and states the tone; where it is a mass, it is re-drawn on the stroke grid,
+  // crowding to near-solid at the core and opening to cross-hatch at the rim so the silhouette
+  // breaks into separate strokes instead of ending on a vector edge.
+  // A black thing in the film is FILLED, not hatched: the man in the black suit at the card table,
+  // the coats in the metro carriage — flat ink with a drawn edge, and the paper lines inside the
+  // coat (its folds, its lapels) left as paper. Only a large dark AREA (the arch behind La Brique
+  // Rouge) is built from crossing strokes. So above the fourth threshold the pen stops hatching
+  // and fills, following the drawing's own shape at the pixel so those paper lines survive.
+  float texLevel = 0.0, stroke = 0.0, blackArea = 0.0;
+  if (!bg && !colorful) {
+    blackArea = step(uTex.w, wash);
+    // A stroke is drawn when it still stands clear of its field and is still dark enough to be a
+    // stroke. As the drawing recedes the pen does not draw the same marks fainter — it draws
+    // FEWER of them, at the same weight, and leaves the paper between: so what a receding pattern
+    // loses is whole runs of strokes, chosen on the same world-anchored grid the hatching uses.
+    // One pen, one pressure, all the way to the back wall.
+    float keep = step((1.0 - resolved) * 0.92, vnoise(huv * 2.4 + 17.0));
+    stroke = smoothstep(0.20, 0.41, tHere) * keep;
+    // …and what is no longer resolvable states its tone instead of being smeared out as a grey.
+    // Below the first threshold it states nothing: the pen would not have made a mark that small,
+    // and the paper stays bare. That is what strips the upper wall, the wainscot, the boards and
+    // the middle of the cloth.
+    texLevel = (1.0 - blackArea) * (1.0 - resolved) * (step(uTex.x, wash) + step(uTex.y, wash) + step(uTex.z, wash));
   }
+  if (uMode == 1) { texLevel = 0.0; matLevel = 0.0; blackArea = 0.0; } // lines-only: no tone
+  if (uMode == 2) stroke = 0.0;                                        // tone-only: no line work
 
-  float ink = max(line, max(hatchInk, texInk));
+  float solid = max(step(0.84, hatchW),                          // the MATERIAL is a black thing
+                    blackArea * smoothstep(0.22, 0.48, tHere));   // the DRAWING is black here
+
+  float level = max(max(lightLevel, texLevel), matLevel);
+  if (solid > 0.5) level = 4.0;
+  float cov = level > 3.5 ? hTile.a : level < 1.5 ? hTile.r : level < 2.5 ? hTile.g : hTile.b;
+  float tone = level > 0.5 ? smoothstep(0.32, 0.62, cov) * (level > 3.5 ? 1.0 : 1.0 - halo) : 0.0;
+  if (level > 3.5) tone = max(tone, solid * (1.0 - halo));
+
+  vec3 base = (uMode == 0 && !bg && colorful) ? alb.rgb : uPaper;
+  float ink = max(line, max(tone, stroke));
   vec3 col = mix(base, uInk, ink);
   col *= paperGrain;
   outColor = vec4(col, 1.0);

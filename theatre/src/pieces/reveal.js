@@ -39,7 +39,22 @@ export const meta = {
 // on its edge to show its face to the visitor is exactly edge-on to that lens and vanishes, and
 // the turn is built around that drawing. The stills in which nothing touches anything (dealt,
 // revealed) keep the piece's frontal 'table' frame.
-const SHOT = { fan: 'fan', fanning: 'fan', pick: 'fan', gather: 'fan', deal: 'fan', turn: 'fan', turning: 'fan' };
+const SHOT = { fan: 'fan', fanning: 'fan', pick: 'fan', gather: 'fan', deal: 'fan', turn: 'turn', turning: 'turn', shuffle: 'shuffle' };
+
+// The shuffle's own frame, which the camera piece has no name for: the deck close, from above and
+// a little downstage of it, so the cut side of both halves faces the lens while they go into each
+// other and his hand is allowed on the cloth (reveal-hand.js withdraws from any lens near level).
+// camera.cut() takes a shot object as happily as a name, so this needs nothing from that piece —
+// but the FLOW should cut here too for the shuffle beat, or the riffle plays where nobody is
+// looking. See the return note.
+const SHUFFLE_SHOT = { pos: [0.36, 1.34, 0.30], look: [0.42, 0.7625, -0.06], fov: 34 };
+
+// And the turn's. The whole beat is built round ONE drawing — the card stood up on its edge with
+// its face to the visitor — and that drawing is a plane. From a lens much past 60° above the
+// table it is a hairline: the money shot of the piece, edge-on. So the turn is staged from a
+// three-quarter 40° above the cloth, steep enough that his drawn hand may still lie on it
+// (reveal-hand.js withdraws below 37°) and shallow enough that a card standing up is a card.
+const TURN_SHOT = { pos: [0, 1.42, 0.94], look: [0, 0.8, 0.24], fov: 37 };
 
 const SLUGS = ['the-fool', 'the-star', 'the-house-of-god'];
 
@@ -133,6 +148,7 @@ export async function build(ctx) {
   function shuffleFrames() {
     if (!shuffleTake && deck) {
       shuffleTake = buildShuffle(ctx, deck, T, {
+        hand,
         cues: {
           cut: () => pepe()?.shuffle?.(),
           riffle: () => sound('riffle'),
@@ -150,15 +166,18 @@ export async function build(ctx) {
   function deckHandFrames(at, gap) {
     const d = ctx.layout.deck.pos;
     const top = (deck?.userData?.height ?? 0.036) + 0.002;
-    const on = (y, dz = 0, pose = 'splay') => ({ x: d[0] - 0.012, y, z: d[2] + dz, yaw: -0.16, pose, side: DECK_SIDE });
+    // yawed well across, the same way the riffle's hand is: pointed straight down the frame his
+    // palm sits directly upstage of the deck and the deck hides it, and all that reaches the
+    // picture is three green fingertips with nothing attached to them.
+    const on = (y, dz = 0, pose = 'splay') => ({ x: d[0] - 0.004, y, z: d[2] + dz, yaw: 0.42, pose, side: DECK_SIDE });
     const specs = [{ ...on(0.07, -0.3) }];
     at.forEach((k, i) => {
       const prev = i ? at[i - 1] + 5 : 1; // where the last card's hold ended
-      if (k > prev) specs.push({ ...on(top + 0.02, -0.02), n: k - prev }); // lifted between cards
-      specs.push(on(top)); // the press: the card slides out
-      specs.push({ ...on(top), n: 4 }); // held four frames
+      if (k > prev) specs.push({ ...on(top + 0.05, -0.02), n: k - prev }); // lifted between cards
+      specs.push(on(top + 0.022)); // the press: the card slides out from under his hand
+      specs.push({ ...on(top + 0.022), n: 4 }); // held four frames
     });
-    specs.push({ ...on(top + 0.03, -0.05), n: 2 }, { ...on(0.07, -0.3) }, { off: true });
+    specs.push({ ...on(top + 0.06, -0.05), n: 2 }, { ...on(0.10, -0.3) }, { off: true });
     return handFrames(hand, specs);
   }
 
@@ -220,14 +239,15 @@ export async function build(ctx) {
   }
   function standOnEdge(m, i) {
     const slot = poseOf(m);
-    const { rx, y, dz } = turnPose(90, H);
+    const { rx, y, dz } = turnPose(78, H);
     m.position.set(slot.p.x, slots[Math.min(i, slots.length - 1)][1] + y, slot.p.z + dz);
     m.rotation.set(rx, slot.ry + 0.03, 0);
-    // and his fingers still on the edge that reared it up. On edge the card is a wall at the same
-    // x as the hand, so for the still the fingers are slid out to its corner where they read.
-    const e = turnEdge(90, H);
+    // …and his fingers still at the foot of the card they reared up. They stay ON THE CLOTH: a
+    // flat cut-out tilted up to follow a card standing on its edge turns edge-on to the overhead
+    // lens and lies in the picture as a green blade, which is exactly what it used to do.
+    const e = turnEdge(78, H);
     const side = handSide(slot.p.x);
-    hand.at(slot.p.x + (side === 'L' ? -0.078 : 0.078), Math.min(e.y, 0.9 * hand.HAND.reach) + 0.002, slot.p.z + e.z, { yaw: -0.3, side, pose: 'point' });
+    hand.at(slot.p.x + (side === 'L' ? -0.03 : 0.03), 0.006, slot.p.z + e.z + 0.024, { yaw: -0.24, side, pose: 'point' });
   }
   function faceUpAsTurned(m, i) {
     const landed = landedPose(m, i);
@@ -309,7 +329,8 @@ export async function build(ctx) {
     _fan: fan,
     async setState(name) {
       // the beats over the cloth are judged from above, the rest from the frontal 'table'
-      ctx.pieces.camera?.cut?.(SHOT[name] ?? 'table');
+      const s = SHOT[name] ?? 'table';
+      ctx.pieces.camera?.cut?.(s === 'shuffle' ? SHUFFLE_SHOT : s === 'turn' ? TURN_SHOT : s);
       if (name === 'dealt' || name === 'default') await lay(SLUGS, false);
       else if (name === 'turning') {
         const meshes = await lay(SLUGS, false);

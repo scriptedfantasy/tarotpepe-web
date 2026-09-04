@@ -41,8 +41,15 @@ const NEXT_SENTENCE_S = 9; // ... each further sentence
 const TURN_S = 22; // mind.turn(), when it answers with a finished object rather than a stream
 const IDLE_S = 90; // the visitor's silence at the field: he says a line and opens it again
 const PICK_S = 75; // ... at the fan: Pepe chooses
-const CHAPTER_S = 1.7;
+const CHAPTER_S = 3.5; // the story card, held long enough to read its four lines (round 3: 1.7 → 2.3s on screen)
 const DOOR_S = 3.4;
+const LANDING_S = 3.0; // the parlour, held, before anybody says anything
+
+// A turn is three sentences: acknowledge · notice · ask one thing back. He is a fortune teller in
+// a small room, not a lecturer, and a visitor who has typed a line should be typing again inside
+// ten seconds. The mind is not asked to write less — it writes what it writes and the flow stops
+// listening after the third sentence and drops the rest, so a long turn simply ends on time.
+const MAX_SENTENCES = 3;
 
 // Where the lettering stands, per shot: x is the centre, y the TOP of the block, w its width, all
 // fractions of the frame. Not one of these is a taste: each is the barest caption-sized block of
@@ -52,17 +59,26 @@ const DOOR_S = 3.4;
 // beside the speaker the way the film sets a name beside a figure — not down on the tablecloth,
 // where the same block of words sits on 18% ink and every hatch stroke fights the letters.
 const ANCHORS = {
-  // the wall above his head, under the clock and clear of his crown at y=0.40. 1.9% ink
-  // (the same block over the cloth at the foot of the picture: 18.1%).
-  pepe: { x: 0.52, y: 0.235, w: 0.32, floor: 0.39 },
-  // the same passage of plaster, seen smaller: 3.8% (against 9.4% at the foot).
-  home: { x: 0.5, y: 0.235, w: 0.28, floor: 0.375 },
+  // Round 4 raised the top edge of all three frontal frames, so the wall behind the lettering moved
+  // with them — and in `home` and `wide` the pendant now hangs INTO the frame, which sets a second
+  // limit these anchors did not have before: the block sits between the pendant's lowest bulb and
+  // Pepe's crown, and its `floor` is far enough above his head that a five-line block (his line
+  // plus the visitor's own, typed underneath) grows down into the wall rather than up into the lamp.
+  // The pendant's bulbs end at 0.266 of the frame in `home` and 0.218 in `wide`; his crown is at
+  // 0.637 and 0.520; in `pepe` the lamp is out of frame and the crown is at 0.465.
+  pepe: { x: 0.52, y: 0.28, w: 0.34, floor: 0.44 },
+  home: { x: 0.5, y: 0.29, w: 0.32, floor: 0.55 },
+  wide: { x: 0.5, y: 0.235, w: 0.25, floor: 0.5 },
   // straight down at the table there is no wall, so the words lie on the cloth between the spread
   // and the table's front edge: 2.7%, the barest block in that frame.
   table: { x: 0.5, y: 0.81, w: 0.34 },
-  // the fan fills the bottom and the picked cards land in the slots at y=0.16..0.46; the only clear
-  // cloth is the far edge of the table above them. 0.5%.
-  fan: { x: 0.5, y: 0.035, w: 0.34 },
+  // straight down on the row: the cloth below the three cards is the bare half of the frame
+  spread: { x: 0.5, y: 0.76, w: 0.34 },
+  // the deck sits in the lower two thirds of the riffle frame; the cloth above it is empty
+  riffle: { x: 0.5, y: 0.045, w: 0.4, floor: 0.17 },
+  // the fan's frame now holds the slot row AND the fan with an even margin; the clear band is the
+  // cloth above the slot row, which the row's own top edge fixes at 0.155.
+  fan: { x: 0.5, y: 0.022, w: 0.46, floor: 0.15 },
   // the insert: the card stands in the middle of the frame and the label stands beside it, on the
   // bare cloth to its right — 0.0% (card 0 and 1), 1.2% (card 2, one seam of the cloth).
   card0: { x: 0.78, y: 0.3, w: 0.3 },
@@ -105,10 +121,31 @@ export async function build(ctx) {
     C?.cut?.(shot);
     cue('cut');
   }
+  // Inside one of his turns: the first sentence stays in the frame the visitor was answered in,
+  // the second is played close on him, and the third is held back for the open field — by which
+  // time the frame is out again. Two cuts to a turn, always in the same order.
+  const closer = (k) => {
+    if (k === 1) cut('pepe');
+  };
 
   // ---- Pepe's sentences, one placard each ---------------------------------------------------------
   // The source may be an array, an iterator or an async generator (the mind streams, so the first
   // sentence is up while the rest is still being written).
+
+  // Read what is left of a source to its end, off screen, so it can close itself down tidily.
+  function drain(it) {
+    (async () => {
+      try {
+        for (let n = 0; n < 24; n++) {
+          const r = await timeout(it.next(), NEXT_SENTENCE_S);
+          if (r === TIMEOUT || r.done) break;
+        }
+      } catch {
+        /* a source that throws on the way out is no longer our business */
+      }
+    })();
+  }
+
   function iterate(source) {
     if (!source) return null;
     if (typeof source === 'string') return splitSentences(source)[Symbol.iterator]();
@@ -120,11 +157,13 @@ export async function build(ctx) {
 
   // keepLast: the last sentence is returned unsaid (it becomes the line over the open field).
   // each(k, sentence): called before sentence k is said (a cut mid-turn).
+  // max: how many sentences of the source are used at all — the rest are dropped and the mind is
+  //      told to stop writing. With keepLast, max counts the held one too (2 said + 1 held).
   // → { said: how many went up, held: the one kept back }
-  async function render(source, { hold = 1.2, keepLast = false, each = null } = {}) {
+  async function render(source, { hold = 1.2, keepLast = false, each = null, max = MAX_SENTENCES } = {}) {
     const token = run;
     const it = iterate(source);
-    let said = 0, held = null;
+    let said = 0, held = null, taken = 0;
     if (!it) return { said, held };
     const emit = async (s) => {
       if (keepLast) {
@@ -157,6 +196,15 @@ export async function build(ctx) {
         if (!s) continue;
         if (!alive(token) || skipBeat) break;
         await emit(s);
+        // the cap: three sentences and the turn is over, whatever else was on its way. The mind is
+        // told to stop writing and then read to the end in the background — never `return()`d,
+        // because the mind writes what he said into its own history when its stream ends, and a
+        // turn he is not remembered to have made is worse than a fourth sentence nobody heard.
+        if (max > 0 && ++taken >= max) {
+          M?.abort?.();
+          drain(it);
+          break;
+        }
       }
     } catch (e) {
       console.warn('[flow] the mind stumbled; the script continues:', e?.message ?? e);
@@ -270,15 +318,13 @@ export async function build(ctx) {
         // and he is never off the screen for more than ten seconds. Not after the third: the gather
         // follows straight on.
         //
-        // The cut is to `home`, not to the closer `pepe`. His drawn hand waits on the cloth all
-        // through the picking (reveal's ribbon hand, a flat drawing lying in the plane of the
-        // table). Seen from the table's own height it foreshortens into a green blade lying across
-        // the cloth; from `home`, which looks down on the table, it reads as what it is — his arm
-        // out, his fingers on the cloth beside the deck — and covers his own right hand rather than
-        // doubling it.
+        // The cut is to `pepe`: from a frame that is nothing but cloth and card backs, the reaction
+        // has to be a face, and a face at this size is the biggest change of scale in the evening.
+        // His drawn hand takes itself off whenever the camera is not overhead (reveal-hand.js), so
+        // his own two hands are on the cloth in this frame and there is no second one.
         if (k < 2) {
           await wait(0.35);
-          cut('home');
+          cut('pepe');
           P.pepeAnim?.react?.();
           await wait(1.9);
           cut('fan');
@@ -314,7 +360,7 @@ export async function build(ctx) {
         },
       );
       if (!alive(token)) return;
-      cut('table');
+      cut('spread');
       await wait(0.9);
     }
   }
@@ -326,23 +372,33 @@ export async function build(ctx) {
   async function drawing(token, nth, sentences) {
     // the one story card in the evening, and this is where it belongs: the cards coming out. A
     // second reading does not get one — a card twice is a slideshow.
-    if (nth === 0) await chapter(1, () => C?.cut?.('home'));
+    // The camera is already on the deck behind the story card, so the card lifts on the shuffle
+    // rather than on a wide of a room in which nothing is about to move.
+    if (nth === 0) await chapter(1, () => C?.cut?.('riffle'));
     else {
       M?.newSpread?.(); // the cloth cleared, the conversation kept
-      cut('home');
+      cut('riffle');
       await wait(0.5);
     }
     if (!alive(token)) return null;
 
+    // The shuffle, staged: the frame is on the deck before a card moves, and the riffle plays in
+    // it — the cut, the halves parted a hand's width, the six drawings of the interleave, the pile
+    // stood on its edge and tapped square. Round 3 played all of that in a wide of the whole
+    // parlour, where the deck is nine millimetres of the picture behind a bottle, and his line
+    // went up in front of it besides.
     api.beat = 'shuffle';
     D.folio?.('shuffle');
+    await wait(0.3);
     const shuffling = R?.shuffle?.() ?? Promise.resolve();
-    C?.move?.('table', { kind: 'push' });
-    const over = await render(sentences, { hold: 1.2 });
-    if (!over.said) await speak({ beat: 'shuffle' }, { hold: 1.2 });
+    await wait(0.9); // the cut and the parting before he says a word over them
+    // his first sentence goes over the riffle; the riffle is two seconds long and his turn is not,
+    // so the rest of it is played on him rather than on a deck that has stopped moving
+    const over = await render(sentences, { hold: 1.2, each: closer });
+    if (!over.said) await speak({ beat: 'shuffle' }, { hold: 1.2, each: closer });
     await timeout(shuffling, 12);
     if (!alive(token)) return null;
-    await wait(0.5);
+    await wait(0.4);
 
     api.beat = 'fan';
     D.folio?.('fan');
@@ -358,14 +414,14 @@ export async function build(ctx) {
     await wait(0.5);
     await timeout(R?.gather?.() ?? Promise.resolve(), 10);
     api.beat = 'dealt';
-    cut('table');
+    cut('spread'); // straight down on the row: the frame the cards are turned in
     await wait(0.9);
 
     await readings(token);
     if (!alive(token)) return null;
 
     // and back to the table talk, with three cards face up on it
-    cut('pepe');
+    cut('home');
     await wait(0.5);
     return PROMPTS.afterReading[Math.min(nth, PROMPTS.afterReading.length - 1)];
   }
@@ -376,8 +432,14 @@ export async function build(ctx) {
   async function conversation(token, opening) {
     let prompt = opening || PROMPTS.opening;
     let quiet = 0;
+    // The frame the talking is played in. The first exchange stays in the wide the greeting was
+    // said in — the visitor answers a man in a room, not a face — and from his first reply the
+    // evening settles into `home`, a size closer, still with the ceiling and the pendant in it.
+    // `pepe` is punctuation inside a turn, not the whole conversation.
+    let frame = 'wide';
     for (;;) {
       if (!alive(token)) return { spoke: false };
+      if (C?.current !== frame) cut(frame);
       api.beat = 'talk';
       // the folio stays on 'talk' for the whole conversation, so his name is not set over every
       // line he says; dialogue puts it back after a long silence, which is where it belongs
@@ -402,24 +464,29 @@ export async function build(ctx) {
       if (intent === 'draw') {
         const back = await drawing(token, api.readings++, sentences);
         if (!alive(token)) return { spoke: false };
+        frame = 'home';
         prompt = back ?? PROMPTS.afterReading[0];
         continue;
       }
-      // the good night. His turn is the goodbye.
+      // the good night. His turn is the goodbye, and it is said in the room he is sitting in.
       if (intent === 'farewell') {
         api.beat = 'farewell';
         D.folio?.('farewell');
+        cut('wide');
         const bye = await render(sentences, { hold: 1.6 });
         return { spoke: bye.said > 0 };
       }
-      // talk: the last sentence is kept back to stand over the open field
-      let r = await render(sentences, { hold: 1.3, keepLast: true });
+      // talk: the last sentence is kept back to stand over the open field. The middle sentence of
+      // a turn is played close on him and the frame goes back for the one the visitor answers —
+      // so a turn is: the room · his face · the room, and never four minutes of the same crop.
+      let r = await render(sentences, { hold: 1.3, keepLast: true, each: closer });
       if (!r.said && r.held == null && alive(token) && !skipBeat) {
         // nothing came of the turn (no mind.turn, a dead call): his answer comes from the beat he
         // would be on — with the cards down, the beat that answers a question about them
-        r = await speak({ beat: api.readings > 0 ? 'followup' : 'answer', user: said, question: said }, { hold: 1.3, keepLast: true });
+        r = await speak({ beat: api.readings > 0 ? 'followup' : 'answer', user: said, question: said }, { hold: 1.3, keepLast: true, each: closer });
       }
       if (!alive(token)) return { spoke: false };
+      frame = 'home';
       prompt = r.held ?? PROMPTS.lost;
     }
   }
@@ -439,19 +506,26 @@ export async function build(ctx) {
     await wait(0.9); // the parlour, seen from the doorway, before we sit down
     if (!alive(token)) return;
 
-    // 2. good evening — and then it is the visitor's evening, not ours
-    cut('pepe');
+    // 2. the parlour, whole, and three seconds of nobody saying anything. The film has to show the
+    // room it is set in before it shows a man talking in it: the ceiling, the pendant, both walls,
+    // the coat stand, the tiles. Every frame of round 3's conversation was a crop of this.
+    cut('wide');
+    await wait(LANDING_S, { skippable: true });
+    if (!alive(token)) return;
+
+    // 3. good evening — said in the room, not in a crop of it — and then it is the visitor's
+    // evening, not ours. Three sentences at most; the field opens under the third.
     api.beat = 'greeting';
     D.folio?.('greeting');
-    await wait(0.4);
     const g = await speak({ beat: 'greeting' }, { keepLast: true, hold: 1.2 });
     if (!alive(token)) return;
     const out = await conversation(token, g.held);
     if (!alive(token)) return;
 
-    // 3. the good night he asked for, the door, the sign-off card
+    // 4. the good night he asked for, in the wide again, then the door and the sign-off card
     api.beat = 'farewell';
     D.folio?.('farewell');
+    if (C?.current !== 'wide') cut('wide'); // the good night was already said there if he said one
     if (!out.spoke) {
       const f = await speak({ beat: 'farewell' }, { hold: 1.6 });
       if (!f.said && f.held == null) await say(PROMPTS.farewellNone, { hold: 1.4 });
@@ -536,40 +610,41 @@ export async function build(ctx) {
       api.beat = name;
       const cam = (shot) => C?.cut?.(shot);
       if (name === 'greeting') {
-        cam('pepe');
+        cam('wide');
         D.folio?.('greeting');
         D.setState('greeting');
       } else if (name === 'talk') {
         // mid-conversation: his line above, the visitor's next one being typed underneath
-        cam('pepe');
+        cam('home');
         D.folio?.('talk');
         D.ask(D.reply(SAMPLE_ANSWER), { instant: true, value: 'can you read my cards' });
       } else if (name === 'shuffle') {
-        cam('table');
+        // reveal's own setState cuts to its judging shot; the flow's frame goes on after it
         await R?.setState?.('shuffle');
+        cam('riffle');
         D.folio?.('shuffle');
         D.setState('shuffle');
       } else if (name === 'fan') {
-        cam('fan');
         await R?.setState?.('fan');
+        cam('fan');
         D.folio?.('fan');
         D.ask(PROMPTS.pick[0], { instant: true });
       } else if (name === 'dealt') {
-        cam('table');
         await R?.setState?.('dealt');
+        cam('spread');
         D.folio?.('draw');
         D.setState('draw');
       } else if (name === 'reading') {
-        cam('table');
         await R?.setState?.('revealed');
+        cam('spread');
         // the caption reads the card that is on the table (reveal's still lays the-fool, the-star, the-house-of-god)
         if (!ctx.params.has('card')) ctx.params.set('card', 'the-star');
         if (!ctx.params.has('pos')) ctx.params.set('pos', '1');
         D.folio?.('reading');
         D.setState('reading');
       } else if (name === 'farewell') {
-        cam('pepe');
         await R?.setState?.('revealed');
+        cam('wide');
         D.folio?.('farewell');
         D.setState('farewell');
       } else {

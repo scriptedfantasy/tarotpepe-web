@@ -41,7 +41,28 @@ const SRC = new URL('../public/pepe/pepe-meditation.webp', import.meta.url).path
 const OUT = new URL('../public/pepe/', import.meta.url).pathname;
 const TARGET_W = 2048;
 const CELL = 64; // hi px; the meshes are built from the occupied cells of this grid
-const INK = [28, 26, 23]; // the world's ink #1c1a17
+const INK = [13, 14, 13]; // the world's ink #0d0e0d (src/core/strokes.js), and nothing else
+
+// ── one pen (the numbers) ───────────────────────────────────────────────────────────────────────
+// Measured on the supplied drawing (tools/_pepe-contour.mjs): its contour is 6 source pixels
+// thick, its interior lines 5–7. In the pepe shot one source pixel is very nearly one screen
+// pixel, and the room's pen is 2 screen pixels (ink-tiles.js: PEN = 2.0, and the outline pass at
+// lineWeight 1.1). So the drawing is inked three times as heavy as the room it sits in — and
+// because a `colorful` material shows its albedo verbatim (ink-shaders.js: `if (colorful) base =
+// alb.rgb`), that fat, smooth, un-boiling marker line WAS his contour on screen: a second drawing
+// pasted into the first. Two things are done about it below:
+//   · every line of the drawing is re-cut to the room's weight about its own centre;
+//   · the OUTER contour is taken off altogether and the alpha eroded to where its middle ran, so
+//     the ink pass draws his silhouette itself, in its own hand, at the room's weight, with the
+//     room's wobble and the room's boil (pepe.js asks for lineWeight 1.1).
+// 2.7, not 2.3: at the judging shot one source pixel is 0.86 screen pixels, so 2.3 lands at the
+// room's two — but a line baked in a texture is minified about five times to get there, and the
+// mip chain turns a two-pixel line into a grey. Cut a third heavier and the core stays ink.
+const PEN_W = 2.7; // source px: the width the drawing's pen is re-cut to
+const CONTOUR_W = 6.0; // source px: what it is now, where it runs round the outside
+// And the colour plate is printed a hair out of register under the line, the way the folios' fills
+// sit off their contours (STYLE.md §1.4). The key is stage left, so the paper opens on that side.
+const MISREG = [1.4, 1.6]; // source px, the colour pulled down and to the right
 
 // ── source-pixel geometry (474 x 454), read off the drawing with tools/_pepe-grid.mjs ──
 const GEO = {
@@ -314,20 +335,20 @@ const mouth = (() => {
 })();
 
 // ── the cloth ───────────────────────────────────────────────────────────────────────────────────
-// The supplied drawing gives the robe four contour lines and nothing else, so beside a hatched room
-// and a finished head it reads as an undrawn white blob. The pen goes back over the robe HERE, at
-// print resolution, in the same hand and without touching the silhouette or the face — the way the
-// film draws a coat (STYLE.md §1.3 "textiles: the pattern is the shading", the sweeper's checked
-// coat and the boy's in fd-anim-courtyard-three-figures):
+// THE ROBE IS BARE PAPER. That is the rule the folios keep and the one this piece kept breaking:
+// hatch density IS the light, so the lit plane of a white garment is drawn by leaving the paper
+// alone (STYLE.md §1.3, and the mustard suit in fd-anim-courtyard-three-figures, which carries no
+// tone at all on its lit front). An earlier round laid a twill and a rain-shower edge to edge over
+// the whole garment at half opacity; every stroke was a grey, every square inch had the same
+// number of them, and the robe read as one flat grey wash — the exact opposite of the rule.
 //
-//   weave  a coarse diagonal twill over the whole garment, deliberately too large for the figure —
-//          that is what says "real cloth at miniature scale" (STYLE.md §2.2)
-//   rain   short vertical strokes crowding wherever a contour is near and wherever the cloth lies
-//          UNDER something (the key is above him): inside the sleeves, under the arms, under the
-//          jaw, beneath every fold the drawing already has
-//   rim    a dense two-direction patch along the bottom, where the robe meets the bench
-//   folds  three from each shoulder into the empty chest, three out of the lap; each one stops the
-//          moment it meets a line the drawing already made, the way a pen stops at an overlap
+// So the pen goes on the robe in three places only, and nowhere else:
+//   · under each forearm, where the sleeve shades the lap;
+//   · under the crossed legs, along the hem the bench holds up;
+//   · down his left shoulder and upper arm — the side the key (stage left) cannot see.
+// The strokes are the room's: 2 source px wide (≈ the room's 2 px pen), 8.5 px apart, hanging the
+// way cloth does, full ink and never a grey, crowding to the lines the drawing already made and
+// stopping the moment they meet one.
 const BODY_BOX = { x0: 0, y0: Math.floor(s(60)), x1: W, y1: H };
 const CLOTH = await (async () => {
   const rand = (seed) => () => {
@@ -381,21 +402,37 @@ const CLOTH = await (async () => {
   }
   const dUp = new Float32Array(SW * SH), dDown = new Float32Array(SW * SH), dIn = new Float32Array(SW * SH);
   measure();
-  // the tone: hatch density IS the light (STYLE.md §1.3). Bare paper is the lit plane, and the
-  // chest and the top of the lap face the visitor square on, so they must stay bare.
-  // where the light falls: the lamp hangs above and a little toward the visitor, so the chest and
-  // the top of the lap are the two planes it strikes. A draughtsman decides this once and keeps
-  // his pen off them; the rest of the tone is then read against bare paper.
-  const pool = (x, y, cx, cy, rx, ry) => Math.max(0, 1 - Math.hypot((x - cx) / rx, (y - cy) / ry));
+  // The three places the pen is allowed, read off the drawing (source px). Everywhere else the
+  // robe is bare paper — the chest, the front of the lap, the lit shoulder, the whole near sleeve.
+  // (k weights them: the key is stage left, so his lit side takes less than his shaded one)
+  const WEDGES = [
+    { c: [150, 332], r: [78, 42], k: 0.84 }, // under his right forearm — the lit side, a little lighter
+    { c: [346, 324], r: [66, 38], k: 1.0 }, // under his left forearm
+    { c: [244, 396], r: [146, 34], k: 0.95 }, // under the crossed legs, along the hem on the bench
+    // the shoulder and upper arm away from the lamp. It STOPS above the elbow: run it down to the
+    // forearm and the two wedges join into one long band down his side, which is a wash again.
+    { c: [346, 222], r: [42, 62], k: 1.0 },
+  ];
+  // a wedge is a PATCH with a ragged edge, not a soft blob: full weight over most of its area and
+  // gone within a few pixels of its rim
+  const wedge = (x, y) => {
+    let z = 0;
+    for (const w of WEDGES) z = Math.max(z, w.k * clamp((1 - Math.hypot((x - w.c[0]) / w.r[0], (y - w.c[1]) / w.r[1])) * 2.4, 0, 1));
+    return z;
+  };
   const tone = (x, y) => {
     if (!robe(x, y)) return 0;
+    const z = wedge(x, y);
+    if (z <= 0.02) return 0;
     const k = x + y * SW;
-    let t = 0.92 * Math.pow(1 - clamp(dEdge[k] / 6.5, 0, 1), 1.9); // crowding to every line
-    t += 0.60 * Math.pow(1 - clamp(dUp[k] / 7, 0, 1), 1.7); // under a ledge
-    t += 0.70 * (1 - clamp(dDown[k] / 8, 0, 1)) * (y > 300 ? 1 : 0.2); // the rim on the bench
-    t += 0.44 * (1 - clamp(dIn[k] / 23, 0, 1)); // the form turning away at the sides
-    const lit = Math.max(pool(x, y, 236, 236, 62, 66), pool(x, y, 238, 332, 78, 34));
-    return t * (1 - 0.55 * lit);
+    // inside a wedge the tone is still read the way a draughtsman reads it: crowding to the lines
+    // the drawing already made, heaviest immediately under a ledge (the light is above him) and
+    // along the hem the bench holds up.
+    let t = 0.52; // the wedge itself is one level of tone, the way a level of rain covers a wall
+    t += 0.55 * Math.pow(1 - clamp(dEdge[k] / 11, 0, 1), 1.25); // crowding to the drawing's lines
+    t += 0.52 * (1 - clamp(dUp[k] / 22, 0, 1)); // and hardest immediately under a ledge
+    t += 0.45 * (1 - clamp(dDown[k] / 13, 0, 1)) * (y > 340 ? 1 : 0); // the hem on the bench
+    return t * z;
   };
 
   // ---- the pen
@@ -422,84 +459,32 @@ const CLOTH = await (async () => {
     return pts.length;
   };
 
-  // ---- 1. the folds the drawing does not have: three falling out of each shoulder into the empty
-  // chest, three out of the lap. Contour weight, and each one stops where it meets a line the
-  // drawing already made. They are cut into the cloth mask before the hatching runs, so the rain
-  // crowds under them exactly as it crowds under his own lines.
-  const fold = (a, b, c, { width = 2.3, opacity = 0.88 } = {}) => {
-    const pts = [];
-    for (let u = 0; u <= 1.0001; u += 0.04) {
-      const m = 1 - u;
-      const px = m * m * a[0] + 2 * m * u * b[0] + u * u * c[0];
-      const py = m * m * a[1] + 2 * m * u * b[1] + u * u * c[1];
-      const ix = Math.round(px), iy = Math.round(py);
-      if (!robe(ix, iy) || (u > 0.1 && dEdge[ix + iy * SW] < 2.4)) break;
-      pts.push([px + (rng() - 0.5) * 0.7, py + (rng() - 0.5) * 0.7]);
-    }
-    if (pts.length < 4) return;
-    pen(pts, width, opacity);
-    for (const [px, py] of pts)
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const k = Math.round(px + dx) + Math.round(py + dy) * SW;
-        if (k >= 0 && k < SW * SH) SR[k] = 0; // the pen has been here: the hatch must respect it
-      }
-  };
-  for (const f of [
-    [[177, 173], [183, 214], [196, 256]], // falling out of his right shoulder
-    [[191, 169], [201, 208], [213, 246]],
-    [[206, 166], [218, 197], [228, 228]],
-    [[295, 171], [289, 212], [275, 252]], // and his left
-    [[281, 168], [271, 206], [259, 243]],
-    [[266, 165], [254, 195], [244, 224]],
-    [[212, 322], [199, 352], [193, 384]], // out of the lap, over the crossed legs
-    [[241, 325], [239, 357], [242, 388]],
-    [[270, 322], [285, 350], [294, 378]],
-  ])
-    fold(f[0], f[1], f[2]);
-  measure();
-
-  // ---- 2. the weave. Twill: a dominant diagonal, a sparser cross, both broken into dashes so it
-  // reads as thread and not as ruling. Spacing is set from the figure, then coarsened by a third.
-  for (const [ang, spacing, width, alpha, dash] of [[rad(34), 10.5, 1.15, 0.34, [9, 26]]]) {
-    const nx = -Math.sin(ang), ny = Math.cos(ang);
-    const reach = SW + SH;
-    for (let k = -Math.ceil(reach / spacing); k <= Math.ceil(reach / spacing); k++) {
-      const off = k * spacing + (rng() - 0.5) * spacing * 0.35;
-      const cx = SW / 2 + nx * off, cy = SH / 2 + ny * off;
-      let u = -reach / 2;
-      while (u < reach / 2) {
-        const len = dash[0] + rng() * (dash[1] - dash[0]);
-        const x0 = cx + Math.cos(ang) * u, y0 = cy + Math.sin(ang) * u;
-        if (robe(Math.round(x0), Math.round(y0)) && dEdge[Math.round(x0) + Math.round(y0) * SW] > 2.2)
-          stroke(x0, y0, ang + (rng() - 0.5) * 0.14, len, { width, opacity: alpha, wob: 0.28, step: 1.4, stopAtInk: 1.6 });
-        u += len + spacing * (0.35 + rng() * 1.1);
-      }
-    }
-  }
-
-  // ---- 3. rain-strokes: the tone. A jittered lattice; the density and the length of the stroke
-  // are the tone at that point, so the hatch crowds under the jaw, inside the sleeves, under the
-  // arms and beneath every fold, and leaves the lit chest bare paper.
-  for (let y = 60; y < SH; y += 2.9)
-    for (let x = 0; x < SW; x += 2.9) {
-      const px = x + (rng() - 0.5) * 3, py = y + (rng() - 0.5) * 3;
+  // ---- the hatch. One lattice, the room's spacing (ink-tiles.js draws its rain at 11 texels for
+  // one level of tone, 8 for two, and the tile is shown at about a texel a pixel). Strokes hang
+  // the way cloth does; over the lap they follow the crossed legs round. Full ink, always: a pen
+  // has one pressure, and a half-opacity stroke is a grey, which this world does not own.
+  const SPACING = 8.5;
+  for (let y = 150; y < SH; y += SPACING)
+    for (let x = 0; x < SW; x += SPACING) {
+      const px = x + (rng() - 0.5) * SPACING * 0.8, py = y + (rng() - 0.5) * SPACING * 0.8;
       const ix = Math.round(px), iy = Math.round(py);
       if (!robe(ix, iy)) continue;
       const t = tone(ix, iy);
-      if (t < 0.34 || rng() > Math.min(0.92, (t - 0.3) * 0.92)) continue;
-      // the strokes hang, the way cloth does; over the lap they follow the crossed legs round
-      const base = iy > 312 ? rad(58 + (px > 240 ? 0 : 64)) : Math.PI / 2;
-      stroke(px, py, base + (rng() - 0.5) * 0.24, 9 + 19 * Math.min(1, t), { width: 1.15, opacity: 0.5 + 0.3 * Math.min(1, t) });
+      if (t < 0.24) continue;
+      if (t < 0.66 && rng() > (t - 0.20) * 2.3) continue; // the edge of a patch of hatch is ragged
+      const base = iy > 312 ? rad(64 + (px > 244 ? 0 : 52)) : Math.PI / 2;
+      stroke(px, py, base + (rng() - 0.5) * 0.2, 18 + 34 * Math.min(1, t), { width: 2.0, opacity: 1, wob: 0.42, stopAtInk: 1.6 });
     }
-  // the second direction, only in the darkest places: cross-hatch is how a mass gets built
-  for (let y = 60; y < SH; y += 2.9)
-    for (let x = 0; x < SW; x += 2.9) {
-      const px = x + (rng() - 0.5) * 3, py = y + (rng() - 0.5) * 3;
+  // the second direction, only where the wedge runs right up under a line: cross-hatch is how a
+  // mass gets built, and it is the only place on this garment that gets one.
+  for (let y = 150; y < SH; y += SPACING * 1.3)
+    for (let x = 0; x < SW; x += SPACING * 1.3) {
+      const px = x + (rng() - 0.5) * SPACING, py = y + (rng() - 0.5) * SPACING;
       const ix = Math.round(px), iy = Math.round(py);
       if (!robe(ix, iy)) continue;
       const t = tone(ix, iy);
-      if (t < 0.92 || rng() > (t - 0.86) * 1.6) continue;
-      stroke(px, py, rad(26) + (rng() - 0.5) * 0.3, 3 + 7 * Math.min(1, t), { width: 1.1, opacity: 0.6 });
+      if (t < 0.96 || rng() > (t - 0.92) * 2.2) continue;
+      stroke(px, py, rad(24) + (rng() - 0.5) * 0.26, 8 + 14 * Math.min(1, t), { width: 1.9, opacity: 1, wob: 0.4, stopAtInk: 1.6 });
     }
 
   console.log(`cloth: ${paths.length} strokes`);
@@ -513,15 +498,116 @@ const CLOTH = await (async () => {
   };
 })();
 
+// ── one pen: re-cut the drawing's marker to the room's weight, and peel its contour off ─────────
+// Everything above this line reads the drawing as it was supplied. Everything below prints it.
+// The pen is re-cut about its own centre line: for a pixel `dP` inside a stroke whose local
+// half-width is `R`, the distance to that centre line is `R - dP`, so the stroke survives where
+// `R - dP` is within half the new pen. A stroke already thin enough keeps all of itself. Then the
+// band of ink that ran round the outside is deleted and the alpha eroded to its middle: the ink
+// pass finds the silhouette there and draws it, so his contour is the room's line, not his own.
+{
+  const t0 = Date.now();
+  // chamfer distance (hi px) to the nearest zero of a mask, over the whole sheet
+  const dist = (mask) => {
+    const d = new Float32Array(N);
+    const at = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : d[x + y * W]);
+    for (let i = 0; i < N; i++) d[i] = mask[i] ? 1e6 : 0;
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const k = x + y * W;
+        if (!d[k]) continue;
+        d[k] = Math.min(d[k], at(x - 1, y) + 1, at(x, y - 1) + 1, at(x - 1, y - 1) + 1.414, at(x + 1, y - 1) + 1.414);
+      }
+    for (let y = H - 1; y >= 0; y--)
+      for (let x = W - 1; x >= 0; x--) {
+        const k = x + y * W;
+        if (!d[k]) continue;
+        d[k] = Math.min(d[k], at(x + 1, y) + 1, at(x, y + 1) + 1, at(x + 1, y + 1) + 1.414, at(x - 1, y + 1) + 1.414);
+      }
+    return d;
+  };
+  // sliding-window maximum, separable: the local ridge height of the distance field
+  const maxFilter = (src, r) => {
+    const out = new Float32Array(N), tmp = new Float32Array(N);
+    const run = (get, set, n, stride) => {
+      const q = new Int32Array(n);
+      let h = 0, t = 0;
+      for (let i = 0; i < n; i++) {
+        while (t > h && get(q[t - 1]) <= get(i)) t--;
+        q[t++] = i;
+        if (q[h] < i - 2 * r) h++;
+        if (i >= r) set(i - r, get(q[h]));
+      }
+      for (let i = n; i < n + r; i++) {
+        if (q[h] < i - 2 * r) h++;
+        set(i - r, get(q[h]));
+      }
+      void stride;
+    };
+    for (let y = 0; y < H; y++) run((i) => src[y * W + i], (i, v) => (tmp[y * W + i] = v), W);
+    for (let x = 0; x < W; x++) run((i) => tmp[i * W + x], (i, v) => (out[i * W + x] = v), H);
+    return out;
+  };
+  const half = s(PEN_W) / 2;
+  // the pen, and only the pen: near-black. INKA (a soft ramp off 128) also catches the drawing's
+  // airbrushed dark green under the jaw, which is a FILL — it stays a flat second green below.
+  const penMask = new Uint8Array(N);
+  for (let i = 0; i < N; i++) {
+    if (ALPHA[i] < 100) continue;
+    const o = i * 4;
+    penMask[i] = 0.299 * hi[o] + 0.587 * hi[o + 1] + 0.114 * hi[o + 2] < 88 ? 1 : 0;
+  }
+  const dP = dist(penMask);
+  const ridge = maxFilter(dP, Math.ceil(s(CONTOUR_W) * 0.85));
+  const inside = new Uint8Array(N);
+  for (let i = 0; i < N; i++) inside[i] = ALPHA[i] > 127 ? 1 : 0;
+  const dA = dist(inside);
+  const peel = s(CONTOUR_W) / 2; // how far in the middle of the old contour ran
+  const clear = peel + half + s(0.8); // and how far in the ink pass's own line will reach
+  for (let i = 0; i < N; i++) {
+    ALPHA[i] = Math.round(clamp(dA[i] - peel + 0.5, 0, 1) * 255);
+    if (!ALPHA[i] || dA[i] < clear) {
+      INKA[i] = 0;
+      continue;
+    }
+    // one pen, one pressure: the stroke is ink or it is paper, never a grey (STYLE.md §1.2)
+    INKA[i] = penMask[i] ? Math.round(clamp((dP[i] - (ridge[i] - half)) / 1.5 + 0.5, 0, 1) * 255) : 0;
+  }
+  // the one number that says whether the discipline is being kept: how much of the figure is ink
+  let np = 0, ni = 0;
+  for (let i = 0; i < N; i++) {
+    if (ALPHA[i] > 200) np++;
+    if (ALPHA[i] > 200 && INKA[i] > 200) ni++;
+  }
+  if (PREVIEW) {
+    const g = Buffer.alloc(N * 2);
+    for (let i = 0; i < N; i++) {
+      g[i * 2] = 255 - INKA[i];
+      g[i * 2 + 1] = ALPHA[i];
+    }
+    mkdirSync(PREVIEW, { recursive: true });
+    await sharp(g, { raw: { width: W, height: H, channels: 2 } }).flatten({ background: '#cfcfcf' }).resize(700).png().toFile(PREVIEW + '/onepen.png');
+  }
+  console.log(`ink coverage: ${((100 * ni) / np).toFixed(1)}% of the figure`);
+  console.log(`one pen: ${PEN_W} src px, contour peeled ${CONTOUR_W} src px (${Date.now() - t0} ms)`);
+}
+// the colour plate, out of register under the line: where a pixel takes its flat colour from
+const MDX = Math.round(s(MISREG[0])), MDY = Math.round(s(MISREG[1]));
+const misIdx = (i) => {
+  const x = i % W, y = (i - x) / W;
+  return Math.max(0, x - MDX) + Math.max(0, y - MDY) * W;
+};
+
 // ── compose a pixel: flat fill (or the drawing's own colour) under the pen ──
-function pixel(i, out, o, { cls = CLS[i], shade = SHADE[i], ink = INKA[i], alpha = ALPHA[i], forceFill = null } = {}) {
+function pixel(i, out, o, { cls = null, shade = null, ink = INKA[i], alpha = ALPHA[i], forceFill = null } = {}) {
   let r, g, b;
+  const j = cls === null && shade === null && !forceFill ? misIdx(i) : i;
   if (FILL === 'soft' && !forceFill) {
     r = hi[i * 4];
     g = hi[i * 4 + 1];
     b = hi[i * 4 + 2];
   } else {
-    const f = forceFill ?? fillOf(i, cls, shade);
+    const f = forceFill ?? fillOf(j, cls ?? CLS[j], shade ?? SHADE[j]);
     const k = ink / 255;
     r = f[0] + (INK[0] - f[0]) * k;
     g = f[1] + (INK[1] - f[1]) * k;
@@ -705,7 +791,8 @@ for (const side of ['L', 'R']) {
     // the lower edge: pixels whose nearest outside is below them (the mask's bottom arc)
     let below = 0;
     for (let k = 1; k <= 7; k++) if (!e.inHull(x, y + k * s(1))) { below = 1; break; }
-    const lowerLine = below && dIn <= s(5.5) && y > s(e.centre[1]) - s(2);
+    // the lash line of a closed lid is a loaded stroke, but it is still the same pen
+    const lowerLine = below && dIn <= s(PEN_W * 1.15) && y > s(e.centre[1]) - s(2);
     const f = lowerLine ? INK : PAL.green[0];
     buf[o] = f[0];
     buf[o + 1] = f[1];
@@ -736,17 +823,17 @@ const mc = [s(GEO.mouth.centre[0]), s(GEO.mouth.centre[1])];
 const DARK = 'rgb(46,26,24)';
 // a small open "o": red rim, dark inside, the pen around it — the lips pursed
 await svgLayer('mouthO', mouth.box, `
-  <ellipse cx="${mc[0]}" cy="${mc[1] + s(1)}" rx="${s(17)}" ry="${s(12.5)}" fill="${rgb(PAL.red)}" stroke="${rgb(INK)}" stroke-width="${s(4.4)}"/>
+  <ellipse cx="${mc[0]}" cy="${mc[1] + s(1)}" rx="${s(17)}" ry="${s(12.5)}" fill="${rgb(PAL.red)}" stroke="${rgb(INK)}" stroke-width="${s(PEN_W)}"/>
   <ellipse cx="${mc[0]}" cy="${mc[1] + s(1.5)}" rx="${s(10.5)}" ry="${s(6.5)}" fill="${DARK}"/>
-  <path d="M ${mc[0] - s(15)} ${mc[1] - s(8)} Q ${mc[0] - s(5)} ${mc[1] - s(11.5)} ${mc[0] + s(6)} ${mc[1] - s(9.5)}" fill="none" stroke="${rgb(INK)}" stroke-width="${s(2.4)}" stroke-linecap="round" opacity="0.9"/>
+  <path d="M ${mc[0] - s(15)} ${mc[1] - s(8)} Q ${mc[0] - s(5)} ${mc[1] - s(11.5)} ${mc[0] + s(6)} ${mc[1] - s(9.5)}" fill="none" stroke="${rgb(INK)}" stroke-width="${s(PEN_W)}" stroke-linecap="round"/>
 `);
 // a thin closed mouth: the lips pressed to a line, still red, the pen above and below
 const fx0 = mc[0] - s(46), fx1 = mc[0] + s(48);
 const flatPath = `M ${fx0} ${mc[1] - s(2)} C ${mc[0] - s(20)} ${mc[1] + s(3)}, ${mc[0] + s(15)} ${mc[1] + s(4)}, ${fx1} ${mc[1] + s(1)}`;
 await svgLayer('mouthFlat', mouth.box, `
-  <path d="${flatPath}" fill="none" stroke="${rgb(INK)}" stroke-width="${s(10)}" stroke-linecap="round"/>
+  <path d="${flatPath}" fill="none" stroke="${rgb(INK)}" stroke-width="${s(4.6 + 2 * PEN_W)}" stroke-linecap="round"/>
   <path d="${flatPath}" fill="none" stroke="${rgb(PAL.red)}" stroke-width="${s(4.6)}" stroke-linecap="round"/>
-  <path d="M ${fx0 - s(6)} ${mc[1] - s(6)} q ${s(4)} ${s(3)} ${s(6)} ${s(9)}" fill="none" stroke="${rgb(INK)}" stroke-width="${s(2.2)}" stroke-linecap="round"/>
+  <path d="M ${fx0 - s(6)} ${mc[1] - s(6)} q ${s(4)} ${s(3)} ${s(6)} ${s(9)}" fill="none" stroke="${rgb(INK)}" stroke-width="${s(PEN_W)}" stroke-linecap="round"/>
 `);
 
 // ── write ──

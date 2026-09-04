@@ -41,23 +41,62 @@ export async function build(ctx) {
   const down = (x, y, z, fov) => ({ pos: [x, y, z], look: [x, spreadY, z], fov, up: [0, 0, -1] });
 
   // Every name from the layout survives (other pieces cut to them); the values are ours.
+  //
+  // ROUND 4 — the rule the frames are cut to: an object is either wholly in the frame or wholly
+  // out of it; the TOP edge never bisects one. In a room this crowded that is a real constraint,
+  // and it is what decides the three frontal shots. The back wall carries its furniture between
+  // y = 1.0 and y = 2.59 (window and door heads at 2.45, the VOYANTE board 2.21–2.41, the pictures
+  // and the clock to 2.27, the TAROT board 2.41–2.59), then bare plaster to the cornice at 2.98
+  // and the ceiling at 3.10; the pendant hangs over the table's own centre from 3.10 down to 2.45.
+  // So a frontal shot may put its top edge in exactly two places: ABOVE the pendant's rose (3.10 at
+  // z = 0 — which is `wide` and `home`, the box closed), or in the bare plaster between 2.59 and
+  // 2.98 at the back wall with the pendant wholly above the frame (which is `pepe`). Anywhere
+  // between slices the door head, the shutters and the sign, which is what round 3 did.
+  //
+  // The arithmetic, since it is not obvious: closing the box over the pendant means the frame must
+  // hold 0.76 m (the cards) to 3.10 m (the rose) at almost the same depth, so it cannot be a close
+  // frame — the tightest lens that does it is a long one from the back of the room. That is why
+  // `home` is not a medium: there is no medium that closes this box. The close work is `pepe`
+  // (the plaster band) and the overheads.
   const shots = {
     ...L.shots,
-    // the reading: Pepe dead centre behind the table, the cards on the cloth, the wall behind him a flat elevation
-    home: flat([0, 1.8, 3.4], 28, [0, 0.31]),
-    // the parlour: the whole back wall floor to cornice, side walls as slivers, the table small and centred
-    wide: flat([0, 1.62, 5.9], 25, [0, 0.05]),
-    // Pepe: head, shoulders, the open hands on the cloth
-    pepe: flat([0, 1.4, 2.9], 24, [0, 0.108]),
-    // the table: frontal, the lens dropped so the cloth is seen from above and Pepe's hands come in from the top
+    // the parlour, and the visitor is in it: ceiling, cornice, the whole pendant dead centre, both
+    // side walls, the coat stand, the umbrella, the tiles and both rugs. The lens sits at a seated
+    // visitor's eye height so the floor reads; Pepe is small, the way the film keeps a figure small
+    // in a big frame. The rose stands 3.5% of the frame height below the top edge.
+    wide: flat([0, 1.45, 6.4], 31, [0, 0]),
+    // the same box a size closer and a head higher, so the cloth reads from above and the table
+    // cuts the bottom edge: the frame the conversation is played in. Still closed at the top — the
+    // pendant whole, the cornice whole, the cards 10% of the frame height above the bottom edge.
+    // 1.28× tighter than `wide`, which is as tight as the pendant allows (see above).
+    home: flat([0, 1.80, 6.4], 24.5, [0, 0]),
+    // Pepe: head, shoulders, the open hands on the cloth, and the whole of the wall he sits
+    // against — window, door, board, clock, pictures — with the top edge in the bare plaster at
+    // 2.70 and the pendant wholly out of frame. 1.82× tighter than `home`: a cut, not a nudge.
+    pepe: flat([0, 1.30, 2.9], 30, [0, 0]),
+    // the table: frontal, the lens dropped so the cloth is seen from above and Pepe's hands come in
+    // from the top. The one frame here whose top edge crosses the wall (it must: a frontal lens low
+    // enough to see the cloth cannot also clear the door head) — so the film does not use it; it is
+    // kept because other pieces are judged from it. The cards are read from `spread` instead.
     table: flat([0, 1.86, 2.55], 28, [0, 0.64]),
-    // the spread: exactly 90° down, three cards in a row, the deck at the right
-    spread: down(sx0, 2.15, sz0, 30),
-    card0: down(L.spread.slots[0][0], 1.25, L.spread.slots[0][2], 30),
-    card1: down(L.spread.slots[1][0], 1.25, L.spread.slots[1][2], 30),
-    card2: down(L.spread.slots[2][0], 1.25, L.spread.slots[2][2], 30),
+    // the spread: exactly 90° down, the three cards in a row across the middle of the cloth with an
+    // even hand's breadth of cloth above and below them. This is the frame the cards are turned in.
+    spread: down(sx0, 2.12, sz0, 30),
+    card0: down(L.spread.slots[0][0], 1.32, L.spread.slots[0][2], 30),
+    card1: down(L.spread.slots[1][0], 1.32, L.spread.slots[1][2], 30),
+    card2: down(L.spread.slots[2][0], 1.32, L.spread.slots[2][2], 30),
     // the deck: square on, close, the lens dropped onto the stack
     deck: flat([L.deck.pos[0], 1.06, L.deck.pos[2] + 0.86], 24, [0, 0.5]),
+    // the riffle: the deck at two thirds of the frame height, seen from just over the cloth's edge
+    // with the lens dropped, so the halves part and bend up in profile — the shuffle is an event
+    // and not a rumour. Square to the wall, on the deck's own axis.
+    riffle: flat([L.deck.pos[0], 0.98, L.deck.pos[2] + 0.52], 30, [0, 0.7]),
+    // the fan, and the row the picked cards go to: 90° down, both wholly inside the frame with an
+    // even margin — the slot row at a third of the height, the fan at two thirds, and a clear band
+    // of cloth at the top for the lettering. The old frame was cropped at both ends at once: the
+    // fan's bottom row ran off the foot and the three slots were off the head, which is the one
+    // frame in the evening that must show everything at once (the cards are turned here).
+    fan: down(0, 2.27, 0.207, 33),
     // the door: the doormat to the VOYANTE board, the door on the axis. The lens stands 8 cm inboard
     // of the door's centre and is a little wider than it was: at 19° on the door's own axis the left
     // edge fell at x = -0.39 in Pepe's plane and sliced him and his table down the middle, which is
