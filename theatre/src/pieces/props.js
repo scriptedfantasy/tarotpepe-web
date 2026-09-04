@@ -1,12 +1,17 @@
-// PIECE: props — set dressing. A crowded, ordered parlour: a tall cabinet of bottles with drawn
-// labels (two thirds of them solid black), two bookcases, a chest with a lamp and an album on it,
-// a cat asleep on the right bookcase, a bar cart under the window carrying the radio and four big
-// bottles, curtains in the window, a floor lamp with a fringed shade, a hat stand with a black
-// coat and a bowler, a potted palm, framed drawings around a wall clock, a pinboard of notes,
-// hand-lettered signs, a rug with a scrolled border, the three-petal pendant of the kitchen frame.
-// Every prop is paper-white geometry or a solid-ink mass with its pattern left in paper; the ink
-// pass draws the lines. Composed frontal and symmetrical for the 'wide' and 'home' shots; nothing
-// in front of Pepe or the table.
+// PIECE: props — set dressing. A crowded, ordered parlour, but one that BREATHES: the film's rooms
+// are dense along a low band and bare above it, and always keep one big empty area. So the back wall
+// carries a low run of furniture — bookcase | chest | bookcase, none of it above waist height — with
+// bare plaster over it and either side of Pepe's head, and ONE row of pictures round the clock under
+// the rail. A cabinet of bottles beside the door (four boards, three bottles a board, one bay left to
+// a single demijohn), a bar cart under the window with the radio and four big bottles, curtains, a
+// floor lamp, a hat stand with a black overcoat, a potted palm, hand-lettered signs, a rug, a doormat,
+// a cat on the right bookcase, the three-petal pendant of the kitchen frame.
+// Every prop is paper-white geometry or a solid-ink mass with its pattern left in paper; the ink pass
+// draws the lines. The rule the round-1 critic set: from across the room every prop must show ONE
+// solid black area and ONE bare white area — a black plinth under a white case, a black grille beside
+// a paper dial, a black bezel round a paper clock face, a black frond among paper ones.
+// Composed frontal and symmetrical for the 'wide' and 'home' shots; nothing in front of Pepe or the
+// table, and nothing at the height of his shoulders within a hand's width of them.
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import * as O from './props-objects.js';
@@ -39,56 +44,64 @@ export async function build(ctx) {
   rug.position.set(0, 0, -0.2);
   g.add(rug);
 
-  // ---- the back wall's furniture row: bookcase | chest | bookcase (between shutter and door) --------
-  const chestW = 1.04, caseW = 0.34;
+  // ---- the back wall's furniture row: a LOW band — bookcase | chest | bookcase --------------------
+  // Round 3: the cases came down from 1.45 m to 1.02 m and moved outboard, so the wall beside
+  // Pepe's shoulders and either side of his head is bare plaster, the way the film always keeps one
+  // big empty area. Half as many books, twice the spine, black and pale alternating; and the lining
+  // board hardly takes tone, so the spines read as silhouettes instead of strokes lost in hatch.
+  const chestW = 1.04, caseW = 0.34, caseH = 1.02;
+  const CASE_BOARDS = [0.15, 0.57];
   const chest = O.console_({ w: chestW, h: 0.82, d: 0.38 });
   chest.position.set(0, 0, FLUSH + 0.19);
   g.add(chest);
   {
     const top = 0.82;
+    // the lamp and the vase sit at the ENDS of the chest, clear of Pepe's head
     const d = O.doily(0.13);
-    d.position.set(-0.36, top + 0.002, chest.position.z + 0.02);
+    d.position.set(-0.44, top + 0.002, chest.position.z + 0.02);
     g.add(d);
     const lamp = O.mushroomLamp();
-    lamp.position.set(-0.36, top, chest.position.z + 0.02);
+    lamp.position.set(-0.44, top, chest.position.z + 0.02);
     g.add(lamp);
     let y = top;
-    for (let i = 0; i < 3; i++) {
-      const t = 0.028 - i * 0.004;
-      const b = O.book({ w: 0.2 - i * 0.02, h: 0.26 - i * 0.03, t, flat: true, seed: 90 + i, title: ['GRAND ALBUM', 'LE TAROT', 'ORACLES'][i], dark: i === 1 });
-      b.position.set(-0.1 + i * 0.01, y + t / 2, chest.position.z + 0.02);
-      b.rotation.y = (i - 1) * 0.08;
+    for (let i = 0; i < 2; i++) {
+      const t = 0.03 - i * 0.005;
+      const b = O.book({ w: 0.22 - i * 0.02, h: 0.28 - i * 0.03, t, flat: true, seed: 90 + i, title: ['GRAND ALBUM', 'LE TAROT'][i], dark: i === 1 });
+      b.position.set(-0.2 + i * 0.012, y + t / 2, chest.position.z + 0.02);
+      b.rotation.y = (i - 0.5) * 0.1;
       g.add(b);
       y += t;
     }
     const cs = O.candleStick();
-    cs.position.set(0.14, top, chest.position.z + 0.06);
+    cs.position.set(0.2, top, chest.position.z + 0.06);
     g.add(cs);
-    const v = O.vase({ rng });
-    v.position.set(0.4, top, chest.position.z + 0.02);
+    const v = O.vase({ rng, spread: 0.78 });
+    v.position.set(0.45, top, chest.position.z + 0.02);
     g.add(v);
   }
   for (const side of [-1, 1]) {
-    const bc = O.shelfUnit({ w: caseW, h: 1.45, d: 0.28, boards: [0.1, 0.44, 0.78, 1.12], plinth: 0.06 });
-    bc.position.set(side * (chestW / 2 + 0.02 + caseW / 2), 0, FLUSH + 0.14);
+    const bc = O.shelfUnit({ w: caseW, h: caseH, d: 0.28, boards: CASE_BOARDS, plinth: 0.07, back: true });
+    bc.position.set(side * 0.85, 0, FLUSH + 0.14);
     g.add(bc);
     const { x0, x1, z0 } = bc.userData.inner;
-    for (const y of [0.1, 0.44, 0.78, 1.12]) bc.add(O.bookRow({ x0, x1, y, z: z0, rng, maxH: 0.28, depth: 0.25 }));
+    for (const y of CASE_BOARDS) bc.add(O.bookRow({ x0, x1, y, z: z0, rng, maxH: 0.3, depth: 0.25, chunky: true }));
     if (side < 0) {
       const gl = O.globe();
-      gl.position.set(0, 1.45, 0.02);
+      gl.position.set(0, caseH, 0.02);
       bc.add(gl);
     } else {
       // the cat, asleep on top of the bookcase, facing the room
       const cat = O.cat();
-      cat.position.set(0.0, 1.45, 0.0);
+      cat.position.set(0.0, caseH, 0.0);
       cat.rotation.y = -0.2;
       bc.add(cat);
     }
   }
 
   // ---- the window (stage left): curtains inside the architrave, the bar cart under it, the palm -----
-  g.add(O.curtainSet({ x0: win.x0 - 0.03, x1: win.x1 + 0.03, rodY: win.y1 + 0.05, panelW: 0.24, dropTo: win.y0 + 0.02, z: WALL + 0.06 }));
+  // narrower panels than round 2, and half the vertical hatch in the cloth: the curtains were a
+  // wall of rain-strokes beside a window that is already all shutter-louvres
+  g.add(O.curtainSet({ x0: win.x0 - 0.03, x1: win.x1 + 0.03, rodY: win.y1 + 0.05, panelW: 0.19, dropTo: win.y0 + 0.02, z: WALL + 0.06 }));
   {
     const cart = O.barCart({ w: 0.96, d: 0.42, h: 0.8 });
     cart.position.set((win.x0 + win.x1) / 2, 0, WALL + 0.48);
@@ -115,16 +128,14 @@ export async function build(ctx) {
         ],
       }),
     );
-    // the lower board: the newspapers and the soda siphon
-    const news = O.newspaperStack({ n: 6, rng });
+    // the lower board: the newspapers and the soda siphon (the ice bucket went; three things under
+    // there read as clutter behind the cart's own rails)
+    const news = O.newspaperStack({ n: 4, rng });
     news.position.set(0.16, cart.userData.lower, 0.02);
     cart.add(news);
     const s = O.siphon();
-    s.position.set(-0.2, cart.userData.lower, 0.0);
+    s.position.set(-0.28, cart.userData.lower, 0.0);
     cart.add(s);
-    const ib = O.iceBucket();
-    ib.position.set(-0.36, cart.userData.lower, 0.04);
-    cart.add(ib);
   }
   {
     const stool = new THREE.Group();
@@ -135,11 +146,14 @@ export async function build(ctx) {
       const a = (i / 3) * Math.PI * 2 + 0.5;
       stool.add(O.rod([Math.cos(a) * 0.1, 0.29, Math.sin(a) * 0.1], [Math.cos(a) * 0.15, 0, Math.sin(a) * 0.15], 0.012, M.solid));
     }
-    // the palm stands between the cart and the floor lamp, clear of the bottles
-    stool.position.set(-W / 2 + 0.24, 0, -1.45);
+    // The palm is set far enough out and upstage that the home shot crops it away entirely and the
+    // wide keeps it whole behind the floor lamp: standing level with the lamp the two of them were
+    // one tangle of black spikes at the left edge, and a frond tip poking into the home frame is
+    // scribble with no body to it.
+    stool.position.set(-W / 2 + 0.24, 0, -1.3);
     g.add(stool);
-    const p = O.plant({ rng, leaves: 12, kind: 'palm', scale: 1.0 });
-    p.position.set(-W / 2 + 0.24, 0.31, -1.45);
+    const p = O.plant({ rng, leaves: 8, kind: 'palm', scale: 1.15 });
+    p.position.set(-W / 2 + 0.24, 0.31, -1.3);
     g.add(p);
   }
 
@@ -153,55 +167,59 @@ export async function build(ctx) {
     g.add(sign);
     for (const sx of [-1, 1]) g.add(O.rod([cx + sx * 0.3, ty + 0.1, WALL - 0.008], [cx + sx * 0.3, door.y1 - 0.02, WALL - 0.02], 0.003, M.cord, 5));
     // a doormat in front of the door, lettered
-    const mat = O.doorMat({ w: 0.7, d: 0.42 });
-    mat.position.set(cx, 0, WALL + 0.06 + 0.21);
+    const mat = O.doorMat({ w: 0.58, d: 0.34 });
+    mat.position.set(cx, 0, WALL + 0.06 + 0.2);
     g.add(mat);
 
-    const unit = O.shelfUnit({ w: 0.5, h: 2.45, d: 0.24, boards: [0.08, 0.48, 0.88, 1.28, 1.68, 2.08], plinth: 0.05 });
-    unit.position.set(W / 2 - 0.04 - 0.25, 0, FLUSH + 0.12);
+    // Round 3: the cabinet was a full-height wall of 24 bottles at 42-54% ink — the heaviest thing
+    // in the frame. It is now four boards instead of six (stopping 0.7 m short of the rail, so the
+    // plaster above it is bare), three bottles a shelf instead of four, each a size larger, and its
+    // back is open so the shelves are not a black box behind the glass.
+    const CAB = [0.12, 0.66, 1.2];
+    const CABH = 1.5;
+    const unit = O.shelfUnit({ w: 0.54, h: CABH, d: 0.24, boards: CAB, plinth: 0.07, back: true });
+    unit.position.set(W / 2 - 0.04 - 0.27, 0, FLUSH + 0.12);
     g.add(unit);
     const { x0, x1, z0 } = unit.userData.inner;
-    // four or five bottles a shelf, silhouettes different, two thirds of them solid black
+    // on top of it, where the coat on the hat stand crosses: two flat books and a black jar, so the
+    // run of shelving ends in a silhouette instead of a sawn-off edge
+    {
+      const b = O.book({ w: 0.24, h: 0.3, t: 0.05, flat: true, seed: 71, title: 'ALMANACH', dark: true });
+      b.position.set(-0.09, CABH + 0.025, 0.01);
+      b.rotation.y = 0.09;
+      unit.add(b);
+      const j = O.shelfItem({ kind: 'jar', name: 'MIEL', h: 0.13, scale: 1.3, seed: 72 }, rng);
+      j.position.set(0.13, CABH, 0.0);
+      unit.add(j);
+    }
+    // three bottles a shelf, silhouettes different, two thirds of them solid black
     const bays = [
       [
-        { kind: 'square', name: 'GIN', dark: true, bodyH: 0.15 },
-        { kind: 'tall', name: 'MARC', dark: true, bodyH: 0.2, neckH: 0.09 },
-        { kind: 'flask', lines: ['POIRE'], dark: false, neck: 0.06 },
-        { kind: 'squat', name: 'RHUM', dark: true, bodyH: 0.12 },
+        { kind: 'square', name: 'GIN', dark: true, bodyH: 0.16 },
+        { kind: 'tall', name: 'MARC', dark: true, bodyH: 0.22, neckH: 0.1 },
+        { kind: 'flask', lines: ['POIRE'], dark: false, neck: 0.07 },
       ],
       [
-        { kind: 'jar', name: 'SEL', h: 0.1 },
-        { kind: 'jar', name: 'THE', h: 0.13 },
-        { kind: 'squat', name: 'ANIS', dark: true, bodyH: 0.14, neckH: 0.05 },
-        { kind: 'corked', name: 'PRUNE', dark: false, bodyH: 0.13 },
+        { kind: 'jar', name: 'THE', h: 0.15 },
+        { kind: 'squat', name: 'ANIS', dark: true, bodyH: 0.16, neckH: 0.06 },
+        { kind: 'corked', name: 'PRUNE', dark: false, bodyH: 0.15 },
       ],
       [
-        { kind: 'tall', name: 'VIN', dark: true, bodyH: 0.19, neckH: 0.1 },
-        { kind: 'square', name: 'FINE', dark: false, bodyH: 0.12 },
-        { kind: 'tall', name: 'PORTO', dark: true, bodyH: 0.21, neckH: 0.07 },
-        { kind: 'wine' },
-      ],
-      [
-        { kind: 'flask', lines: ['EAU', 'DE VIE'], dark: true, neck: 0.07 },
-        { kind: 'squat', name: 'SUZE', dark: false, bodyH: 0.13 },
-        { kind: 'jar', name: 'CAFE', h: 0.12 },
-        { kind: 'tall', name: 'BYRRH', dark: true, bodyH: 0.18, neckH: 0.11 },
-      ],
-      [
-        { kind: 'square', name: 'KIRSCH', dark: true, bodyH: 0.17 },
-        { kind: 'corked', name: 'MARC', dark: true, bodyH: 0.15, neckH: 0.06 },
-        { kind: 'tall', name: 'EAU', dark: false, bodyH: 0.17, neckH: 0.09 },
-        { kind: 'squat', name: 'CASSIS', dark: true, bodyH: 0.11 },
-      ],
-      [
-        { kind: 'tall', name: 'COGNAC', dark: true, bodyH: 0.2, neckH: 0.1 },
-        { kind: 'flask', lines: ['EAU', 'DE VIE'], dark: false, neck: 0.08 },
-        { kind: 'square', name: 'GIN', dark: true, bodyH: 0.14 },
-        { kind: 'jar', name: 'MIEL', h: 0.09 },
+        { kind: 'tall', name: 'VIN', dark: true, bodyH: 0.21, neckH: 0.11 },
+        { kind: 'square', name: 'FINE', dark: false, bodyH: 0.14 },
+        { kind: 'tall', name: 'PORTO', dark: true, bodyH: 0.23, neckH: 0.08 },
       ],
     ];
-    [0.08, 0.48, 0.88, 1.28, 1.68, 2.08].forEach((y, i) => {
-      unit.add(O.row({ x0, x1, y, z: z0 + 0.13, rng, gap: 0.01, items: bays[i].map((s, k) => ({ ...s, scale: 1.1, seed: 300 + i * 10 + k })) }));
+    CAB.forEach((y, i) => {
+      // the second bay up carries a single big demijohn and nothing else: the film gives every
+      // packed run of objects one place where the eye is allowed to stop
+      if (i === 1) {
+        const dj = O.shelfItem({ kind: 'corked', name: 'PRUNE', dark: true, bodyH: 0.25, neckH: 0.1, scale: 1.8, seed: 391 }, rng);
+        dj.position.set(x0 + 0.17, y, z0 + 0.14);
+        unit.add(dj);
+        return;
+      }
+      unit.add(O.row({ x0, x1, y, z: z0 + 0.13, rng, gap: 0.012, items: bays[i].map((s, k) => ({ ...s, scale: 1.3, seed: 300 + i * 10 + k })) }));
     });
   }
 
@@ -216,16 +234,14 @@ export async function build(ctx) {
       g.add(hook);
     }
 
-    // two portraits flanking the clock, four small subjects in a row beneath
+    // Round 3: ONE row of pictures, not two, and no cork board. The lower row of four small
+    // subjects sat directly over Pepe's head and the pinboard's grid of notes was the densest
+    // patch on the wall; between them they were most of the 35-45% the room measured here. What is
+    // left is three larger, better-drawn things — a portrait, the clock, a hand — hung in a row
+    // under the rail, with bare plaster above the furniture and either side of Pepe's head.
     const rowA = [
-      [-0.39, 0.34, 0.38, 'portrait', true],
-      [0.39, 0.34, 0.38, 'hand', true],
-    ];
-    const rowB = [
-      [-0.43, 0.22, 0.22, 'ship', false],
-      [-0.145, 0.2, 0.2, 'eye', false],
-      [0.145, 0.2, 0.2, 'moon', false],
-      [0.43, 0.22, 0.22, 'house', false],
+      [-0.46, 0.4, 0.46, 'portrait', true],
+      [0.46, 0.4, 0.46, 'hand', true],
     ];
     let seed = 100;
     const hang = (list, y) => {
@@ -236,68 +252,58 @@ export async function build(ctx) {
         O.hangCords(g, x, y + h / 2, w / 2 - 0.02, HOOK_Y, WALL + 0.012);
       }
     };
-    hang(rowA, 2.06);
-    hang(rowB, 1.66);
-    const clock = O.wallClock({ r: 0.17 });
+    hang(rowA, 2.04);
+    const clock = O.wallClock({ r: 0.185 });
     clock.position.set(0, 2.06, WALL + 0.03);
     g.add(clock);
-    O.hangCords(g, 0, 2.06 + 0.17, 0.1, HOOK_Y, WALL + 0.012);
+    O.hangCords(g, 0, 2.06 + 0.185, 0.1, HOOK_Y, WALL + 0.012);
     g.userData.pendulum = clock.userData.pendulum;
-
-    // between the pictures and the door: a cork board of pinned notes
-    const pbX = (0.5 + door.x0 - 0.1) / 2;
-    const pb = O.pinBoard({ w: 0.38, h: 0.5, rng });
-    pb.position.set(pbX, 1.98, WALL + 0.012);
-    g.add(pb);
-    O.hangCords(g, pbX, 1.98 + 0.25, 0.15, HOOK_Y, WALL + 0.01);
   }
 
-  // ---- the stage-left wall (no window there): two frames in a row and a small shelf of jars -----------
+  // ---- the stage-left wall (no window there): one round picture and a small shelf of jars ------------
   {
     const x = -W / 2 + 0.02;
     const rot = Math.PI / 2;
-    const rf = O.roundFrame({ r: 0.15, kind: 'zodiac', seed: 7 });
-    rf.position.set(x, 1.95, -1.55);
+    const rf = O.roundFrame({ r: 0.17, kind: 'zodiac', seed: 7 });
+    rf.position.set(x, 1.95, -1.75);
     rf.rotation.y = rot;
     g.add(rf);
-    const pf = O.pictureFrame({ w: 0.26, h: 0.32, kind: 'sun', seed: 9, ornate: true });
-    pf.position.set(x, 1.95, -2.05);
-    pf.rotation.y = rot;
-    g.add(pf);
     const shelf = O.wallShelf({ w: 0.6, d: 0.16 });
     shelf.position.set(x, 1.3, -2.3);
     shelf.rotation.y = rot;
     g.add(shelf);
     shelf.add(
       O.row({
-        x0: -0.28,
-        x1: 0.28,
+        x0: -0.26,
+        x1: 0.26,
         y: 0.01,
         z: 0.08,
         rng,
         items: [
-          { kind: 'jar', name: 'SUCRE', h: 0.1, seed: 401 },
-          { kind: 'squat', name: 'ANIS', dark: true, bodyH: 0.11, seed: 402 },
-          { kind: 'jar', name: 'RIZ', h: 0.12, seed: 403 },
+          { kind: 'jar', name: 'SUCRE', h: 0.12, scale: 1.15, seed: 401 },
+          { kind: 'squat', name: 'ANIS', dark: true, bodyH: 0.13, scale: 1.15, seed: 402 },
         ],
       }),
     );
   }
 
-  // ---- the stage-right wall: a key on a nail and a small round picture --------------------------------
+  // ---- the stage-right wall: a small round picture, upstage of the second window ----------------------
   {
     const x = W / 2 - 0.02;
     const rot = -Math.PI / 2;
-    const rf = O.roundFrame({ r: 0.13, kind: 'key', seed: 11 });
-    rf.position.set(x, 1.95, -1.7);
+    const rf = O.roundFrame({ r: 0.14, kind: 'key', seed: 11 });
+    rf.position.set(x, 1.95, -2.18);
     rf.rotation.y = rot;
     g.add(rf);
   }
 
   // ---- in front of the side walls: the floor lamp (left) and the hat stand (right) ---------------------
-  // both a hand's width in from the side walls, so the wide shot keeps them whole
+  // Both a hand's width in from the side walls, so the wide shot keeps them whole. Tried downstage
+  // and tried swapping sides in round 3; both put a cropped black mass hard against a frame edge.
+  // What separates the coat from the bottle cabinet behind it is the cabinet coming down to 1.5 m —
+  // the top half of the coat now hangs against bare plaster.
   const lamp = O.floorLamp({ h: 1.62 });
-  lamp.position.set(-W / 2 + 0.5, 0, -0.55);
+  lamp.position.set(-W / 2 + 0.5, 0, -0.2);
   g.add(lamp);
   const stand = O.hatStand({ h: 1.85, rng });
   stand.position.set(W / 2 - 0.5, 0, -0.75);
@@ -319,7 +325,9 @@ export async function build(ctx) {
     }
   });
   for (const grp of noShadow) grp.traverse((o) => { if (o.isMesh) o.castShadow = false; });
-  ctx.scene.add(g);
+  // ?nodress=1 leaves the dressing out: how the props' own share of a frame's ink is measured
+  // against the room and the figure (tools/_cover.mjs on the two shots, and subtract).
+  if (!new URLSearchParams(location.search).has('nodress')) ctx.scene.add(g);
 
   return {
     group: g,

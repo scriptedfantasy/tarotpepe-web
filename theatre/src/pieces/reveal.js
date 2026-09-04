@@ -21,15 +21,20 @@
 //   states: dealt · turning · revealed · fan (stills) · shuffle · fanning · pick · gather · deal · turn (motion)
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
-import { FPS, compose, hold, dealTrack, turnTrack, turnPose } from './reveal-takes.js';
+import { FPS, compose, hold, dealTrack, turnTrack, turnPose, turnEdge, handFrames } from './reveal-takes.js';
 import { buildShuffle } from './reveal-shuffle.js';
 import { buildFan } from './reveal-fan.js';
+import { buildHand } from './reveal-hand.js';
 
 export const meta = {
   name: 'reveal',
   judge: { shot: 'table', states: ['dealt', 'turning', 'revealed', 'fan', 'shuffle', 'fanning', 'pick', 'gather', 'deal', 'turn'], motion: true },
-  files: ['src/pieces/reveal.js', 'src/pieces/reveal-takes.js', 'src/pieces/reveal-shuffle.js', 'src/pieces/reveal-fan.js'],
+  files: ['src/pieces/reveal.js', 'src/pieces/reveal-takes.js', 'src/pieces/reveal-shuffle.js', 'src/pieces/reveal-fan.js', 'src/pieces/reveal-hand.js'],
 };
+
+// The states shot from over the cloth, where his hand does the work: they are judged from the
+// 'fan' shot, not the piece's default 'table'.
+const OVERHEAD = new Set(['fan', 'fanning', 'pick', 'gather']);
 
 const SLUGS = ['the-fool', 'the-star', 'the-house-of-god'];
 
@@ -50,8 +55,10 @@ export async function build(ctx) {
   function stop() {
     for (const p of playing) p.resolve?.();
     playing.length = 0;
+    hand?.hide();
   }
   function tick(t) {
+    if (!playing.length) return; // a still state has posed the hand itself: leave it alone
     for (let i = playing.length - 1; i >= 0; i--) {
       const p = playing[i];
       let k = Math.round((t - p.t0) * FPS);
@@ -63,7 +70,13 @@ export async function build(ctx) {
         if (k < p.last) p.last = -1; // wrapped: redraw from the first drawing
       }
       const kk = Math.min(k, n - 1);
-      for (let j = p.last + 1; j <= kk; j++) p.frames[j]();
+      // every drawing is bracketed: the hand belongs to whichever composed track claimed it in
+      // THIS drawing, and leaves the cloth in a drawing where none did
+      for (let j = p.last + 1; j <= kk; j++) {
+        hand.begin();
+        p.frames[j]();
+        hand.end();
+      }
       p.last = kk;
       if (!p.loop && k >= n - 1) {
         playing.splice(i, 1);
@@ -104,8 +117,11 @@ export async function build(ctx) {
     cards.drawn.clear();
   };
 
+  // ---- his hand, for the beats shot over the cloth ------------------------------------------------
+  const hand = buildHand(ctx);
+
   // ---- the fan and the visitor's pick ------------------------------------------------------------
-  const fan = buildFan(ctx, cards, { play, stop });
+  const fan = buildFan(ctx, cards, { play, stop }, hand);
 
   // ---- the takes --------------------------------------------------------------------------------
   let shuffleTake = null;
@@ -120,6 +136,24 @@ export async function build(ctx) {
       });
     }
     return shuffleTake?.frames ?? [() => {}];
+  }
+
+  // His hand resting on the deck while the cards leave it: it comes in from the top of the frame,
+  // presses on the stack, and the card slides out from under it; between cards it breathes up a
+  // centimetre and comes back down. `at` are the master frames at which a card leaves.
+  function deckHandFrames(at, gap) {
+    const d = ctx.layout.deck.pos;
+    const top = (deck?.userData?.height ?? 0.036) + 0.002;
+    const on = (y, dz = 0, pose = 'splay') => ({ x: d[0] - 0.012, y, z: d[2] + dz, yaw: -0.16, pose });
+    const specs = [{ x: d[0] - 0.012, y: 0.07, z: d[2] - 0.3, yaw: -0.16, pose: 'splay' }];
+    at.forEach((k, i) => {
+      const prev = i ? at[i - 1] + 5 : 1; // where the last card's hold ended
+      if (k > prev) specs.push({ ...on(top + 0.02, -0.02), n: k - prev }); // lifted between cards
+      specs.push(on(top)); // the press: the card slides out
+      specs.push({ ...on(top), n: 4 }); // held four frames
+    });
+    specs.push({ ...on(top + 0.03, -0.05), n: 2 }, { x: d[0] - 0.012, y: 0.07, z: d[2] - 0.3, yaw: -0.16, pose: 'splay' }, { off: true });
+    return handFrames(hand, specs);
   }
 
   // the three cards stacked on the deck, then flicked to their slots one after another
@@ -146,6 +180,10 @@ export async function build(ctx) {
       }
       return { offset: i * (frames.length + gap), frames };
     });
+    // the hand presses on the deck one frame before each card leaves (dealTrack's lift is its
+    // second drawing), holds four, and lets the next one come
+    const leaves = tracks.map((t) => t.offset + 1);
+    tracks.push({ offset: 0, frames: deckHandFrames(leaves, gap) });
     return compose(tracks);
   }
 
@@ -155,6 +193,7 @@ export async function build(ctx) {
     const landed = landedPose(m, i);
     landed.p.y = slot.p.y;
     return turnTrack(m, slot, landed, H, {
+      hand,
       cues: {
         touch: () => pepe()?.turn?.(i),
         lift: () => sound('flip'),
@@ -176,6 +215,10 @@ export async function build(ctx) {
     const { rx, y, dz } = turnPose(90, H);
     m.position.set(slot.p.x, slots[Math.min(i, slots.length - 1)][1] + y, slot.p.z + dz);
     m.rotation.set(rx, slot.ry + 0.03, 0);
+    // and his fingers still on the edge that reared it up
+    const e = turnEdge(90, H);
+    const side = slot.p.x < -0.08 ? 'L' : 'R';
+    hand.at(slot.p.x + (side === 'L' ? -0.02 : 0.02), Math.min(e.y, 0.9 * hand.HAND.reach) + 0.002, slot.p.z + e.z, { yaw: -0.3, side, pose: 'point' });
   }
   function faceUpAsTurned(m, i) {
     const landed = landedPose(m, i);
@@ -252,6 +295,8 @@ export async function build(ctx) {
     fanScreenPositions: () => fan.screenPositions(),
     _fan: fan,
     async setState(name) {
+      // the beats over the cloth are judged from the overhead 'fan' shot, the rest from 'table'
+      ctx.pieces.camera?.cut?.(OVERHEAD.has(name) ? 'fan' : 'table');
       if (name === 'dealt' || name === 'default') await lay(SLUGS, false);
       else if (name === 'turning') {
         const meshes = await lay(SLUGS, false);
@@ -268,7 +313,7 @@ export async function build(ctx) {
         loopPlay(dealFrames(meshes), 10);
       } else if (name === 'turn') {
         const meshes = await lay(SLUGS, false);
-        const tracks = meshes.map((m, i) => ({ offset: 3 + i * 12, frames: turnFrames(m, i) }));
+        const tracks = meshes.map((m, i) => ({ offset: 2 + i * 15, frames: turnFrames(m, i) }));
         loopPlay(compose(tracks), 14);
       } else if (name === 'fan') {
         // the fan laid out, one card lifted as if under the pointer; live, the visitor may pick

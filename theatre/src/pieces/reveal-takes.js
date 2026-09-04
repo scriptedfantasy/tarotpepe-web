@@ -94,8 +94,34 @@ export function turnPose(phi, H) {
   return { rx: PI - rad(phi), y, dz };
 }
 
-// slot: { p, ry } the dealt pose; landed: { p, ry } where it ends up face up (a hand moved it a mm).
-export function turnTrack(mesh, slot, landed, H, { cues = {} } = {}) {
+// ---- the hand -----------------------------------------------------------------------------------
+// A list of drawings for the hand alone (reveal-hand.js), so a hand track composes with a card
+// track and the two stay in lockstep. Each spec is { n (a hold), x, y, z, yaw, pose } or null /
+// { off: true } for the hand off the cloth. y is metres above the cloth.
+export function handFrames(hand, specs) {
+  const out = [];
+  for (const s of specs) {
+    const draw = !s || s.off ? () => hand.off() : () => hand.at(s.x, s.y ?? 0, s.z, { yaw: s.yaw ?? 0, pose: s.pose ?? 'splay', side: s.side ?? 'R' });
+    for (let i = 0; i < (s?.n ?? 1); i++) out.push(draw);
+  }
+  return out;
+}
+
+// Where the card's near edge — the one the fingers hold — is at lift angle phi. The card is face
+// down, so the edge that rises is the one toward the visitor (+z); it swings up and over the far
+// edge, which stays on the cloth. Offsets from the slot centre.
+export function turnEdge(phi, H) {
+  const p = rad(phi);
+  const { dz } = turnPose(phi, H);
+  return { y: H * Math.sin(p), z: dz + (H / 2) * Math.cos(p) };
+}
+
+// The turn, twelve drawings. His hand comes in from the top of the frame, two fingers land on the
+// near edge of the card and HOLD, and only then does the card move; it goes flat — on edge — flat,
+// the fingers riding the edge up, and lets go as it falls over. The card never moves on its own.
+// hand: the reveal-hand api, or null (then the card turns alone, as before).
+// dx / yaw: where on the near edge the fingers land, and how far his arm is turned across.
+export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 0.02, yaw = -0.3 } = {}) {
   const at = (phi, ry, cue, extraY = 0, extraZ = 0) => () => {
     const { rx, y, dz } = turnPose(phi, H);
     mesh.visible = true;
@@ -108,9 +134,12 @@ export function turnTrack(mesh, slot, landed, H, { cues = {} } = {}) {
     mesh.position.copy(landed.p);
     mesh.rotation.set(0, landed.ry, 0);
   };
-  return [
+  const card = [
     at(0, slot.ry), // as dealt
-    at(1.2, slot.ry, cues.touch, 0.0008, 0.003), // fingers under the near edge: a hair up, slid toward the visitor
+    at(0, slot.ry), // still as dealt: the hand is on its way
+    at(0, slot.ry),
+    at(1.2, slot.ry, cues.touch, 0.0008, 0.003), // the fingers land: a hair up, slid toward the visitor
+    at(1.2, slot.ry, null, 0.0008, 0.003), // and hold
     at(28, slot.ry, cues.lift),
     at(64, slot.ry + 0.02),
     at(90, slot.ry + 0.03), // on edge: the face shown to the visitor
@@ -118,5 +147,39 @@ export function turnTrack(mesh, slot, landed, H, { cues = {} } = {}) {
     at(138, slot.ry + 0.02),
     at(176, landed.ry + 0.02, cues.land, 0.005), // the bounce: 5 mm up, almost flat
     settled,
+    settled,
   ];
+  if (!hand) return card;
+  // the hand nearest this card, so no arm crosses the whole cloth
+  const side = slot.p.x < -0.08 ? 'L' : 'R';
+  const s = side === 'L' ? -1 : 1;
+  const X = slot.p.x + s * dx;
+  const base = { yaw, side, pose: 'point' };
+  // the fingers on the near edge, drawing it up; they let go at 90° and come back to the cloth
+  const on = (phi) => {
+    const e = turnEdge(phi, H);
+    return { ...base, x: X, y: Math.min(e.y, 0.9 * hand.HAND.reach) + 0.002, z: slot.p.z + e.z };
+  };
+  const near = slot.p.z + H / 2;
+  return compose([
+    { offset: 0, frames: card },
+    {
+      offset: 0,
+      frames: handFrames(hand, [
+        { off: true }, // before this card's turn: another card's hand may be on the cloth
+        { ...base, x: X, y: 0.06, z: near - 0.26 }, // in from the top of the frame
+        { ...base, x: X, y: 0.02, z: near - 0.09 },
+        on(1.2), // the fingers land on the near edge
+        on(1.2), // and hold
+        on(28),
+        on(64),
+        on(90),
+        on(90),
+        { ...base, x: X, y: 0.012, z: slot.p.z + 0.02 }, // let go
+        { ...base, x: X + s * 0.01, y: 0.03, z: near - 0.14 }, // drawn back
+        { ...base, x: X + s * 0.02, y: 0.06, z: near - 0.28 },
+        { off: true },
+      ]),
+    },
+  ]);
 }

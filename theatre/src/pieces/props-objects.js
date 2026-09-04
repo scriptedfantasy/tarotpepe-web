@@ -374,13 +374,17 @@ export function book({ w = 0.14, h = 0.2, t = 0.03, title = null, flat = false, 
 }
 // Books along a shelf from x0..x1 (local), standing on y, back at z (spines to +z). A third of
 // the spines are solid ink, the way the film blacks in every third book on a shelf.
-export function bookRow({ x0, x1, y, z, rng, maxH = 0.26, depth = 0.22, extras = true }) {
+export function bookRow({ x0, x1, y, z, rng, maxH = 0.26, depth = 0.22, extras = true, chunky = false }) {
   const g = new THREE.Group();
   let x = x0 + 0.012;
   let guard = 0;
+  // chunky: half as many books, each twice the spine, so a shelf at four metres reads as a row of
+  // separable objects with black ones among them, not as a picket fence of strokes
+  const T0 = chunky ? 0.042 : 0.02, T1 = chunky ? 0.075 : 0.05;
+  const DARK = chunky ? 0.5 : 0.36;
   while (x < x1 - 0.03 && guard++ < 40) {
     const r = rng();
-    if (r < 0.14 && extras) {
+    if (r < (chunky ? 0.1 : 0.14) && extras) {
       // a short flat stack
       const n = 2 + ((rng() * 2) | 0);
       let yy = y;
@@ -395,7 +399,7 @@ export function bookRow({ x0, x1, y, z, rng, maxH = 0.26, depth = 0.22, extras =
         yy += t;
       }
       x += w + 0.012;
-    } else if (r < 0.22 && extras) {
+    } else if (r < (chunky ? 0.16 : 0.22) && extras) {
       // a little object between books
       const o = rng() < 0.5 ? jar({ r: 0.03, h: 0.07, lines: [rng.pick(JAR_NAMES)], seed: guard * 3 }) : sphere(0.035, materials().globe, 16, 12);
       if (o.isMesh && !o.userData.height) o.position.y = y + 0.035;
@@ -405,11 +409,13 @@ export function bookRow({ x0, x1, y, z, rng, maxH = 0.26, depth = 0.22, extras =
       g.add(o);
       x += 0.085;
     } else {
-      const t = rng.range(0.02, 0.05);
+      const t = rng.range(T0, T1);
       if (x + t > x1) break;
-      const h = Math.min(maxH, rng.range(0.15, 0.25));
+      const h = Math.min(maxH, rng.range(chunky ? 0.19 : 0.15, chunky ? 0.3 : 0.25));
       const w = rng.range(0.12, Math.min(0.18, depth - 0.02));
-      const b = book({ w, h, t, seed: guard * 17 + 5, dark: rng() < 0.36 });
+      // chunky rows alternate rather than roll for it: on a shelf of four books the dice too often
+      // gave four pale ones, and a shelf with no black on it is a row of wire rectangles
+      const b = book({ w, h, t, seed: guard * 17 + 5, dark: chunky ? guard % 2 === 1 : rng() < DARK });
       b.position.set(x + t / 2, y + h / 2, z + w / 2 + rng.range(0, depth - w));
       // a few lean on their neighbour
       if (rng() < 0.12 && x + t + 0.03 < x1) {
@@ -426,6 +432,7 @@ export function bookRow({ x0, x1, y, z, rng, maxH = 0.26, depth = 0.22, extras =
 const JAR_NAMES = ['SEL', 'THE', 'SUCRE', 'CAFE', 'FIGUES', 'MIEL', 'RIZ', 'POIVRE', 'TILLEUL', 'SAUGE', 'CLOUS', 'ORGE'];
 
 // ---- shelving ------------------------------------------------------------------------------------
+let _lining = null;
 export function shelfUnit({ w, h, d, boards, thick = 0.022, back = true, plinth = 0.06 }) {
   const M = materials();
   const g = new THREE.Group();
@@ -437,7 +444,10 @@ export function shelfUnit({ w, h, d, boards, thick = 0.022, back = true, plinth 
   side(-w / 2 + thick / 2);
   side(w / 2 - thick / 2);
   if (back) {
-    const b = box(w, h, 0.01, M.wood);
+    // a lining board that hardly takes tone (hatch 0.12, like a picture's glass): the bottles and
+    // book spines then read as black-and-white silhouettes on bare paper instead of as strokes lost
+    // in the hatch a broad light leaves at the back of a deep box
+    const b = box(w, h, 0.01, _lining ?? (_lining = inkMaterial({ hatch: 0.12 })));
     b.position.set(0, h / 2, -d / 2 + 0.005);
     g.add(b);
   }
@@ -450,9 +460,14 @@ export function shelfUnit({ w, h, d, boards, thick = 0.022, back = true, plinth 
     g.add(b);
   }
   if (plinth > 0) {
-    const p = box(w - thick * 2, plinth, d - 0.02, M.wood);
+    // the plinth is blacked in — every case in the folios stands on a solid dark foot, and it is
+    // what stops a shelf unit reading as a wire cage
+    const p = box(w - thick * 2, plinth, d - 0.02, M.solid);
     p.position.set(0, plinth / 2, 0);
     g.add(p);
+    const toe = box(w + 0.03, 0.012, d, M.solid);
+    toe.position.set(0, plinth + 0.006, 0.004);
+    g.add(toe);
   }
   g.userData.inner = { x0: -w / 2 + thick, x1: w / 2 - thick, z0: -d / 2 + 0.01 };
   return g;
@@ -486,15 +501,15 @@ export function pictureFrame({ w, h, kind, seed = 1, rim = 0.022, depth = 0.028,
   g.userData.size = { w, h, depth };
   return g;
 }
-export function roundFrame({ r, kind = null, tex = null, depth = 0.04, rim = 0.02, seed = 1 }) {
+export function roundFrame({ r, kind = null, tex = null, depth = 0.04, rim = 0.02, seed = 1, darkRim = false }) {
   const M = materials();
   const g = new THREE.Group();
   const ringGeo = new THREE.TorusGeometry(r - rim / 2, rim / 2, 8, 40);
-  const ringM = new THREE.Mesh(ringGeo, M.frame);
+  const ringM = new THREE.Mesh(ringGeo, darkRim ? M.solid : M.frame);
   ringM.castShadow = true;
   ringM.position.z = depth / 2 - rim / 2;
   g.add(ringM);
-  const body = cyl(r - rim * 0.6, r - rim * 0.6, depth - rim / 2, M.frame, 40);
+  const body = cyl(r - rim * 0.6, r - rim * 0.6, depth - rim / 2, darkRim ? M.solid : M.frame, 40);
   body.rotation.x = Math.PI / 2;
   body.position.z = 0;
   g.add(body);
@@ -505,7 +520,8 @@ export function roundFrame({ r, kind = null, tex = null, depth = 0.04, rim = 0.0
 }
 export function wallClock({ r = 0.17 }) {
   const M = materials();
-  const g = roundFrame({ r, tex: T.clockTexture(), depth: 0.06, rim: 0.024 });
+  // a solid black bezel round a bare paper face: the one prop everyone reads from across the room
+  const g = roundFrame({ r, tex: T.clockTexture(), depth: 0.06, rim: 0.034, darkRim: true });
   // hands (a fixed, deadpan time: five to midnight), solid ink
   const hour = box(0.012, r * 0.5, 0.004, M.solid);
   hour.geometry.translate(0, r * 0.2, 0);
@@ -618,8 +634,10 @@ export function rug({ w = 3.2, d = 2.6 }) {
 export function barCart({ w = 0.9, d = 0.42, h = 0.8 }) {
   const M = materials();
   const g = new THREE.Group();
+  // the legs are drawn, not inked in: four solid black uprights the height of the frame made the
+  // cart a black scaffold at four metres. The wheels, the lip and the handle carry its weight.
   const legR = 0.012;
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rod([sx * (w / 2 - 0.025), 0.05, sz * (d / 2 - 0.025)], [sx * (w / 2 - 0.025), h + 0.02, sz * (d / 2 - 0.025)], legR, M.solid));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rod([sx * (w / 2 - 0.025), 0.05, sz * (d / 2 - 0.025)], [sx * (w / 2 - 0.025), h + 0.02, sz * (d / 2 - 0.025)], legR, M.metal));
   for (const y of [0.3, h]) {
     const s = box(w, 0.022, d, M.wood);
     s.position.y = y;
@@ -940,6 +958,7 @@ export function plant({ rng, leaves = 11, kind = 'palm', scale = 1 }) {
   soil.position.y = 0.285;
   g.add(soil);
   const leafMat = alphaMat(T.leafTexture({ kind }), 0.1);
+  const leafDark = alphaMat(T.leafTexture({ kind, seed: 46, dark: true }), 0.1);
   const up = new THREE.Vector3(0, 1, 0);
   for (let i = 0; i < leaves; i++) {
     const a = (i / leaves) * Math.PI * 2 + rng() * 0.4;
@@ -959,7 +978,7 @@ export function plant({ rng, leaves = 11, kind = 'palm', scale = 1 }) {
       p.setZ(k, -yy * yy * lh * 0.35);
     }
     geo.computeVertexNormals();
-    const leaf = new THREE.Mesh(geo, leafMat);
+    const leaf = new THREE.Mesh(geo, i % 2 ? leafDark : leafMat);
     leaf.castShadow = true;
     const q = new THREE.Quaternion().setFromUnitVectors(up, dir);
     leaf.quaternion.copy(q);
@@ -1031,6 +1050,11 @@ export function console_({ w = 1.16, h = 0.82, d = 0.38 }) {
   const top = box(w + 0.04, 0.03, d + 0.04, M.wood);
   top.position.y = h - 0.015;
   g.add(top);
+  // a solid apron under the carcase: the chest's one black note, so it is not a white slab of
+  // drawer lines behind Pepe
+  const apron = box(w + 0.005, 0.055, d + 0.005, M.solid);
+  apron.position.y = legH + 0.026;
+  g.add(apron);
   const dw = w / 2 - 0.06, dh = (h - legH - 0.03) / 2 - 0.04;
   for (const sx of [-1, 1]) for (let r = 0; r < 2; r++) {
     const f = box(dw, dh, 0.014, M.wood);
@@ -1067,15 +1091,15 @@ export function globe() {
   g.add(rod([0, 0.05, 0], [0, 0.13 - 0.088 * Math.cos(0.4), 0], 0.005, M.solid));
   return g;
 }
-export function vase({ rng }) {
+export function vase({ rng, spread = 1 }) {
   const M = materials();
   const g = new THREE.Group();
   const v = lathe([[0, 0], [0.04, 0], [0.05, 0.02], [0.06, 0.09], [0.04, 0.14], [0.03, 0.2], [0.04, 0.24], [0.035, 0.24], [0.025, 0.2], [0, 0.2]], M.pot, 18);
   g.add(v);
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * Math.PI * 2;
-    const tilt = rng.range(0.1, 0.45);
-    const len = rng.range(0.22, 0.34);
+    const tilt = rng.range(0.1, 0.45) * spread;
+    const len = rng.range(0.22, 0.34) * spread;
     const end = [Math.sin(tilt) * Math.cos(a) * len, 0.2 + Math.cos(tilt) * len, Math.sin(tilt) * Math.sin(a) * len];
     g.add(rod([0, 0.2, 0], end, 0.003, M.solid, 5));
     // dried flower heads: solid, every other one paper

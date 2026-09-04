@@ -374,7 +374,9 @@ export function woodTexture(seed = 4) {
 const PICTURES = {
   hand(g, rng, s) {
     const o = { width: 2.4, wobble: 0.9, rng };
-    hatch(g, 0, 0, 100 * s, 100 * s, { angle: Math.PI / 2, spacing: 5 * s, width: 1.2, wobble: 0.6, broken: 0.35, rng, alpha: 0.75 });
+    // the ground is hatched only where the hand casts against it, not edge to edge: a framed
+    // drawing in the folios is mostly bare paper inside a black mat
+    hatch(g, 0, 52 * s, 100 * s, 48 * s, { angle: Math.PI / 2, spacing: 7 * s, width: 1.2, wobble: 0.6, broken: 0.4, rng, alpha: 0.7 });
     const P = [[34, 98], [30, 72], [22, 58], [11, 50], [8, 43], [15, 39], [27, 47], [32, 42], [31, 18], [37, 12], [43, 19], [44, 40], [46, 10], [52, 5], [58, 11], [57, 38], [61, 15], [67, 12], [71, 18], [69, 42], [75, 30], [81, 29], [83, 36], [76, 54], [70, 72], [66, 98]];
     const pts = P.map(([x, y]) => [x * s, y * s]);
     fillPoly(g, pts, LABEL_PAPER);
@@ -400,7 +402,8 @@ const PICTURES = {
   },
   portrait(g, rng, s) {
     const o = { width: 2.4, wobble: 0.9, rng };
-    hatch(g, 0, 0, 100 * s, 100 * s, { angle: Math.PI / 2, spacing: 6 * s, width: 1, wobble: 0.6, broken: 0.4, rng, alpha: 0.4 });
+    // a hatched band behind the head only; the rest of the plate stays bare paper
+    hatch(g, 0, 8 * s, 100 * s, 46 * s, { angle: Math.PI / 2, spacing: 9 * s, width: 1, wobble: 0.6, broken: 0.45, rng, alpha: 0.4 });
     // shoulders: a solid jacket with a paper collar
     const jacket = [[6, 100], [14, 74], [34, 64], [50, 68], [66, 64], [86, 74], [94, 100]];
     fillPoly(g, jacket.map(([x, y]) => [x * s, y * s]), INK);
@@ -696,7 +699,7 @@ export function rugTexture(seed = 14) {
       g.rect(b0 + 20, b0 + 20, W - 2 * b0 - 40, H - 2 * b0 - 40);
       g.rect(b1, b1, W - 2 * b1, H - 2 * b1);
       g.clip('evenodd');
-      dashes(g, 0, 0, W, H, { count: 2600, len: 5, width: 1.4, angle: Math.PI / 4, angleJitter: 0.3, rng, alpha: 0.45 });
+      dashes(g, 0, 0, W, H, { count: 1200, len: 5, width: 1.3, angle: Math.PI / 4, angleJitter: 0.3, rng, alpha: 0.4 });
       g.restore();
       inkRect(g, b1, b1, W - 2 * b1, H - 2 * b1, { ...o, width: 3, overshoot: 0 });
       inkRect(g, b1 + 12, b1 + 12, W - 2 * b1 - 24, H - 2 * b1 - 24, { ...o, width: 1.4, overshoot: 0 });
@@ -751,20 +754,22 @@ export function curtainTexture(seed = 15) {
     512,
     (g, W, H, rng) => {
       paper(g, W, H, '#f8f4ec', { grain: 0, seed });
-      for (let v = 0; v < 11; v++) {
-        const x0 = 8 + v * 23.5 + (rng() - 0.5) * 6;
+      // Round 3: six fold lines instead of eleven, and no vertical repeat — the curtain is cloth
+      // hanging in a few big folds, not a field of rain-hatch beside an already-louvred window.
+      for (let v = 0; v < 6; v++) {
+        const x0 = 14 + v * 43 + (rng() - 0.5) * 8;
         const pts = [];
         const ph = rng() * 6, fq = 40 + rng() * 30, am = 3 + rng() * 5;
         for (let y = -8; y <= H + 8; y += 10) pts.push([x0 + Math.sin(y / fq + ph) * am, y]);
         stroke(g, pts, { width: v % 3 === 1 ? 3 : 1.8, wobble: 0.6, rng, alpha: 0.95 });
       }
     },
-    { repeat: [1, 2], seed },
+    { repeat: [1, 1], seed },
   );
 }
 
 // ---- leaves (alpha cut) ----------------------------------------------------------------------------
-export function leafTexture({ kind = 'palm', seed = 16 } = {}) {
+export function leafTexture({ kind = 'palm', seed = 16, dark = false } = {}) {
   return drawTexture(
     128,
     256,
@@ -790,14 +795,18 @@ export function leafTexture({ kind = 'palm', seed = 16 } = {}) {
       } else {
         outline = [...quad([cx, 8], [W * 0.98, H * 0.45], [cx, H - 8], 14), ...quad([cx, H - 8], [W * 0.02, H * 0.45], [cx, 8], 14)];
       }
-      fillPoly(g, outline, PAPER);
+      // half the fronds of a plant in the folios are inked solid, the other half left as paper with
+      // a hatched underside; a bush of outlined leaves alone is a wire scribble at four metres
+      fillPoly(g, outline, dark ? INK : PAPER);
       stroke(g, outline, { ...o, width: 3.6, close: true });
-      inkLine(g, cx, 10, cx, H - 10, { ...o, width: 2.6 });
+      inkLine(g, cx, 10, cx, H - 10, { ...o, width: dark ? 4.5 : 2.6, color: dark ? PAPER : INK });
       for (let y = 30; y < H - 20; y += 22) {
         const w = Math.sin(((y - 8) / (H - 16)) * Math.PI) * W * 0.36;
-        inkLine(g, cx, y, cx + w, y - 14, { ...o, width: 1.4 });
-        inkLine(g, cx, y + 8, cx - w, y - 6, { ...o, width: 1.4 });
+        const vo = { ...o, width: dark ? 2.4 : 1.4, color: dark ? PAPER : INK };
+        inkLine(g, cx, y, cx + w, y - 14, vo);
+        inkLine(g, cx, y + 8, cx - w, y - 6, vo);
       }
+      if (dark) return;
       // one solid half-leaf in shadow, as the film would ink the underside
       if (kind === 'palm') {
         g.save();
@@ -836,14 +845,17 @@ export function shadeTexture(seed = 18) {
     256,
     (g, W, H, rng) => {
       paper(g, W, H, '#faf7f0', { grain: 0, seed });
+      // Round 3: a lamp shade in the folios is bare paper with a few long strokes turning the form
+      // at its two silhouette edges. 400 strokes made a black scribble at four metres; 150 thinner
+      // ones leave the middle of the shade white, which is the point.
       let n = 0, guard = 0;
-      while (n < 400 && guard++ < 6000) {
+      while (n < 150 && guard++ < 6000) {
         const x = rng() * W;
-        const d = Math.pow(Math.abs(Math.sin((x / W) * Math.PI * 2)), 2.2);
+        const d = Math.pow(Math.abs(Math.sin((x / W) * Math.PI * 2)), 3.4);
         if (rng() > d) continue;
         const y = rng() * H;
-        const len = 26 + rng() * 60;
-        inkLine(g, x, y, x + (rng() - 0.5) * 4, Math.min(H, y + len), { width: 3.6, wobble: 1.2, rng, alpha: 0.95 });
+        const len = 40 + rng() * 90;
+        inkLine(g, x, y, x + (rng() - 0.5) * 4, Math.min(H, y + len), { width: 2.6, wobble: 1.2, rng, alpha: 0.9 });
         n++;
       }
       inkLine(g, 0, 6, W, 6, { width: 4, wobble: 0.8, rng });

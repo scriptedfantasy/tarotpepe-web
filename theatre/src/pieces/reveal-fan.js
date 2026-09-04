@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import { cardGeometry } from './cards-geometry.js';
-import { compose, dealTrack } from './reveal-takes.js';
+import { compose, dealTrack, handFrames } from './reveal-takes.js';
 import { deckStacks } from './reveal-shuffle.js';
 
 // The arc: pivot at (0, zMid - R), radius R, half-angle A. Every corner stays on the cloth and
@@ -34,7 +34,9 @@ const _v = new THREE.Vector3();
 const _e = new THREE.Euler();
 
 // player: { play(frames, opts) → Promise } — the piece's take player (reveal.js)
-export function buildFan(ctx, cards, player) {
+// hand: the reveal-hand api, or null. His hand does the laying, the taking and the sweeping: it
+// enters from the top of the overhead frame, and every card in this file moves because it moved.
+export function buildFan(ctx, cards, player, hand = null) {
   const { card, slots, y: Y } = ctx.layout.spread;
   const W = card.w, H = card.h, T = card.t;
   const deck = cards?.deck ?? null;
@@ -206,6 +208,7 @@ export function buildFan(ctx, cards, player) {
   }
   // the fan gone (the picks stay readable until the next fan is dealt)
   function clear() {
+    hand?.hide();
     for (const e of entries) group.remove(e.mesh);
     entries.length = 0;
     hover = null;
@@ -279,6 +282,27 @@ export function buildFan(ctx, cards, player) {
       };
       tracks.push({ offset: start + every * i, frames: fr });
     });
+    // His hand: in from the top of the frame, a hold on the cut packet while the first cards come
+    // out from under it, then a sweep left to right along the arc, laying a card every second
+    // frame under the heel of the hand, and away. Card i settles at frame start + 2i + 6.
+    if (hand) {
+      // the heel of the hand on the near half of the card just laid, so the next one arrives from
+      // upstage and slides in under his fingers instead of landing on top of them
+      const land = (i) => {
+        const r = restPose(entries[i], {});
+        return { x: r.x, y: 0.006, z: r.z + 0.05, yaw: r.ry, pose: 'splay' };
+      };
+      const pk = deckToWorld(PK.x - 0.01, 0, PK.z);
+      const specs = [
+        { x: pk.x, y: 0.09, z: pk.z - 0.26, yaw: -0.16, pose: 'splay' },
+        { x: pk.x, y: (nRest() + n) * T + 0.004, z: pk.z, yaw: -0.16, pose: 'splay', n: 4 }, // the hold on the packet
+      ];
+      for (let i = 0; i < n; i++) specs.push({ ...land(i), n: 2 });
+      const last = land(n - 1);
+      specs.push({ ...last, y: 0.05, z: last.z - 0.16, n: 2 }, { ...last, y: 0.09, z: last.z - 0.34 }, { off: true });
+      // card i settles at frame start + 2i + 6, so the hand is over its place as it lands
+      tracks.push({ offset: 4, frames: handFrames(hand, specs) });
+    }
     return compose(tracks);
   }
 
@@ -295,9 +319,9 @@ export function buildFan(ctx, cards, player) {
     const from = { p: e.mesh.position.clone(), ry: e.mesh.rotation.y };
     const to = slotPose(slot);
     const fr = dealTrack(e.mesh, from, to, {
-      spin: 0.14,
-      apex: 0.05,
-      bank: 0.1,
+      spin: 0.12,
+      apex: hand ? 0.026 : 0.05, // carried in his fingers, not flicked: it stays near the cloth
+      bank: hand ? 0.06 : 0.1,
       cues: {
         lift: () => {
           sound('pick');
@@ -326,9 +350,39 @@ export function buildFan(ctx, cards, player) {
     const shiftFrames = [0, 0.5, 1].map((f) => () => {
       for (const s of shifts) s.o.u = s.u0 + (s.u1 - s.u0) * f;
     });
+    if (!hand)
+      return compose([
+        { offset: 0, frames: fr },
+        { offset: 2, frames: shiftFrames },
+      ]);
+    // His hand takes the card the visitor chose: in from the top of the frame, thumb and
+    // forefinger down on the card, a two-frame hold, and only then does the card travel — under
+    // his fingers the whole way — to its slot, where he presses it flat and lets go.
+    const D = 4; // the card waits while the hand comes in and holds
+    const side = from.p.x < -0.08 ? 'L' : 'R'; // the hand nearest the card he is taking
+    const sgn = side === 'L' ? -1 : 1;
+    const pinch = (p, ry, y) => ({ x: p.x, y: y ?? 0.006, z: p.z + 0.03, yaw: sgn * -ry * 0.6 - 0.12, side, pose: 'pinch' });
+    // his fingers stay on the card for every drawing of the flight; `compose` holds a track's last
+    // drawing for ever, so each of the three hand tracks ends by letting the hand go
+    const ride = [];
+    for (let k = 0; k < fr.length; k++)
+      ride.push(() => {
+        e.mesh.updateMatrixWorld(true);
+        hand.at(e.mesh.position.x, Math.max(0, e.mesh.position.y - Y) + 0.006, e.mesh.position.z + 0.03, { yaw: sgn * -e.mesh.rotation.y * 0.6 - 0.12, side, pose: 'pinch' });
+      });
+    ride.push(() => hand.off());
     return compose([
-      { offset: 0, frames: fr },
-      { offset: 2, frames: shiftFrames },
+      { offset: D, frames: fr },
+      { offset: D + 2, frames: shiftFrames },
+      {
+        offset: 0, // in from the top of the frame, down on the card, and a two-frame hold
+        frames: handFrames(hand, [{ ...pinch(from.p, from.ry, 0.07), z: from.p.z - 0.24 }, { ...pinch(from.p, from.ry, 0.03), z: from.p.z - 0.08 }, pinch(from.p, from.ry), pinch(from.p, from.ry), { off: true }]),
+      },
+      { offset: D, frames: ride },
+      {
+        offset: D + fr.length - 1, // pressed flat in its slot, then away
+        frames: handFrames(hand, [{ off: true }, pinch(to.p, to.ry), { ...pinch(to.p, to.ry, 0.04), z: to.p.z - 0.14 }, { ...pinch(to.p, to.ry, 0.08), z: to.p.z - 0.32 }, { off: true }]),
+      },
     ]);
   }
 
@@ -358,11 +412,14 @@ export function buildFan(ctx, cards, player) {
         set(e, rests[r], rests[r], 0, rests[r].roll);
       });
     });
-    for (let k = 1; k <= 5; k++) {
+    // eight drawings, each card closing three frames after his hand has passed over it, so the
+    // ribbon collapses behind the sweep instead of all at once
+    const SWEEP = 8;
+    for (let k = 1; k <= SWEEP; k++) {
       F(() => {
         if (k === 1) sound('riffle');
         rem.forEach((e, r) => {
-          const f = clamp01((k - (r * 2) / Math.max(1, R - 1)) / 3);
+          const f = clamp01((k - (r * 5) / Math.max(1, R - 1)) / 3);
           set(e, rests[r], closed(r), f, rests[r].roll * (1 - f));
         });
       });
@@ -384,7 +441,22 @@ export function buildFan(ctx, cards, player) {
       for (const e of rem) e.mesh.visible = false;
       deckReal();
     });
-    return frames;
+    if (!hand) return frames;
+    // His hand sweeps the ribbon in: it lands at the left end, pushes right along the arc with the
+    // cards closing under it, presses the packet square, carries it to the deck and goes.
+    const dk = deckToWorld(0.003, 0, 0.002);
+    const sweep = (f) => {
+      const th = FAN.A * (2 * f - 1);
+      return { x: FAN.R * Math.sin(th), y: 0.004 + f * 0.008, z: zp + FAN.R * Math.cos(th), yaw: -th, pose: 'splay' };
+    };
+    const packet = { x: closed(0).x, y: R * T + 0.004, z: closed(0).z, yaw: -FAN.A, pose: 'splay' };
+    const specs = [{ ...sweep(0), y: 0.09, z: sweep(0).z - 0.3 }];
+    for (let k = 0; k < SWEEP; k++) specs.push(sweep(k / (SWEEP - 1)));
+    specs.push(packet, { ...packet, y: 0.05, z: packet.z - 0.05, pose: 'pinch' }, { x: dk.x, y: nRest() * T + R * T + 0.004, z: dk.z, yaw: -0.16, pose: 'pinch' }, { x: dk.x, y: 0.1, z: dk.z - 0.3, yaw: -0.16, pose: 'pinch' }, { off: true });
+    return compose([
+      { offset: 0, frames },
+      { offset: 0, frames: handFrames(hand, specs) },
+    ]);
   }
 
   // ---- the visitor's hand: hover lifts, click picks ----------------------------------------------
