@@ -112,3 +112,29 @@ export function drawMic(svg, seed = 31) {
   ];
   svg.innerHTML = twice(groups, lw) + `<path class="ring" d="${ring}" fill="none" stroke="${INK}" stroke-width="${lw}" stroke-linecap="round"/>`;
 }
+
+
+// The placard the line brings with it into the picture, like the sign held up in the metro carriage
+// of the Aline sequence: a card of the same paper as the drawing, its four sides drawn as four
+// separate pen strokes whose corners cross by a few pixels. The fill follows the same wobble,
+// trimmed of the overshoots, so no paper shows past the rule.
+//
+// The user asked for this card back after a critic had it removed in favour of free-floating type;
+// see BRIEF.md. It is not a web element with a border: it is a drawn object.
+export const PLACARD_BLEED = 12; // px the svg extends past the box, for the overshooting corners
+
+export function drawPlacard(svg, w, h, seed = 7, lw = 2.4) {
+  const rng = mulberry32(seed);
+  const B = PLACARD_BLEED;
+  const W = w + 2 * B, H = h + 2 * B;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  const x0 = B, y0 = B, x1 = B + w, y1 = B + h;
+  const o = { wobble: 1.15, overshoot: 2.6 };
+  const sides = [stroke(x0, y0, x1, y0, rng, o), stroke(x1, y0, x1, y1, rng, o), stroke(x1, y1, x0, y1, rng, o), stroke(x0, y1, x0, y0, rng, o)];
+  const inner = sides.map((pts) => pts.slice(1, -1)).flat();
+  svg.innerHTML =
+    `<path d="${pathD(inner)}Z" fill="${PAPER}" stroke="none"/>` +
+    sides.map((pts) => `<path d="${pathD(pts)}" fill="none" stroke="${INK}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+}

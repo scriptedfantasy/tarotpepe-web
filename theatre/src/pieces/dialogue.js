@@ -46,7 +46,7 @@ import { SCRIPT, lineFor, linesFor, reply as scriptReply, POSITIONS, positionKey
 import { bySlug } from '../core/deck.js';
 import { INK, PAPER } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
-import { SVGNS, drawCaret, drawMic } from './dialogue-ink.js';
+import { SVGNS, drawCaret, drawMic, drawPlacard, PLACARD_BLEED } from './dialogue-ink.js';
 
 export const meta = {
   name: 'dialogue',
@@ -113,6 +113,7 @@ function buildStyle() {
     #dialogue .cap {
       position: absolute; left: 50%; top: 50%; transform: translate(-50%, 0);
       width: max-content; max-width: 30%; box-sizing: border-box; text-align: center;
+      padding: 0.85em 1.15em 0.9em;
       font-family: var(--typewriter);
       font-size: clamp(9px, 1vw, 20px); line-height: 1.48;
       letter-spacing: 0.085em; text-indent: 0.085em; text-transform: uppercase;
@@ -125,6 +126,12 @@ function buildStyle() {
       color: ${PAPER}; -webkit-text-stroke: 0.38em ${PAPER};
     }
     #dialogue .cap .layer.ink { position: relative; z-index: 1; }
+    /* the drawn card the words stand on (the user asked for it back; see BRIEF.md) */
+    #dialogue .cap > svg.placard {
+      position: absolute; left: -12px; top: -12px; z-index: 0;
+      overflow: visible; display: block; pointer-events: none;
+    }
+    #dialogue .cap.bare > svg.placard { display: none; }
     #dialogue .cap .g { display: inline-block; }
     #dialogue .cap .w { white-space: nowrap; }
     #dialogue .cap .line .w.hid { visibility: hidden; }
@@ -408,10 +415,30 @@ export async function build(ctx) {
   // ---- the caption itself ------------------------------------------------------------------------
   let inkLayer = null, haloLayer = null;
   // Both passes carry the same markup; the paper one sits behind and knocks the hatching out.
+  let placard = null;
+  let placardSeed = 7;
   function render(html) {
     cap.innerHTML = `<div class="layer halo" aria-hidden="true">${html}</div><div class="layer ink">${html}</div>`;
     haloLayer = cap.querySelector('.layer.halo');
     inkLayer = cap.querySelector('.layer.ink');
+    placard = document.createElementNS(SVGNS, 'svg');
+    placard.setAttribute('class', 'placard');
+    placard.setAttribute('aria-hidden', 'true');
+    cap.insertBefore(placard, cap.firstChild);
+    drawCard();
+  }
+  // The card is redrawn whenever the block changes size: the visitor's answer grows a line, the
+  // window is resized, a longer sentence arrives. One pen, one seed per caption, so it does not
+  // shiver while the words type in.
+  function drawCard() {
+    if (!placard || cap.hidden) return;
+    const w = cap.offsetWidth, h = cap.offsetHeight;
+    if (!w || !h) return;
+    if (placard.dataset.w === String(w) && placard.dataset.h === String(h)) return;
+    placard.dataset.w = String(w);
+    placard.dataset.h = String(h);
+    const lw = Math.max(1.6, Math.min(3.2, w * 0.006));
+    drawPlacard(placard, w, h, placardSeed, lw);
   }
   function cut() {
     cap.hidden = true;
@@ -429,6 +456,7 @@ export async function build(ctx) {
     cut();
     place();
     const rng = mulberry32(23 + text.length * 7 + (who ? 3 : 0));
+    placardSeed = 7 + (text.length % 23) * 3;
     render(`${who ? `<div class="who">${glyphs(who, rng)}</div>` : ''}<div class="line">${wordMarkup(text)}</div>`);
     cap.hidden = false;
     const a = [...inkLayer.querySelectorAll('.line .w')];
@@ -440,6 +468,7 @@ export async function build(ctx) {
       words.push({ els: [a[i], b[i]], at: count });
     });
     fit();
+    drawCard();
     return words;
   }
   function reveal(words, chars) {
@@ -760,6 +789,8 @@ export async function build(ctx) {
     update(ctx) {
       if (!ctx.clock.stepped) return;
       const t = ctx.clock.t;
+      // the card grows with the block: a word typed in, a line of the visitor's answer wrapping
+      if (!cap.hidden) drawCard();
       // the caret: an ink dash, on and off on the 12fps clock; quicker while the ear is open
       if (field) {
         const period = mic.classList.contains('listening') ? BLINK_LISTEN : BLINK;
@@ -783,6 +814,8 @@ export async function build(ctx) {
     if (cap.hidden) return;
     place();
     fit();
+    if (placard) placard.dataset.w = ''; // force the card to be re-cut at the new size
+    drawCard();
     place_mic();
   });
   return api;

@@ -30,6 +30,10 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   mysticism, never an assistant), the beat (greeting · the question · reading position i of card X ·
   follow-up · farewell), what the visitor said, and the scripted line for that card as a hint of his voice.
   The mind yields SENTENCES; flow says them one at a time through `dialogue.say` (typed on twos, held, cut).
+- **Captions sit on a drawn placard (the user's decision, not open to a critic).** A paper card with a wobbly
+  ink rule, the speaker in small tracked caps above, the line beneath in the caption face. A critic once
+  had it removed in favour of free-floating text on the drawing; the user asked for the card back and
+  that settles it. Keep the drawn answer block, its ink caret and the microphone prop.
 - **Chat or voice.** The visitor answers by typing (`dialogue.ask`, a drawn input in the picture) or by voice
   (a mic button: the browser's SpeechRecognition; when voice is on, Pepe is also spoken by speechSynthesis).
   Chat is the default, voice a toggle; both must work in Chrome.
