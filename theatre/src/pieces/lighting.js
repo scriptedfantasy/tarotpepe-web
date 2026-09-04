@@ -248,14 +248,10 @@ export async function build(ctx) {
   pool(-1.5, 0.08, -1.55, 1.2, 0.7); // under the trolley, stage left
   pool(1.6, 0.08, -1.75, 1.2, 0.7); // under the shelf unit, stage right
 
-  // ── practicals: a point light at each drawn lamp. A bulb is a point; a shade is drawn, not
-  //    simulated — and the small negative above the pendant is what keeps its light off the
-  //    ceiling, in place of a shadow-casting cube map we cannot afford. ──
-  // The pendant is the one practical that casts. It is a SpotLight rather than a bare point for
-  // one reason only: a three-petal shade IS a cone, and the key is off at night, so the shadow
-  // budget it spends is free — and it is the only light that will draw Pepe's silhouette, a flat
-  // paper edge, down the console behind him. Never a halo: nothing is drawn where the light is,
-  // only where it stops.
+  // ── practicals: a light at each drawn lamp. A bulb is a point; a shade is drawn, not simulated.
+  //    Never a glow, never a halo — nothing is drawn where the light is, only where it stops. ──
+  // The pendant is a SpotLight rather than a bare point for one reason: a three-petal shade IS a
+  // cone, and it can then cast for the price of one map instead of a cube's six.
   const pendant = new THREE.SpotLight('#ffe6b8', 0, 5.0, 1.24, 0.22, 2);
   pendant.castShadow = true;
   pendant.shadow.mapSize.set(1024, 1024);
@@ -264,6 +260,15 @@ export async function build(ctx) {
   pendant.shadow.radius = 1;
   pendant.shadow.camera.near = 0.15;
   pendant.shadow.camera.far = 5.0;
+  // The table lamp does NOT cast, and this was measured rather than assumed. Its geometry is
+  // right — it stands upstage of Pepe on the console, and the ray through his crossed legs does
+  // land on the cloth just behind the card slots. Its photometry is not: the bulb sits 0.26 m
+  // above the table plane and 2.25 m from it, so it rakes the cloth at 6.6° and supplies about
+  // 2% of that surface's light. Subtracting 2% draws nothing. Cranked to nine times its intensity
+  // with the pendant taken out it does not produce a silhouette either; it simply pushes the
+  // whole tabletop under the first stroke threshold at once, because a grazing light falls off
+  // across the cloth faster than any shadow edge crosses it. A cube map for an invisible shadow
+  // is six depth passes for nothing, so it stays a plain point light.
   const tableLamp = new THREE.PointLight('#ffe0a8', 0, 1.55, 2);
   const floorLamp = new THREE.PointLight('#ffe6b8', 0, 3.4, 2);
   for (const l of [pendant, tableLamp, floorLamp]) g.add(l);
