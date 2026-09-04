@@ -108,57 +108,79 @@ export function alphaMat(map, hatch = 0.4) {
 }
 
 // ---- bottles, jars, glasses --------------------------------------------------------------------
-// The label sits at a third of the body's height, wraps a quarter of the way round, and carries
-// 3–6 pen caps. A dark bottle is a solid-ink body with the label left in paper; a glass bottle is
-// paper with one diagonal stroke and a solid cap.
-const LABEL_HALF_U = 0.12;
+// Round 4, from the shelves in reference/fd-anim-kitchen-table-cards-hires.jpg. A bottle is BARE
+// PAPER inside its contour, with one solid black area: the capsule over its neck. Dark glass is
+// that capsule, not a filled body. One bottle in each group is filled solid and carries the big
+// paper label; the rest are outlines of different heights and different shoulders, and the label
+// does the reading. `dark: true` is that one bottle, and should appear once in a row.
+//
+// The sheets are 128 x 256 (they were 256 x 512). A bottle is 13 px wide on the wide shot, so the
+// old sheet put ~10 texels of drawing under every screen pixel — past the point where the ink pass
+// can find a stroke, which is why the labels arrived as white smears. At 128 it is under five and
+// the label is drawn as drawn.
+const LABEL_HALF_U = 0.155;
+const LABEL_HALF_U_DARK = 0.185;
 function bottleMaterial(tex, dark) {
-  return inkMaterial({ map: tex, hatch: dark ? 0.5 : 0.18, lineWeight: 1 });
+  return inkMaterial({ map: tex, hatch: dark ? 0.5 : 0.14, lineWeight: 1 });
 }
-// a round bottle: 'tall' (long thin neck), 'squat' (short and wide), 'corked' (no cap, a cork)
+// a round bottle. Silhouettes, so a row is never four of the same object:
+//   'tall'   a long thin neck on a slim body      'squat'  short and wide, a short neck
+//   'corked' no capsule, a cork in the mouth      'carafe' a fat round body under a long neck
 export function bottle({ kind = 'tall', r = null, bodyH = null, neckH = null, lines = ['VIN'], shape = 'rect', dark = false, seed = 1 }) {
   const tall = kind === 'tall';
+  const carafe = kind === 'carafe';
   r = r ?? (tall ? 0.032 : 0.044);
   bodyH = bodyH ?? (tall ? 0.2 : 0.12);
-  const shoulder = tall ? 0.05 : 0.04;
-  const neckR = tall ? 0.011 : 0.014;
+  const shoulder = carafe ? bodyH * 0.62 : tall ? 0.05 : 0.04;
+  // a hair thicker than round 3's 0.011: at this size a neck of 0.022 m under a black capsule was
+  // two pixels of stove-pipe, and the film's necks are about a third of the body's width
+  const neckR = tall || carafe ? 0.0128 : 0.015;
   neckH = neckH ?? (tall ? 0.085 : 0.045);
   const corked = kind === 'corked';
   const top = bodyH + shoulder + neckH;
-  const profile = [
-    [0, 0],
-    [r * 0.85, 0],
-    [r, 0.012],
-    [r, bodyH * 0.5],
-    [r, bodyH],
-    [r * 0.92, bodyH + 0.012],
-    [neckR * 1.7, bodyH + shoulder * 0.55],
-    [neckR, bodyH + shoulder],
-    [neckR, top - 0.014],
-    [neckR * (corked ? 1.15 : 1.35), top - 0.014],
-    [neckR * (corked ? 1.15 : 1.35), top],
-    [neckR * 0.7, top],
-    [0, top],
-  ];
-  const tmp = lathe(profile, materials().paper, 18);
-  const v0 = tmp.userData.vAt(2), v1 = tmp.userData.vAt(4);
+  const lipR = neckR * (corked ? 1.15 : 1.35);
+  // Where the drawing needs to know it is: the foot, the top of the body (the label sits between
+  // those two), where the shoulder ends and the neck begins (the capsule starts there), the lip.
+  const profile = [[0, 0], carafe ? [r * 0.68, 0] : [r * 0.85, 0]];
+  const iFoot = profile.push(carafe ? [r * 0.95, 0.016] : [r, 0.012]) - 1;
+  profile.push(carafe ? [r, bodyH * 0.45] : [r, bodyH * 0.5]);
+  const iBody = profile.push(carafe ? [r * 0.99, bodyH] : [r, bodyH]) - 1;
+  if (carafe) {
+    // a carafe's shoulder is one long curve into the neck, not a chamfer: a quarter ellipse
+    for (let i = 1; i <= 5; i++) {
+      const a = (i / 5) * (Math.PI / 2);
+      profile.push([neckR + (r - neckR) * Math.cos(a) * (1 - 0.06 * Math.sin(a * 2)), bodyH + shoulder * Math.sin(a)]);
+    }
+  } else {
+    profile.push([r * 0.92, bodyH + 0.012], [neckR * 1.7, bodyH + shoulder * 0.55], [neckR, bodyH + shoulder]);
+  }
+  const iNeck = profile.length - 1;
+  profile.push([neckR, top - 0.014], [lipR, top - 0.014]);
+  const iLip = profile.length - 1;
+  profile.push([lipR, top], [neckR * 0.7, top], [0, top]);
+  const tmp = lathe(profile, materials().paper, carafe ? 22 : 18);
+  const v0 = tmp.userData.vAt(iFoot), v1 = tmp.userData.vAt(iBody);
+  const halfU = dark ? LABEL_HALF_U_DARK : LABEL_HALF_U;
   const tex = T.labelTexture({
     lines,
     shape,
-    uRange: [0.5 - LABEL_HALF_U, 0.5 + LABEL_HALF_U],
-    vRange: [v0 + (v1 - v0) * 0.2, v0 + (v1 - v0) * 0.58],
+    uRange: [0.5 - halfU, 0.5 + halfU],
+    vRange: dark ? [v0 + (v1 - v0) * 0.16, v0 + (v1 - v0) * 0.62] : [v0 + (v1 - v0) * 0.2, v0 + (v1 - v0) * 0.6],
     bodyV: [v0, v1],
-    lidV: corked ? null : tmp.userData.vAt(9),
+    // the capsule runs from the lip down over the neck to where the shoulder turns
+    capsuleV: corked ? null : tmp.userData.vAt(iNeck),
+    lidV: corked ? null : tmp.userData.vAt(iLip),
+    collarV: tmp.userData.vAt(iNeck),
     seed,
-    w: 256,
-    h: 512,
+    w: 128,
+    h: 256,
     dark,
   });
   tmp.material = bottleMaterial(tex, dark);
   const g = new THREE.Group();
   g.add(tmp);
   if (corked) {
-    const c = cyl(neckR * 1.5, neckR * 1.25, 0.026, materials().cork, 10);
+    const c = cyl(neckR * 1.5, neckR * 1.25, 0.026, materials().solid, 10);
     c.position.y = top + 0.008;
     g.add(c);
   }
@@ -166,12 +188,30 @@ export function bottle({ kind = 'tall', r = null, bodyH = null, neckH = null, li
   g.userData.width = r * 2;
   return g;
 }
+// A small square tin — a canister of tea or tobacco. Solid ink with a paper label band: the one
+// object in a row that is allowed to be a black block, because it IS a block.
+export function tin({ w = 0.06, h = 0.09, lines = ['THÉ'], seed = 1 }) {
+  const M = materials();
+  const g = new THREE.Group();
+  const tex = T.labelTexture({ lines, uRange: [0.12, 0.88], vRange: [0.3, 0.66], seed, w: 128, h: 128, dark: true, shape: 'rect' });
+  const front = inkMaterial({ map: tex, hatch: 0.5 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, w * 0.8), [M.solid, M.solid, M.solid, M.solid, front, M.solid]);
+  body.castShadow = true;
+  body.position.y = h / 2;
+  g.add(body);
+  const lid = box(w * 1.08, h * 0.1, w * 0.88, M.solid);
+  lid.position.y = h + h * 0.04;
+  g.add(lid);
+  g.userData.height = h * 1.1;
+  g.userData.width = w * 1.08;
+  return g;
+}
 // a square gin bottle: a box body, a pyramid shoulder, a short neck, a solid cap
 export function squareBottle({ r = 0.04, bodyH = 0.15, neckH = 0.04, lines = ['GIN'], dark = false, seed = 1 }) {
   const M = materials();
   const g = new THREE.Group();
   const w = r * 2, d = r * 1.7;
-  const tex = T.labelTexture({ lines, uRange: [0.2, 0.8], vRange: [0.3, 0.62], bodyV: [0.06, 0.94], seed, w: 256, h: 512, dark, shape: 'rect' });
+  const tex = T.labelTexture({ lines, uRange: [0.16, 0.84], vRange: [0.28, 0.66], bodyV: [0.06, 0.94], seed, w: 128, h: 256, dark, shape: 'rect' });
   const front = bottleMaterial(tex, dark);
   const side = dark ? M.solid : M.glass;
   const body = new THREE.Mesh(new THREE.BoxGeometry(w, bodyH, d), [side, side, side, side, front, side]);
@@ -212,7 +252,7 @@ export function jar({ r = 0.042, h = 0.12, lines = ['SEL'], seed = 1, shape = 'b
   ];
   const m = lathe(profile, materials().paper, 18);
   const v0 = m.userData.vAt(2), v1 = m.userData.vAt(4);
-  const tex = T.labelTexture({ lines, shape, uRange: [0.5 - LABEL_HALF_U, 0.5 + LABEL_HALF_U], vRange: [v0 + (v1 - v0) * 0.3, v0 + (v1 - v0) * 0.72], bodyV: [v0, v1], lidV: m.userData.vAt(6), seed, w: 256, h: 256, dark: false });
+  const tex = T.labelTexture({ lines, shape, uRange: [0.5 - LABEL_HALF_U, 0.5 + LABEL_HALF_U], vRange: [v0 + (v1 - v0) * 0.3, v0 + (v1 - v0) * 0.72], bodyV: [v0, v1], lidV: m.userData.vAt(6), seed, w: 128, h: 128, dark: false, glassStroke: false });
   m.material = bottleMaterial(tex, false);
   m.userData.height = h + 0.038;
   m.userData.width = r * 2;
@@ -235,12 +275,12 @@ export function flask({ R = 0.05, neck = 0.08, nr = 0.012, lines = ['EAU', 'DE V
   ];
   const m = lathe(profile, materials().paper, 20);
   const v0 = m.userData.vAt(2), v1 = m.userData.vAt(5);
-  const tex = T.labelTexture({ lines, shape: 'oval', uRange: [0.5 - LABEL_HALF_U * 1.2, 0.5 + LABEL_HALF_U * 1.2], vRange: [v0 + (v1 - v0) * 0.18, v0 + (v1 - v0) * 0.82], bodyV: [v0, v1], lidV: dark ? null : m.userData.vAt(9), seed, w: 256, h: 256, dark });
+  const tex = T.labelTexture({ lines, shape: 'oval', uRange: [0.5 - LABEL_HALF_U * 1.1, 0.5 + LABEL_HALF_U * 1.1], vRange: [v0 + (v1 - v0) * 0.18, v0 + (v1 - v0) * 0.82], bodyV: [v0, v1], capsuleV: dark ? null : m.userData.vAt(7), lidV: dark ? null : m.userData.vAt(9), seed, w: 128, h: 128, dark });
   m.material = bottleMaterial(tex, dark);
   const g = new THREE.Group();
   g.add(m);
   if (stopper) {
-    const s = sphere(nr * 1.9, materials().glass, 12, 8);
+    const s = sphere(nr * 1.9, materials().solid, 12, 8);
     s.position.y = R * 1.62 + neck + 0.01 + nr * 1.5;
     g.add(s);
   }
@@ -316,6 +356,10 @@ export function shelfItem(spec, rng) {
       return bottle({ kind: 'squat', r: 0.045 * s, bodyH: (spec.bodyH ?? 0.12) * s, neckH: (spec.neckH ?? 0.045) * s, lines, dark: !!spec.dark, seed, shape: spec.shape ?? 'rect' });
     case 'corked':
       return bottle({ kind: 'corked', r: 0.04 * s, bodyH: (spec.bodyH ?? 0.15) * s, neckH: (spec.neckH ?? 0.05) * s, lines, dark: !!spec.dark, seed, shape: spec.shape ?? 'oval' });
+    case 'carafe':
+      return bottle({ kind: 'carafe', r: 0.048 * s, bodyH: (spec.bodyH ?? 0.14) * s, neckH: (spec.neckH ?? 0.1) * s, lines, dark: !!spec.dark, seed, shape: spec.shape ?? 'oval' });
+    case 'tin':
+      return tin({ w: 0.058 * s, h: (spec.h ?? 0.1) * s, lines: lines ?? ['THÉ'], seed });
     case 'square':
       return squareBottle({ r: 0.04 * s, bodyH: (spec.bodyH ?? 0.15) * s, neckH: (spec.neckH ?? 0.04) * s, lines, dark: !!spec.dark, seed });
     case 'flask':
@@ -354,7 +398,9 @@ export function row({ x0, x1, y, z, items, rng, gap = 0.014 }) {
 }
 
 // ---- books ---------------------------------------------------------------------------------------
-const TITLES = ['LE TAROT', 'ASTRONOMIE', 'REVES', 'LA MAIN', 'PROVERBES', 'ATLAS', 'LA LUNE', 'MEMOIRES', 'ORACLES', 'BOTANIQUE', 'LES NOMBRES', 'HISTOIRE', 'VOL. II', 'POESIES', 'ALMANACH', 'LE DESTIN', 'GRAMMAIRE', 'MARSEILLE', 'CHIROMANCIE', 'CARTES', 'TOME I', 'TOME III', 'LES ASTRES', 'LE HASARD', 'CUISINE', 'VOYAGES', 'DICTIONNAIRE', 'ZODIAQUE', 'SILENCE', 'CHANSONS'];
+// The accents are back: the pen this file used to letter with stripped them (POÉSIES came out
+// POESIES), and the sign hand it letters with now has the whole accented case.
+const TITLES = ['LE TAROT', 'ASTRONOMIE', 'RÊVES', 'LA MAIN', 'PROVERBES', 'ATLAS', 'LA LUNE', 'MÉMOIRES', 'ORACLES', 'BOTANIQUE', 'LES NOMBRES', 'HISTOIRE', 'VOL. II', 'POÉSIES', 'ALMANACH', 'LE DESTIN', 'GRAMMAIRE', 'MARSEILLE', 'CHIROMANCIE', 'CARTES', 'TOME I', 'TOME III', 'LES ASTRES', 'LE HASARD', 'CUISINE', 'VOYAGES', 'DICTIONNAIRE', 'ZODIAQUE', 'SILENCE', 'CHANSONS'];
 let _titleIdx = 0;
 export function book({ w = 0.14, h = 0.2, t = 0.03, title = null, flat = false, seed = 1, dark = false }) {
   const M = materials();
@@ -819,15 +865,26 @@ export function pinBoard({ w = 0.42, h = 0.52, rng }) {
   return g;
 }
 
-// A coir doormat: a dark field with the greeting left in paper.
-export function doorMat({ w = 0.7, d = 0.42 }) {
+// A coir doormat, drawn for the rake it is actually seen at (see matTexture): a bound border, a
+// bare field with the greeting in it, and a bristle strip along the near edge so it has a
+// thickness. The sheet is cut 640 x 96 — the shape the mat projects to — NOT to the mat's own
+// proportions, which is what put 27 texels of drawing under every screen pixel before.
+export function doorMat({ w = 0.92, d = 0.56 }) {
   const M = materials();
-  const tex = T.matTexture({ text: 'BIENVENUE', w: 512, h: Math.round((512 * d) / w), seed: 41 });
-  const top = inkMaterial({ map: tex, hatch: 0.5 });
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.014, d), [M.paperStack, M.paperStack, top, M.paperStack, M.paperStack, M.paperStack]);
-  m.position.y = 0.007;
+  const g = new THREE.Group();
+  const tex = T.matTexture({ w: 640, h: 96, seed: 41 });
+  // a mat is bare coir, not a dark thing: it takes almost no tone, or the drawing on it is lost
+  // under a wash of diagonals the moment the key crosses the doorway
+  const top = inkMaterial({ map: tex, hatch: 0.22 });
+  const edge = inkMaterial({ map: T.matEdgeTexture(), hatch: 0.3 });
+  const th = 0.022;
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, th, d), [M.solid, M.solid, top, M.paperStack, edge, edge]);
+  m.position.y = th / 2;
   m.receiveShadow = true;
-  return m;
+  g.add(m);
+  g.userData.height = th;
+  g.userData.noShadow = true;
+  return g;
 }
 
 // A small wall shelf on two brackets.

@@ -5,6 +5,7 @@
 // either solid ink (a black bottle, a mat, a coat) or bare paper; the ink pass adds outlines.
 import * as THREE from 'three';
 import { INK, PAPER, drawTexture, paper, inkLine, inkRect, hatch, crossHatch, dashes } from '../core/strokes.js';
+import { signCaps, signWidth, signFit } from './titles-sign.js';
 
 const LABEL_PAPER = '#f9f6ee';
 
@@ -89,111 +90,36 @@ function sparkle(g, cx, cy, r, opts) {
   inkLine(g, cx, cy - r, cx, cy + r, opts);
 }
 
-// ---- the pen alphabet ----------------------------------------------------------------------
-// Upright sans caps, each glyph a few polylines in a cell 14 tall (0 = cap line, 14 = baseline).
-const ell = (cx, cy, rx, ry, n = 14) => {
-  const p = [];
-  for (let i = 0; i <= n; i++) {
-    const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
-    p.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]);
-  }
-  return p;
-};
-const GLYPHS = {
-  A: [10, [[[0, 14], [5, 0], [10, 14]], [[2, 9.5], [8, 9.5]]]],
-  B: [9, [[[0, 14], [0, 0], [6, 0], [8, 1.5], [8, 5], [6, 7], [0, 7]], [[0, 7], [7, 7], [9, 9], [9, 12], [7, 14], [0, 14]]]],
-  C: [10, [[[10, 3], [8, 0.5], [5, 0], [2, 1.5], [0, 5], [0, 9], [2, 12.5], [5, 14], [8, 13.5], [10, 11]]]],
-  D: [10, [[[0, 14], [0, 0], [5, 0], [9, 2.5], [10, 7], [9, 11.5], [5, 14], [0, 14]]]],
-  E: [9, [[[9, 0], [0, 0], [0, 14], [9, 14]], [[0, 7], [7, 7]]]],
-  F: [9, [[[9, 0], [0, 0], [0, 14]], [[0, 7], [7, 7]]]],
-  G: [10, [[[10, 3], [8, 0.5], [5, 0], [2, 1.5], [0, 5], [0, 9], [2, 12.5], [5, 14], [8, 13.5], [10, 11], [10, 8], [6, 8]]]],
-  H: [10, [[[0, 0], [0, 14]], [[10, 0], [10, 14]], [[0, 7], [10, 7]]]],
-  I: [3, [[[1.5, 0], [1.5, 14]]]],
-  J: [8, [[[8, 0], [8, 10], [7, 13], [4, 14], [1, 13], [0, 10]]]],
-  K: [10, [[[0, 0], [0, 14]], [[10, 0], [0, 8.5]], [[3.5, 6], [10, 14]]]],
-  L: [9, [[[0, 0], [0, 14], [9, 14]]]],
-  M: [12, [[[0, 14], [0, 0], [6, 10], [12, 0], [12, 14]]]],
-  N: [10, [[[0, 14], [0, 0], [10, 14], [10, 0]]]],
-  O: [11, [ell(5.5, 7, 5.5, 7)]],
-  P: [9, [[[0, 14], [0, 0], [6, 0], [9, 2], [9, 5], [6, 7.5], [0, 7.5]]]],
-  Q: [11, [ell(5.5, 7, 5.5, 7), [[7, 10], [11.5, 15]]]],
-  R: [10, [[[0, 14], [0, 0], [6, 0], [9, 2], [9, 5], [6, 7.5], [0, 7.5]], [[4, 7.5], [10, 14]]]],
-  S: [9, [[[9, 3], [7, 0.5], [4, 0], [1, 1.5], [0.5, 4], [2, 6.5], [7, 8], [9, 10], [8.5, 12.5], [5, 14], [2, 13.5], [0, 11]]]],
-  T: [10, [[[0, 0], [10, 0]], [[5, 0], [5, 14]]]],
-  U: [10, [[[0, 0], [0, 10], [1.5, 13], [5, 14], [8.5, 13], [10, 10], [10, 0]]]],
-  V: [10, [[[0, 0], [5, 14], [10, 0]]]],
-  W: [14, [[[0, 0], [3.5, 14], [7, 3], [10.5, 14], [14, 0]]]],
-  X: [10, [[[0, 0], [10, 14]], [[10, 0], [0, 14]]]],
-  Y: [10, [[[0, 0], [5, 7.5], [10, 0]], [[5, 7.5], [5, 14]]]],
-  Z: [10, [[[0, 0], [10, 0], [0, 14], [10, 14]]]],
-  0: [9, [ell(4.5, 7, 4.5, 7)]],
-  1: [6, [[[1, 3], [4, 0], [4, 14]]]],
-  2: [9, [[[0, 3], [2, 0.5], [6, 0], [9, 2.5], [9, 5], [0, 14], [9, 14]]]],
-  3: [9, [[[0, 1], [4, 0], [8, 1], [9, 3.5], [7, 6.5], [4, 7]], [[4, 7], [8, 7.5], [9, 10.5], [8, 13], [4, 14], [0, 12.5]]]],
-  4: [10, [[[7, 14], [7, 0], [0, 10], [10, 10]]]],
-  5: [9, [[[9, 0], [1, 0], [0, 6.5], [5, 5.5], [9, 8], [9, 11], [7, 14], [2, 14], [0, 12]]]],
-  6: [9, [[[8, 1], [5, 0], [1.5, 2.5], [0, 8], [1, 12.5], [4.5, 14], [8, 12.5], [9, 9.5], [7, 7], [3, 7], [0.5, 9]]]],
-  7: [9, [[[0, 0], [9, 0], [3, 14]]]],
-  8: [9, [ell(4.5, 3.5, 3.5, 3.5, 10), ell(4.5, 10, 4.5, 4, 12)]],
-  9: [9, [[[1, 13], [4, 14], [7.5, 11.5], [9, 6], [8, 1.5], [4.5, 0], [1, 1.5], [0, 4.5], [2, 7], [6, 7], [8.5, 5]]]],
-  ' ': [5, []],
-  '.': [3, [[[1.5, 12.5], [1.5, 14]]]],
-  ',': [3, [[[1.8, 12.5], [1, 16]]]],
-  '·': [3, [[[1.5, 6.5], [1.5, 8]]]],
-  '-': [7, [[[1, 7], [6, 7]]]],
-  '—': [12, [[[0, 7], [12, 7]]]],
-  "'": [3, [[[1.8, 0], [1.2, 3]]]],
-  '!': [3, [[[1.5, 0], [1.5, 10]], [[1.5, 12.5], [1.5, 14]]]],
-  '&': [11, [[[10, 14], [2, 5], [2, 2], [4, 0], [6, 2], [5, 5], [0, 10], [1, 13], [4, 14], [7, 12], [10, 8]]]],
-  '/': [8, [[[0, 14], [8, 0]]]],
-  ':': [3, [[[1.5, 4], [1.5, 5.5]], [[1.5, 11], [1.5, 12.5]]]],
-  '°': [4, [ell(2, 1.5, 1.5, 1.5, 8)]],
-  '(': [5, [[[4, 0], [1.5, 3], [1, 7], [1.5, 11], [4, 14]]]],
-  ')': [5, [[[1, 0], [3.5, 3], [4, 7], [3.5, 11], [1, 14]]]],
-  '?': [8, [[[0, 3], [2, 0.5], [6, 0], [8, 2.5], [7, 5], [4, 7], [4, 10]], [[4, 12.5], [4, 14]]]],
-};
-const normalize = (text) =>
-  String(text)
-    .toUpperCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
+// ---- the hand ------------------------------------------------------------------------------
+// Everything lettered on a prop — a bottle's label, a book's spine, the clock's numerals, the
+// signs, the mat — is cut in the SAME hand the titles piece cuts its signage in (titles-sign.js).
+// This file used to carry a second, smaller alphabet of its own; it had no accents (POÉSIES came
+// out POESIES, THÉ came out THE) and its own idea of a wobble. penText/penWidth/penFit are kept as
+// the names the rest of the piece calls, and are now three lines of adapter over signCaps:
+//   penText's `size` IS the cap height (signCaps calls that `capH`; its own `size` is the em),
+//   `weight` is the pen in px (signCaps calls that `pen`),
+//   and penText's `tracking` was a fraction of the CAP where signCaps' is a fraction of the em,
+//   so it is multiplied by 0.72 on the way through and every existing call keeps its spacing.
+const trk = (t) => (t ?? 0.18) * 0.72;
+const BASE = { middle: 'middle', top: 'top', bottom: 'alphabetic' };
 export function penWidth(text, size, tracking = 0.18) {
-  const chars = [...normalize(text)];
-  const s = size / 14;
-  let w = 0;
-  chars.forEach((ch, i) => {
-    w += (GLYPHS[ch] ?? GLYPHS['?'])[0] * s + (i < chars.length - 1 ? tracking * size : 0);
-  });
-  return w;
+  return signWidth(text, { capH: size, tracking: trk(tracking) });
 }
-// Hand-lettered caps: `size` is the cap height in px; the pen's weight follows the size unless
-// given; each letter drifts a pixel or two and leans a hair so no two are alike.
-export function penText(g, text, x, y, { size = 20, weight = null, rng = Math.random, tracking = 0.18, align = 'center', color = INK, drift = 0.06, alpha = 1, baseline = 'middle' } = {}) {
-  const chars = [...normalize(text)];
-  const s = size / 14;
-  const w = weight ?? Math.max(1.1, size * 0.15);
-  const total = penWidth(text, size, tracking);
-  let cx = align === 'center' ? x - total / 2 : align === 'right' ? x - total : x;
-  const top = baseline === 'middle' ? y - size / 2 : baseline === 'top' ? y : y - size;
-  const wob = Math.max(0.3, size * 0.035);
-  for (const ch of chars) {
-    const [adv, lines] = GLYPHS[ch] ?? GLYPHS['?'];
-    const dx = (rng() - 0.5) * 2 * drift * size, dy = (rng() - 0.5) * 2 * drift * size;
-    const sc = s * (0.96 + rng() * 0.08);
-    const lean = (rng() - 0.5) * 0.06;
-    for (const pl of lines) {
-      for (let i = 0; i < pl.length - 1; i++) {
-        const [ax, ay] = pl[i], [bx, by] = pl[i + 1];
-        inkLine(g, cx + dx + (ax + lean * (14 - ay)) * sc, top + dy + ay * sc, cx + dx + (bx + lean * (14 - by)) * sc, top + dy + by * sc, { width: w, wobble: wob, rng, color, alpha });
-      }
-    }
-    cx += adv * s + tracking * size;
-  }
+export function penText(g, text, x, y, { size = 20, weight = null, rng = Math.random, tracking = 0.18, align = 'center', color = INK, alpha = 1, baseline = 'middle' } = {}) {
+  return signCaps(g, text, x, y, {
+    capH: size,
+    pen: weight ?? Math.max(1.1, size * 0.15),
+    tracking: trk(tracking),
+    align,
+    color,
+    alpha,
+    baseline: BASE[baseline] ?? 'middle',
+    seed: Math.floor((rng ?? Math.random)() * 1e6),
+  });
 }
 // Fit a size so `text` spans at most maxW.
 export function penFit(text, size, maxW, tracking = 0.18) {
-  const w = penWidth(text, size, tracking);
-  return w > maxW ? size * (maxW / w) : size;
+  return signFit(text, maxW, { capH: size, tracking: trk(tracking) });
 }
 
 // ---- solid ink (a 1-colour texture for black masses) --------------------------------------
@@ -228,9 +154,19 @@ export function darkTexture(seed = 27) {
 }
 
 // ---- bottle / jar labels ----------------------------------------------------------------------
-// A wrap-around texture for a lathe (front = u 0.5, v = 0 at the bottom). A dark bottle is solid
-// ink with the label left as a paper rectangle; a glass bottle is paper with one diagonal stroke.
-export function labelTexture({ lines = ['VIN'], uRange = [0.3, 0.7], vRange = [0.3, 0.6], bodyV = null, seed = 1, w = 256, h = 512, dark = false, shape = 'rect', glassStroke = true, lidV = null }) {
+// A wrap-around texture for a lathe (front = u 0.5, v = 0 at the bottom).
+//
+// Round 4. How the film actually draws a shelf of bottles — see the two shelves and the sideboard
+// in reference/fd-anim-kitchen-table-cards-hires.jpg, and the three on the stand in the same
+// folio's right-hand corner. Almost every bottle is BARE PAPER inside a contour. Dark glass is
+// stated by a solid CAPSULE over the neck and shoulder, not by filling the body; the body keeps a
+// diagonal glass stroke or two and an outlined label. In a group of three or four exactly ONE is
+// filled solid, and that one carries a big paper label with the name in it ("Poivenchon" on the
+// sideboard). Filling them all — which is what this file did until now — is correct for a black
+// object and wrong for a row of them: at 13 px a side they became a picket of blots.
+//   dark:false → paper body, ink capsule down to `capsuleV`, an outlined label
+//   dark:true  → solid ink body, a big paper label, a paper collar rule at the shoulder
+export function labelTexture({ lines = ['VIN'], uRange = [0.3, 0.7], vRange = [0.3, 0.6], bodyV = null, seed = 1, w = 128, h = 256, dark = false, shape = 'rect', glassStroke = true, lidV = null, capsuleV = null, collarV = null }) {
   return drawTexture(
     w,
     h,
@@ -239,48 +175,66 @@ export function labelTexture({ lines = ['VIN'], uRange = [0.3, 0.7], vRange = [0
       if (dark) {
         g.fillStyle = INK;
         g.fillRect(0, 0, W, H);
+        // the paper collar the film leaves where the shoulder turns into the neck: one bright
+        // rule that keeps a filled bottle from reading as a rectangle
+        if (collarV != null) {
+          const y = (1 - collarV) * H;
+          inkLine(g, 0, y, W, y, { width: Math.max(2, H * 0.012), wobble: 1, rng, color: LABEL_PAPER });
+        }
       }
-      if (lidV != null) {
+      // the capsule: solid ink over the neck (and, on a wine bottle, the top of the shoulder).
+      // On a paper bottle this is its one black area — the mark that says "dark glass" without
+      // the body having to be black.
+      const capV = capsuleV ?? lidV;
+      if (!dark && capV != null) {
+        g.fillStyle = INK;
+        g.fillRect(0, 0, W, (1 - capV) * H + 1);
+      } else if (dark && lidV != null) {
         g.fillStyle = INK;
         g.fillRect(0, 0, W, (1 - lidV) * H + 2);
       }
       if (!dark && glassStroke && bodyV) {
-        // the one highlight stroke the film gives a glass bottle, left of centre
+        // the two strokes the film gives a glass bottle, left of centre and nothing else
         const yt = (1 - bodyV[1]) * H, yb = (1 - bodyV[0]) * H;
-        inkLine(g, W * 0.39, yt + (yb - yt) * 0.08, W * 0.415, yb - (yb - yt) * 0.12, { width: Math.max(3, W * 0.014), wobble: 1.2, rng });
+        inkLine(g, W * 0.38, yt + (yb - yt) * 0.06, W * 0.405, yb - (yb - yt) * 0.14, { width: Math.max(2.4, W * 0.022), wobble: 1.2, rng });
+        inkLine(g, W * 0.44, yt + (yb - yt) * 0.1, W * 0.455, yt + (yb - yt) * 0.34, { width: Math.max(2, W * 0.018), wobble: 1, rng });
       }
       const x0 = uRange[0] * W, x1 = uRange[1] * W;
       const y0 = (1 - vRange[1]) * H, y1 = (1 - vRange[0]) * H;
       const lw = x1 - x0, lh = y1 - y0;
       const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-      const o = { width: Math.max(2, lw * 0.022), wobble: 0.9, rng };
+      const rule = Math.max(1.8, lw * 0.035);
+      const o = { width: rule, wobble: 0.9, rng };
       if (shape === 'oval') {
         g.fillStyle = LABEL_PAPER;
         g.beginPath();
         g.ellipse(cx, cy, lw / 2, lh / 2, 0, 0, Math.PI * 2);
         g.fill();
-        ring(g, cx, cy, lw / 2 - 4, { ...o, squash: (lh - 8) / (lw - 8), n: 40 });
+        // two rings, the outer one heavy: on a paper bottle an oval label has no fill to state it
+        // and a single thin ring at this size arrives as a dotted smudge
+        ring(g, cx, cy, lw / 2 - rule, { ...o, width: rule * 1.6, squash: (lh - 2 * rule) / (lw - 2 * rule), n: 40 });
+        ring(g, cx, cy, lw / 2 - rule * 3.4, { ...o, width: rule * 0.8, squash: (lh - 6.8 * rule) / (lw - 6.8 * rule), n: 34 });
       } else if (shape === 'band') {
         g.fillStyle = LABEL_PAPER;
         g.fillRect(0, y0, W, lh);
-        inkLine(g, 0, y0 + 3, W, y0 + 3, o);
-        inkLine(g, 0, y1 - 3, W, y1 - 3, o);
+        inkLine(g, 0, y0 + rule, W, y0 + rule, o);
+        inkLine(g, 0, y1 - rule, W, y1 - rule, o);
       } else {
         g.fillStyle = LABEL_PAPER;
         g.fillRect(x0, y0, lw, lh);
-        inkRect(g, x0 + 4, y0 + 4, lw - 8, lh - 8, { ...o, overshoot: 1 });
+        inkRect(g, x0 + rule, y0 + rule, lw - 2 * rule, lh - 2 * rule, { ...o, overshoot: 1 });
       }
-      // the name: 3–6 caps drawn with the pen, filling the label
+      // the name: 3–6 caps in the sign hand, filling the label, with a rule under it
       const n = lines.length;
-      let size = lh * (n === 1 ? 0.44 : 0.3);
-      for (const t of lines) size = penFit(t, size, lw * 0.78, 0.14);
-      const weight = Math.max(1.6, size * 0.17);
+      let size = lh * (n === 1 ? 0.46 : 0.32);
+      for (const t of lines) size = penFit(t, size, lw * 0.76, 0.14);
+      const weight = Math.max(1.5, size * 0.16);
       if (n === 1) {
-        penText(g, lines[0], cx, cy - (lh > size * 3 ? size * 0.2 : 0), { size, weight, rng, tracking: 0.14 });
-        if (lh > size * 3) inkLine(g, cx - lw * 0.22, cy + size * 0.75, cx + lw * 0.22, cy + size * 0.75, { width: weight * 0.8, wobble: 0.6, rng });
+        penText(g, lines[0], cx, cy - (lh > size * 2.6 ? size * 0.24 : 0), { size, weight, rng, tracking: 0.14 });
+        if (lh > size * 2.6) inkLine(g, cx - lw * 0.24, cy + size * 0.8, cx + lw * 0.24, cy + size * 0.8, { width: weight * 0.8, wobble: 0.6, rng });
       } else {
-        penText(g, lines[0], cx, cy - size * 0.7, { size, weight, rng, tracking: 0.14 });
-        penText(g, lines[1], cx, cy + size * 0.7, { size, weight, rng, tracking: 0.14 });
+        penText(g, lines[0], cx, cy - size * 0.72, { size, weight, rng, tracking: 0.14 });
+        penText(g, lines[1], cx, cy + size * 0.72, { size, weight, rng, tracking: 0.14 });
       }
     },
     { seed },
@@ -596,17 +550,74 @@ export function signTexture({ lines, w = 1024, h = 160, seed = 9, border = 'sing
   );
 }
 
-// ---- the doormat: a dark coir field with the greeting left in paper ---------------------------
-export function matTexture({ text = 'BIENVENUE', w = 512, h = 300, seed = 41 } = {}) {
+// ---- the doormat -------------------------------------------------------------------------------
+// Round 4. The mat lies on a floor the camera rakes at about 6°, so it arrives as a strip a dozen
+// pixels deep. The old drawing was a 512x300 sheet — a square drawing squeezed 25:1 on one axis,
+// which is 27 texels of pattern per screen pixel: nothing a pen can draw, and the ink pass
+// correctly threw the whole thing away and stated a tone. Two things fix that and they are both
+// drawing decisions, not shader ones.
+//   1. The SHEET is cut to the shape the mat projects to (640 x 96 for a 0.92 x 0.56 mat), so a
+//      texel is about as wide on screen as it is tall and every mark on it survives at its drawn
+//      weight. Nothing here is squeezed.
+//   2. The mat is drawn the way the film draws a rug seen almost edge-on — the runner across the
+//      bottom of reference/fd-anim-staircase-guitar-room.jpg: a heavy bound border top and bottom,
+//      a bare field between them, and the pattern reduced to what fits in that band. There is no
+//      fine coir texture, because at this rake there is no room for one; the mat is three
+//      horizontal decisions and a word.
+// What is NOT here is the word. The mat now measures 149 x 17.9 px on the wide shot and 198 x 21.7
+// on home, and the band between the bindings takes a cap of about 11 px — nine letters of it, each
+// one 3 px of pen wide. That is a black smear, the same failure as a row of filled bottles. So the
+// greeting moved to a board on the wall under the picture rail, where it is cut at an 18 px cap and
+// can be read; the mat carries what the film puts on a rug at this rake instead — a running scroll
+// between two bindings, one continuous wave that survives being eleven pixels tall.
+export function matTexture({ w = 640, h = 96, seed = 41 } = {}) {
   return drawTexture(
     w,
     h,
     (g, W, H, rng) => {
-      paper(g, W, H, '#f3eee4', { grain: 0, seed });
-      hatch(g, 0, 0, W, H, { angle: 0, spacing: 4, width: 2.6, wobble: 0.5, broken: 0.05, rng, alpha: 0.95, jitter: 0.6 });
-      inkRect(g, 14, 14, W - 28, H - 28, { width: 5, wobble: 1, rng, color: LABEL_PAPER, overshoot: 0 });
-      const size = penFit(text, H * 0.34, W * 0.8, 0.2);
-      penText(g, text, W / 2, H / 2, { size, weight: size * 0.22, rng, tracking: 0.2, color: LABEL_PAPER });
+      paper(g, W, H, '#f4efe6', { grain: 0, seed });
+      const bind = Math.round(H * 0.15); // the bound edge, solid
+      g.fillStyle = INK;
+      g.fillRect(0, 0, W, bind);
+      g.fillRect(0, H - bind, W, bind);
+      g.fillRect(0, 0, Math.round(W * 0.02), H);
+      g.fillRect(W - Math.round(W * 0.02), 0, Math.round(W * 0.02), H);
+      // a rule a stroke in from each binding, the way a mat is stitched
+      const o = { width: Math.max(2.2, H * 0.032), wobble: 1.2, rng };
+      inkLine(g, W * 0.03, bind * 1.9, W * 0.97, bind * 1.9, o);
+      inkLine(g, W * 0.03, H - bind * 1.9, W * 0.97, H - bind * 1.9, o);
+      // the scroll: one wave down the length with a curl at every crest, and a second, fainter
+      // wave a half period out of step, so the band reads as pattern and not as a rule
+      // The wave has to be big enough to survive: at eleven periods and a sixteenth of the sheet's
+      // height it measured out at 13 px per period and 3 px of swing on screen, which is a texture,
+      // not a pattern. Seven periods, a fifth of the height, and the curls a third bigger.
+      const y0 = H / 2, amp = H * 0.2, per = W / 7;
+      for (const [ph, wd] of [[0, o.width * 1.2], [Math.PI, o.width * 0.8]]) {
+        const pts = [];
+        for (let x = W * 0.05; x <= W * 0.95; x += per / 12) pts.push([x, y0 + Math.sin((x / per) * Math.PI * 2 + ph) * amp]);
+        stroke(g, pts, { width: wd, wobble: 0.8, rng });
+      }
+      for (let i = 0; i < 7; i++) {
+        const x = W * 0.05 + (i + 0.25) * per;
+        if (x > W * 0.92) break;
+        ring(g, x, y0 + (i % 2 ? amp : -amp) * 0.5, H * 0.15, { width: o.width, wobble: 0.6, rng, n: 11 });
+      }
+    },
+    { seed },
+  );
+}
+// The bristle strip along the mat's near edge, seen end-on: a row of short vertical dashes, the
+// only thing that gives the mat a thickness from this angle.
+export function matEdgeTexture(seed = 42) {
+  return drawTexture(
+    512,
+    32,
+    (g, W, H, rng) => {
+      paper(g, W, H, '#f4efe6', { grain: 0, seed });
+      inkLine(g, 0, 3, W, 4, { width: 4, wobble: 1.2, rng });
+      for (let x = 4; x < W - 4; x += 7 + rng() * 5) {
+        inkLine(g, x, 6, x + (rng() - 0.5) * 3, H - 3 - rng() * 8, { width: 3, wobble: 0.6, rng });
+      }
     },
     { seed },
   );
@@ -667,11 +678,14 @@ export function clockTexture(seed = 13) {
         const r0 = i % 5 ? 100 : 92, r1 = 108;
         inkLine(g, cx + Math.cos(a) * r0, cy + Math.sin(a) * r0, cx + Math.cos(a) * r1, cy + Math.sin(a) * r1, { ...o, width: i % 5 ? 1.4 : 3 });
       }
-      const nums = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
-      nums.forEach((n, i) => {
-        const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
-        penText(g, n, cx + Math.cos(a) * 74, cy + Math.sin(a) * 74, { size: 20, weight: 3, rng, tracking: 0.08 });
-      });
+      // Round 4: twelve numerals on a face 90 px across came out as a ring of grey specks. Four
+      // numerals at half again the size read as numerals, and the other eight hours keep their
+      // ticks — which is how a clock this small is drawn.
+      const nums = { 0: 'XII', 3: 'III', 6: 'VI', 9: 'IX' };
+      for (const k of Object.keys(nums)) {
+        const a = (+k / 12) * Math.PI * 2 - Math.PI / 2;
+        penText(g, nums[k], cx + Math.cos(a) * 72, cy + Math.sin(a) * 72, { size: 30, weight: 4.6, rng, tracking: 0.1 });
+      }
       dot(g, cx, cy, 7);
     },
     { seed },

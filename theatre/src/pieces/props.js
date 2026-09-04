@@ -120,11 +120,13 @@ export async function build(ctx) {
         z: -0.02,
         rng,
         gap: 0.01,
+        // one filled bottle in four, at the left where the row starts; the rest paper with a
+        // black capsule, four different heights, four different shoulders
         items: [
           { kind: 'tall', name: 'VIN', dark: true, scale: 1.2, seed: 201, bodyH: 0.19, neckH: 0.1 },
-          { kind: 'square', name: 'GIN', dark: true, scale: 1.25, seed: 202, bodyH: 0.17 },
-          { kind: 'corked', name: 'MARC', dark: false, scale: 1.2, seed: 203, bodyH: 0.14, neckH: 0.06 },
-          { kind: 'squat', name: 'RHUM', dark: true, scale: 1.2, seed: 204, bodyH: 0.13, neckH: 0.05 },
+          { kind: 'carafe', name: 'GIN', dark: false, scale: 1.15, seed: 202, bodyH: 0.13, neckH: 0.1 },
+          { kind: 'corked', name: 'MARC', dark: false, scale: 1.2, seed: 203, bodyH: 0.15, neckH: 0.06 },
+          { kind: 'squat', name: 'RHUM', dark: false, scale: 1.2, seed: 204, bodyH: 0.12, neckH: 0.05 },
         ],
       }),
     );
@@ -166,16 +168,26 @@ export async function build(ctx) {
     sign.position.set(cx, ty, WALL - 0.008);
     g.add(sign);
     for (const sx of [-1, 1]) g.add(O.rod([cx + sx * 0.3, ty + 0.1, WALL - 0.008], [cx + sx * 0.3, door.y1 - 0.02, WALL - 0.02], 0.003, M.cord, 5));
-    // a doormat in front of the door, lettered
-    const mat = O.doorMat({ w: 0.58, d: 0.34 });
-    mat.position.set(cx, 0, WALL + 0.06 + 0.2);
+    // A doormat in front of the door. Round 4: the floor is raked about 6°, so the mat arrives as
+    // a strip a dozen pixels deep whatever is drawn on it. Measured on the wide shot with the old
+    // 0.58 x 0.34 mat: 91 px across by 10.8 px deep, and a 512 x 300 sheet on it — 27 texels of
+    // drawing per screen pixel, which is nothing a pen can draw. It is now a real doormat's size
+    // (92 x 56 cm) on a sheet cut to the shape it projects to: 149 x 17.9 px on the wide and 198 x
+    // 21.7 on home, and 6.4 texels per pixel measured on the pass's own minification channel —
+    // under the 9 at which the pen gives up. Everything drawn on it is drawn.
+    const mat = O.doorMat({ w: 0.92, d: 0.56 });
+    mat.position.set(cx, 0, WALL + 0.06 + 0.26);
     g.add(mat);
 
     // Round 3: the cabinet was a full-height wall of 24 bottles at 42-54% ink — the heaviest thing
     // in the frame. It is now four boards instead of six (stopping 0.7 m short of the rail, so the
     // plaster above it is bare), three bottles a shelf instead of four, each a size larger, and its
     // back is open so the shelves are not a black box behind the glass.
-    const CAB = [0.12, 0.66, 1.2];
+    // Round 4: the boards are evenly spaced (they were 0.12 / 0.66 / 1.2 under a top at 1.49, so
+    // the top bay had 0.28 m of headroom and the bottles standing in it — 0.46 m of bottle — went
+    // straight through the cabinet's own top board). Every bay now clears 0.44 m and nothing in
+    // the cabinet is taller than 0.43.
+    const CAB = [0.11, 0.575, 1.04];
     const CABH = 1.5;
     const unit = O.shelfUnit({ w: 0.54, h: CABH, d: 0.24, boards: CAB, plinth: 0.07, back: true });
     unit.position.set(W / 2 - 0.04 - 0.27, 0, FLUSH + 0.12);
@@ -192,41 +204,56 @@ export async function build(ctx) {
       j.position.set(0.13, CABH, 0.0);
       unit.add(j);
     }
-    // three bottles a shelf, silhouettes different, two thirds of them solid black
+    // Three a shelf, no two the same silhouette or the same height, and exactly ONE of them
+    // filled solid — the film's own arithmetic on the two shelves and the sideboard of
+    // fd-anim-kitchen-table-cards-hires. Round 3 had two thirds of them black and at 13 px a
+    // bottle that read as a picket of blots; the rest of them are paper now, each with a solid
+    // capsule over its neck for its black area, and the one filled bottle in the row carries the
+    // big label. Names kept: GIN · MARC · POIRE · PRUNE · VIN · FINE · PORTO.
     const bays = [
       [
-        { kind: 'square', name: 'GIN', dark: true, bodyH: 0.16 },
-        { kind: 'tall', name: 'MARC', dark: true, bodyH: 0.22, neckH: 0.1 },
-        { kind: 'flask', lines: ['POIRE'], dark: false, neck: 0.07 },
+        { kind: 'tall', name: 'MARC', dark: false, bodyH: 0.19, neckH: 0.1 },
+        { kind: 'square', name: 'GIN', dark: true, bodyH: 0.15 },
+        { kind: 'flask', lines: ['POIRE'], dark: false, neck: 0.075 },
       ],
+      [],
       [
-        { kind: 'jar', name: 'THE', h: 0.15 },
-        { kind: 'squat', name: 'ANIS', dark: true, bodyH: 0.16, neckH: 0.06 },
-        { kind: 'corked', name: 'PRUNE', dark: false, bodyH: 0.15 },
-      ],
-      [
-        { kind: 'tall', name: 'VIN', dark: true, bodyH: 0.21, neckH: 0.11 },
-        { kind: 'square', name: 'FINE', dark: false, bodyH: 0.14 },
-        { kind: 'tall', name: 'PORTO', dark: true, bodyH: 0.23, neckH: 0.08 },
+        // short-wide, block, tall-round: the top bay's three read apart at a glance, which the
+        // two tall bottles it had before did not
+        { kind: 'squat', name: 'PORTO', dark: false, bodyH: 0.14, neckH: 0.06 },
+        { kind: 'tin', name: 'FINE', h: 0.13 },
+        { kind: 'carafe', name: 'VIN', dark: false, bodyH: 0.12, neckH: 0.09 },
       ],
     ];
     CAB.forEach((y, i) => {
       // the second bay up carries a single big demijohn and nothing else: the film gives every
-      // packed run of objects one place where the eye is allowed to stop
+      // packed run of objects one place where the eye is allowed to stop. It is glass now, with a
+      // black capsule and an oval label — a shape to rest on rather than the frame's biggest blot.
       if (i === 1) {
-        const dj = O.shelfItem({ kind: 'corked', name: 'PRUNE', dark: true, bodyH: 0.25, neckH: 0.1, scale: 1.8, seed: 391 }, rng);
-        dj.position.set(x0 + 0.17, y, z0 + 0.14);
+        const dj = O.shelfItem({ kind: 'carafe', name: 'PRUNE', dark: false, bodyH: 0.14, neckH: 0.075, scale: 1.4, seed: 391, shape: 'oval' }, rng);
+        dj.position.set(x0 + 0.16, y, z0 + 0.14);
         unit.add(dj);
+        // one small thing at the far end so the bay is a resting place and not a hole: a tumbler,
+        // a third of the demijohn's height and nothing like its shape
+        const tu = O.shelfItem({ kind: 'tumbler', scale: 1.25, seed: 392 }, rng);
+        tu.position.set(x1 - 0.09, y, z0 + 0.15);
+        unit.add(tu);
         return;
       }
-      unit.add(O.row({ x0, x1, y, z: z0 + 0.13, rng, gap: 0.012, items: bays[i].map((s, k) => ({ ...s, scale: 1.3, seed: 300 + i * 10 + k })) }));
+      unit.add(O.row({ x0, x1, y, z: z0 + 0.13, rng, gap: 0.008, items: bays[i].map((s, k) => ({ ...s, scale: 1.3, seed: 300 + i * 10 + k })) }));
     });
   }
 
   // ---- the centre wall: a sign under the rail, pictures around the clock, a pinboard by the door ------
   {
-    const sign = O.signBoard({ w: 1.0, h: 0.18, lines: ['TAROT — READINGS — 3 CARDS', 'BY APPOINTMENT · WALK-INS TOLERATED'], border: 'double', texW: 1536 });
-    sign.position.set(0, railY - 0.1, WALL + 0.045);
+    // Round 4. This board carried two lines of small print — 25 and 34 characters on a metre of
+    // wall — which measured out at a 5 px cap and arrived as two grey scribbles. The film letters a
+    // fascia with FEW letters and big ones (COIFFEUR, OPTIQUE, LE SANS BLAGUE), so the board is
+    // bigger and says two words. It is also where BIENVENUE now lives: the doormat is 18 px deep
+    // and could only give the word an 11 px cap, and here it is cut at 18 and can be read.
+    // `sizes` are in the sheet's own px — texW 1024 on a 4:1 board makes the sheet 1024 x 256.
+    const sign = O.signBoard({ w: 1.2, h: 0.3, lines: ['TAROT', 'BIENVENUE'], sizes: [97, 77], border: 'double', texW: 1024 });
+    sign.position.set(0, railY - 0.17, WALL + 0.045);
     g.add(sign);
     for (const sx of [-1, 1]) {
       const hook = O.sphere(0.009, M.solid, 8, 6);
@@ -305,8 +332,13 @@ export async function build(ctx) {
   const lamp = O.floorLamp({ h: 1.62 });
   lamp.position.set(-W / 2 + 0.5, 0, -0.2);
   g.add(lamp);
+  // Round 4: the stand came 0.3 m downstage. Standing at z = -0.75 its pole ran straight down the
+  // middle of the bottle cabinet in both the wide and the door shot and its coat covered the right
+  // third of every shelf — half the bottles were behind it. Round 3 tried moving it downstage and
+  // it landed hard against the frame edge, but the wide has opened out since; at -0.45 the pole
+  // clears the cabinet's right stile and the stand is still 0.55 m inside the wall.
   const stand = O.hatStand({ h: 1.85, rng });
-  stand.position.set(W / 2 - 0.5, 0, -0.75);
+  stand.position.set(W / 2 - 0.55, 0, -0.45);
   g.add(stand);
 
   // ---- overhead: the three-petal pendant over the table -------------------------------------------------
