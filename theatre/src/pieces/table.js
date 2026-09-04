@@ -1,10 +1,11 @@
 // PIECE: table — the reading table: a round café table on a turned pedestal, dressed with a square
-// fringed café cloth (a woven check drawn stroke by stroke) laid corner-forward so a point hangs
-// towards the visitor and the hem is two lines dropping out of the frame; the still life in one
-// row across the middle band: a wine glass, an ashtray with stubbed cigarettes, a candle stuck in
-// a bottle, a saucer with an espresso cup and a sugar cube, a folded newspaper, coins, a pocket
-// watch, a folded letter, spectacles. The near half stays clear for the three card slots and the
-// deck (ctx.layout.spread / deck).
+// fringed café cloth laid corner-forward so a point hangs towards the visitor and the hem is two
+// lines dropping out of the frame. The cloth's check is drawn thread by thread and is not
+// everywhere: it is full at the rim and across the far half and thins to almost bare paper through
+// the middle, where the three cards and the fan lie (see table-textures.js). The still life sits in
+// one row across the far band — a wine glass, an ashtray, a candle stuck in a bottle, a saucer with
+// an espresso cup, a folded newspaper, coins, a pocket watch, a folded letter, a matchbox — and the
+// whole near half is clear for the three card slots and the deck (ctx.layout.spread / deck).
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { surface, lathe, merge, smooth, CLOTH_ROT } from './table-geo.js';
@@ -158,8 +159,8 @@ export async function build(ctx) {
   const marks = {
     rings: [
       [...PLACES.wineGlass, 0.034],
-      [...PLACES.tumbler, 0.03],
-      [PLACES.tumbler[0] - 0.08, PLACES.tumbler[1] - 0.12, 0.031],
+      [...PLACES.tumbler, 0.03], // the tumbler has been cleared away; its ring has not
+      [0.28, -0.02, 0.031], // and one out on the bare middle, where a glass stood all evening
     ],
     crumbs: [[PLACES.plate[0] + 0.1, PLACES.plate[1] - 0.06]],
     burns: [[PLACES.ashtray[0] + 0.1, PLACES.ashtray[1] - 0.05]],

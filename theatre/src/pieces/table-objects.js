@@ -27,7 +27,6 @@ export const PLACES = {
   matchbox: [-0.02, -0.15],
   watch: [0.15, -0.17],
   note: [0.31, -0.15],
-  spectacles: [0.45, -0.08],
   wineGlass: [0.55, -0.12],
   bottle: [0.44, -0.34],
   coins: [
