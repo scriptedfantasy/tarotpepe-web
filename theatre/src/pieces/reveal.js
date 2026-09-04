@@ -34,27 +34,17 @@ export const meta = {
 
 // Where each judging state is shot from. His hand is a flat cut-out lying IN the cloth
 // (reveal-hand.js) and only reads from a lens well above the table — it takes itself off the
-// cloth from anywhere else — so every state in which it touches a card is staged from `fan`, the
-// high three-quarter that holds the whole arc. Not from `spread`, the straight-down: a card stood
-// on its edge to show its face to the visitor is exactly edge-on to that lens and vanishes, and
-// the turn is built around that drawing. The stills in which nothing touches anything (dealt,
-// revealed) keep the piece's frontal 'table' frame.
-const SHOT = { fan: 'fan', fanning: 'fan', pick: 'fan', gather: 'fan', deal: 'fan', turn: 'turn', turning: 'turn', shuffle: 'shuffle' };
-
-// The shuffle's own frame, which the camera piece has no name for: the deck close, from above and
-// a little downstage of it, so the cut side of both halves faces the lens while they go into each
-// other and his hand is allowed on the cloth (reveal-hand.js withdraws from any lens near level).
-// camera.cut() takes a shot object as happily as a name, so this needs nothing from that piece —
-// but the FLOW should cut here too for the shuffle beat, or the riffle plays where nobody is
-// looking. See the return note.
-const SHUFFLE_SHOT = { pos: [0.36, 1.34, 0.30], look: [0.42, 0.7625, -0.06], fov: 34 };
-
-// And the turn's. The whole beat is built round ONE drawing — the card stood up on its edge with
-// its face to the visitor — and that drawing is a plane. From a lens much past 60° above the
-// table it is a hairline: the money shot of the piece, edge-on. So the turn is staged from a
-// three-quarter 40° above the cloth, steep enough that his drawn hand may still lie on it
-// (reveal-hand.js withdraws below 37°) and shallow enough that a card standing up is a card.
-const TURN_SHOT = { pos: [0, 1.42, 0.94], look: [0, 0.8, 0.24], fov: 37 };
+// cloth from anywhere else — so every state in which it touches a card is staged from an overhead
+// or a rake, never from `table`, whose lens is at the height of the cloth.
+//
+// All four are the camera piece's own NAMED shots now, so the judging views and the film are cut
+// to the same frames (round 5). `fan` for everything that happens flat on the cloth; `turn` — the
+// rake 46° above the cloth — for the turn, because a card stood on its edge at 78° is a hairline
+// from straight down and that is the money drawing of the whole evening; `riffle` — 58° over the
+// deck at 0.6 m — for the shuffle, because the deck in profile is the only place an interleave can
+// be read from. The stills in which nothing touches anything (dealt, revealed) keep the piece's
+// frontal 'table' frame.
+const SHOT = { fan: 'fan', fanning: 'fan', pick: 'fan', gather: 'fan', deal: 'fan', turn: 'turn', turning: 'turn', shuffle: 'riffle' };
 
 const SLUGS = ['the-fool', 'the-star', 'the-house-of-god'];
 
@@ -330,7 +320,7 @@ export async function build(ctx) {
     async setState(name) {
       // the beats over the cloth are judged from above, the rest from the frontal 'table'
       const s = SHOT[name] ?? 'table';
-      ctx.pieces.camera?.cut?.(s === 'shuffle' ? SHUFFLE_SHOT : s === 'turn' ? TURN_SHOT : s);
+      ctx.pieces.camera?.cut?.(s);
       if (name === 'dealt' || name === 'default') await lay(SLUGS, false);
       else if (name === 'turning') {
         const meshes = await lay(SLUGS, false);
@@ -371,7 +361,7 @@ export async function build(ctx) {
         await lay([], false);
         fan.lay();
         fan.fakePicks([5, 10, 16]);
-        loopPlay(fan.gatherFrames(), 12);
+        loopPlay(fan.gatherFrames(), 5);
       } else await lay(SLUGS, false);
       // draw the first frame at once so a frozen clock shows the right drawing: the hand answers
       // the camera first (the state has just cut it), then the take draws with that answer

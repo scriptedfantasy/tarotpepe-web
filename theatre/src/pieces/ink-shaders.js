@@ -94,7 +94,16 @@ void main() {
   gNorm = vec4(octEncode(n), idLo / 255.0, idHi / 255.0);
   float dl = clamp(log2(max(uDist, 0.25) / 0.25) / 8.0, 0.0, 1.0); // 0.25..64 m, 16 bit
   float dHi = floor(dl * 255.0), dLo = floor(fract(dl * 255.0) * 255.0);
-  gMisc = vec4(dHi / 255.0, dLo / 255.0, 0.0, 1.0);
+  // How far the frame has shrunk the surface's own drawing: TEXELS of its texture per screen pixel.
+  // This is the projected size of a drawn mark, measured rather than guessed — the number that says
+  // whether a label's lettering, a shutter's louvre or a board's seam is still something a pen
+  // could draw here, or has already fallen below the width of the nib. Encoded log2, 0.25..64.
+  float texels = 0.25;
+  if (uHasMap > 0.5) {
+    vec2 duv = fwidth(vUv) * vec2(textureSize(uMap, 0));
+    texels = max(max(duv.x, duv.y), 0.25);
+  }
+  gMisc = vec4(dHi / 255.0, dLo / 255.0, clamp(log2(texels) / 8.0 + 0.25, 0.0, 1.0), 1.0);
 }
 `;
 
@@ -117,7 +126,7 @@ precision highp int;
 uniform sampler2D tDepth, tNorm, tMisc, tAlbedo;
 uniform vec2 uRes;
 uniform float uNear, uFar, uSeed, uDpr, uWobble;
-uniform float uDepthThr, uCreaseThr;
+uniform float uDepthThr, uCreaseThr, uCreaseWide;
 in vec2 vUv;
 layout(location = 0) out vec4 outColor;
 ${NOISE}
@@ -153,7 +162,19 @@ void main() {
   float ax = xp.d - c.d, bx = xm.d - c.d, ay = yp.d - c.d, by = ym.d - c.d;
   bool sil = (max(ax, bx) > thr && abs(ax + bx) > thr) || (max(ay, by) > thr && abs(ay + by) > thr);
   float dotMin = min(dot(c.n, xp.n), dot(c.n, yp.n));
-  bool crease = dotMin < uCreaseThr;
+  // A fold earns a line only if it is still a CORNER at the scale of the pen. Measured across one
+  // pixel a bead of moulding, a lathed rim, a shutter's louvre across the room and a crease of
+  // cloth all read as sharp; measured across three, a real corner still has its two flats either
+  // side while a bead has already turned back on itself. The film inks the corner and lets the
+  // bead go: a line that cannot be a stroke arrives as a grey smudge, and there are no greys. This
+  // is the projected-size rule for the pen — a moulding four pixels wide stops being three lines
+  // and becomes one, which is what a draughtsman draws at that distance.
+  vec3 wx = octDecode(texture(tNorm, uv + vec2(o.x * 3.0, 0.0)).rg);
+  vec3 wxm = octDecode(texture(tNorm, uv - vec2(o.x * 3.0, 0.0)).rg);
+  vec3 wy = octDecode(texture(tNorm, uv + vec2(0.0, o.y * 3.0)).rg);
+  vec3 wym = octDecode(texture(tNorm, uv - vec2(0.0, o.y * 3.0)).rg);
+  float wide = min(dot(wx, wxm), dot(wy, wym));
+  bool crease = dotMin < uCreaseThr && wide < uCreaseWide;
   bool idE = abs(c.id - xp.id) > 0.5 || abs(c.id - yp.id) > 0.5 || abs(c.m - xp.m) > 0.002 || abs(c.m - yp.m) > 0.002;
   float seed = 0.0, type = 0.0;
   if (crease) { seed = 1.0; type = mix(0.72, 0.95, clamp((1.0 - dotMin) / 0.7, 0.0, 1.0)); }
@@ -181,12 +202,48 @@ export const EXTEND_FRAG = /* glsl */ `
 precision highp float;
 uniform sampler2D tEdge;
 uniform vec2 uRes;
-uniform float uDpr, uSeed, uOvershoot;
+uniform float uDpr, uSeed, uOvershoot, uMerge;
 in vec2 vUv;
 layout(location = 0) out vec4 outColor;
 ${NOISE}
 void main() {
   vec4 e = texture(tEdge, vUv);
+  // Two lines a nib's width apart are a black bar, not two strokes. The set is full of pairs that
+  // describe one thing twice: an object's silhouette against the edge of its own drawn texture, a
+  // moulding inked by its geometry and again by its map, the top and bottom of a louvre once the
+  // slat is a few pixels deep. The film draws one stroke there. So where a second seed runs
+  // PARALLEL to this one within uMerge pixels, only one survives — the stronger line, and on a tie
+  // the one the search reaches from its own -normal, which is a fixed choice for a given pair and
+  // so does not flicker between frames.
+  if (e.r > 0.5 && uMerge > 0.5) {
+    float th = e.b * 3.14159265;
+    vec2 nrm = vec2(-sin(th), cos(th));
+    for (int s = 1; s <= 4; s++) {
+      if (float(s) > uMerge) break;
+      for (int k = 0; k < 2; k++) {
+        vec2 d = nrm * (k == 0 ? 1.0 : -1.0) * float(s) * uDpr / uRes;
+        vec4 q = texture(tEdge, vUv + d);
+        if (q.r < 0.5) continue;
+        float dth = abs(q.b - e.b);
+        dth = min(dth, 1.0 - dth);
+        if (dth > 0.11) continue;                       // not parallel: a crossing, not a double
+        // Only a WEAKER line merges into a stronger one. Two equals a few pixels apart are the two
+        // sides of something thin — a coin, a rail, a slat seen edge-on — and both are real; taking
+        // one of those left the small props on the table drawn in a broken scratch. What does get
+        // merged is a crease under a silhouette, or a moulding the map draws again under the
+        // geometry's own line: one thing described twice, at two strengths.
+        // Only a WEAKER line merges into a stronger one at a distance. Two equals a few pixels
+        // apart are the two sides of something thin — a coin, a rail, a slat seen edge-on — and
+        // both are real; taking one of those left the small props on the table drawn in a broken
+        // scratch. What does get merged at a distance is a crease running under a silhouette, or a
+        // moulding the map draws again beneath the geometry's own line: one thing described twice.
+        // Touching equals are a different matter — that is one seed two pixels thick, where a
+        // shallow diagonal staircases — and thinning it to one is what keeps the nib's width the
+        // nib's, so at s == 1 an equal is merged as well.
+        if (q.g > e.g + 0.06 || (s == 1 && q.g > e.g - 0.02 && k == 0)) { outColor = vec4(0.0); return; }
+      }
+    }
+  }
   if (e.r > 0.5 || uOvershoot < 0.5) { outColor = e; return; }
   vec2 dirs[8];
   dirs[0] = vec2(1, 0); dirs[1] = vec2(0, 1); dirs[2] = vec2(-1, 0); dirs[3] = vec2(0, -1);
@@ -225,6 +282,8 @@ uniform vec2 uRes;
 uniform float uDpr, uSeed, uNear, uFar, uHatchK, uLref, uLineBase, uBreak, uPaperAmt, uHatchBoil;
 uniform float uPocket;      // how much a fold in the set darkens: under a ledge, into a corner
 uniform vec4 uTex;          // the wash a drawn pattern must reach for tone 1/2/3, then for a fill
+uniform vec4 uTexPen;       // texels/px where a drawn mark stops being drawable (lo, hi), then the
+                            // darkness a mark must reach to be ink at all (lo, hi)
 uniform int uMode;          // 0 all, 1 lines only, 2 tone only
 uniform mat4 uInvVP;
 uniform vec3 uInk, uPaper;
@@ -265,14 +324,21 @@ void main() {
 
   vec4 alb = texture(tAlbedo, vUv);
   // debug views: 3 albedo, 4 normal, 5 depth, 6 lit, 7 edge seeds
-  if (uMode >= 3) {
+  if ((uMode >= 3 && uMode <= 8) || uMode == 11) {
     vec3 dbg = vec3(0.0);
+    if (uMode == 11) {
+      // texels of a surface's own drawing per screen pixel: white = drawn at or above pen size,
+      // red = 1..4 texels a pixel (marks closing up), black = past 8 (nothing left to draw)
+      // the stored channel, raw, so tools/_ink-minif.mjs can decode it: texels = 2^((v-0.25)*8)
+      outColor = vec4(vec3(texture(tMisc, vUv).b), 1.0);
+      return;
+    }
     if (uMode == 3) dbg = alb.rgb;
     else if (uMode == 4) dbg = octDecode(texture(tNorm, vUv).rg) * 0.5 + 0.5;
     else if (uMode == 5) dbg = vec3(fract(linD(texture(tDepth, vUv).x) / 8.0));
     else if (uMode == 6) dbg = texture(tLit, vUv).rgb;
     else if (uMode == 7) { vec4 e = texture(tEdge, vUv); dbg = vec3(1.0 - e.r, 1.0 - e.r * e.g, 1.0 - e.r * (1.0 - e.b)); }
-    else if (uMode == 8 || uMode == 9) {
+    else if (uMode == 8) {
       // the tiles at true scale: four levels left→right, wall set top, floor set bottom
       vec2 tuv = cssPx / 512.0;
       int lv = int(floor(cssPx.x / (uRes.x / uDpr / 4.0)));
@@ -283,6 +349,9 @@ void main() {
     outColor = vec4(dbg, 1.0);
     return;
   }
+  // 9 = the pen's contours alone, 10 = the ink that comes from the surfaces' own drawn marks alone.
+  // Everything below runs as in lines-only; only the last mix is masked.
+  int drawMode = uMode >= 9 ? 1 : uMode;
   int packed = int(alb.a * 255.0 + 0.5);
   bool colorful = packed >= 128;
   float hatchW = float((packed >> 3) & 15) / 14.0;
@@ -322,6 +391,17 @@ void main() {
   // stroke — and the same shutter across the room, which a draughtsman would give two or three
   // strokes and a lot of paper, not sixty grey ones.
   float resolved = smoothstep(0.26, 0.56, ringHi - ringLo);
+  // …and the second half of the same question, which contrast alone cannot answer: is the mark
+  // still BIG ENOUGH to be a stroke? A shelf's stencilled label, a bottle's small type, a coat's
+  // stripes across the room all keep their contrast right down to the last pixel — the ring test
+  // says "still resolved" and the pen dutifully inks them, which is how a word the size of a
+  // fingernail arrives as a black smudge and a striped coat as a bar code. The G-buffer measures
+  // it exactly: texels of the surface's own drawing per screen pixel. One pen, one width — at two
+  // texels a pixel the drawn stroke is already thinner than the nib, and past four there is
+  // nothing a nib could put down. The film's answer at that size is a couple of marks and a lot
+  // of paper, or a flat tone, never a smaller pen.
+  float minif = exp2((texture(tMisc, vUv).b - 0.25) * 8.0);
+  float drawable = 1.0 - smoothstep(uTexPen.x, uTexPen.y, minif);
 
   // ── the stroke grid, anchored to the surface in world space ──────────────────────────────
   // The scale snaps to octaves of the object's distance, so strokes stay the same size on the
@@ -353,22 +433,36 @@ void main() {
   vec4 hTile = bg ? vec4(0.0) : (up ? texture(tFloor, huv) : texture(tWall, huv));
 
   // ── lines: a soft field from the seed map, thresholded by pen pressure → one pen, one weight ──
+  // ONE NIB. The mark is every pixel within a nib's radius of a seed — a distance, not a blur.
+  // What this replaced summed the seeds under a gaussian and thresholded the sum, which makes the
+  // width depend on how much seed happens to be nearby: a lone contour on the back wall came out a
+  // hair, and a moulding whose geometry and whose texture both ask for a line came out as a bar.
+  // Measured against the folio at a matched scale, that gave us a stroke whose median was 5–6 px
+  // where the film's is 4 and whose distribution had a long tail at 6–10 px that the film simply
+  // does not have — thick-and-thin, the one thing STYLE §1.2 forbids outright. Raising the old
+  // threshold could not fix it either: it took the width off the strong lines and rubbed the weak
+  // ones out altogether, so the cornice arrived as a dotted line. A radius sets the width once and
+  // every line gets it, however its seeds fell.
   float line = 0.0, halo = 0.0;
-  if (uMode != 2) {
-    float pressure = 0.84 + 0.36 * vnoise(cssPx / 120.0 + uSeed * 3.3);
-    float acc = 0.0;
-    for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++) {
+  if (drawMode != 2) {
+    float nearest = 9.0;
+    for (int j = -3; j <= 3; j++) for (int i = -3; i <= 3; i++) {
       vec2 off = vec2(float(i), float(j));
-      vec2 q = vUv + off * uDpr / uRes;
-      vec4 e = texture(tEdge, q);
+      float d2 = dot(off, off);
+      if (d2 > 9.0) continue;
+      vec4 e = texture(tEdge, vUv + off * uDpr / uRes);
       if (e.r < 0.05) continue;
-      acc += exp(-dot(off, off) / 2.88) * e.r * e.g;
+      // e.g carries the line's own weight (type × the material's lineWeight): a cut-out that asks
+      // for a quarter-weight outline gets a quarter of the radius, and nothing else varies.
+      nearest = min(nearest, sqrt(d2) / max(e.g, 0.12));
     }
-    float v = acc / 8.49;
-    float t = uLineBase / pressure;
-    line = smoothstep(t - 0.05, t + 0.05, v);
+    // the hand's pressure: ±8% over a slow drift, not the ±40% a real threshold noise gives
+    float R = uLineBase * (0.93 + 0.14 * vnoise(cssPx / 120.0 + uSeed * 3.3));
+    // The edge of the mark is a pixel of irregularity, not a blur (STYLE §3, "post"): the ramp is
+    // biased inward so the nib's own width is solid ink and only the last half pixel is soft.
+    line = 1.0 - smoothstep(R - 0.55, R + 0.35, nearest);
     // a hair of bare paper either side of every contour: the tone strokes stop short of the line
-    halo = smoothstep(t * 0.12, t * 0.3, v);
+    halo = 1.0 - smoothstep(R + 0.7, R + 2.2, nearest);
     // a pen that skips now and then
     float brk = vnoise(cssPx / 19.0 + uSeed * 5.1 + 40.0);
     line *= 1.0 - step(brk, uBreak) * 0.85;
@@ -391,7 +485,7 @@ void main() {
   float matLevel = floor(clamp((hatchW - 0.5) * 8.0, 0.0, 4.0));
 
   float lightLevel = 0.0;
-  if (uMode != 1 && !bg) {
+  if (drawMode != 1 && !bg) {
     float L = softLit(vUv, 2.6 * uDpr / uRes);
     float shade = 1.0 - smoothstep(uTone.x, uTone.y, L);
     // where the set folds in on itself — under every shelf board, into the top corners, beside the
@@ -422,9 +516,11 @@ void main() {
     // precisely the surfaces a draughtsman hatches under a cornice or a picture rail — while a
     // shadow is a shadow whatever it falls on. So the low end is lifted (0.08 → 0.30, 0.12 → 0.53,
     // the wainscot 0.24 → 0.72) and only what genuinely refuses tone — glass at 0.04, a lit
-    // lampshade, a flame — is cut away below 0.11. Plain paper (0.5) is still exactly 1.0 and
-    // Pepe's cut-out (0.35 → 0.79) lands where the lighting piece tuned it, so his robe stays
-    // white. Plaster at 0.12 now reads 0.42: a black shadow reaches the first stroke level, a half
+    // lampshade, a flame — is cut away below 0.11. Plain paper (0.5) is still exactly 1.0, and
+    // Pepe's cut-out asks for 0.02, which is BELOW the cut: he takes no tone from this pass at all,
+    // deliberately (see pepe.js — he is a flat card facing the visitor, and one even density of
+    // hatch edge to edge would be a grey wash). Plaster at 0.12 reads 0.42: a black shadow reaches
+    // the first stroke level, a half
     // one does not, which is the difference between hatching under the cornice and greying a wall.
     float soak = smoothstep(0.03, 0.11, hatchW) * pow(clamp(hatchW / 0.5, 0.0, 1.0), 0.72);
     // The form turning away: a rim of strokes down the side of a round thing. It sits OUTSIDE
@@ -455,22 +551,39 @@ void main() {
   // and fills, following the drawing's own shape at the pixel so those paper lines survive.
   float texLevel = 0.0, stroke = 0.0, blackArea = 0.0;
   if (!bg && !colorful) {
-    blackArea = step(uTex.w, wash);
+    // Only a drawing that is black AT THE SCALE IT IS DRAWN is filled. Once the frame has minified
+    // a surface its albedo is an average of ink and paper, and the average of a well-drawn object
+    // — a bottle with its outline and its label, a book with its spine type — passes 0.64 long
+    // before the object is anywhere near black. That is how a whole shelf across the room arrived
+    // as one solid blot with its lettering swallowed. So the bar for a flat fill rises with the
+    // minification: close to, a coat at 0.64 is a coat; across the room only what is still ink at
+    // 0.93 is filled, and everything between is hatched like the mass it is.
+    blackArea = step(mix(uTex.w, 0.93, smoothstep(1.0, 5.0, minif)), wash);
     // A stroke is drawn when it still stands clear of its field and is still dark enough to be a
     // stroke. As the drawing recedes the pen does not draw the same marks fainter — it draws
     // FEWER of them, at the same weight, and leaves the paper between: so what a receding pattern
     // loses is whole runs of strokes, chosen on the same world-anchored grid the hatching uses.
     // One pen, one pressure, all the way to the back wall.
+    // Neither gate is allowed to FADE a mark — a half-drawn stroke is a grey, and there are no
+    // greys. Both drop whole marks instead, dithered on the same world-anchored grid the hatching
+    // uses, so what recedes loses runs of strokes at full weight and keeps the paper between.
     float keep = step((1.0 - resolved) * 0.92, vnoise(huv * 2.4 + 17.0));
-    stroke = smoothstep(0.20, 0.41, tHere) * keep;
-    // …and what is no longer resolvable states its tone instead of being smeared out as a grey.
-    // Below the first threshold it states nothing: the pen would not have made a mark that small,
-    // and the paper stays bare. That is what strips the upper wall, the wainscot, the boards and
-    // the middle of the cloth.
-    texLevel = (1.0 - blackArea) * (1.0 - resolved) * (step(uTex.x, wash) + step(uTex.y, wash) + step(uTex.z, wash));
+    float draw = step(1.0 - drawable, vnoise(huv * 3.7 + 41.0));
+    stroke = smoothstep(uTexPen.z, uTexPen.w, tHere) * keep * draw;
+    // …and what the pen can no longer draw — because the marks have closed up OR because they have
+    // shrunk under the nib — states its tone instead of being smeared out as a grey. Below the
+    // first threshold it states nothing: the pen would not have made a mark that small, and the
+    // paper stays bare. That is what strips the upper wall, the wainscot, the boards, the middle of
+    // the cloth, and now the far shelves' labels — a pale label averages to nothing and goes blank,
+    // a striped coat averages to a tone and is hatched, which is the choice a draughtsman makes.
+    float washLevel = step(uTex.x, wash) + step(uTex.y, wash) + step(uTex.z, wash);
+    // A pattern that has CLOSED UP states everything it averages to. A drawing that has merely got
+    // too SMALL states only what is genuinely dark, one level lower: a hand faced with type it
+    // cannot write leaves the plate blank, but still darkens a striped coat across the room.
+    texLevel = (1.0 - blackArea) * max((1.0 - resolved) * washLevel, (1.0 - drawable) * max(washLevel - 1.0, 0.0));
   }
-  if (uMode == 1) { texLevel = 0.0; matLevel = 0.0; blackArea = 0.0; } // lines-only: no tone
-  if (uMode == 2) stroke = 0.0;                                        // tone-only: no line work
+  if (drawMode == 1) { texLevel = 0.0; matLevel = 0.0; blackArea = 0.0; } // lines-only: no tone
+  if (drawMode == 2) stroke = 0.0;                                        // tone-only: no line work
 
   float solid = max(step(0.84, hatchW),                          // the MATERIAL is a black thing
                     blackArea * smoothstep(0.22, 0.48, tHere));   // the DRAWING is black here
@@ -481,7 +594,9 @@ void main() {
   float tone = level > 0.5 ? smoothstep(0.32, 0.62, cov) * (level > 3.5 ? 1.0 : 1.0 - halo) : 0.0;
   if (level > 3.5) tone = max(tone, solid * (1.0 - halo));
 
-  vec3 base = (uMode == 0 && !bg && colorful) ? alb.rgb : uPaper;
+  vec3 base = (drawMode == 0 && !bg && colorful) ? alb.rgb : uPaper;
+  if (uMode == 9) stroke = 0.0;              // probe: the pen's contours alone
+  if (uMode == 10) line = 0.0;               // probe: the surfaces' own drawn marks alone
   float ink = max(line, max(tone, stroke));
   vec3 col = mix(base, uInk, ink);
   col *= paperGrain;

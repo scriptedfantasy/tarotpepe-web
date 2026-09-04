@@ -103,7 +103,8 @@ export function deckStacks(deck, T) {
 // HAND on the deck for every drawing of it: on the packet as it is cut, over the bridge as the
 // halves go into each other, pressing the pile flat, on the stood packet as it is tapped square.
 // (The drawn hand only lies on the cloth for a lens above the table — reveal-hand.js — so this
-// beat has to be cut to an overhead; reveal.js stages the judging state that way.)
+// beat has to be cut steeply: the camera piece's `riffle`, 58° over the deck at 0.6 m, which is
+// what reveal.js's `shuffle` judging state and the flow's shuffle beat both cut to.)
 export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, rounds = 3 } = {}) {
   const S = deckStacks(deck, T);
   if (!S) return null;

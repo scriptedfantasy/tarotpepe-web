@@ -18,10 +18,9 @@ import * as THREE from 'three';
 
 // What the pen and the sheet actually are, sampled off the folios (STYLE.md §1.1 and §3): the
 // paper is a cool, faintly green off-white, not a cream; the ink is a neutral near-black, not a
-// warm brown-black. strokes.js still exports the older, warmer pair for materials and for the
-// canvases the other pieces draw on — those are only ever seen THROUGH this pass, which repaints
-// every non-colourful surface with the values below, so the two need not agree.
-// (Reported upward: src/core/strokes.js PAPER/INK should be moved to match.)
+// warm brown-black. src/core/strokes.js now exports exactly these two (round 3 asked for it and it
+// was done), so the canvases the other pieces draw on and the values this pass composites with
+// agree; keep them in step if either moves.
 const PAPER = '#f8f9f4';
 const INK = '#0d0e0d';
 import { makeTiles, makePaperGrain } from './ink-tiles.js';
@@ -33,7 +32,11 @@ export const meta = {
   files: ['src/pieces/ink.js', 'src/pieces/ink-tiles.js', 'src/pieces/ink-shaders.js'],
 };
 
-const MODES = { default: 0, 'lines-only': 1, 'tone-only': 2, 'debug-albedo': 3, 'debug-normal': 4, 'debug-depth': 5, 'debug-lit': 6, 'debug-edge': 7, 'debug-tiles': 8 };
+// The three judged states are default / lines-only / tone-only. The rest are probes: 3..8 show a
+// buffer, 9 draws ONLY the pen's contours and 10 ONLY the ink that comes from the surfaces' own
+// drawn marks — the two halves that "lines-only" adds together, and the pair a coverage
+// measurement has to separate before it can say which half is overdrawing.
+const MODES = { default: 0, 'lines-only': 1, 'tone-only': 2, 'debug-albedo': 3, 'debug-normal': 4, 'debug-depth': 5, 'debug-lit': 6, 'debug-edge': 7, 'debug-tiles': 8, 'debug-contour': 9, 'debug-texink': 10, 'debug-minif': 11 };
 
 export async function build(ctx) {
   const { renderer, scene, camera } = ctx;
@@ -41,14 +44,26 @@ export async function build(ctx) {
 
   // ── tunables (other pieces may nudge these through ctx.pieces.ink.params) ──
   const params = {
-    lineBase: 0.235, // threshold on the blurred seed field: lower = heavier pen (0.14 ≈ 3px, 0.28 ≈ 1.5px)
+    // THE NIB, as a radius in css px: the mark is every pixel within it of a seed, so this IS the
+    // half-width of every contour in the frame and nothing else changes it. STYLE §1.2 puts the
+    // film's contour at ≈2 px at 1080p; measured off the folio resampled to our 1600 px frame its
+    // stroke-width mode is 3 px and its median 4, ours was a mode of 3 and a median of 5–6 with a
+    // long tail to 10. 0.95 gives ≈1.9 px of solid ink plus a pixel of shoulder.
+    lineBase: 1.05,
     wobble: 0.9, // css px of hand drift
     breakAmt: 0.03, // how often the pen skips (0 = never)
     overshoot: 1, // 0/1 line ends run past corners
+    // px within which two PARALLEL contours are one contour and only the stronger is drawn.
+    // 0 turns the merge off. See the note in EXTEND_FRAG: this is the doubled-line rule.
+    merge: 3,
     depthThr: 0.012, // silhouette sensitivity (relative to depth)
     // cos of the fold angle that gets a line. A draughtsman inks a corner, not a soft bend: only
     // folds sharper than ≈53° are drawn, so lathed curves and cloth do not fill up with creases.
     creaseThr: 0.6,
+    // …and the same fold measured across three pixels instead of one. Only a fold still sharper
+    // than ≈60° at the pen's scale is a corner; anything softer is a bead or a rim the frame has
+    // shrunk below a stroke, and it is left to the silhouette.
+    creaseWide: 0.5,
     lref: 0.5, // (unused now; kept for other pieces that may read it)
     // lit luminance: fully dark, fully lit; max darkness from light; grazing amount. With the
     // levels below a plain-paper material (hatch 0.5) is BARE above L≈0.10 — most of the room —
@@ -68,10 +83,32 @@ export async function build(ctx) {
     // tone it averages to, on the same stroke grid as the light. Above the last it is a black AREA
     // (a coat, a cat, a doorway) and is filled flat, the way the film fills a black coat.
     texLevels: [0.34, 0.48, 0.58, 0.64],
+    // The projected-size rule for a surface's OWN drawing, in texels of that drawing per screen
+    // pixel (the G-buffer measures it) and then in how dark a mark must be to be ink at all.
+    // Round 3 taught the pass to stop drawing a PATTERN it could no longer resolve; it went on
+    // inking a shelf's stencil, a bottle's small type and a coat's stripes at any size, because
+    // those keep their contrast to the last pixel — measured, they cost 3.9 points of clean paper
+    // and arrived as illegible smudges. Past ~1.7 texels a pixel the drawn stroke is thinner than
+    // the nib and the pen stops; the tone it averages to is stated instead. The second pair is the
+    // pressure: one pen, so a mark is ink or it is paper, and a half-grey mip average is paper.
+    // Measured on this set: the VOYANTE plate reads at 4.3 texels a pixel and the placard's big
+    // line at 6.5, so a gate that starts before ~9 deletes hand-lettering the frame is meant to
+    // carry. It is a safety net against smearing, not a way to buy clean paper.
+    texPen: [9, 20, 0.3, 0.5],
     paper: 0.55, // paper grain amount (the grain itself is already a whisper)
     hatchBoil: 0.003, // tile-units of hatch shiver on twos
     letterbox: null, // e.g. 1.85 → paper-white bars; null → none
   };
+
+  // Tuning hook: any of the numbers above may be overridden from the URL as `ink.<name>=v` (a
+  // vector as `a,b,c,d`), so a parameter can be swept with tools/shot.mjs without an edit-and-
+  // reload per value. Nothing else reads these; the defaults above are what ships.
+  for (const [k, v] of ctx.params ?? []) {
+    if (!k.startsWith('ink.')) continue;
+    const name = k.slice(4);
+    if (!(name in params)) continue;
+    params[name] = Array.isArray(params[name]) ? v.split(',').map(Number) : +v;
+  }
 
   // ── textures drawn once ──
   // Nothing here is awaited. The hatch tiles come off the bake through ctx.assets, which is TRACKED
@@ -196,6 +233,7 @@ export async function build(ctx) {
       uWobble: { value: params.wobble },
       uDepthThr: { value: params.depthThr },
       uCreaseThr: { value: params.creaseThr },
+      uCreaseWide: { value: params.creaseWide },
     },
     depthTest: false,
     depthWrite: false,
@@ -210,6 +248,7 @@ export async function build(ctx) {
       uDpr: { value: 1 },
       uSeed: { value: 0 },
       uOvershoot: { value: params.overshoot },
+      uMerge: { value: params.merge },
     },
     depthTest: false,
     depthWrite: false,
@@ -241,6 +280,7 @@ export async function build(ctx) {
       uHatchBoil: { value: params.hatchBoil },
       uPocket: { value: params.pocket },
       uTex: { value: new THREE.Vector4(...params.texLevels) },
+      uTexPen: { value: new THREE.Vector4(...params.texPen) },
       uMode: { value: 0 },
       uInvVP: { value: new THREE.Matrix4() },
       uInk: { value: new THREE.Color(INK) },
@@ -315,6 +355,7 @@ export async function build(ctx) {
     eu.uWobble.value = params.wobble;
     eu.uDepthThr.value = params.depthThr;
     eu.uCreaseThr.value = params.creaseThr;
+    eu.uCreaseWide.value = params.creaseWide;
     renderer.setClearColor(0x000000, 0);
     fullscreen(edgeMat, rt.edge);
 
@@ -325,6 +366,7 @@ export async function build(ctx) {
     xu.uDpr.value = dpr;
     xu.uSeed.value = seed;
     xu.uOvershoot.value = params.overshoot;
+    xu.uMerge.value = params.merge;
     fullscreen(extMat, rt.ext);
 
     // 5. composite to the canvas
@@ -349,6 +391,7 @@ export async function build(ctx) {
     cu.uHatchBoil.value = params.hatchBoil;
     cu.uPocket.value = params.pocket;
     cu.uTex.value.set(...params.texLevels);
+    cu.uTexPen.value.set(...params.texPen);
     cu.uMode.value = mode;
     cu.uInvVP.value.multiplyMatrices(cam.matrixWorld, cam.projectionMatrixInverse);
     cu.uLevels.value.set(...params.levels);

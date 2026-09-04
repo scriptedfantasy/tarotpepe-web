@@ -435,17 +435,23 @@ export function buildFan(ctx, cards, player, hand = null) {
       });
     }
     F(() => rem.forEach((e, r) => set(e, closed(r), closed(r), 1)));
-    F(() => {
-      rem.forEach((e, r) => {
-        set(e, closed(r), onDeck(r), 0.45, -0.3);
-        e.mesh.position.y += 0.03;
+    // The carry. It used to be two drawings, which was a jump and not a carry the moment the deck
+    // moved upstage-right in round 5 and the packet had a metre to travel; it is four now, lifted
+    // in the middle so the packet passes OVER the slot cards it crosses instead of through them.
+    const CARRY = [0.24, 0.52, 0.79, 1];
+    const RISE = [0.048, 0.062, 0.04, 0];
+    CARRY.forEach((f, k) => {
+      F(() => {
+        rem.forEach((e, r) => {
+          set(e, closed(r), onDeck(r), f, -0.3 * (1 - f));
+          e.mesh.position.y += RISE[k];
+        });
+        if (k === 0) {
+          sound('deal');
+          pepe()?.deal?.(3, 'R'); // the packet is carried to the deck by the hand beside it
+        }
+        if (k === CARRY.length - 1) sound('settle');
       });
-      sound('deal');
-      pepe()?.deal?.(3, 'R'); // the packet is carried to the deck by the hand beside it
-    });
-    F(() => {
-      rem.forEach((e, r) => set(e, onDeck(r), onDeck(r), 1));
-      sound('settle');
     });
     F(() => {
       for (const e of rem) e.mesh.visible = false;
@@ -460,9 +466,21 @@ export function buildFan(ctx, cards, player, hand = null) {
       return { x: FAN.R * Math.sin(th), y: 0.004 + f * 0.008, z: zp + FAN.R * Math.cos(th), yaw: -th * FAN.rake, pose: 'splay' };
     };
     const packet = { x: closed(0).x, y: R * T + 0.004, z: closed(0).z, yaw: -FAN.A * FAN.rake, pose: 'splay' };
+    const deckYawH = -(deckYaw() + 0.04);
     const specs = [{ ...sweep(0), y: 0.09, z: sweep(0).z - 0.3 }];
     for (let k = 0; k < SWEEP; k++) specs.push(sweep(k / (SWEEP - 1)));
-    specs.push(packet, { ...packet, y: 0.05, z: packet.z - 0.05, pose: 'pinch' }, { x: dk.x, y: nRest() * T + R * T + 0.004, z: dk.z, yaw: -0.16, pose: 'pinch' }, { x: dk.x, y: 0.1, z: dk.z - 0.3, yaw: -0.16, pose: 'pinch' }, { off: true });
+    specs.push(packet);
+    // his fingers stay on the packet for every drawing of the carry, and let go on the deck
+    CARRY.forEach((f, k) => {
+      specs.push({
+        x: lerp(packet.x, dk.x, f),
+        y: lerp(R * T + 0.006, nRest() * T + R * T + 0.006, f) + RISE[k],
+        z: lerp(packet.z, dk.z, f) + 0.03,
+        yaw: lerp(packet.yaw, deckYawH, f),
+        pose: 'pinch',
+      });
+    });
+    specs.push({ off: true });
     return compose([
       { offset: 0, frames },
       { offset: 0, frames: handFrames(hand, specs) },

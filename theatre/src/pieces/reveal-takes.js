@@ -53,10 +53,14 @@ export function compose(tracks) {
 // Options: spin — the over-spin of the flick in radians (default: more on a long throw); apex — the
 // height of the flight (a card drawn from the fan to its slot is carried lower than one flicked
 // from the deck); bank — how far it banks into its travel.
-export function dealTrack(mesh, from, to, { cues = {}, faceUp = false, spin: spinAmt = null, apex = 0.07, bank = 0.17 } = {}) {
+export function dealTrack(mesh, from, to, { cues = {}, faceUp = false, spin: spinAmt = null, apex: apexIn = null, bank = 0.17 } = {}) {
   const d = to.p.clone().sub(from.p);
   d.y = 0;
   const dist = d.length();
+  // The apex now follows the throw. The deck moved upstage-right in round 5 and the far slot is a
+  // metre away from it: a fixed 7 cm arc over that distance is a card skimming the cloth like a
+  // stone, which is not how a card is dealt. A short carry keeps its old low arc.
+  const apex = apexIn ?? 0.05 + 0.065 * Math.min(1, dist / 1.05);
   const u = d.normalize();
   const axis = new THREE.Vector3(-u.z, 0, u.x); // rotating about this by +a lifts the leading edge
   const base = faceUp ? 0 : PI;
@@ -183,6 +187,15 @@ export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 
     const e = turnEdge(phi, H);
     return { ...base, x: X, y: Math.min(e.y * ride, 0.9 * hand.HAND.reach) + 0.002, z: slot.p.z + e.z - tuck };
   };
+  // Past halfway the fingers leave the edge and go to the card's FOOT, where a hand steadying a
+  // card that is standing up actually is. Riding the top edge to 78° floats the whole drawing
+  // 15 cm above the cloth (the tilt is capped, so what cannot be got by tilting is got by rising),
+  // and a cut-out hovering in mid-air beside a card, half of it behind the card, is the green
+  // blade this piece spent round 4 getting rid of.
+  const foot = (phi, out) => {
+    const { dz } = turnPose(phi, H);
+    return { ...base, x: X, y: 0.006, z: slot.p.z + dz + out };
+  };
   const near = slot.p.z + H / 2;
   return compose([
     { offset: 0, frames: card },
@@ -194,10 +207,10 @@ export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 
         { ...base, x: X, y: 0.018, z: near - 0.08 },
         on(0), // the fingertip lands on the near edge
         on(12, 0.009, 0.12), // and the edge comes up OVER it: the finger is still on the cloth
-        on(34, 0.007, 0.5),
-        on(62, 0.005, 0.85),
-        on(78, 0.004),
-        on(78, 0.004),
+        on(34, 0.007, 0.42),
+        foot(62, 0.034), // the fingers slide down to the foot of the card as it comes up
+        foot(78, 0.026),
+        foot(78, 0.026),
         { ...base, x: X, y: 0.010, z: slot.p.z + 0.02 }, // let go
         { ...base, x: X + s * 0.01, y: 0.028, z: near - 0.13 }, // drawn back
         { ...base, x: X + s * 0.02, y: 0.055, z: near - 0.26 },
