@@ -30,9 +30,10 @@ import * as dialogue from './pieces/dialogue.js';
 import * as sound from './pieces/sound.js';
 import * as mind from './pieces/mind.js';
 import * as flow from './pieces/flow.js';
+import * as dials from './pieces/dials.js';
 
 // Build order = dependency order. Each piece receives ctx.pieces with everything built before it.
-export const PIECES = [lighting, room, props, table, cards, pepe, pepeAnim, reveal, camera, ink, entrance, titles, dialogue, sound, mind, flow];
+export const PIECES = [lighting, room, props, table, cards, pepe, pepeAnim, reveal, camera, ink, entrance, titles, dialogue, sound, mind, flow, dials];
 
 const params = new URLSearchParams(location.search);
 const view = params.get('view');

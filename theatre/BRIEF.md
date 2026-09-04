@@ -72,6 +72,13 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   along a stroke, and a `seed` that re-rolls the whole drawing. The room's contours are derived
   per-pixel by a shader at 3.7 px nominal extent, which is why they read fat and blurry beside it.
   Judge the room against the door, in the same frame, at 1:1 — not against a film still.
+- **What is already right, and may not be broken to fix something else.** 2026-09-05, the user, on
+  the current build: "pepe is great - the floor is great, the carpet is great. much of the rest is
+  still blurry and needs thinning". All three of those get their marks from a drawing of their own —
+  the floorboard dashes, the rug's hatch tiles, Pepe's cut sheet — while everything still called
+  blurry takes its lines from the screen-space contour pass. That is the diagnosis: the tone passes
+  are landing and the contour pass is not. Thin the contour; leave the floor, the rug and the puppet
+  alone unless a measurement says they regressed.
 - **The line boils.** The drawing is re-struck on every 12 fps step, so a held line is never the same
   line twice: it breathes. This is the film's most recognisable quality and it must be true while
   nothing is happening, not only during a move.
