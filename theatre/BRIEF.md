@@ -57,6 +57,20 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   never a photographic specular highlight, never a soft blurry shadow. Ink is near-black `#0d0e0d`,
   paper is `#f8f9f4` — both sampled from the folio scans (STYLE.md §1.1). Take them from
   `src/core/strokes.js` (INK, PAPER); never hard-code a different white or black.
+- **"No grey" is a rule about TONE, not about rasterisation.** A mark is ink or it is paper — there
+  is no grey WASH, no soft shading, no blurry shadow. But a drawn line, rasterised, has an
+  anti-aliased edge, and the film's does: a contour is a 2.5–3 px stroke with round caps and a soft
+  pixel at its boundary. Round 4 applied the tone rule to the pixels as well and produced 1 px
+  stair-stepped contours with isolated speckle, which the round-3 critic ranked the film's single
+  worst fault. Threshold the tone buffer; let the line buffer keep its anti-aliasing. Judge a line at
+  1:1 against `reference/fd-anim-kitchen-table-cards-hires.jpg`, never at a glance.
+- **The table is shot square.** STYLE §2.3 allows a dead plan view or straight-on at table height and
+  nothing else. No casual three-quarter: the table's ellipse renders as a circle centred in frame, the
+  row of slots runs parallel to the frame's edge, cards are square to it, and rug and floor stay out
+  of a tabletop shot.
+- **Every shot must survive a phone.** 390x760 portrait is a first-class frame, not an afterthought:
+  the named subject fills at least 70% of the short axis, no card or box is clipped, and nothing is
+  lettered below 13 px (10 px for a speaker's name).
 - **Selective colour.** Only Pepe (his green skin `#5dbb63`-ish, his red lips; his robe is paper-white
   with ink) and the faces of the tarot cards carry colour. One single mustard accent in the set is
   allowed (the smoother decides which object). Colour is a flat fill with hatching drawn over it.
