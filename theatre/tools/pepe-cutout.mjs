@@ -55,7 +55,7 @@ const GEO = {
   mouth: { box: [194, 86, 336, 134], centre: [265, 111] },
   // hands: poly = the hand plus 8 px of sleeve past the cuff; cuff = the cuff line top → bottom (x as a function of y)
   handL: { poly: [[0, 288], [56, 288], [64, 294], [82, 302], [88, 320], [90, 350], [86, 380], [76, 408], [0, 408]], cuff: [[52, 298], [62, 306], [70, 314], [75, 328], [78, 346], [80, 356]], wrist: [67, 322], side: -1 },
-  handR: { poly: [[395, 270], [474, 270], [474, 384], [432, 384], [420, 350], [410, 335], [396, 310]], cuff: [[401, 278], [404, 300], [408, 313], [413, 323], [420, 334]], wrist: [407, 305], side: 1 },
+  handR: { poly: [[386, 264], [474, 264], [474, 384], [432, 384], [420, 350], [410, 335], [390, 306]], cuff: [[401, 278], [404, 300], [408, 313], [413, 323], [420, 334]], wrist: [407, 305], side: 1 },
 };
 
 // ── the drawing, upscaled ──
@@ -220,8 +220,10 @@ for (const side of ['L', 'R']) {
     return ALPHA[i] > 127 && inP(x, y) && handSide(x, y);
   };
   const dist = distanceFrom(core, box);
-  // the tab: sleeve pixels within 9 px of the hand → painted green, under the sleeve
-  const tab = (x, y) => inP(x, y) && !handSide(x, y) && dist(x, y) <= s(9) && ALPHA[x + y * W] > 127;
+  // the tab: sleeve pixels within 15 px of the hand → painted green, under the sleeve. It is long
+  // enough that the sleeve (which laps CUFF_OVER px over the hand) still covers the joint when the
+  // wrist turns, so the hand never floats free of its cuff.
+  const tab = (x, y) => inP(x, y) && !handSide(x, y) && dist(x, y) <= s(15) && ALPHA[x + y * W] > 127;
   hand[side] = { box, inP, cuffX, handSide, cuffBand, core, tab, meanGreen: null };
   hand[side].meanGreen = meanColour((i) => core(i) && CLS[i] === 2 && INKA[i] < 20 && SHADE[i] === 0);
 }
@@ -298,6 +300,191 @@ const mouth = (() => {
   const wide = (x, y) => dist(x, y) <= s(2.6); // the skin painted under the mouths: past the pen's soft edge
   const near = (x, y) => dist(x, y) <= s(11);
   return { box, mask, wide, near, core };
+})();
+
+// ── the cloth ───────────────────────────────────────────────────────────────────────────────────
+// The supplied drawing gives the robe four contour lines and nothing else, so beside a hatched room
+// and a finished head it reads as an undrawn white blob. The pen goes back over the robe HERE, at
+// print resolution, in the same hand and without touching the silhouette or the face — the way the
+// film draws a coat (STYLE.md §1.3 "textiles: the pattern is the shading", the sweeper's checked
+// coat and the boy's in fd-anim-courtyard-three-figures):
+//
+//   weave  a coarse diagonal twill over the whole garment, deliberately too large for the figure —
+//          that is what says "real cloth at miniature scale" (STYLE.md §2.2)
+//   rain   short vertical strokes crowding wherever a contour is near and wherever the cloth lies
+//          UNDER something (the key is above him): inside the sleeves, under the arms, under the
+//          jaw, beneath every fold the drawing already has
+//   rim    a dense two-direction patch along the bottom, where the robe meets the bench
+//   folds  three from each shoulder into the empty chest, three out of the lap; each one stops the
+//          moment it meets a line the drawing already made, the way a pen stops at an overlap
+const BODY_BOX = { x0: 0, y0: Math.floor(s(60)), x1: W, y1: H };
+const CLOTH = await (async () => {
+  const rand = (seed) => () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const rng = rand(20260904);
+  const rad = (d) => (d * Math.PI) / 180;
+
+  // ---- masks and fields, at SOURCE resolution: stroke placement needs no more than that
+  const SR = new Uint8Array(SW * SH); // bare robe: paper class, no pen on it, below the chin
+  for (let y = 0; y < SH; y++)
+    for (let x = 0; x < SW; x++) {
+      const X = Math.min(W - 1, Math.round((x + 0.5) * K)), Y = Math.min(H - 1, Math.round((y + 0.5) * K));
+      const i = X + Y * W;
+      if (ALPHA[i] < 220 || aboveChin(X, Y) || CLS[i] !== 1 || INKA[i] > 60) continue;
+      let onHand = false;
+      for (const side of ['L', 'R']) if (hand[side].inP(X, Y) && hand[side].handSide(X, Y)) onHand = true;
+      if (!onHand) SR[x + y * SW] = 1;
+    }
+  const robe = (x, y) => x >= 0 && y >= 0 && x < SW && y < SH && SR[x + y * SW] === 1;
+  // distance into the robe from the nearest pen line or edge (two chamfer passes)
+  const dEdge = new Float32Array(SW * SH).fill(0);
+  for (let k = 0; k < SW * SH; k++) dEdge[k] = SR[k] ? 1e6 : 0;
+  const D = (x, y) => (x < 0 || y < 0 || x >= SW || y >= SH ? 1e6 : dEdge[x + y * SW]);
+  for (let y = 0; y < SH; y++)
+    for (let x = 0; x < SW; x++) dEdge[x + y * SW] = Math.min(D(x, y), D(x - 1, y) + 1, D(x, y - 1) + 1, D(x - 1, y - 1) + 1.414, D(x + 1, y - 1) + 1.414);
+  for (let y = SH - 1; y >= 0; y--)
+    for (let x = SW - 1; x >= 0; x--) dEdge[x + y * SW] = Math.min(D(x, y), D(x + 1, y) + 1, D(x, y + 1) + 1, D(x + 1, y + 1) + 1.414, D(x - 1, y + 1) + 1.414);
+  // how far the cloth runs before it meets a boundary in each direction: "under a ledge" is the
+  // one that matters, because the light in this room comes from above
+  const dUp = new Float32Array(SW * SH), dDown = new Float32Array(SW * SH), dIn = new Float32Array(SW * SH);
+  for (let x = 0; x < SW; x++) {
+    let c = 0;
+    for (let y = 0; y < SH; y++) dUp[x + y * SW] = c = SR[x + y * SW] ? c + 1 : 0;
+    c = 0;
+    for (let y = SH - 1; y >= 0; y--) dDown[x + y * SW] = c = SR[x + y * SW] ? c + 1 : 0;
+  }
+  for (let y = 0; y < SH; y++) {
+    let c = 0;
+    for (let x = 0; x < SW; x++) dIn[x + y * SW] = c = SR[x + y * SW] ? c + 1 : 0;
+    c = 0;
+    for (let x = SW - 1; x >= 0; x--) {
+      c = SR[x + y * SW] ? c + 1 : 0;
+      dIn[x + y * SW] = Math.min(dIn[x + y * SW], c);
+    }
+  }
+  // the tone: hatch density IS the light (STYLE.md §1.3)
+  const tone = (x, y) => {
+    if (!robe(x, y)) return 0;
+    const k = x + y * SW;
+    let t = 0.60 * Math.pow(1 - clamp(dEdge[k] / 11, 0, 1), 1.35); // crowding to every line
+    t += 0.52 * Math.pow(1 - clamp(dUp[k] / 10, 0, 1), 1.2); // under a ledge
+    t += 0.50 * (1 - clamp(dDown[k] / 9, 0, 1)) * (y > 300 ? 1 : 0.3); // the rim on the bench
+    t += 0.24 * (1 - clamp(dIn[k] / 26, 0, 1)); // the form turning away at the sides
+    return t;
+  };
+
+  // ---- the pen
+  const paths = [];
+  const ink = `rgb(${INK[0]},${INK[1]},${INK[2]})`;
+  const pen = (pts, width, opacity) => {
+    if (pts.length < 2) return;
+    let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+    for (let i = 1; i < pts.length; i++) d += `L${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)}`;
+    paths.push(`<path d="${d}" fill="none" stroke="${ink}" stroke-width="${width.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity.toFixed(2)}"/>`);
+  };
+  // one stroke of the pen laid on the cloth: it runs until the cloth runs out, and it wobbles
+  const stroke = (x0, y0, ang, len, { width = 1.15, opacity = 0.55, wob = 0.34, step = 1.6, stopAtInk = 1.1 } = {}) => {
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const pts = [];
+    for (let u = 0; u <= len; u += step) {
+      const px = x0 + dx * u, py = y0 + dy * u;
+      const ix = Math.round(px), iy = Math.round(py);
+      if (!robe(ix, iy) || dEdge[ix + iy * SW] < stopAtInk) break;
+      const w = (rng() - 0.5) * 2 * wob;
+      pts.push([px - dy * w, py + dx * w]);
+    }
+    if (pts.length >= 2) pen(pts, width, opacity);
+    return pts.length;
+  };
+
+  // ---- 1. the weave. Twill: a dominant diagonal, a sparser cross, both broken into dashes so it
+  // reads as thread and not as ruling. Spacing is set from the figure, then coarsened by a third.
+  for (const [ang, spacing, width, alpha, dash] of [
+    [rad(34), 7.4, 1.15, 0.5, [3.5, 9]],
+    [rad(-52), 15.5, 1.0, 0.3, [2.5, 6]],
+  ]) {
+    const nx = -Math.sin(ang), ny = Math.cos(ang);
+    const reach = SW + SH;
+    for (let k = -Math.ceil(reach / spacing); k <= Math.ceil(reach / spacing); k++) {
+      const off = k * spacing + (rng() - 0.5) * spacing * 0.35;
+      const cx = SW / 2 + nx * off, cy = SH / 2 + ny * off;
+      let u = -reach / 2;
+      while (u < reach / 2) {
+        const len = dash[0] + rng() * (dash[1] - dash[0]);
+        const x0 = cx + Math.cos(ang) * u, y0 = cy + Math.sin(ang) * u;
+        if (robe(Math.round(x0), Math.round(y0)) && dEdge[Math.round(x0) + Math.round(y0) * SW] > 2.2)
+          stroke(x0, y0, ang + (rng() - 0.5) * 0.14, len, { width, opacity: alpha, wob: 0.28, step: 1.4, stopAtInk: 1.6 });
+        u += len + spacing * (0.35 + rng() * 1.1);
+      }
+    }
+  }
+
+  // ---- 2. rain-strokes: the tone. A jittered lattice; the density and the length of the stroke
+  // are the tone at that point, so the hatch crowds under the jaw, inside the sleeves, under the
+  // arms and beneath every fold, and leaves the lit chest bare paper.
+  for (let y = 60; y < SH; y += 2.3)
+    for (let x = 0; x < SW; x += 2.3) {
+      const px = x + (rng() - 0.5) * 2.4, py = y + (rng() - 0.5) * 2.4;
+      const ix = Math.round(px), iy = Math.round(py);
+      if (!robe(ix, iy)) continue;
+      const t = tone(ix, iy);
+      if (t < 0.2 || rng() > Math.min(0.9, (t - 0.14) * 0.95)) continue;
+      // the strokes hang, the way cloth does; over the lap they follow the crossed legs round
+      const base = iy > 312 ? rad(58 + (px > 240 ? 0 : 64)) : Math.PI / 2;
+      stroke(px, py, base + (rng() - 0.5) * 0.34, 3.5 + 11 * Math.min(1, t), { width: 1.1 + 0.2 * Math.min(1, t), opacity: 0.42 + 0.3 * Math.min(1, t) });
+    }
+  // the second direction, only in the darkest places: cross-hatch is how a mass gets built
+  for (let y = 60; y < SH; y += 2.9)
+    for (let x = 0; x < SW; x += 2.9) {
+      const px = x + (rng() - 0.5) * 3, py = y + (rng() - 0.5) * 3;
+      const ix = Math.round(px), iy = Math.round(py);
+      if (!robe(ix, iy)) continue;
+      const t = tone(ix, iy);
+      if (t < 0.86 || rng() > (t - 0.8) * 1.5) continue;
+      stroke(px, py, rad(26) + (rng() - 0.5) * 0.3, 3 + 7 * Math.min(1, t), { width: 1.1, opacity: 0.5 });
+    }
+
+  // ---- 3. the folds the drawing does not have: three out of each shoulder into the empty chest,
+  // three out of the lap. Contour weight, and each stops where it meets an existing line.
+  const fold = (a, b, c, { width = 1.9, opacity = 0.92 } = {}) => {
+    const pts = [];
+    for (let u = 0; u <= 1.0001; u += 0.05) {
+      const m = 1 - u;
+      const px = m * m * a[0] + 2 * m * u * b[0] + u * u * c[0];
+      const py = m * m * a[1] + 2 * m * u * b[1] + u * u * c[1];
+      const ix = Math.round(px), iy = Math.round(py);
+      if (!robe(ix, iy) || (u > 0.12 && dEdge[ix + iy * SW] < 2.2)) break;
+      pts.push([px + (rng() - 0.5) * 0.7, py + (rng() - 0.5) * 0.7]);
+    }
+    if (pts.length >= 3) pen(pts, width, opacity);
+  };
+  for (const f of [
+    [[178, 170], [204, 202], [214, 248]], // out of his right shoulder, across the chest
+    [[186, 167], [218, 196], [240, 226]],
+    [[196, 165], [230, 182], [258, 198]],
+    [[292, 170], [268, 200], [258, 244]], // and his left
+    [[286, 168], [258, 194], [240, 222]],
+    [[276, 165], [248, 180], [226, 196]],
+    [[214, 320], [200, 352], [192, 386]], // out of the lap
+    [[240, 322], [238, 356], [240, 390]],
+    [[268, 320], [284, 350], [296, 380]],
+  ])
+    fold(f[0], f[1], f[2]);
+
+  console.log(`cloth: ${paths.length} strokes`);
+  const bw = BODY_BOX.x1 - BODY_BOX.x0, bh = BODY_BOX.y1 - BODY_BOX.y0;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${bw}" height="${bh}" viewBox="${BODY_BOX.x0 / K} ${BODY_BOX.y0 / K} ${bw / K} ${bh / K}">${paths.join('')}</svg>`;
+  const raw = await sharp(Buffer.from(svg), { limitInputPixels: false }).ensureAlpha().raw().toBuffer();
+  return (x, y) => {
+    const px = x - BODY_BOX.x0, py = y - BODY_BOX.y0;
+    if (px < 0 || py < 0 || px >= bw || py >= bh) return 0;
+    return raw[(py * bw + px) * 4 + 3];
+  };
 })();
 
 // ── compose a pixel: flat fill (or the drawing's own colour) under the pen ──
@@ -414,18 +601,30 @@ makeLayer('head', { x0: s(140), y0: 0, x1: s(345), y1: s(160) }, (i, x, y, buf, 
   pixel(i, buf, o);
 });
 // body: everything below the chin line except the hands; the collar band runs on white under the head
-makeLayer('body', { x0: 0, y0: s(60), x1: W, y1: H }, (i, x, y, buf, o) => {
+// The sleeve does not stop at the cuff: it runs CUFF_OVER past it, over the hand, and the cuff line
+// is drawn at that new edge — so the sleeve and the hand share one line, and the hinge stays covered
+// when the wrist turns (a paper puppet's sleeve always laps its own joint). See CUFF_OVER.
+const CUFF_OVER = 5.2; // source px of sleeve laid over the hand
+makeLayer('body', BODY_BOX, (i, x, y, buf, o) => {
   if (ALPHA[i] < 8) return;
   for (const side of ['L', 'R']) {
     const h = hand[side];
-    if (h.inP(x, y) && h.handSide(x, y)) return;
+    if (!h.inP(x, y) || !h.handSide(x, y)) continue;
+    const d = (x - h.cuffX(y)) * GEO['hand' + side].side; // source px past the cuff, toward the hand
+    if (d > s(CUFF_OVER)) return; // the hand's own territory
+    // the cuff: one pen line at the lapped edge, the sleeve's white behind it
+    const edge = s(CUFF_OVER) - s(1.9) + Math.sin(y * 0.035) * s(0.45);
+    const cov = clamp((s(2.05) - Math.abs(d - edge)) / s(0.9), 0, 1);
+    return pixel(i, buf, o, { forceFill: PAL.paper, ink: Math.round(cov * 255), alpha: 255 });
   }
   if (aboveChin(x, y)) {
     const d = chinY(x) - y;
     if (d <= s(14) && x >= s(GEO.collarX[0]) && x <= s(GEO.collarX[1])) return pixel(i, buf, o, { forceFill: PAL.paper, ink: 0, alpha: 255 });
     return;
   }
-  pixel(i, buf, o);
+  // the robe carries the cloth drawn above; it never touches the green or the drawing's own pen
+  const cl = CLS[i] === 1 ? CLOTH(x, y) : 0;
+  pixel(i, buf, o, { ink: cl ? INKA[i] + ((255 - INKA[i]) * cl) / 255 : INKA[i] });
 });
 // hands: the hand with its outline, the cuff line, and a green tab under the sleeve
 for (const side of ['L', 'R']) {

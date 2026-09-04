@@ -258,6 +258,7 @@ export async function build(ctx) {
     api.beat = 'title';
     cut('home');
     T?.title?.({ type: true });
+    cue('title');
     cue('snap');
     await wait(TITLE_S, { skippable: true });
     if (!alive(token)) return;
@@ -332,6 +333,7 @@ export async function build(ctx) {
     if (!alive(token)) return;
     api.beat = 'closing';
     T?.closing?.();
+    cue('closing');
     cue('snap');
     await untilSkip(token); // a click, a key: again
     if (!alive(token)) return;
@@ -385,6 +387,7 @@ export async function build(ctx) {
           if (!alive(token)) return;
           api.beat = 'closing';
           T?.closing?.();
+          cue('closing');
           untilSkip(token).then(() => alive(token) && api.start());
         });
     },

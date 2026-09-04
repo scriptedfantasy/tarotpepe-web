@@ -134,6 +134,12 @@ try {
   await page.mouse.up();
   const p1 = await until('pick 1', (s) => s.picks.length === 1, 20);
   log('pick 1', JSON.stringify(p1));
+  // the reaction cut: between picks the film leaves the top-down and holds on him
+  const rx = await until('the reaction cut', (s) => s.shot !== 'fan', 8).catch(() => null);
+  if (rx) {
+    log('reaction cut to', rx.shot);
+    await shot('react');
+  } else log('no reaction cut seen after pick 1');
   await shot('pick1');
 
   // the second: named

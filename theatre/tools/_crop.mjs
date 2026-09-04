@@ -1,10 +1,11 @@
-// throwaway: crop a region of a shot and blow it up, to look at the lettering close.
-//   node tools/_crop.mjs <png> <xFrac> <yFrac> <wFrac> <hFrac> <out.png>
+#!/usr/bin/env node
+// scratch: crop + zoom a region of a png. node tools/_crop.mjs <in> <out> x y w h [scale]
 import sharp from 'sharp';
-const [file, x, y, w, h, out] = process.argv.slice(2);
-const img = sharp(file);
-const { width, height } = await img.metadata();
-const left = Math.round(+x * width), top = Math.round(+y * height);
-const cw = Math.round(+w * width), ch = Math.round(+h * height);
-await img.extract({ left, top, width: cw, height: ch }).resize(Math.min(1400, cw * 2)).png().toFile(out);
-console.log('wrote', out, cw + 'x' + ch);
+const [, , inp, outp, x, y, w, h, sc = 3] = process.argv;
+const S = Number(sc);
+await sharp(inp)
+  .extract({ left: +x, top: +y, width: +w, height: +h })
+  .resize(Math.round(+w * S), Math.round(+h * S), { kernel: 'nearest' })
+  .png()
+  .toFile(outp);
+console.log('wrote', outp);
