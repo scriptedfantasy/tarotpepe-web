@@ -312,6 +312,7 @@ export async function build(ctx) {
         for (;;) {
           if (!alive(token)) return;
           const ac = new AbortController();
+          P.pepeAnim?.listen?.();
           const typed = D.ask(prompt, { signal: ac.signal, timeout: PICK_S, hold: 0.3 });
           const result = await Promise.race([landed.then((pick) => ({ pick })), typed.then((text) => ({ text }))]);
           if ('pick' in result) {
@@ -472,6 +473,10 @@ export async function build(ctx) {
       D.folio?.('talk');
       // after the last of his waiting lines the field simply stays open, with no timer at all
       const patient = quiet >= PROMPTS.quiet.length;
+      // The field is the visitor's turn, so he takes the listening posture and holds it — leaning
+      // in, one long blink, a tilt — until something comes back. pepeAnim asked for this: nothing
+      // else tells it who has the floor.
+      P.pepeAnim?.listen?.();
       const said = await D.ask(prompt, { timeout: patient ? 0 : IDLE_S, hold: 0.35 });
       if (!alive(token)) return { spoke: false };
       if (!said) {

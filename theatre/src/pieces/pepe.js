@@ -2,8 +2,18 @@
 // (public/pepe/pepe-meditation.webp): a flat figure standing on a small bench upstage of the
 // table, facing the visitor, hinged the way a paper-theatre puppet is.
 //
-// ONE PEN, AND THE PAPER IS THE LIGHT. Two rules govern how he is drawn, and both are enforced
-// half here and half in tools/pepe-cutout.mjs:
+// ONE PEN, AND THE PAPER IS THE LIGHT. Three rules govern how he is drawn, and they are enforced
+// partly here, partly in tools/pepe-cutout.mjs and partly in pepe-mips.js:
+//   · The MIP CHAIN IS PRINTED, NOT AVERAGED (pepe-mips.js). This is the round-6 fix and it is the
+//     one that mattered. A `colorful` material is shown verbatim by the ink pass — `base = alb.rgb`
+//     — so unlike every other surface in the room his drawing is never re-stated by the pen: what
+//     the texture unit hands over IS his line. And generateMipmaps hands over an AVERAGE, so the
+//     moment the frame minified him (about three times, in his own shot) every line in his face and
+//     every fold of his robe arrived as a soft mid-grey with an anti-aliased fringe, against the
+//     hard black of a chair 200 px away. The chain is now rebuilt by hand under a printer's rule —
+//     each level is ink or fill and never between — and measured against the room's own contours in
+//     the same frame his marks now sit at the same ink (median lum 14), the same width (median 3 px)
+//     and the same 4% of marks greyer than 90.
 //   · His contour is the INK PASS's line, at the room's lineWeight (1.15), and nothing else. The
 //     generator peels the drawing's own marker — three times the room's weight, smooth, and unable
 //     to boil because it lives in a texture — off the outside and erodes the alpha to where its
@@ -24,17 +34,21 @@
 //   body (robe, legs, feet, sleeves with their cuff lines)     z 0
 //   handL / handR, hinged at the wrist, tucked UNDER the sleeve  z -0.5 mm
 //   head, from the chin line up, hinged at the neck              z +1 mm
+// …and all three hang off a TORSO group pinned at the hip (anchors.hip, the middle of the crossed
+// legs), which is the only thing pepeAnim leans and breathes on. See "the hip pin" below.
 //     with its overlays as material groups of the same mesh (no seam lines from the ink pass):
 //     pupils (moved by uv offset), the eye ink over them, closed lids, three mouths (rest / o / flat)
 //
 // api: { group, root, head, headPivot, body, hands, parts, anchors, scale, setState,
 //        setMouth(name), setLids(closed), setGaze(dx, dy),
 //        reach(side) → putBack(), handOff(side), handOn(side), handIsOff(side) }
-//   parts = { head, headPivot, headMesh, body, handL, handR, bench, lids:[L,R], pupils:[L,R],
+//   parts = { torso, head, headPivot, headMesh, body, handL, handR, bench, lids:[L,R], pupils:[L,R],
 //             eyelines, mouths:{rest,o,flat}, eyes:[L,R] }     (lids/pupils/mouths: { mat, show() })
+//   also: torso (the hip pin), headRest (the head's rest position inside it)
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { buildBench } from './pepe-bench.js';
+import { inkFilter } from './pepe-mips.js';
 // The cut-out manifest is imported, not fetched. In the headless judging browser nothing a page
 // requests is served for the first few seconds of its life, so a single await on a file inside
 // build() costs the whole page four seconds that have nothing to do with this piece's work.
@@ -45,7 +59,7 @@ import MANIFEST from '../../public/pepe/cutout.json';
 export const meta = {
   name: 'pepe',
   judge: { shot: 'pepe', states: ['default'] },
-  files: ['src/pieces/pepe.js', 'src/pieces/pepe-bench.js', 'tools/pepe-cutout.mjs', 'public/pepe/cutout.json'],
+  files: ['src/pieces/pepe.js', 'src/pieces/pepe-bench.js', 'src/pieces/pepe-mips.js', 'tools/pepe-cutout.mjs', 'public/pepe/cutout.json'],
 };
 
 export const SKIN = '#69b964';
@@ -147,6 +161,11 @@ export async function build(ctx) {
     mat.name = layer;
     const p = ctx.assets.texture(`/pepe/${L[layer].file}`).then((t) => {
       t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      // …and the chain is PRINTED, not averaged (pepe-mips.js). A colorful material shows its
+      // albedo verbatim, so whatever the texture unit hands over IS his pen: with the hardware's
+      // averaging filter every line of his face arrived as a mid-grey the moment the frame
+      // minified him, which is what made him a sticker laid on a drawing instead of a figure in it.
+      inkFilter(t, ctx.renderer);
       mat.map = t;
       mat.needsUpdate = true;
       return t;
@@ -155,14 +174,34 @@ export async function build(ctx) {
     return mat;
   };
 
+  // ── the hip pin ─────────────────────────────────────────────────────────────────────────────
+  // A paper puppet bends where it is pinned, and this one is pinned in one place: the hip, in the
+  // middle of the crossed legs (anchors.hip). Everything above it — the robe, both hands, the head
+  // — hangs off this group, and pepeAnim moves it. Two channels and no more:
+  //   rotation.z   the weight shift. A lean of 1.2° swings the head 12 mm and the feet 0.8 mm,
+  //                because the head is 320 drawing-pixels from the pin and the feet are 44. That
+  //                is the whole reason the pin is at the hip and not at the neck: he can lean into
+  //                a sentence without the crossed legs sliding off the bench.
+  //   scale        the breath. Scaling about the pin lifts the shoulders and leaves the seat of
+  //                him exactly where it was; lifting the group instead would open a gap under the
+  //                hem, and moving the head alone (which is what round 5 did) is a nodding dog.
+  // At rest it is the identity, so anything that read a world position off him at build time —
+  // reveal-hand takes both wrists — reads the same numbers as before.
+  const hipX = A.hip ? (A.hip[0] - A.neck[0]) * m * BODY_X : 0;
+  const hipY = A.hip ? neckY - (A.hip[1] - A.neck[1]) * m * BODY_Y : neckY;
+  const torso = new THREE.Group();
+  torso.name = 'pepeTorso';
+  torso.position.set(hipX, hipY, 0);
+  root.add(torso);
+
   // ── body: hangs from the neck, standing on the bench ──
   const bodyMat = cutMat('body');
   const body = new THREE.Mesh(toBuffer(layerGeometry(L.body, A.neck, 0, m)), bodyMat);
   body.name = 'body';
   body.scale.set(BODY_X, BODY_Y, 1);
-  body.position.set(0, neckY, 0);
+  body.position.set(-hipX, neckY - hipY, 0);
   body.castShadow = body.receiveShadow = true;
-  root.add(body);
+  torso.add(body);
 
   // ── hands: hinged at the wrist, behind the body so the seam hides under the cuff line ──
   const hands = {};
@@ -170,7 +209,7 @@ export async function build(ctx) {
     const wrist = A['wrist' + side];
     const grp = new THREE.Group();
     grp.name = 'hand' + side;
-    grp.position.set(colX(wrist[0]), rowY(wrist[1]), -Z_STEP);
+    grp.position.set(colX(wrist[0]) - hipX, rowY(wrist[1]) - hipY, -Z_STEP);
     const mesh = new THREE.Mesh(toBuffer(layerGeometry(L['hand' + side], wrist, 0, m)), cutMat('hand' + side));
     // the drawing is trimmed exactly as the robe is, so the cuff and the hand keep their join; the
     // scale rides UNDER the wrist's rotation, so a turned wrist stretches nothing
@@ -178,19 +217,20 @@ export async function build(ctx) {
     mesh.castShadow = mesh.receiveShadow = true;
     grp.add(mesh);
     grp.userData.rest = { x: grp.position.x, y: grp.position.y };
-    root.add(grp);
+    torso.add(grp);
     hands[side] = grp;
   }
 
   // ── head: a Group at headY (lifts), a pivot at the neck (turns), the mesh with its overlays ──
   const head = new THREE.Group();
   head.name = 'head';
-  head.position.set(0, headY, 2 * Z_STEP);
+  const headRest = { x: -hipX, y: headY - hipY, z: 2 * Z_STEP };
+  head.position.set(headRest.x, headRest.y, headRest.z);
   const headPivot = new THREE.Group();
   headPivot.name = 'headPivot';
   headPivot.position.set(0, neckY - headY, 0);
   head.add(headPivot);
-  root.add(head);
+  torso.add(head);
 
   const overlayOrder = [
     ['head', 0],
@@ -279,7 +319,7 @@ export async function build(ctx) {
 
   ctx.scene.add(root);
 
-  const parts = { head, headPivot, headMesh, body, handL: hands.L, handR: hands.R, bench, lids, pupils, eyelines, mouths, eyes, mouth: mouthAnchor };
+  const parts = { torso, head, headPivot, headMesh, body, handL: hands.L, handR: hands.R, bench, lids, pupils, eyelines, mouths, eyes, mouth: mouthAnchor };
 
   // ── lending a hand ──────────────────────────────────────────────────────────────────────────
   // The green hand that reaches onto the tablecloth (reveal-hand.js) is HIS hand, so while it is
@@ -321,6 +361,8 @@ export async function build(ctx) {
     headY,
     neckY,
     feetY,
+    torso, // the hip pin: pepeAnim leans and breathes on this and on nothing else
+    headRest, // the head group's rest position inside the torso (it hangs off the pin now)
     textures: Promise.all(textures),
     setMouth(name = 'rest') {
       for (const k in mouths) mouths[k].show(k === name);
@@ -349,7 +391,10 @@ export async function build(ctx) {
     // the rest pose, deterministic; extra words are builder checks: raw (no overlays), lines, tone, albedo, edges
     setState(name = 'default', ctx2) {
       const words = String(name).split('-');
-      head.position.set(0, headY, 2 * Z_STEP);
+      torso.rotation.set(0, 0, 0);
+      torso.position.set(hipX, hipY, 0);
+      torso.scale.set(1, 1, 1);
+      head.position.set(headRest.x, headRest.y, headRest.z);
       headPivot.rotation.set(0, 0, 0);
       for (const side of ['L', 'R']) {
         setHand(side, true);
@@ -366,6 +411,12 @@ export async function build(ctx) {
       const pieces = ctx2?.pieces ?? ctx.pieces;
       const modes = { lines: 'lines-only', tone: 'tone-only', normals: 'debug-normal', edges: 'debug-edge', albedo: 'debug-albedo', lit: 'debug-lit' };
       for (const w of words) if (modes[w]) pieces.ink?.setMode?.(modes[w]);
+      // ?view=pepe&state=talk is what a critic types, and until round 6 it showed him IDLE: only
+      // `ctx.pieces[view].setState()` is called, so pepeAnim never heard about it and the note
+      // "across eight frames of one speech only the mouth changes" was written off a frame in
+      // which he was not speaking at all. A motion word is handed on to the piece that owns it.
+      const MOTION = ['idle', 'listen', 'talk', 'gesture', 'consider', 'deal', 'shuffle', 'turn', 'react'];
+      for (const w of words) if (MOTION.includes(w)) pieces.pepeAnim?.setState?.(w);
     },
   };
   return api;

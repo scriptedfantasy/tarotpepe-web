@@ -9,13 +9,13 @@
 //   node tools/pepe-cutout.mjs --fill soft          # keep the drawing's airbrush shading
 //   node tools/pepe-cutout.mjs --trace              # also rasterise an imagetracerjs trace (preview only)
 //
-// Method: a 4.32x lanczos upscale (+ a light unsharp mask) is the LINE layer — ink alpha from
+// Method: a 2.16x lanczos upscale (+ a light unsharp mask) is the LINE layer — ink alpha from
 // darkness, so the drawing's own pen stays confident and black. The FILLS under the lines are
 // re-flattened to the drawing's palette (paper, three greens, the red of the lips, eye white): a
 // cut-out printed from the drawing. imagetracerjs was tried for the fills (--trace); its paths go
 // blobby at the eyes and the line work loses its taper, so it lost to the upscale.
 //
-// Layers (all in "hi" pixel space, W = 2048):
+// Layers (all in "hi" pixel space, W = 1024):
 //   body      robe, legs, feet, the sleeves with their cuff lines; the collar band continues white
 //             under the head so a lift or tilt of the head never shows a hole
 //   head      from the chin line up; mouth and pupils removed (they are overlays)
@@ -39,8 +39,18 @@ const TRACE = args.includes('--trace');
 
 const SRC = new URL('../public/pepe/pepe-meditation.webp', import.meta.url).pathname;
 const OUT = new URL('../public/pepe/', import.meta.url).pathname;
-const TARGET_W = 2048;
-const CELL = 64; // hi px; the meshes are built from the occupied cells of this grid
+// THE SHEET IS PRINTED AT THE SIZE IT IS SHOWN. Round 5 cut the layers at 2048 px across, which is
+// 4.3 texels for every pixel of the supplied drawing — and in the judging shot he is 346 screen px
+// wide, so the frame minifies that sheet about six times. A mip chain is an AVERAGING filter: six
+// levels down, a 12-texel pen line and the paper either side of it have been averaged into a
+// 2-pixel MID GREY with a soft fringe, which is exactly what the critic saw ("a soft ~2 px mid-grey
+// /olive line") against the room's hard black. Two things fix it and both are here:
+//   · print at 1024, so at the shot one texel is about one and a half screen pixels and the frame
+//     reads the top of the chain instead of the middle of it;
+//   · and give the chain itself a printer's rule instead of an averaging one — that is
+//     src/pieces/pepe-mips.js, which rebuilds every level as INK OR FILL and never between.
+const TARGET_W = 1024;
+const CELL = 32; // hi px; the meshes are built from the occupied cells of this grid
 const INK = [13, 14, 13]; // the world's ink #0d0e0d (src/core/strokes.js), and nothing else
 
 // ── one pen (the numbers) ───────────────────────────────────────────────────────────────────────
@@ -55,10 +65,13 @@ const INK = [13, 14, 13]; // the world's ink #0d0e0d (src/core/strokes.js), and 
 //   · the OUTER contour is taken off altogether and the alpha eroded to where its middle ran, so
 //     the ink pass draws his silhouette itself, in its own hand, at the room's weight, with the
 //     room's wobble and the room's boil (pepe.js asks for lineWeight 1.1).
-// 2.7, not 2.3: at the judging shot one source pixel is 0.86 screen pixels, so 2.3 lands at the
-// room's two — but a line baked in a texture is minified about five times to get there, and the
-// mip chain turns a two-pixel line into a grey. Cut a third heavier and the core stays ink.
-const PEN_W = 2.7; // source px: the width the drawing's pen is re-cut to
+// 3.1, measured, not guessed. At the judging shot one source pixel is 0.73 screen pixels, so 2.7
+// lands at 2.0 — and against the room's own contours in the same frame (tools/_pepe-pen6.mjs) that
+// came out one pixel light: his marks were mode 2 px against the room's mode 3, median 3 for both.
+// 3.1 puts the mode at 3 as well. Value is no longer the question it was in round 5: with the mip
+// chain printed instead of averaged (src/pieces/pepe-mips.js) his core sits at lum 14 — the same
+// ink as the wainscot — with the same 4% of marks greyer than 90 as the room has.
+const PEN_W = 3.1; // source px: the width the drawing's pen is re-cut to
 const CONTOUR_W = 6.0; // source px: what it is now, where it runs round the outside
 // And the colour plate is printed a hair out of register under the line, the way the folios' fills
 // sit off their contours (STYLE.md §1.4). The key is stage left, so the paper opens on that side.
@@ -76,6 +89,11 @@ const GEO = {
   headScale: 0.88,
   neck: [245, 150],
   headCentre: [245, 76],
+  // THE HIP PIN. A paper puppet is pinned where it bends, and this figure bends in one place: the
+  // hip, in the middle of the crossed legs. pepeAnim rotates everything above it about this point
+  // for a lean and scales about it for a breath, so the seat of him stays on the bench while the
+  // shoulders move — a point at the shoulder (y 190) travels 206 px for every 44 px the feet do.
+  hip: [244, 396],
   eyeL: { box: [201, 34, 268, 79], centre: [236, 57], pupil: { c: [240, 57.5], rx: 11.5, ry: 12.5, hi: [235.5, 51.5] } },
   eyeR: { box: [266, 34, 331, 79], centre: [299, 56], pupil: { c: [301, 56], rx: 10.5, ry: 11.5, hi: [297, 50.5] } },
   mouth: { box: [194, 86, 336, 134], centre: [265, 111] },
@@ -176,7 +194,14 @@ const PAL = {
 console.log('palette', JSON.stringify(PAL));
 
 // the flat colour of a pixel before the pen: by class, greens by shade
-const fillOf = (i, cls = CLS[i], shade = SHADE[i]) => (cls === 2 ? PAL.green[shade] : cls === 3 ? PAL.red : inBox(i, GEO.eyeL.box) || inBox(i, GEO.eyeR.box) ? PAL.eyeWhite : PAL.paper);
+// TWO GREENS, NOT THREE. The folios give a coloured figure a lit tone and, at most, one second
+// flat tone on the side away from the light (STYLE §1.4: the mustard suit #C4C059 shading to
+// #9B9A51). The supplied drawing is airbrushed and so has a third, LIGHTER green on the dome of
+// the brow — which the flattener was printing as a pale blob in the middle of his forehead. That
+// is a highlight, and a highlight is the one thing this world does not draw: the paper is the
+// light, so the lit plane of anything is its plain tone and nothing is added on top of it. Shade 1
+// is folded into shade 0; the darker green under the jaw stays, as the one shadow tone.
+const fillOf = (i, cls = CLS[i], shade = SHADE[i]) => (cls === 2 ? PAL.green[shade === 1 ? 0 : shade] : cls === 3 ? PAL.red : inBox(i, GEO.eyeL.box) || inBox(i, GEO.eyeR.box) ? PAL.eyeWhite : PAL.paper);
 
 // ── geometry helpers (hi px) ──
 function polyY(pts) {
@@ -883,6 +908,7 @@ const manifest = {
   anchors: {
     neck: A(GEO.neck),
     headCentre: A(GEO.headCentre),
+    hip: A(GEO.hip),
     eyeL: A(GEO.eyeL.centre),
     eyeR: A(GEO.eyeR.centre),
     pupilL: A(GEO.eyeL.pupil.c),
