@@ -42,6 +42,11 @@ export function drawName(canvas, text, capH, { seed = 5, tracking = 0.3, pen = n
 }
 export const CAN_LETTER = SIGN_HAS;
 
+// The height of the box a name cut at `capH` occupies, in px — the same arithmetic drawName does.
+// The card reserves its rows from this BEFORE anything is lettered into them, so a caption with a
+// speaker over it and one without are the same object, the same size, in the same place.
+export const nameBoxHeight = (capH) => Math.ceil(capH * (1 + SIGN_ASCENT + SIGN_DESCENT)) + 2;
+
 // One pen stroke: points every ~10 units, drifting off the straight line by a slow random walk,
 // the ends a little past the corners.
 export function stroke(x1, y1, x2, y2, rng, { wobble = 1.1, overshoot = 1.2 } = {}) {

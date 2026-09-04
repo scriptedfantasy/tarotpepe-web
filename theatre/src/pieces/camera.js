@@ -14,6 +14,13 @@
 // and the camera goes back onto its current shot when it is, so a window dragged from 16:9 to a
 // phone re-frames instead of cropping.
 //
+// ROUND 6 — the shots over the TABLE are solved by a second solver, camera-plan.js, which frames
+// them the opposite way round: no lens rise at all, the camera standing on the room's axis of
+// symmetry, and the point it looks at IS the centre of the frame. That is what makes a plan read
+// as a plan — the row of three parallel to the frame's top edge, the cards square to it, the rim a
+// true circle — rather than as the casual three-quarter a shifted lens over a table produces. This
+// file does not care which solver made a shot: both return {pos, look, up, fov, shift}.
+//
 // API: shots (the named shots; every layout name is kept, others added), current, cut(shot),
 //      move(shot, {kind: 'cut'|'push'|'track'|'whip', duration}), sequence([{shot, kind, duration, hold}]),
 //      stop(), setState(name).

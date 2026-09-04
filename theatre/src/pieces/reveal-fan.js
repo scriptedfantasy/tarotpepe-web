@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import { cardGeometry } from './cards-geometry.js';
-import { compose, dealTrack, handFrames, handSide } from './reveal-takes.js';
+import { compose, dealTrack, handFrames, handSide, laidPose } from './reveal-takes.js';
 import { deckStacks } from './reveal-shuffle.js';
 
 // The arc: pivot at (0, zMid - R), radius R, half-angle A. Every corner stays on the cloth and
@@ -44,8 +44,10 @@ const _r = {};
 // player: { play(frames, opts) → Promise } — the piece's take player (reveal.js)
 // hand: the reveal-hand api, or null. His hand does the laying, the taking and the sweeping: it
 // enters from the top of the overhead frame, and every card in this file moves because it moved.
-export function buildFan(ctx, cards, player, hand = null) {
-  const { card, slots, y: Y } = ctx.layout.spread;
+// slots: the row reveal.js lays its cards in (reveal-takes.js → stagedRow). Not the layout's —
+// a card picked out of the fan has to land in the same row a dealt one does.
+export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spread.slots) {
+  const { card, y: Y } = ctx.layout.spread;
   const W = card.w, H = card.h, T = card.t;
   const deck = cards?.deck ?? null;
   const sound = (name) => ctx.pieces.sound?.play?.(name);
@@ -385,11 +387,12 @@ export function buildFan(ctx, cards, player, hand = null) {
     return compose(tracks);
   }
 
-  // where a picked card lies in slot k: a millimetre off, a degree off, as a hand puts it
+  // where a picked card lies in slot k: a millimetre off, a few degrees off, as a hand puts it.
+  // The same function reveal.js lays a dealt row with, so the two ways a card reaches the cloth
+  // put it in exactly the same place.
   function slotPose(k) {
-    const rng = mulberry32(1013 + ctx.seed + k * 7);
-    const s = slots[Math.min(k, slots.length - 1)];
-    return { p: new THREE.Vector3(s[0] + (rng() - 0.5) * 0.003, s[1], s[2] + (rng() - 0.5) * 0.003), ry: (rng() - 0.5) * 0.03 };
+    const p = laidPose(slots, k, ctx.seed);
+    return { p: new THREE.Vector3(p.x, p.y, p.z), ry: -p.ry }; // the card arrives face down
   }
 
   // The pick: the card carried from where it lies (lifted, if the pointer had it) to slot k, low

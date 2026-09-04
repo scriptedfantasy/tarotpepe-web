@@ -22,6 +22,7 @@ await page.evaluate(() => {
   window.__cues = [];
   const orig = s.play.bind(s);
   s.play = (n, o) => { window.__cues.push(n); return orig(n, o); };
+  if (typeof s.at === 'function') { const oa = s.at.bind(s); s.at = (w, n, o) => { window.__cues.push('at:' + n); return oa(w, n, o); }; }
 });
 // wait for the door to actually be up before knocking
 for (let i = 0; i < 200; i++) {

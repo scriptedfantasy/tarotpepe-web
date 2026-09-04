@@ -12,8 +12,16 @@
 //   3. Edge      seeds from depth (silhouettes), normals (creases), id/distance (boundaries),
 //                sampled through a low-frequency wobble re-seeded on twos. Also a tangent.
 //   4. Extend    the pen overshoots a little past line ends (corners cross).
-//   5. Composite lines (pressure-varied dilation, occasional skips), tone quantised to 4 stroke
-//                levels drawn with world-anchored hatch tiles, selective colour, paper grain.
+//   5. Composite lines (a nib's coverage of the pixel, occasional skips), tone quantised to 4
+//                stroke levels drawn with world-anchored hatch tiles, selective colour, paper grain.
+//   6. Despeckle a dark pixel with paper on all four sides is not a mark a pen could make.
+//
+// THE ONE RULE THIS PASS EXISTS TO KEEP, and the one round 4 broke: "no grey" is about TONE, not
+// about rasterisation. There is no grey WASH — tone is strokes over paper, a mark is ink or it is
+// paper — but a drawn line, rasterised, HAS a soft edge, and the folio's has more than a pixel of
+// it. Round 4 thresholded the raster as well and shipped 1 px stair-stepped contours with a grit of
+// isolated black beside them. So: the TONE buffer is thresholded, the LINE buffer keeps its
+// anti-aliasing, and nothing anywhere is allowed to leave a single dark pixel alone on the paper.
 import * as THREE from 'three';
 
 // What the pen and the sheet actually are, sampled off the folios (STYLE.md §1.1 and §3): the
@@ -24,7 +32,7 @@ import * as THREE from 'three';
 const PAPER = '#f8f9f4';
 const INK = '#0d0e0d';
 import { makeTiles, makePaperGrain } from './ink-tiles.js';
-import { GBUF_VERT, GBUF_FRAG, QUAD_VERT, EDGE_FRAG, EXTEND_FRAG, COMPOSITE_FRAG } from './ink-shaders.js';
+import { GBUF_VERT, GBUF_FRAG, QUAD_VERT, EDGE_FRAG, EXTEND_FRAG, COMPOSITE_FRAG, DESPECKLE_FRAG } from './ink-shaders.js';
 
 export const meta = {
   name: 'ink',
@@ -44,19 +52,27 @@ export async function build(ctx) {
 
   // ── tunables (other pieces may nudge these through ctx.pieces.ink.params) ──
   const params = {
-    // THE NIB, as a radius in css px: the mark is every pixel within it of a seed, so this IS the
-    // half-width of every contour in the frame and nothing else changes it. STYLE §1.2 puts the
-    // film's contour at ≈2 px at 1080p and near-constant.
-    // Measured (tools/_ink-pen.mjs, every image resampled to 1600 px wide, min-run thickness over
-    // every ink pixel) against the kitchen folio: the film's stroke is mode 3 px, median 4, with
-    // only 6% of its ink one pixel wide. At 1.05 ours was mode 1 with THIRTY-THREE per cent of the
-    // ink one pixel wide — a hairline with a grey shoulder, which is thick-and-thin by another
-    // route and reads as a scratch. The width is quantised (a seed pixel plus whatever the radius
-    // reaches), so 1.05 draws 1 px and 1.15 draws 3; there is no 2. At 1.15 the whole distribution
-    // lands on the film's: mode 3, 6% at one pixel, ink 21.7% of the frame against its 19.9%, and
-    // solid ink (below 70) 12.6% against its 12.7%. It costs 2.5 points of clean paper and it is
-    // the correct pen; the paper is bought back by drawing FEWER lines (see `thin`), never thinner.
+    // THE NIB, as a radius in css px. The mark is the COVERAGE of the pixel by a nib of this radius
+    // rolled along the seeds, so the stroke carries exactly 2 × lineBase pixels of ink per unit of
+    // its length whatever the seeds did, and this is the half-width of every contour in the frame.
+    // Nothing else changes it: one pen, one pressure (STYLE §1.2 — no thick-and-thin, and no change
+    // of weight between foreground and background).
+    // With lineSoft 1.9 below, 1.15 draws a stroke about 3.6 px across: roughly 1.2 px of solid ink
+    // in the middle and 1.2 px of shoulder either side. Measured against the kitchen folio at a
+    // matched 1600 px (tools/_ink-r5.mjs): ink below grey 64 12.1% against its 12.1%, mid-tone
+    // 64–224 13.9% against its 14.7%, isolated dark pixels 0.06% against its 0.00%.
     lineBase: 1.15,
+    // THE SHOULDER, in css px: how wide the ramp from full ink to bare paper is at the edge of
+    // every mark. Round 4 had no ramp worth the name — the mark's boundary could only land on the
+    // pixel lattice, so the contour came out as a 1 px stair-stepped raster of a vector with two
+    // fixed greys beside it, and the round-4 critic ranked that the film's worst fault. "No grey"
+    // is a rule about TONE (there is no grey WASH, no soft shading) and never was a rule about
+    // rasterisation: a drawn line HAS a soft pixel at its edge, and the folio's has more than one.
+    // Measured on the kitchen folio at 1600 px wide: 8.1% of the frame below grey 32, 4.0% between
+    // 32 and 63, and 14.7% spread evenly from 64 to 224 — a third of its ink lives in the shoulder
+    // and half as much again beyond it. Widening this moves ink out of the core and into that
+    // shoulder without changing the stroke's total mass (2 × lineBase px per unit length).
+    lineSoft: 1.9,
     wobble: 0.9, // css px of hand drift
     breakAmt: 0.03, // how often the pen skips (0 = never)
     overshoot: 1, // 0/1 line ends run past corners
@@ -66,7 +82,23 @@ export async function build(ctx) {
     // px within which two EQUAL parallel contours are one contour, because the paper between them
     // is thinner than a stroke: the two edges of a moulding, of a glazing bar, of a slat across the
     // room. Above this both are drawn. Bounded by `merge`, which is how far the search looks.
-    thin: 3,
+    //
+    // OFF as of round 5, and it should stay off unless someone can make the choice stable. Deciding
+    // which of two EQUAL lines survives is a coin toss that has to come out the same way at every
+    // pixel of both lines, and it does not: the parallel test, the strength comparison and the
+    // tangent all wobble by a hair from pixel to pixel, so each line surrendered alternate pixels
+    // to the other and BOTH arrived as trails of dashes. Cropped and read at 1:1 against the folio,
+    // that trail is the field of dirt the round-4 critic found strewn beside every vertical in the
+    // room — a far worse fault than the doubled line it was written to cure, which at the pen's
+    // present width barely shows. Measured at home: thin 3 gives ink 11.1% and dashes; thin 0 gives
+    // 12.5% against the folio's 12.1% and continuous strokes.
+    thin: 0,
+    // A stroke RUNS. How far along its own tangent, in px, a contour must continue for the pen to
+    // draw it at all; 0 turns the test off. A crowded set projects hundreds of things two pixels
+    // across — a baluster, a bottle stopper, a sprig of the wallpaper — and the edge pass dutifully
+    // put a closed outline round every one of them, which at a nib width lands as a black speck.
+    // The film does not outline what it cannot draw; it leaves the paper.
+    stub: 3,
     depthThr: 0.012, // silhouette sensitivity (relative to depth)
     // cos of the fold angle that gets a line. A draughtsman inks a corner, not a soft bend: only
     // folds sharper than ≈53° are drawn, so lathed curves and cloth do not fill up with creases.
@@ -87,6 +119,11 @@ export async function build(ctx) {
     // thirty objects and the tone stopped being a decision. Halved: the pen still hatches the
     // corners of the room and the underside of a shelf, and leaves the rest to the contour.
     pocket: 0.32,
+    // 1 = the marks DRAWN INSIDE a coloured surface are inked with the room pen (STYLE 1.4: flat
+    // colour under the line, never a coloured line). 0 leaves a coloured cut-out exactly as painted,
+    // which is what round 4 did and why the puppet reads as a sticker: his contour arrived as a soft
+    // mid-grey line against the set black.
+    colorInk: 1,
     // A drawn pattern the frame has become too small to draw (a wainscot's seams across the room,
     // a shutter's louvres, a rug's border) is not smeared out as a mip-grey: below the first number
     // the pen simply stops drawing it and the paper stays bare — which is what strips the upper
@@ -166,7 +203,11 @@ export async function build(ctx) {
       t.texture.generateMipmaps = false;
       return t;
     };
-    rt = { gbuf, lit, edge: mk(), ext: mk() };
+    // the composite lands here, not on the canvas, so the despeckle pass can read it back
+    const comp = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false, stencilBuffer: false });
+    comp.texture.minFilter = comp.texture.magFilter = THREE.NearestFilter;
+    comp.texture.generateMipmaps = false;
+    rt = { gbuf, lit, edge: mk(), ext: mk(), comp };
     size.set(w, h);
   }
 
@@ -272,6 +313,7 @@ export async function build(ctx) {
       uOvershoot: { value: params.overshoot },
       uMerge: { value: params.merge },
       uThin: { value: params.thin },
+      uStub: { value: params.stub },
     },
     depthTest: false,
     depthWrite: false,
@@ -298,10 +340,12 @@ export async function build(ctx) {
       uHatchK: { value: 3 },
       uLref: { value: params.lref },
       uLineBase: { value: params.lineBase },
+      uLineSoft: { value: params.lineSoft },
       uBreak: { value: params.breakAmt },
       uPaperAmt: { value: params.paper },
       uHatchBoil: { value: params.hatchBoil },
       uPocket: { value: params.pocket },
+      uColorInk: { value: params.colorInk },
       uTex: { value: new THREE.Vector4(...params.texLevels) },
       uTexPen: { value: new THREE.Vector4(...params.texPen) },
       uMode: { value: 0 },
@@ -313,6 +357,14 @@ export async function build(ctx) {
       uCamPos: { value: new THREE.Vector3() },
       uLetterbox: { value: new THREE.Vector2(0, 0) },
     },
+    depthTest: false,
+    depthWrite: false,
+  });
+  const despeckleMat = new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    vertexShader: QUAD_VERT,
+    fragmentShader: DESPECKLE_FRAG,
+    uniforms: { tSrc: { value: null }, uRes: { value: new THREE.Vector2() }, uDpr: { value: 1 } },
     depthTest: false,
     depthWrite: false,
   });
@@ -392,6 +444,7 @@ export async function build(ctx) {
     xu.uOvershoot.value = params.overshoot;
     xu.uMerge.value = params.merge;
     xu.uThin.value = params.thin;
+    xu.uStub.value = params.stub;
     fullscreen(extMat, rt.ext);
 
     // 5. composite to the canvas
@@ -411,10 +464,12 @@ export async function build(ctx) {
     cu.uHatchK.value = cssH / (1024 * Math.tan(THREE.MathUtils.DEG2RAD * cam.fov * 0.5));
     cu.uLref.value = params.lref;
     cu.uLineBase.value = params.lineBase;
+    cu.uLineSoft.value = params.lineSoft;
     cu.uBreak.value = params.breakAmt;
     cu.uPaperAmt.value = params.paper;
     cu.uHatchBoil.value = params.hatchBoil;
     cu.uPocket.value = params.pocket;
+    cu.uColorInk.value = params.colorInk;
     cu.uTex.value.set(...params.texLevels);
     cu.uTexPen.value.set(...params.texPen);
     cu.uMode.value = mode;
@@ -427,7 +482,18 @@ export async function build(ctx) {
       const bar = Math.max(0, (1 - frameAspect / params.letterbox) / 2);
       cu.uLetterbox.value.set(bar, bar);
     } else cu.uLetterbox.value.set(0, 0);
-    fullscreen(compMat, null);
+    // 6. despeckle. The probe buffers (3..8, 11) are raw readouts and are shown untouched; the
+    // three judged states and the two halves that add up to lines-only all go through the sieve,
+    // so what is measured is what is shown.
+    const sieve = mode < 3 || mode === 9 || mode === 10;
+    if (sieve) {
+      fullscreen(compMat, rt.comp);
+      const du = despeckleMat.uniforms;
+      du.tSrc.value = rt.comp.texture;
+      du.uRes.value.copy(size);
+      du.uDpr.value = dpr;
+      fullscreen(despeckleMat, null);
+    } else fullscreen(compMat, null);
 
     renderer.setRenderTarget(prevRT);
     renderer.setClearColor(_clear, prevAlpha);

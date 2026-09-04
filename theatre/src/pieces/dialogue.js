@@ -6,8 +6,15 @@
 // paper, framed in one pen, like the sign the passenger holds up in the metro carriage of the Aline
 // sequence (reference/fd-anim-metro-carriage.png). This is the user's decision and it is settled
 // (BRIEF.md); a critic once had it removed in favour of free-floating type and the user asked for
-// the card back. It is drawn in dialogue-ink.js: a deckled edge that bows and bites, four strokes
-// that cross at every corner, and the wobbly ink rule that divides the name from the words.
+// the card back. It is drawn in dialogue-ink.js: a deckled edge that bows and bites and four
+// strokes that cross at every corner. Nothing is ruled inside it (the user's word: "the chatbox was
+// also nicer when it was just plain text - without the dividers inside the text pannel").
+//
+// AND IT IS ONE OBJECT. One width for a given frame (46% of it, ~90% on a phone, never under
+// 300 px), one height, one place, whatever is written on it — the speaker's row and a well of
+// exactly two lines, both reserved before a word is set. A line too long for the well does not
+// stretch the card: it is cut into TAKES at its own clauses and the takes are played into the same
+// card. See WELL_LINES, `measure`, `splitTakes`.
 //
 // ONE VOICE OF TYPE, ONE HAND OF LETTERING, and nothing else on the card:
 //   · the words — his line and the visitor's alike — are the typewriter serif, capitals, tracked,
@@ -15,16 +22,19 @@
 //   · the NAMES — the speaker over the rule, a card's name in an intertitle — are LETTERED, in the
 //     small hand-cut alphabet of titles-sign.js, drawn on a canvas. Nothing inside the drawing is
 //     set in a system font (the checklist's rule 7).
-// The visitor's words carry no label at all. A short ruled stroke divides them from his line, and
-// the ink caret blinks under them; the "YOU" that used to stand over an empty block was a form
-// label in a film frame, and it is gone.
+// The visitor's words carry no label at all: they set into the same well, under the last sentence
+// of his question, and the ink caret blinks at the end of them. His name comes off the card while
+// they hold the pen. The "YOU" that used to stand over an empty block was a form label in a film
+// frame, and it is gone.
 //
 // Placement. `anchors` names a spot per camera shot — {shot: {x, y, w, floor}} — and every shot has
 // the same one: centred at the foot of the frame, where a film puts its subtitles. See ANCHORS.
 //
-// The visitor's answer is drawn, not typed into a form: a block of the same face that wraps to as
-// many lines as it needs, with an ink dash for a caret that blinks on the 12 fps clock. A hidden
-// input takes the real keystrokes (and the speech recogniser's words) and nothing else.
+// The visitor's answer is drawn, not typed into a form: the same face, in the same two-line well,
+// with an ink dash for a caret that blinks on the 12 fps clock. As they write past two lines the
+// well rolls — his question, then the head of their own sentence, ride out of the top of the card,
+// a whole line at a time — and the card does not grow. A hidden input takes the real keystrokes
+// (and the speech recogniser's words) and nothing else.
 //
 // The microphone is a prop, not an icon: a pen-drawn carbon microphone on a stand that stands on
 // the table beside the ashtray (its world position is projected into the frame, so it sits in the
@@ -52,7 +62,7 @@ import { SCRIPT, lineFor, linesFor, reply as scriptReply, POSITIONS, positionKey
 import { bySlug } from '../core/deck.js';
 import { INK } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
-import { SVGNS, drawCaret, drawMic, drawPlacard, drawName, CAN_LETTER, PLACARD_BLEED } from './dialogue-ink.js';
+import { SVGNS, drawCaret, drawMic, drawPlacard, drawName, CAN_LETTER, PLACARD_BLEED, nameBoxHeight } from './dialogue-ink.js';
 
 export const meta = {
   name: 'dialogue',
@@ -65,6 +75,28 @@ const INTER_HOLD = 1.5; // seconds a card's intertitle is held
 const BAR = 0.07; // the titles piece's letterbox bar, fraction of the frame
 const BLINK = 6; // frames the caret is on, then off (12fps → half a second each)
 const BLINK_LISTEN = 3; // ... while the microphone is listening: twice as quick
+
+// THE CARD IS ONE OBJECT, AND IT DOES NOT RESIZE. Round 3 shrink-wrapped it to each line — 700 px
+// for one sentence, 560 for the next, 980 for the one after — so under a table that never moved the
+// card grew and shrank like a browser element and re-cut itself mid-conversation. A film's
+// lower-third is a physical card: one width, one height, and the type is SET INTO it. So:
+//
+//   · the measure is a fraction of the frame and nothing else (46% wide, ~90% on a phone);
+//   · the words live in a WELL of exactly two lines, always two lines tall whether one word or
+//     twenty-two are in it;
+//   · the speaker's row is reserved whether or not this line names him;
+//   · a line too long for the well is not allowed to stretch the card. It is CUT INTO TAKES and
+//     the takes are played into the same card, one after the other, the way a subtitle changes
+//     while the card it is set in does not. (The alternative — hold the line and let the card
+//     grow — is the fault we are fixing.)
+const WELL_LINES = 2; // the well, in lines of type. The whole point: it never changes.
+const LINE_H = 1.5; // the leading, as a multiple of the type size (and the CSS line-height)
+const TAKE_HOLD = 0.55; // seconds a take that is not the last of its line is held before the cut
+const PHONE = 700; // frames narrower than this are a phone: the card takes nearly the whole width
+// The type floors (BRIEF.md: nothing lettered below 13 px, 10 px for a speaker's name). The caption
+// face is clamped at 13 px and the speaker's lettering cut no smaller than a 10 px cap height.
+const FONT_MIN = 13;
+const SPEAKER_CAP_MIN = 10;
 
 // WHERE THE CARD STANDS. Centred at the foot of the frame, in every shot, the way a film puts its
 // subtitles — the user's own decision, and the whole of it:
@@ -85,13 +117,13 @@ const BLINK_LISTEN = 3; // ... while the microphone is listening: twice as quick
 const CAPTION = { x: 0.5, y: 0.99, floor: 0.945 };
 const SHOTS = ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'deck', 'card0', 'card1', 'card2', 'door', 'window', 'threshold'];
 const ANCHORS = {};
-// The measure, in characters rather than in fractions: the caption face is clamp(9px, 1vw, 20px),
-// so below a 900 px window the type stops shrinking while the window does not, and a third of a
-// phone's width would be four words a line. ~46 characters, plus the card's own margins, capped so
-// the card never runs to the edges of the paper.
+// The measure: a fraction of the frame, and NOT a function of what is written on the card. 46% of
+// a cinema frame (never under 300 px of paper), nine tenths of a phone's — where 46% of 390 px
+// would be nine characters a line. Nothing else feeds it: the same window gives the same card
+// however long the sentence.
 function measure(w) {
-  const fs = Math.min(20, Math.max(9, w / 100));
-  return Math.min(0.86, Math.max(0.3, (34.5 * fs) / Math.max(1, w)));
+  if (w <= PHONE) return 0.9;
+  return Math.max(0.46, Math.min(0.7, 300 / Math.max(1, w)));
 }
 function setAnchors(w) {
   const a = { ...CAPTION, w: measure(w) };
@@ -134,15 +166,36 @@ function buildStyle() {
        his line and the visitor's own words are set exactly alike, as a film's subtitles are. The
        only other lettering on the card is DRAWN (the sign hand, on a canvas), never set. */
     #dialogue .cap {
-      position: absolute; left: 50%; top: 50%; transform: translate(-50%, 0);
-      width: max-content; max-width: 30%; box-sizing: border-box; text-align: center;
-      padding: 0.9em 1.35em 0.95em;
+      position: absolute; left: 50%; transform: translate(-50%, 0);
+      box-sizing: border-box; text-align: center;
+      padding: 0.86em 1.3em 0.9em;
       font-family: var(--typewriter);
-      font-size: clamp(9px, 1vw, 20px); line-height: 1.5;
+      font-size: clamp(${FONT_MIN}px, 1vw, 20px); line-height: 1.5;
       letter-spacing: 0.085em; text-indent: 0.085em; text-transform: uppercase;
       font-weight: 600; color: ${INK};
     }
-    #dialogue .cap.mid { transform: translate(-50%, -50%); }
+    #dialogue .cap.narrow { padding-left: 0.8em; padding-right: 0.8em; }
+    #dialogue .cap.mid { top: 50%; transform: translate(-50%, -50%); }
+    /* THE ROW and THE WELL — the two fixed compartments the type is set into. Both are reserved
+       before a word is written, so the card is the same object on every line of the evening. */
+    #dialogue .cap .row {
+      height: var(--row, 1.2em); display: flex; align-items: flex-end; justify-content: center;
+      margin: 0 0 0.6em;
+    }
+    #dialogue .cap .well {
+      height: calc(${WELL_LINES} * ${LINE_H}em); overflow: hidden;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    /* what is in the well keeps its own height and the well clips it — it is never squeezed */
+    #dialogue .cap .well > * { flex: 0 0 auto; }
+    /* while the visitor writes, the well fills from the bottom: his question rides up out of the
+       card as their answer takes the room, the way a two-line subtitle rolls */
+    #dialogue .cap.asking .well { justify-content: flex-end; }
+    /* the measuring block: the same card, the same measure, the same face, off the paper */
+    #dialogue .cap.ruler {
+      left: -30000px; top: 0; bottom: auto; transform: none;
+      visibility: hidden; pointer-events: none; height: auto;
+    }
     /* the drawn card the words stand on (the user asked for it back; see BRIEF.md) */
     #dialogue .cap > svg.placard {
       position: absolute; left: -${PLACARD_BLEED}px; top: -${PLACARD_BLEED}px; z-index: 0;
@@ -152,18 +205,20 @@ function buildStyle() {
     #dialogue .cap .g { display: inline-block; }
     #dialogue .cap .w { white-space: nowrap; }
     #dialogue .cap .line .w.hid { visibility: hidden; }
-    /* the speaker's name: lettered by hand above the rule, never set */
-    #dialogue .cap .who { display: block; line-height: 0; margin: 0 auto 0.78em; }
+    /* the speaker's name: lettered by hand, standing in the reserved row */
+    #dialogue .cap .who { display: block; line-height: 0; margin: 0 auto; }
     #dialogue .cap .who > canvas { display: block; margin: 0 auto; }
     /* the card's title: its name lettered, the numeral and the position set small */
-    #dialogue .cap .n { font-size: 0.78em; letter-spacing: 0.42em; text-indent: 0.42em; font-weight: 600; }
-    #dialogue .cap .name { display: block; line-height: 0; margin: 0.5em auto 0.46em; }
+    #dialogue .cap .n { font-size: 0.72em; letter-spacing: 0.42em; text-indent: 0.42em; font-weight: 600; line-height: 1.5; }
+    #dialogue .cap .name { display: block; line-height: 0; margin: 0 auto; }
     #dialogue .cap .name > canvas { display: block; margin: 0 auto; }
-    #dialogue .cap .pos { font-size: 0.78em; letter-spacing: 0.32em; text-indent: 0.32em; font-weight: 600; }
-    /* the visitor's own words, under the divider: the same face, the same size, the same case */
+    #dialogue .cap .pos { font-size: 0.72em; letter-spacing: 0.32em; text-indent: 0.32em; font-weight: 600; line-height: 1.5; }
+    /* the line he is saying now, and the tail of the one he said before it */
+    #dialogue .cap .line, #dialogue .cap .said { margin: 0; }
+    /* the visitor's own words: the same face, the same size, the same case, on the same line grid */
     #dialogue .cap .answer {
       font-size: 1em; font-weight: 600; letter-spacing: 0.085em; text-indent: 0.085em;
-      line-height: 1.5; word-break: break-word; margin: 0.86em 0 0;
+      line-height: 1.5; word-break: break-word; margin: 0;
     }
     #dialogue .cap .caret { display: inline-block; width: 0.86em; height: 1.12em; vertical-align: baseline; margin-left: 0.06em; }
     #dialogue .cap .caret > svg { display: block; width: 100%; height: 100%; overflow: visible; }
@@ -395,32 +450,50 @@ export async function build(ctx) {
     const bar = ctx.dom.letterbox?.querySelector?.('.bar.bottom');
     return bar && bar.offsetHeight > 0 ? BAR : 0;
   }
-  // Put the caption on its anchor for the current shot, or at the foot of the picture.
-  // `y` is the TOP of the block (so a line of one sentence and a line of four begin on the same
-  // line of the paper, and nothing moves when the visitor's words grow underneath); an anchor may
-  // ask for `at: 'centre'` instead.
-  let anchored = false;
+  // Put the card on its anchor for the current shot. Its width is the anchor's measure and its
+  // height follows from the row and the well — both fixed — so there is nothing here to measure and
+  // nothing that a longer sentence can move. The anchor's `y` is the TOP of the block; a `y` below
+  // the `floor` (which is every shot: 0.99 against 0.945) hangs the card by its BOTTOM edge on the
+  // floor line instead, so the card stands on the same line of the picture all evening.
+  let anchored = false; // true only on the rare top-anchored path, where fit() still has work
+  let cardW = 0; // the card's width in px right now — the ruler is cut to the same measure
   function place() {
     const a = ANCHORS[shotName()];
-    anchored = !!a && a.at !== 'centre';
-    cap.classList.toggle('mid', !!a && a.at === 'centre');
-    if (a) {
-      cap.style.left = `${a.x * 100}%`;
-      cap.style.top = `${a.y * 100}%`;
+    const W = ctx.size?.w || root.clientWidth || window.innerWidth || 1600;
+    const mid = !!a && a.at === 'centre';
+    cap.classList.toggle('mid', mid);
+    cap.classList.toggle('narrow', W <= PHONE);
+    // The MEASURE is this piece's own — it is typography, not staging — and an anchor may only ask
+    // for a WIDER card, never a narrower one. flow.js keeps a copy of the old character-counting
+    // measure and sets `w` from it at runtime; it lands under this floor at every size, so it no
+    // longer decides anything. (Contract note in the return value: that copy should go.)
+    // ... and never narrower than 300 px of paper, whatever the window does
+    cardW = Math.round(Math.max(Math.max(measure(W), a?.w ?? 0) * W, Math.min(W - 16, 300)));
+    cap.style.width = `${cardW}px`;
+    cap.style.maxWidth = 'none';
+    cap.style.left = `${(a?.x ?? 0.5) * 100}%`;
+    sizeRows();
+    if (mid) {
+      anchored = false;
+      cap.style.top = '';
       cap.style.bottom = '';
-      cap.style.maxWidth = `${a.w * 100}%`;
-    } else {
-      cap.style.left = '50%';
+      return;
+    }
+    const floor = Math.min(a?.floor ?? 0.945, 1 - barFrac() - 0.028);
+    lastBar = barFrac();
+    if (!a || a.y > floor) {
+      anchored = false; // hung by the bottom edge: nothing left to fit
       cap.style.top = 'auto';
-      cap.style.maxWidth = '';
-      cap.style.bottom = `${(barFrac() + 0.05) * 100}%`;
+      cap.style.bottom = `${((1 - floor) * 100).toFixed(3)}%`;
+    } else {
+      anchored = true;
+      cap.style.bottom = '';
+      cap.style.top = `${a.y * 100}%`;
     }
   }
-  // Keep a growing block inside the picture.
-  // A card must never come down over the speaker. An anchor may set `floor`: the lowest line of
-  // the frame its bottom edge may reach (a fraction, measured to just above Pepe's crown). When the
-  // block grows — a longer sentence, the visitor's answer wrapping — it grows UP into the bare wall
-  // instead of down onto his head.
+  let lastBar = -1;
+  // The only case left for fitting: an anchor that hangs the card by its TOP edge and would push
+  // it past the floor. The bottom-hung anchor every shot uses cannot, so this is a no-op there.
   function fit() {
     if (!anchored || cap.hidden) return;
     const h = ctx.size.h || window.innerHeight;
@@ -447,9 +520,15 @@ export async function build(ctx) {
     return `<div class="${cls}" data-t="${esc(text)}"><canvas aria-hidden="true"></canvas></div>`;
   }
   // The cap height a name is cut at: the card's own name is the big line of an intertitle, the
-  // speaker's a small one over the rule. Both are cut from the type size the card is set at, so
-  // they follow the picture when the window changes.
-  const nameCap = (big) => (big ? Math.max(14, fontPx() * 1.12) : Math.max(10, fontPx() * 0.72));
+  // speaker's the small one in the row above the well. Both are cut from the type size the card is
+  // set at, so they follow the picture when the window changes — with a floor under the speaker's
+  // (10 px of cap, BRIEF.md) so the hand still reads as a hand on a phone.
+  const nameCap = (big) => (big ? Math.max(FONT_MIN, fontPx() * 0.95) : Math.max(SPEAKER_CAP_MIN, fontPx() * 0.72));
+  // Reserve the speaker's row before anything is lettered into it. This is what makes a line that
+  // names him and a line that does not the same card, exactly as tall, in exactly the same place.
+  function sizeRows() {
+    cap.style.setProperty('--row', `${nameBoxHeight(nameCap(false))}px`);
+  }
   function letterNames() {
     for (const holder of cap.querySelectorAll('[data-t]')) {
       const canvas = holder.querySelector('canvas');
@@ -464,14 +543,90 @@ export async function build(ctx) {
       holder.setAttribute('aria-label', holder.dataset.t);
     }
   }
-  function render(html) {
-    cap.innerHTML = html;
+  // Set the card: the reserved row, then the well. Both compartments are always present, whether
+  // or not there is anything to put in them.
+  function render(rowHTML, wellHTML) {
+    cap.innerHTML = `<div class="row">${rowHTML}</div><div class="well">${wellHTML}</div>`;
     placard = document.createElementNS(SVGNS, 'svg');
     placard.setAttribute('class', 'placard');
     placard.setAttribute('aria-hidden', 'true');
     cap.insertBefore(placard, cap.firstChild);
     letterNames();
     drawCard();
+  }
+
+  // ---- the ruler: how many lines a string takes in the well -----------------------------------
+  // A hidden card of exactly the same measure, the same padding and the same face, standing off the
+  // paper. Nothing is ever set into the well without being counted here first, which is how a line
+  // is cut into takes that fit rather than allowed to stretch the card.
+  const ruler = document.createElement('div');
+  ruler.className = 'cap ruler';
+  ruler.setAttribute('aria-hidden', 'true');
+  const rulerWell = document.createElement('div');
+  ruler.appendChild(rulerWell);
+  root.appendChild(ruler);
+  const lineHeightPx = () => fontPx() * LINE_H;
+  function linesOf(html) {
+    ruler.style.width = `${cardW || 600}px`;
+    ruler.classList.toggle('narrow', cap.classList.contains('narrow'));
+    rulerWell.innerHTML = html;
+    const h = rulerWell.offsetHeight;
+    return Math.max(1, Math.round(h / Math.max(1, lineHeightPx())));
+  }
+  const lineHTML = (t) => `<div class="line">${wordMarkup(t)}</div>`;
+  // Cut a line into takes, each of which fits the well. The most words that fit is found by
+  // bisection (a dozen measurements for a long sentence rather than one per word) — and then the
+  // cut is walked BACK to the last clause that ends inside it, the way a subtitler breaks a line:
+  // a full stop first, then a semicolon or colon, then a comma. A take that ends on "made for a"
+  // and hands "frog." to the next one is the mark of a machine, not of a hand.
+  const BREAKS = [/[.?!…]["'”’)]?$/, /[;:]$/, /,$/];
+  function splitTakes(text, maxLines = WELL_LINES) {
+    const words = String(text).split(/\s+/).filter(Boolean);
+    if (words.length < 2) return [String(text)];
+    const fits = (a, b) => linesOf(lineHTML(words.slice(a, b).join(' '))) <= maxLines;
+    if (fits(0, words.length)) return [words.join(' ')];
+    const takes = [];
+    let i = 0;
+    while (i < words.length) {
+      let lo = i + 1, hi = words.length, max = i + 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (fits(i, mid)) {
+          max = mid;
+          lo = mid + 1;
+        } else hi = mid - 1;
+      }
+      let cut = max;
+      if (max < words.length) {
+        // do not walk back past a bit over half the take, or the card starts holding scraps
+        const least = i + Math.max(1, Math.ceil((max - i) * 0.55));
+        for (const re of BREAKS) {
+          for (let j = max; j >= least; j--)
+            if (re.test(words[j - 1])) {
+              cut = j;
+              break;
+            }
+          if (cut !== max) break;
+        }
+        // and never leave a widow: a last take of one or two words takes a few back with it
+        const left = words.length - cut;
+        if (left > 0 && left < 3 && cut - i > 3 && fits(cut, words.length)) cut -= 3 - left;
+      }
+      takes.push(words.slice(i, cut).join(' '));
+      i = cut;
+    }
+    return takes;
+  }
+  // What of his question stands over the visitor's answer: its LAST SENTENCE, if that sets on one
+  // line, and otherwise nothing. Cutting it by the line instead — the last rendered line of the
+  // last take — left an orphan on the card ("TONIGHT?" over their answer, at 1600), which is worse
+  // than a card that simply hands the well over.
+  function askTail(text) {
+    const parts = String(text)
+      .split(/(?<=[.?!…])\s+/)
+      .filter(Boolean);
+    const last = (parts[parts.length - 1] ?? '').trim();
+    return last && linesOf(lineHTML(last)) <= 1 ? last : '';
   }
   // Nothing is ruled inside the card. It carried two — under the speaker's name, and between his
   // line and the visitor's — and the user asked for them out: "the chatbox was also nicer when it
@@ -498,6 +653,7 @@ export async function build(ctx) {
   }
   function cut() {
     cap.hidden = true;
+    cap.classList.remove('asking');
     cap.innerHTML = '';
     placard = null;
     mic.hidden = true;
@@ -508,32 +664,55 @@ export async function build(ctx) {
       f.dispose?.(); // an ask() still waiting resolves null
     }
   }
-  function show(text, who) {
-    cut();
-    place();
-    placardSeed = 7 + (text.length % 23) * 3;
-    render(`${who ? nameHTML(who, 'who') : ''}<div class="line">${wordMarkup(text)}</div>`);
-    cap.hidden = false;
-    const els = [...cap.querySelectorAll('.line .w')];
+  // Set one take into the well of a card that is already standing. The card itself is not touched:
+  // same measure, same height, same seed — so the pen does not redraw and nothing flickers between
+  // the takes of a long line.
+  function setTake(text) {
+    const well = cap.querySelector('.well');
+    if (!well) return [];
+    well.innerHTML = lineHTML(text);
+    const els = [...well.querySelectorAll('.line .w')];
     const words = [];
     let count = 0;
     text.split(' ').forEach((w, i) => {
       count += w.length + 1;
       words.push({ els: [els[i]], at: count });
     });
+    return words;
+  }
+  // Stand a fresh card up with the speaker's row set, and cut the line into takes that fit its
+  // well. Returns the takes and the word spans of the first of them.
+  function show(text, who) {
+    cut();
+    place();
+    placardSeed = 7 + (String(text).length % 23) * 3;
+    render(who ? nameHTML(who, 'who') : '', '');
+    cap.hidden = false;
+    const takes = splitTakes(text);
+    const words = setTake(takes[0]);
     fit();
     drawCard();
-    return words;
+    return { takes, words };
   }
   function reveal(words, chars) {
     for (const w of words)
       if (w.at - 1 <= chars + 1e-6) for (const el of w.els) el?.classList.remove('hid');
   }
+  // Move on to the next take of a line: the same card, a new set of words in its well.
+  function nextTake(t) {
+    t.ti += 1;
+    t.words = setTake(t.takes[t.ti]);
+    t.chars = -1;
+    t.start = ctx.clock.t;
+    if (ctx.clock.frozen) reveal(t.words, Infinity);
+  }
   // Finish the caption up (typing or intertitle): resolve its promise; cut it unless asked to keep.
+  // A line still in its takes is finished on its LAST take, whole — never half-said.
   function finish() {
     if (typing) {
       const t = typing;
       typing = null;
+      while (t.ti < t.takes.length - 1) nextTake(t);
       reveal(t.words, Infinity);
       if (!t.keep) cut();
       spoke = ctx.clock.t;
@@ -549,9 +728,13 @@ export async function build(ctx) {
 
   // ---- the visitor's block ------------------------------------------------------------------------
   // Their words are set exactly as his are — the same face, the same size, the same capitals — and
-  // divided from his line by a short ruled stroke, not by a label. There is NO "YOU" over it: a
-  // form label sitting empty in the frame while it waits was the one thing on this card that could
-  // not be a drawing. The rule and the blinking ink caret say whose turn it is.
+  // they are set into the SAME two-line well, under the last line of his question. There is NO
+  // "YOU" over it: a form label sitting empty in the frame while it waits was the one thing on this
+  // card that could not be a drawing. The blinking ink caret says whose turn it is.
+  //
+  // The well is two lines and stays two lines. So as their answer grows past one line, his question
+  // rides up out of the top of the card and is gone, and past two the head of their own answer goes
+  // with it — a rolling two-line subtitle. The card does not grow by a pixel.
   function drawAnswer() {
     if (!field) return;
     const el = field.answer;
@@ -559,9 +742,18 @@ export async function build(ctx) {
     el.appendChild(field.caret[0]);
     fit();
   }
-  function openBlock(value = '') {
-    cap.insertAdjacentHTML('beforeend', '<div class="answer"></div>');
-    const answer = cap.querySelector('.answer');
+  function openBlock(value = '', tail = '') {
+    const well = cap.querySelector('.well');
+    if (!well) return null;
+    cap.classList.add('asking');
+    // his name comes off the card when the pen changes hands. The row stays reserved (so the card
+    // does not move a pixel), but a card whose top line said TAROT PEPE over the visitor's own
+    // sentence — which is what is left once his question has rolled out of the well — would be
+    // labelling their words with his name.
+    const row = cap.querySelector('.row');
+    if (row) row.innerHTML = '';
+    well.innerHTML = (tail ? `<div class="said">${glyphs(tail, mulberry32(17 + tail.length * 7))}</div>` : '') + '<div class="answer"></div>';
+    const answer = well.querySelector('.answer');
     const c = document.createElement('span');
     c.className = 'caret';
     const s = document.createElementNS(SVGNS, 'svg');
@@ -598,16 +790,21 @@ export async function build(ctx) {
     const sx = (pA.x * 0.5 + 0.5) * W, sy = (-pA.y * 0.5 + 0.5) * H;
     const tall = Math.abs((-pB.y * 0.5 + 0.5) * H - sy);
     const inFrame = pA.z < 1 && sx > W * 0.04 && sx < W * 0.96 && sy > H * 0.1 && sy < H * 0.99;
+    // the card is an opaque object standing in the front of the picture: a prop that would fall
+    // behind it is not on the table any more, so it goes to the corner of the frame instead
+    const box = cap.hidden ? null : cap.getBoundingClientRect();
     let h, left, top;
-    if (!overhead && inFrame && tall > 12) {
+    if (!overhead && inFrame && tall > 12 && !(box && sx > box.left - 34 && sx < box.right + 34 && sy > box.top - 8)) {
       h = Math.max(26, Math.min(58, tall * (66 / 54))); // 54 of the 66 drawn units are the prop's body
       left = sx - (h * 56) / 66 / 2;
       top = sy - h * (56.5 / 66);
     } else {
-      // no table under it in this shot: it stands at the near right corner of the picture
+      // no table under it in this shot, or the card is over the table: it stands at the near right
+      // corner of the picture, and never lower than the top edge of the card
       h = Math.max(34, Math.min(56, H * 0.062));
       left = W * 0.93 - (h * 56) / 66 / 2;
       top = H * (1 - barFrac()) - h - H * 0.035;
+      if (box) top = Math.min(top, box.top - h - 6);
     }
     mic.style.width = `${((h * 56) / 66).toFixed(1)}px`;
     mic.style.height = `${h.toFixed(1)}px`;
@@ -657,12 +854,13 @@ export async function build(ctx) {
     say(text, { hold = 1.2, who = null, keep = false } = {}) {
       finish();
       const name = nameFor(who);
-      const words = show(text, name);
-      const seconds = text.length / CPS;
+      const { takes, words } = show(text, name);
+      // how long the line takes to say: the typing, plus a cut between each take and the next
+      const seconds = text.length / CPS + (takes.length - 1) * TAKE_HOLD;
       ctx.pieces.pepeAnim?.say?.(text, seconds + 0.2);
-      ctx.emit?.('dialogue:say', { text, who: name, seconds });
+      ctx.emit?.('dialogue:say', { text, who: name, seconds, takes: takes.length });
       return new Promise((res) => {
-        typing = { words, start: ctx.clock.t, hold, done: res, keep, chars: -1, speaking: false };
+        typing = { words, takes, ti: 0, start: ctx.clock.t, hold, done: res, keep, chars: -1, speaking: false };
         if (ctx.clock.frozen) reveal(words, Infinity);
         // with the voice on the caption also waits for the line to be said
         if (voiceOn && canSpeak) {
@@ -684,12 +882,10 @@ export async function build(ctx) {
       const rng = mulberry32(101 + name.length * 5);
       placardSeed = 13 + (name.length % 19) * 5;
       // The card's own name is hand-lettered, as it is on the card (STYLE.md §2.6); the numeral
-      // above it and the position under it are the caption's set face, small.
-      render(
-        `<div class="n">${glyphs(n, rng)}</div>` +
-          nameHTML(name, 'name') +
-          `<div class="pos">${glyphs(label, rng)}</div>`
-      );
+      // above it and the position under it are the caption's set face, small. It is the SAME card
+      // as every caption's: the numeral takes the speaker's reserved row, the name and the position
+      // set into the two-line well.
+      render(`<div class="n">${glyphs(n, rng)}</div>`, nameHTML(name, 'name') + `<div class="pos">${glyphs(label, rng)}</div>`);
       cap.hidden = false;
       fit();
       drawCard(); // the card and its title arrive on the same frame, as a caption's do
@@ -715,7 +911,10 @@ export async function build(ctx) {
         cut();
         return null;
       }
-      const input = openBlock(value);
+      // the last sentence of his question stands over their answer, and rides out of the top of the
+      // card, a whole line at a time, as they write past it
+      const input = openBlock(value, askTail(prompt));
+      if (!input) return null;
       if (!ctx.shotMode) input.focus();
       const answer = await new Promise((res) => {
         let done = false;
@@ -760,8 +959,8 @@ export async function build(ctx) {
       return answer;
     },
 
-    // The visitor's key: a line still typing is shown whole and holds a moment; a line already
-    // whole (or a card's title) is cut.
+    // The visitor's key: a take still typing is shown whole and holds a moment; a take already
+    // whole cuts to the next take of the line, or ends the line (or a card's title).
     skip() {
       if (typing) {
         const t = typing;
@@ -777,7 +976,8 @@ export async function build(ctx) {
           t.chars = total;
           t.start = ctx.clock.t - total / CPS;
           t.hold = Math.min(t.hold, 0.7);
-        } else finish();
+        } else if (t.ti < t.takes.length - 1) nextTake(t);
+        else finish();
         return true;
       }
       if (inter) {
@@ -817,7 +1017,7 @@ export async function build(ctx) {
       cut();
       const p = ctx.params;
       const i = +(p.get('line') ?? 0);
-      const still = (text, who) => reveal(show(text, who), Infinity);
+      const still = (text, who) => reveal(show(text, who).words, Infinity);
       api.folio(name);
       if (name === 'reading') {
         const slug = p.get('card') ?? 'the-moon';
@@ -846,8 +1046,12 @@ export async function build(ctx) {
     update(ctx) {
       if (!ctx.clock.stepped) return;
       const t = ctx.clock.t;
-      // the card grows with the block: a word typed in, a line of the visitor's answer wrapping
-      if (!cap.hidden) drawCard();
+      // the card is one size and one place — the only thing that can move it is the letterbox bar
+      // opening or closing under it, so watch for that and nothing else
+      if (!cap.hidden) {
+        if (Math.abs(barFrac() - lastBar) > 0.001) place();
+        drawCard();
+      }
       // the caret: an ink dash, on and off on the 12fps clock; quicker while the ear is open
       if (field) {
         const period = mic.classList.contains('listening') ? BLINK_LISTEN : BLINK;
@@ -864,7 +1068,12 @@ export async function build(ctx) {
       }
       const last = typing.words[typing.words.length - 1];
       const typed = typing.start + (last ? last.at - 1 : 0) / CPS;
-      if (t >= typed + typing.hold && !typing.speaking) finish();
+      const more = typing.ti < typing.takes.length - 1;
+      // a take that is not the last of its line cuts to the next one in the same card; the last
+      // take of a line waits out its hold (and the spoken voice, if it is on) and ends the line
+      if (more) {
+        if (t >= typed + TAKE_HOLD) nextTake(typing);
+      } else if (t >= typed + typing.hold && !typing.speaking) finish();
     },
   };
   ctx.on('resize', () => {

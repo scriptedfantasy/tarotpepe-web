@@ -20,15 +20,16 @@
 //   picks (the picks so far), stop(), setState(name)
 //   states: dealt · turning · revealed · fan (stills) · shuffle · fanning · pick · gather · deal · turn (motion)
 import { mulberry32 } from '../core/rng.js';
-import { FPS, compose, hold, turnTrack, turnPose, turnEdge, handFrames, handSide } from './reveal-takes.js';
+import { FPS, compose, hold, turnTrack, turnPose, turnEdge, handFrames, handSide, stagedRow, laidPose } from './reveal-takes.js';
 import { buildShuffle } from './reveal-shuffle.js';
 import { buildFan } from './reveal-fan.js';
 import { buildHand } from './reveal-hand.js';
+import { buildGround } from './reveal-ground.js';
 
 export const meta = {
   name: 'reveal',
   judge: { shot: 'table', states: ['dealt', 'turning', 'revealed', 'fan', 'shuffle', 'fanning', 'pick', 'gather', 'deal', 'turn'], motion: true },
-  files: ['src/pieces/reveal.js', 'src/pieces/reveal-takes.js', 'src/pieces/reveal-shuffle.js', 'src/pieces/reveal-fan.js', 'src/pieces/reveal-hand.js'],
+  files: ['src/pieces/reveal.js', 'src/pieces/reveal-takes.js', 'src/pieces/reveal-shuffle.js', 'src/pieces/reveal-fan.js', 'src/pieces/reveal-hand.js', 'src/pieces/reveal-ground.js'],
 };
 
 // Where each judging state is shot from. His hand is a flat cut-out lying IN the cloth
@@ -49,7 +50,10 @@ const SLUGS = ['the-fool', 'the-star', 'the-house-of-god'];
 
 export async function build(ctx) {
   const cards = ctx.pieces.cards;
-  const { card, slots } = ctx.layout.spread;
+  const { card } = ctx.layout.spread;
+  // The row this piece lays the cards in — not the layout's, which is 36 cm wide and empties every
+  // insert of everything but one card (reveal-takes.js → stagedRow). Published as `api.slots`.
+  const slots = stagedRow(ctx.layout);
   const T = card.t, H = card.h;
   const sound = (name) => ctx.pieces.sound?.play?.(name);
   const pepe = () => ctx.pieces.pepeAnim;
@@ -99,12 +103,16 @@ export async function build(ctx) {
   const deck = cards?.deck;
   const deckTop = deck?.getObjectByName?.('deck-top') ?? null;
   const poseOf = (m) => ({ p: m.position.clone(), ry: m.rotation.y });
-  // where a card ends up after a hand has turned it: a millimetre or two off where it lay
+  // where a card ends up after a hand has turned it: a millimetre or two off where it lay, and one
+  // card-thickness proud of the two beside it — it was picked up and put back down, so it goes down
+  // on top. At the row's spacing that thickness is the difference between three cards in a line and
+  // three cards in a heap.
   function landedPose(m, i) {
     const rng = mulberry32(700 + i * 13 + ctx.seed);
     const p = m.position.clone();
     p.x += (rng() - 0.5) * 0.004;
     p.z += (rng() - 0.5) * 0.003;
+    p.y += T;
     return { p, ry: -m.rotation.y + (rng() - 0.5) * 0.04 };
   }
   const clearDrawn = () => {
@@ -116,8 +124,13 @@ export async function build(ctx) {
   // ---- his hand, for the beats shot over the cloth ------------------------------------------------
   const hand = buildHand(ctx);
 
+  // ---- the tone a card puts on the cloth (reveal-ground.js): a drawn patch, never a soft shadow --
+  const CLOTH_Y = ctx.layout.table.top + 0.0004; // a hair over the cloth's own disc
+  const ground = buildGround(ctx, { w: card.w, h: card.h });
+  if (cards?.drawn) ground.follow(cards.drawn, CLOTH_Y); // every card laid in the row wears one
+
   // ---- the fan and the visitor's pick ------------------------------------------------------------
-  const fan = buildFan(ctx, cards, { play, stop }, hand);
+  const fan = buildFan(ctx, cards, { play, stop }, hand, slots);
 
   // ---- the takes --------------------------------------------------------------------------------
   let shuffleTake = null;
@@ -221,7 +234,7 @@ export async function build(ctx) {
     const slot = poseOf(m);
     slot.p.y = slots[Math.min(i, slots.length - 1)][1];
     const landed = landedPose(m, i);
-    landed.p.y = slot.p.y;
+    landed.p.y = slot.p.y + T; // it comes down on top of the row, not back into it
     return turnTrack(m, slot, landed, H, {
       hand,
       cues: {
@@ -235,12 +248,27 @@ export async function build(ctx) {
   }
 
   // ---- still poses for the judging states -------------------------------------------------------
+  // cards.place() puts its cards on the LAYOUT's slots; the row is this piece's (stagedRow), so
+  // every card that comes back is set down again on it, turned the little turn a hand gives it.
+  // A card that has been turned rides one thickness proud of its neighbours, because that is what
+  // happens: it was picked up, turned over and put back down, and it goes down on top.
+  function settle(meshes, faceUp) {
+    meshes.forEach((m, i) => {
+      const p = laidPose(slots, i, ctx.seed);
+      m.position.set(p.x, p.y + (faceUp ? T : 0), p.z);
+      // a card turned face down is yawed the other way by the flip: the ROOM's yaw is what the row
+      // is drawn in, so the Euler follows from it rather than the other way round
+      m.rotation.set(faceUp ? 0 : Math.PI, faceUp ? p.ry : -p.ry, 0);
+    });
+    ground.step();
+    return meshes;
+  }
   async function lay(slugs, faceUp) {
     stop();
     fan.clear();
     const meshes = await cards.place(slugs, faceUp);
     if (deckTop) deckTop.visible = true;
-    return meshes;
+    return settle(meshes, faceUp);
   }
   function standOnEdge(m, i) {
     const slot = poseOf(m);
@@ -254,6 +282,30 @@ export async function build(ctx) {
     const side = handSide(slot.p.x);
     hand.at(slot.p.x + (side === 'L' ? -0.03 : 0.03), 0.006, slot.p.z + e.z + 0.024, { yaw: -0.24, side, pose: 'point' });
   }
+  // ---- the three inserts, aimed at the cards ------------------------------------------------------
+  // TEMPORARY, and it wants to be deleted. camera-shots.js builds card0/card1/card2 by pointing a
+  // lens straight down at ctx.layout.spread.slots — the layout's row, not the one this piece lays
+  // (stagedRow) — so card0 and card2 would frame 13.5 cm of empty cloth with the card jammed into
+  // the frame's edge. Until the camera derives those three from `ctx.pieces.reveal.slots`, reveal
+  // slides each of them sideways onto its own card: their solved distance, lens and shift — all the
+  // window-fitting work — are left exactly as the camera made them, only the x is moved. It is a
+  // no-op the moment the shot is already on the card, and it stands aside entirely for a shot the
+  // camera has aimed anywhere but at its layout slot. See the contract note in the return value.
+  function aimInserts() {
+    const shots = ctx.pieces.camera?.shots;
+    if (!shots) return;
+    for (let i = 0; i < slots.length; i++) {
+      const s = shots[`card${i}`];
+      if (!s?.look || !s?.pos) continue;
+      const lx = ctx.layout.spread.slots[Math.min(i, ctx.layout.spread.slots.length - 1)][0];
+      if (Math.abs(s.look[0] - lx) > 0.001) continue; // the camera has taken this one over
+      const dx = slots[i][0] - s.look[0];
+      if (!dx) continue;
+      s.look[0] += dx;
+      s.pos[0] += dx;
+    }
+  }
+
   function faceUpAsTurned(m, i) {
     const landed = landedPose(m, i);
     m.position.copy(landed.p);
@@ -273,6 +325,7 @@ export async function build(ctx) {
       stop();
       fan.clear();
       clearDrawn();
+      ground.step(); // the cards those patches belonged to have just been disposed
       await play(fan.fanFrames());
       return fan.remaining().length;
     },
@@ -312,7 +365,7 @@ export async function build(ctx) {
     async deal(slugs) {
       stop();
       fan.clear();
-      const meshes = await cards.place(slugs, false);
+      const meshes = settle(await cards.place(slugs, false), false);
       const frames = dealFrames(meshes);
       frames[0]();
       await play(frames);
@@ -325,6 +378,10 @@ export async function build(ctx) {
       return play(turnFrames(m, i), { t0: ctx.clock.t + 1 / FPS + delay });
     },
     stop,
+    // THE ROW, in world metres: where this piece actually lays the three cards. It is the layout's
+    // row pulled in to 19 cm (reveal-takes.js → stagedRow); the camera's three inserts should be
+    // aimed at these, not at ctx.layout.spread.slots, or they will centre on empty cloth.
+    slots,
     // where the fan's cards are on screen (CSS px), left to right — for tests and captions
     fanScreenPositions: () => fan.screenPositions(),
     // His drawn hand on the cloth. It takes itself off whenever the camera is not overhead (see
@@ -334,6 +391,7 @@ export async function build(ctx) {
     _fan: fan,
     async setState(name) {
       // the beats over the cloth are judged from above, the rest from the frontal 'table'
+      aimInserts();
       const s = SHOT[name] ?? 'table';
       ctx.pieces.camera?.cut?.(s);
       if (name === 'dealt' || name === 'default') await lay(SLUGS, false);
@@ -384,12 +442,15 @@ export async function build(ctx) {
       tick(ctx.clock.t);
       fan.step();
       hand.step();
+      ground.step();
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
+      aimInserts(); // the camera rebuilds every shot when the window changes shape
       if (playing.length) tick(ctx.clock.t);
       fan.step();
       hand.step(); // the withdrawal, one drawing a frame, when the camera is not overhead
+      ground.step(); // the tone under each card follows the card that casts it
     },
   };
   return api;

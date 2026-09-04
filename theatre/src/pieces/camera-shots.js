@@ -1,4 +1,25 @@
-// The named shots, written as CONTENT rather than as lenses — see camera-frame.js for the solver.
+// The named shots, written as CONTENT rather than as lenses. Two solvers behind them: camera-frame.js
+// for the frontal shots (square to the back wall, framed by a rise of the lens) and camera-plan.js
+// for the tabletop plates (square to the room's own axes, framed by where the camera stands).
+//
+// ROUND 6 — the critic's two blockers, and what they cost.
+//
+//  A. EVERY TABLETOP SHOT WAS A CASUAL 3/4. It was not, in the arithmetic — the lens pointed
+//     straight down — but the picture read as one, because the frame was hung off the table by a
+//     rise of the lens until the near rim left the bottom, the rug's scroll border and the
+//     letterbox band took the lower third, and what was left of the cloth read as a canted ellipse.
+//     The plates are rebuilt in camera-plan.js: camera on the room's axis of symmetry, no lens rise
+//     at all, the frame's own axes the room's, bottom edge pinned just inside the near rim. The row
+//     of three is now parallel to the frame's top edge at every window shape, every card is square
+//     to it, and what is left of the table is a symmetric arc of a true circle in the bottom
+//     corners. The `turn` keeps a rake because a card reared on its edge is a hairline from
+//     straight above — but a rake ABOUT THE ROOM'S X is the plan squashed, not a three-quarter.
+//  B. `wide` AND `fan` DID NOT SURVIVE PORTRAIT. A frontal shot's field was solved on the vertical
+//     alone, so a phone kept the whole height of the room and cropped 2.9 m off its width: the
+//     parlour became a slice of bare plaster with a 40 px frog in it. Both frontal shots now have a
+//     PORTRAIT COMPOSITION of their own (`tall` below): they give up the room's floor and its ends,
+//     hang from the plaster or from the pendant, and let the table cut the bottom edge the way the
+//     film's own kitchen table does. His head goes from a fortieth of the frame to an eighth.
 //
 // Round 5, from the user, looking at the running page in a 1200×1100 window: "we're showing a lot
 // of ceiling rather than the lower part of the room … we pan lower, and place the text box under
@@ -11,9 +32,10 @@
 //     which lands at 2.70 on the back wall — between the TAROT board at 2.59 and the cornice at
 //     2.98) and over its ceiling rose (3.10). Round 4 took the second one for the two frontal
 //     shots, and the price was the whole lower half of the room: no floor, no rug, the table's foot
-//     cut off. `home` now takes the FIRST — the pendant is out of the picture, there is no ceiling
-//     in it at all, and the floor, the rug, the table and its foot are in. `wide` keeps the second,
-//     because a film has to show the room it is set in once, and it is the only shot that does.
+//     cut off. (Round 6 found a third and better line for `home`: 2.63 on the table's axis, which
+//     is just over the lamp's shades and lands on the top of the cornice at the wall — so the lamp
+//     is in the picture and the ceiling still is not. `wide` keeps the rose, because a film has to
+//     show the room it is set in once, and it is the only shot that does.)
 //
 //  2. THE CAPTION IS A BAND AT THE FOOT OF THE PICTURE, in every shot (flow.js sets the anchors).
 //     So every shot reserves `pad` of its height under the lowest thing that matters — the table's
@@ -27,6 +49,29 @@
 //     (a longer lens over a table keystones less), and where opening up would run the bottom edge
 //     out into bare floorboards the top anchor moves up instead and the pendant comes back in.
 import { fit, place, tanHalf } from './camera-frame.js';
+import { plate } from './camera-plan.js';
+
+// ---- the tabletop, measured (round 6) ------------------------------------------------------------
+// The cloth is 1.24 m across and the business laid on it is very nearly as big: the row of three
+// slots is 0.85 m wide, the fanned ribbon runs to within 5 cm of the near rim, and a card slid out
+// under a hover reaches 0.667 m from the table's centre — 5 cm PAST the rim. So there is no lens
+// that holds the row and the fan and shows nothing but cloth, and pretending otherwise is what
+// produced round 5's plate: a frame hung downstage until the rim left the bottom and a third of the
+// picture was rug. The plates below take the other answer — the tightest frame that holds the
+// business, its bottom edge pinned just past the rim, so what is left over of the table's near side
+// is a SYMMETRIC arc of the true circle in the two bottom corners and nothing else. See camera-plan.js.
+const ROW = [[-0.425, 0.0263], [0.425, 0.0263], [-0.425, 0.2538], [0.425, 0.2538]];
+const RIBBON = [[-0.3458, 0.2648], [0.3458, 0.2648], [-0.3458, 0.5711], [0.3458, 0.5711]];
+// The pin: how far downstage the bottom edge of a plate may reach ON THE CLOTH. The rim is at 0.62,
+// so 0.596 stops the edge 2.4 cm SHORT of it: at the middle of the frame the picture is cloth all
+// the way down, and the rim only comes in at the two bottom corners, where it reads as what it is —
+// the near side of a round table curving away. A centimetre or two further and the rug's border
+// follows it in, which is the band the critic saw cutting the lower third.
+const PIN = 0.596;
+// The turn's rake: 68° above the cloth in a landscape window, steepening toward the plan as the
+// window narrows (at 0.51 — a phone held upright — 78°, where the standing card still shows two
+// fifths of its face). The reveal piece's hand withdraws below 37°, so every value here keeps it.
+const TURN_RAKE = (aspect) => Math.min(78, 68 + Math.max(0, 1.2 - aspect) * 15);
 
 // ---- the parlour, measured (metres; the room piece and the props piece own these) ----------------
 const WALL = -2.5; // the back wall
@@ -35,6 +80,11 @@ const ROSE = [0, CEIL + 0.08, 0]; // over the pendant's ceiling rose
 // under the pendant, at the UPSTAGE edge of its silhouette (2.45 at the far bulb): the far side of
 // a hanging lamp is the part that dips lowest into a frontal frame, so that is what the edge clears
 const BULB = [0, 2.43, -0.24];
+// … and the line just OVER it: the petal shades bottom out at 2.47 and the arms at 2.56, so an edge
+// at 2.60 on the table's axis has the whole lamp in the picture with its rod running out of the top.
+// Carried back to the wall (1.38× the distance) it lands at 2.98 — the top of the cornice — so the
+// same edge is clean at both depths and there is still no ceiling in the shot.
+const LAMP = [0, 2.63, 0];
 const PLASTER = [0, 2.76, -2.455]; // the frieze on the back wall: rail 2.60-2.64 → cornice 2.98
 const CROWN = [0, 1.37, -0.82]; // the top of his head
 const SHOULDER = 0.45; // his half-width across the shoulders
@@ -63,10 +113,6 @@ const deckBox = (L) => {
   const dx = w * c + h * s, dz = h * c + w * s;
   return { box: box(x - dx, x + dx, L.spread.y, L.spread.y + 0.04, z - dz, z + dz), near: z + dz };
 };
-// … and the OTHER line an overhead's top edge may fall on: just downstage of his own hands, resting
-// on the far side of the cloth, which takes the deck in whole. Past it are his wrists, his arms and
-// the bench, and a frame does not cut a figure.
-const OVER_HANDS = -0.55;
 // Tried and rejected (round 5): the same "wholly in or wholly out" treatment for the two big
 // silhouettes at the ends of the back wall — the bottle cabinet and the coat on the hat stand. In a
 // 1200×1100 window the frame's side edge falls through them, and taking them in costs a 22% wider
@@ -98,42 +144,6 @@ function fitEither(spec, aspect) {
   return grew ? fit({ ...base, keep }, aspect) : shot;
 }
 
-// An overhead (or raked) shot rises before it opens: at a fixed lens the camera climbs until the
-// cloth fits, and only when it has run out of headroom — the pendant's bulbs hang at 2.45 over the
-// table — does the lens open instead. A long lens over a table keystones less, and these are the
-// planimetric plates of the film.
-function overhead(spec, aspect) {
-  const { target, deg = 90, dist, distMax = dist, fov, ...rest } = spec;
-  const a = (deg * Math.PI) / 180;
-  const at = (d) => [target[0], target[1] + d * Math.sin(a), target[2] + d * Math.cos(a)];
-  const t0 = tanHalf(fov);
-  // How far back the lens must stand for every kept point to be inside at this aspect and this
-  // lens. The frame's own up vector for a rake of `deg` is (0, cos, -sin), so a point's height in
-  // the picture is dy·cos − dz·sin: straight down, only the cloth's depth counts; raked, a card
-  // standing on its edge counts too. `pad` is the caption's band at the foot, which the subject
-  // does not get to use.
-  let need = dist;
-  const [ca, sa] = [Math.cos(a), Math.sin(a)];
-  const room = Math.max(0.3, 1 - (rest.pad ?? 0) - 0.02);
-  for (const p of rest.keep ?? []) {
-    const vert = Math.abs((p[1] - target[1]) * ca - (p[2] - target[2]) * sa);
-    need = Math.max(need, Math.abs(p[0] - target[0]) / (t0 * aspect * 0.96), vert / (t0 * room));
-  }
-  const up = deg >= 89.9 ? [0, 0, -1] : [0, 1, 0];
-  let d = Math.min(need, distMax);
-  const solve = (dist) => fitEither({ ...rest, pos: at(dist), look: [...target], up, minT: t0 }, aspect);
-  let shot = solve(d);
-  // and then back it off: whatever the lens still had to open by, the camera makes up in distance
-  // until it runs out of headroom. Two passes settle it to under a degree.
-  for (let i = 0; i < 3 && d < distMax - 1e-3; i++) {
-    const grew = tanHalf(shot.fov) / t0;
-    if (grew < 1.01) break;
-    d = Math.min(distMax, d * grew);
-    shot = solve(d);
-  }
-  return shot;
-}
-
 // ---- the shots ------------------------------------------------------------------------------------
 // L is ctx.layout. Returns the whole table, solved for this window.
 export function buildShots(L, aspect) {
@@ -142,33 +152,66 @@ export function buildShots(L, aspect) {
   const [, , sz0] = L.spread.slots[1];
   const deck = L.deck.pos;
   const DECK = deckBox(L);
-  const overDeck = [0, spreadY, DECK.near + 0.03]; // the top edge just downstage of the deck
   const ahead = (pos) => [pos[0], pos[1], zb];
   // a frontal shot: square to the back wall, the lens axis horizontal, framed by a rise or fall
   const flat = (pos, spec) => fitEither({ pos, look: ahead(pos), ...spec }, aspect);
 
-  // the conversation frame, and the one the round is about. Top edge under the pendant's bulbs, so
-  // there is no ceiling in it; his crown a third of the way down; the table WHOLE, its foot on the
-  // floorboards at four fifths; the rug and the floor under that, where the placard stands.
-  const home = flat([0, 1.62, 6.4], {
-    keep: [FOOT, CROWN, [-RIM, 0.76, 0], [RIM, 0.76, 0], [-CASE, CASE, -2.4], [CASE, CASE, -2.4]],
-    tops: [BULB, ROSE],
-    pad: 0.2,
-    floorZ: 2.15,
-  });
+  // THE CONVERSATION FRAME. Round 6 changes two things about it, both from the critic.
+  //
+  //  · THE LAMP IS IN IT. The pendant is the only drawn light source in the room and the film's
+  //    kitchen frame hangs one dead centre over the table; round 5 put the top edge exactly on its
+  //    bulbs, which is a hair's breadth from having it and not having it. The anchor is now LAMP —
+  //    2.60 on the table's axis — which clears the petals (2.56) and, carried back to the wall at
+  //    1.38 times the distance, lands on the top of the cornice at 2.98. So the edge falls on a
+  //    clean line at both depths: the shades hang into the picture, the rod runs out of the top of
+  //    it and there is still no ceiling in the shot.
+  //  · AND THERE IS LESS BARE FLOOR UNDER IT. `pad` was a fifth of the frame's height reserved
+  //    below the table's foot for the placard; a fifth of this frame is 60 cm of floorboards and
+  //    the placard is an eighth of it. 0.12, and `floorZ` with it, so the bottom edge crosses the
+  //    boards just in front of the rug instead of a metre in front of it.
+  //
+  // In a window narrower than it is tall none of that survives: the room cannot be shown at all
+  // (a phone crops the wall to 2.3 m of its 5.2) and the shot's business is his face and the cloth,
+  // so the frame gives up the room's floor and the bookcases, hangs from the plaster over the TAROT
+  // board, and lets the table cut the bottom edge the way the film's own kitchen table does. His
+  // head goes from a fortieth of the frame's height to an eighth.
+  const tall = aspect < 1.05;
+  const home = flat([0, 1.62, 6.4], tall
+    ? {
+      keep: [CROWN, [-RIM, 0.76, RIM], [RIM, 0.76, RIM], [-SHOULDER, 1.1, -0.82], [SHOULDER, 1.1, -0.82]],
+      tops: [PLASTER],
+      pad: 0.13,
+    }
+    : {
+      keep: [FOOT, CROWN, [-RIM, 0.76, 0], [RIM, 0.76, 0], [-CASE, CASE, -2.4], [CASE, CASE, -2.4]],
+      tops: [LAMP, ROSE],
+      pad: 0.12,
+      floorZ: 1.8,
+    });
 
   const shots = {
     ...L.shots,
     // the parlour, whole, and the one shot that keeps the ceiling: the pendant, the cornice, both
     // walls, the coat stand, the tiles — and now the floor and the rug as well, because the frame
     // is hung from the rose and everything under it is picture rather than plaster.
-    wide: flat([0, 1.72, 6.4], {
-      keep: [FOOT, [-RIM, 0.76, 0], [RIM, 0.76, 0], CROWN],
-      tops: [ROSE],
-      pad: 0.19,
-      floorZ: 3.0,
-      maxT: tanHalf(42),
-    }),
+    // … and in a window narrower than it is tall it stops pretending. A phone crops this wall to
+    // 2.3 m of its 5.2, so the parlour is not in the picture whatever the lens does, and holding
+    // the ceiling as well leaves the room a small rectangle with a hand's depth of blank plaster
+    // over it and half a metre of blank floorboards under it. Portrait keeps the pendant — the one
+    // thing that says "a room" — and gives up the floor: the table cuts the bottom edge.
+    wide: flat([0, 1.72, 6.4], tall
+      ? {
+        keep: [[-RIM, 0.76, RIM], [RIM, 0.76, RIM], CROWN, [-SHOULDER, 1.1, -0.82], [SHOULDER, 1.1, -0.82]],
+        tops: [LAMP, ROSE],
+        pad: 0.06,
+      }
+      : {
+        keep: [FOOT, [-RIM, 0.76, 0], [RIM, 0.76, 0], CROWN],
+        tops: [ROSE],
+        pad: 0.15,
+        floorZ: 2.6,
+        maxT: tanHalf(42),
+      }),
     home,
     // him: head, shoulders, the open hands on the cloth, the whole of the wall he sits against.
     // The top edge in the bare plaster over the TAROT board; his hands at four fifths, and the
@@ -185,78 +228,105 @@ export function buildShots(L, aspect) {
       tops: [[0, 1.45, -2.5]],
       pad: 0.14,
     }),
-    // the spread: 90° down on the row of three, an even hand's breadth of cloth either side and the
-    // caption's band under it.
-    spread: overhead({
-      target: [0, spreadY, sz0],
-      dist: 1.3575,
-      distMax: 1.66, // the pendant's bulbs are at 2.45; the lens stops a hair under them
+    // THE PLATES. Dead plan (or, where something stands up off the cloth, a rake about the room's
+    // own x axis, which is the same picture squashed — see camera-plan.js), camera on the room's
+    // axis of symmetry, no lens rise, bottom edge pinned at the rim.
+    //
+    // the spread: the row of three, and nothing but cloth around it — at every window shape this
+    // one is wholly inside the rim, so there is no floor in it at all.
+    spread: plate({
+      y: spreadY,
+      subject: ROW,
+      whole: [DECK.box],
+      bottom: PIN,
+      top: DECK.near + 0.03,
+      axis: -0.78,
+      dist: 1.28,
+      distMax: 1.66, // the pendant's bulbs hang at 2.45; the lens stops a hair under them
       fov: 30,
-      keep: [[-0.425, spreadY, 0.026], [0.425, spreadY, 0.026], [-0.425, spreadY, 0.254], [0.425, spreadY, 0.254]],
-      limits: [overDeck, [0, spreadY, OVER_HANDS]],
-      optional: [DECK.box],
-      pad: 0.2,
+      pad: 0.08,
     }, aspect),
-    // the fan, and the row the picked cards go to: everything the visitor may click, whole, with a
-    // clear band at the foot for the placard — the pick prompt stands there while they choose, and
-    // a card under a caption cannot be picked.
-    fan: overhead({
-      target: [0, spreadY, 0.28],
-      dist: 1.5575,
+    // the fan, and the row the picked cards go to: everything the visitor may click, whole and
+    // symmetric about the frame's vertical axis, with the near rim of the table closing the two
+    // bottom corners. The caption's placard stands on the band of bare cloth between the near edge
+    // of the ribbon and that rim.
+    fan: plate({
+      y: spreadY,
+      subject: ROW.concat(RIBBON),
+      whole: [DECK.box],
+      bottom: PIN,
+      top: DECK.near + 0.03,
+      axis: -0.78,
+      dist: 1.36,
       distMax: 1.66,
-      fov: 33,
-      keep: [[-0.45, spreadY, -0.05], [0.45, spreadY, -0.05], [-0.45, spreadY, 0.64], [0.45, spreadY, 0.64]],
-      limits: [overDeck, [0, spreadY, OVER_HANDS]],
-      optional: [DECK.box],
-      pad: 0.2,
-    }, aspect),
-    // the turn: the cloth from 46°, because a card standing on its edge is a hairline from straight
-    // down and that is the money frame of the evening. The reveal piece's drawn hand withdraws below
-    // 37°, so this angle keeps the hand in the picture too.
-    turn: overhead({
-      target: [0, spreadY, sz0],
-      deg: 50,
-      dist: 1.15,
-      distMax: 2.2,
-      fov: 32,
-      // the standing card is the tallest thing in this frame and the reason it exists: a card held
-      // on its edge at 78° reaches 22 cm off the cloth, and it is nearer the lens than the cloth line
-      // the top edge is limited to, so it needs saying
-      keep: [[-0.425, spreadY, 0.026], [0.425, spreadY, 0.026], [-0.425, spreadY, 0.254], [0.425, spreadY, 0.254], [0, 0.985, 0.08]],
-      limits: [overDeck, [0, spreadY, OVER_HANDS]],
-      optional: [DECK.box],
-      pad: 0.2,
-    }, aspect),
-    // the riffle: the deck filling the frame while it is cut, parted and interleaved, from 58° above
-    // the cloth — squared onto the deck's axis so the halves read in profile.
-    riffle: overhead({
-      target: [...deck],
-      deg: 58,
-      dist: 0.6,
-      distMax: 1.15,
-      fov: 32,
-      keep: [
-        [deck[0] - 0.2, spreadY, deck[2] - 0.17], [deck[0] + 0.2, spreadY, deck[2] - 0.17],
-        [deck[0] - 0.2, spreadY, deck[2] + 0.17], [deck[0] + 0.2, spreadY, deck[2] + 0.17],
-        [deck[0], 0.99, deck[2]],
-      ],
-      limits: [[deck[0], 0.76, -0.66]],
-      pad: 0.24,
-    }, aspect),
-    // the deck: an insert, raked off the cloth rather than square to the wall — a level lens this
-    // close to the table puts the top edge through the chest, the bookcases and him.
-    deck: overhead({
-      target: [...deck],
-      deg: 52,
-      dist: 0.44,
-      distMax: 0.9,
       fov: 30,
-      keep: [
-        [deck[0] - 0.15, spreadY, deck[2] - 0.15], [deck[0] + 0.15, spreadY, deck[2] - 0.15],
-        [deck[0] - 0.15, spreadY, deck[2] + 0.15], [deck[0] + 0.15, spreadY, deck[2] + 0.15],
+      pad: 0.06,
+    }, aspect),
+    // THE TURN, and the round's one deliberate compromise. The critic's rule is plan or straight-on,
+    // nothing between; the reveal builder's rule is that a card reared on its edge is a hairline
+    // from straight above and his drawn hand leaves the cloth below a 37° rake. Both are right, and
+    // what reconciles them is that a rake ABOUT THE ROOM'S X AXIS is not a three-quarter at all: it
+    // is the same plan squashed. A plane photographed square-on is an affine image of itself, so at
+    // 68° the row of three is still parallel to the frame's top edge, the cards are still square to
+    // it, the table's rim is still an axis-aligned ellipse — 0.93 of a circle — and the picture is
+    // the plan with its z compressed by a fourteenth. What a three-quarter does, and what round 5's
+    // frames did, is leave the axis of symmetry: then the ellipse tips, the row runs diagonally and
+    // the near rim wanders out of a corner. This one never leaves it.
+    // The angle is the card's, not the frame's: at 68° a card held on its edge at 78° shows 0.59 of
+    // its face, which is a card standing up rather than a hairline. It steepens on a narrow window,
+    // where the frame is already three times deeper than the row and every degree off the plan
+    // costs another hand's breadth of floorboards at the foot.
+    turn: plate({
+      y: spreadY,
+      deg: TURN_RAKE(aspect),
+      subject: ROW,
+      // the standing card is the tallest thing in this frame and the reason it exists: a card held
+      // on its edge at 78° reaches 22 cm off the cloth, and it is nearer the lens than the cloth
+      rise: [[-0.075, 0.985, 0.08], [0.075, 0.985, 0.08]],
+      whole: [DECK.box],
+      bottom: PIN,
+      top: DECK.near + 0.03,
+      axis: -0.78,
+      dist: 1.2,
+      distMax: 1.9,
+      fov: 30,
+      pad: 0.08,
+    }, aspect),
+    // the riffle: the deck filling the frame while it is cut, parted and interleaved, raked 62° so
+    // the halves read in profile. The deck stands at x = 0.38 and the rim at its depth is at 0.567,
+    // so a frame centred on the deck itself runs a hand's breadth off the table on the outboard
+    // side and fills it with the dark hatch under the rim. The plate is therefore centred INBOARD
+    // of the deck, at 0.30, which is the only thing an insert of an off-centre object can do and
+    // still be all tabletop.
+    riffle: plate({
+      y: spreadY,
+      x: 0.3,
+      deg: 62,
+      subject: [
+        [deck[0] - 0.17, deck[2] - 0.15], [deck[0] + 0.17, deck[2] - 0.15],
+        [deck[0] - 0.17, deck[2] + 0.15], [deck[0] + 0.17, deck[2] + 0.15],
       ],
-      limits: [[deck[0], spreadY, deck[2] - 0.19]],
-      pad: 0.22,
+      rise: [[deck[0], 0.95, deck[2]]],
+      bottom: PIN,
+      dist: 0.62,
+      distMax: 1.2,
+      fov: 30,
+      pad: 0.06,
+    }, aspect),
+    // the deck at rest: the same insert, tighter, for the detail cuts between turns.
+    deck: plate({
+      y: spreadY,
+      x: 0.32,
+      deg: 62,
+      subject: [
+        [deck[0] - 0.13, deck[2] - 0.14], [deck[0] + 0.13, deck[2] - 0.14],
+        [deck[0] - 0.13, deck[2] + 0.14], [deck[0] + 0.13, deck[2] + 0.14],
+      ],
+      bottom: PIN,
+      dist: 0.46,
+      distMax: 0.95,
+      fov: 30,
+      pad: 0.06,
     }, aspect),
     // the door, on its own axis: the doormat to the VOYANTE board. He is either wholly in this
     // frame (16:9, and squarer, where the frame opens to take him) or wholly outside it (a phone,
@@ -296,14 +366,15 @@ export function buildShots(L, aspect) {
   // the placard. A single card is very nearly the shape of a phone, so this is the one frame that
   // gets better as the window narrows.
   L.spread.slots.forEach(([x, y, z], i) => {
-    shots[`card${i}`] = overhead({
-      target: [x, y, z],
-      dist: 0.5575,
-      distMax: 0.78,
+    shots[`card${i}`] = plate({
+      y,
+      x,
+      subject: [[x - 0.075, z - 0.125], [x + 0.075, z - 0.125], [x - 0.075, z + 0.125], [x + 0.075, z + 0.125]],
+      bottom: PIN,
+      dist: 0.52,
+      distMax: 0.86,
       fov: 30,
-      keep: [[x - 0.075, y, z - 0.125], [x + 0.075, y, z - 0.125], [x - 0.075, y, z + 0.125], [x + 0.075, y, z + 0.125]],
-      limits: [[x, y, z - 0.15]],
-      pad: 0.2,
+      pad: 0.10,
     }, aspect);
   });
   return shots;

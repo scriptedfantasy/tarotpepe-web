@@ -6,6 +6,7 @@
 // cards run their own tracks at their own offsets while every frame of the master stays a pure
 // function of the frame index (deterministic under `?t=`).
 import * as THREE from 'three';
+import { mulberry32 } from '../core/rng.js';
 
 export const FPS = 12;
 const PI = Math.PI;
@@ -16,6 +17,50 @@ const lerp = (a, b, u) => a + (b - a) * u;
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
+
+// ---- THE ROW ------------------------------------------------------------------------------------
+// The layout's slots stand 36 cm apart: the three cards straddle 85 cm of a table 124 cm across,
+// which is not a spread a hand lays, it is three cards abandoned in different parts of the county.
+// It also empties the insert. That frame holds the card at 87 % of its height, so it is 46 cm wide
+// on the cloth — and a neighbour 36 cm away has its near edge 6 cm OUTSIDE it. One card, alone, on
+// bare paper.
+//
+// Pulled to 22.5 cm the row is what a hand lays, and the insert carries a slice of the card on
+// either side of it, cut by the frame edge, the way the film's tabletop always carries its
+// neighbours (fd-anim-kitchen-table-cards-hires: nothing on that table is ever alone in its frame).
+//
+// 22.5 is not a taste: it is the frame. An insert that holds the whole card in 16:9 cannot be
+// narrower than 0.2023 m either side of it (the card's own height, 0.2275, at the 16:9 ratio), and
+// wants ~0.225 with the card at 90 % of the frame's height. A neighbour at 22.5 cm therefore has
+// its near edge 7.5 cm inside the frame and its far edge 9 cm outside it: half a card, cut by the
+// edge. At 36 it was 6 cm outside the frame altogether; at 19 the whole of it was inside and the
+// insert had stopped being an insert. In a portrait window the same row leaves the frame entirely,
+// which is right — a phone gets the single card.
+export const ROW_X = 0.225;
+// Never wider than the row; if the layout ever comes in on its own, this follows it and does
+// nothing. Reveal publishes the answer as `reveal.slots` so the camera can aim its inserts at the
+// cards rather than at the layout's idea of where they would be.
+export function stagedRow(layout) {
+  return layout.spread.slots.map(([x, y, z]) => [Math.sign(x) * Math.min(Math.abs(x), ROW_X), y, z]);
+}
+
+// How far a card is turned as it is laid: a hand does not put a card down square, and at this
+// spacing the little turn is what keeps the row from reading as a printed strip. Deterministic.
+export const LAY_YAW = [0.075, -0.055, 0.098];
+
+// Where card k lies once it is in the row: the slot, a couple of millimetres off, and turned.
+// One function for every way a card gets there (dealt from his packet, carried out of the fan,
+// posed for a judging state) so the row is the same row in all of them.
+export function laidPose(slots, k, seed = 0) {
+  const rng = mulberry32(1013 + seed + k * 7);
+  const s = slots[Math.min(k, slots.length - 1)];
+  return {
+    x: s[0] + (rng() - 0.5) * 0.004,
+    y: s[1],
+    z: s[2] + (rng() - 0.5) * 0.004,
+    ry: LAY_YAW[k % LAY_YAW.length] + (rng() - 0.5) * 0.018,
+  };
+}
 
 // Which of his hands reaches a thing at x on the cloth: the near one, so no arm ever crosses the
 // whole spread. One rule, used by every take and told to pepeAnim so his puppet body agrees with
