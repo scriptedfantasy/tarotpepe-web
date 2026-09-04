@@ -10,13 +10,16 @@
 //   CROSS    undersides, the insides of the window reveal, the two upper corners, the ceiling
 //            line: the densest lattice. A draughtsman hatches a pocket every time.
 //
-// How the tiers are made (the numbers are the lit luminance the ink pass reads; with its default
-// thresholds a plain-paper surface is BARE above L≈0.22, RAIN from 0.22 down to 0.115, denser
-// below, cross-hatch under ≈0.03):
-//   - KEY        one directional light on the window's axis (stage left, 39° up, leaning a little
+// How the tiers are made (the numbers below are the lit luminance the ink pass reads; with the
+// ramp this piece asks it for, a papered wall is BARE above L≈0.30, RAIN below it, and a pocket
+// or a corner near zero goes to cross-hatch):
+//   - KEY        one directional light on the window's axis (stage left, 34° up, leaning a little
 //                downstage) so every front face is lit and every shadow falls down-and-right,
-//                short. Crisp: tight bias, a 2048 map fitted to the room, radius 1 — the ink pass
-//                wants an edge to tear, not a gradient.
+//                short. Crisp: tight bias, a 2048 map fitted to the room, radius 1 on a hard PCF
+//                kernel — the ink pass wants an edge to tear, not a gradient.
+//                The lateral lean is set by Pepe: he is a slightly bowed paper cut-out, and past
+//                about half a metre of lean the bow's right side falls out of the key and his
+//                robe fills with strokes. 0.48 is where he stays white and forms still turn.
 //   - SKY FILL   a hemisphere, white over a dark ground, so undersides go darker than sides and no
 //                wall ever goes black from want of light.
 //   - RIGHT BOUNCE  a weak directional off the stage-right wall: it lifts the shadow side just far
@@ -25,8 +28,15 @@
 //                rather than solid ink.
 //   - CORNERS    negative point lights tucked where the walls meet and under the cornice: strokes
 //                gather in the corners the way a pen does, with no cast shadow to give it away.
-//   - PRACTICALS point lights at the drawn lamps (ctx.pieces.props.lamps). Never a glow, never a
-//                halo: the lamp is drawn as an object; its light is only where the strokes stop.
+//   - POOLS      more negatives at ankle height under the table, the bench, the trolley and the
+//                shelf unit — the dark a piece of furniture stands in. They are kept low and off
+//                the boards: a pool set close to the floor turns it solid under the overhead
+//                camera, which is not a shadow, it is a blot.
+//   - PRACTICALS lights at the drawn lamps (ctx.pieces.props.lamps): points at the table lamp and
+//                the floor lamp, a cone at the pendant (a three-petal shade IS a cone, and it is
+//                the only caster at night, where the key's shadow budget is free). Never a glow,
+//                never a halo: the lamp is drawn as an object; its light is only where the
+//                strokes stop.
 //   - NIGHT      a cross-hatched pane inside every window, so at night the glass goes solid the
 //                way the arch of La Brique Rouge does.
 //
@@ -51,7 +61,7 @@ const LAMPS_FALLBACK = {
 };
 const WIN_FALLBACK = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.16 };
 
-// The key's direction (towards the light). Stage left, 39° up, leaning a little downstage so the
+// The key's direction (towards the light). Stage left, 34° up, leaning a little downstage so the
 // back wall and every front face keeps a good NdotL and stays bare paper. Shadows therefore run
 // DOWN and to the RIGHT, and they are short: a shelf 10 cm off the wall lays a band a finger wide
 // under its board, and Pepe — a cut-out standing 1.7 m off the wall — drops his silhouette below
@@ -80,14 +90,17 @@ const STATES = {
     table: 0,
     floor: 0,
     night: false,
-    // The one nudge to the ink pass's own numbers. Its default ramp (fully lit at L=0.5, light
-    // term weighted 1.0) never crosses the first stroke threshold on the room's own materials —
-    // plaster asks for 0.12 of hatch, the wainscot 0.24 — so a cast shadow on the back wall came
-    // out as bare paper and the whole tone design was invisible. Widening the ramp (0.60) and
-    // weighting the light term (1.22) makes the SAME shadows land one level of strokes on the
-    // papered field and the wainscot, two under a ledge, three inside the window reveal, and
-    // still leaves the frieze and the ceiling bare — the drawings' big rest.
-    ink: { tone: [0.02, 0.62, 1.5, 0.22], levels: [0.55, 0.82, 0.96, 0.15] },
+    // The one nudge to the ink pass's own numbers, and the only reason the tone design is
+    // visible at all. The pass scales the light term by the material's own appetite for hatch
+    // (soak = hatch / 0.45), and the room asks for very little: plaster 0.12, the wainscot 0.24,
+    // the papered field 0.30. Under ink's own ramp (fully lit at L = 0.5, light term weighted
+    // 1.0) even a black cast shadow on the back wall came out below the first stroke threshold,
+    // and the ?view=ink&state=tone-only pass was an empty sheet. Widening the ramp to 0.62 and
+    // weighting the light term 1.4 makes the SAME shadows land one level of strokes on the
+    // papered field and the wainscot, two under a ledge, three inside the window reveal — and
+    // still leaves the frieze and the ceiling bare, which is the drawings' big rest. Held at 1.4:
+    // at 1.5 Pepe's bowed cut-out starts to fill with strokes and his robe goes grey.
+    ink: { tone: [0.02, 0.62, 1.4, 0.22], levels: [0.55, 0.82, 0.96, 0.15] },
   },
   // Night is not a darker paper. The key is gone; the open room sits just inside the ink pass's
   // rain band, so plaster carries a sparse vertical shower; the three lamps lift their own pools
@@ -119,7 +132,6 @@ const STATES = {
     corners: -1.15,
     pools: -0.32,
     pendant: 4.4,
-
     pendantDistance: 4.2,
     pendantAngle: 0.78,
     table: 1.7,
