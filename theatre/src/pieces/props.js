@@ -163,11 +163,9 @@ export async function build(ctx) {
   {
     const cx = (door.x0 + door.x1) / 2;
     const ty = ((door.top ?? 2.12) + 0.05 + door.y1) / 2;
-    // hangs in the transom opening, in front of its glazing bars, on two cords from the head lining
-    const sign = O.signBoard({ w: door.x1 - door.x0 - 0.14, h: 0.2, depth: 0.012, lines: ['VOYANTE'], border: 'single', texW: 768 });
-    sign.position.set(cx, ty, WALL - 0.008);
-    g.add(sign);
-    for (const sx of [-1, 1]) g.add(O.rod([cx + sx * 0.3, ty + 0.1, WALL - 0.008], [cx + sx * 0.3, door.y1 - 0.02, WALL - 0.02], 0.003, M.cord, 5));
+    // The transom is left as glass. A VOYANTE board hung here until the user took it off: the room
+    // already says what it is on the wall board, and the door's own fanlight carries his name from
+    // the street. Two signs over one door was one too many.
     // A doormat in front of the door. Round 4: the floor is raked about 6°, so the mat arrives as
     // a strip a dozen pixels deep whatever is drawn on it. Measured on the wide shot with the old
     // 0.58 x 0.34 mat: 91 px across by 10.8 px deep, and a 512 x 300 sheet on it — 27 texels of
@@ -246,13 +244,20 @@ export async function build(ctx) {
 
   // ---- the centre wall: a sign under the rail, pictures around the clock, a pinboard by the door ------
   {
-    // Round 4. This board carried two lines of small print — 25 and 34 characters on a metre of
-    // wall — which measured out at a 5 px cap and arrived as two grey scribbles. The film letters a
-    // fascia with FEW letters and big ones (COIFFEUR, OPTIQUE, LE SANS BLAGUE), so the board is
-    // bigger and says two words. It is also where BIENVENUE now lives: the doormat is 18 px deep
-    // and could only give the word an 11 px cap, and here it is cut at 18 and can be read.
-    // `sizes` are in the sheet's own px — texW 1024 on a 4:1 board makes the sheet 1024 x 256.
-    const sign = O.signBoard({ w: 1.2, h: 0.3, lines: ['TAROT', 'BIENVENUE'], sizes: [97, 77], border: 'double', texW: 1024 });
+    // The shop's own board, in its own words. Round 4 cut this to TAROT / BIENVENUE because the
+    // old copy measured out at a 5 px cap and arrived as grey scribble — but the user prefers the
+    // longer lines, and the ink pass has since stopped drawing a minified mark as a grey: a mark is
+    // full ink or bare paper now. So the copy is back, on the bigger board round 4 built for it,
+    // which gives the first line a 43 px cap where it used to have 25.
+    // `sizes` are in the sheet's own px — texW 1536 on a 4:1 board makes the sheet 1536 x 384.
+    const sign = O.signBoard({
+      w: 1.32,
+      h: 0.33,
+      lines: ['TAROT — READINGS — 3 CARDS', 'BY APPOINTMENT · WALK-INS TOLERATED'],
+      sizes: [64, 40],
+      border: 'double',
+      texW: 1536,
+    });
     sign.position.set(0, railY - 0.17, WALL + 0.045);
     g.add(sign);
     for (const sx of [-1, 1]) {

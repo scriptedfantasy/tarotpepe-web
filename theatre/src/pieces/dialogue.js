@@ -473,21 +473,14 @@ export async function build(ctx) {
     letterNames();
     drawCard();
   }
-  // Where the pen rules the card: under the speaker's name (the brief asks for a wobbly ink one),
-  // and — shorter, centred — between his line and the visitor's own words. Measured off the block,
-  // so a rule always falls in the gap that was left for it.
+  // Nothing is ruled inside the card. It carried two — under the speaker's name, and between his
+  // line and the visitor's — and the user asked for them out: "the chatbox was also nicer when it
+  // was just plain text - without the dividers inside the text pannel." The card's own drawn edge
+  // is the only line on it; the name's smaller lettering and the space beneath it do the dividing,
+  // and at the field the blinking caret says whose turn it is. drawPlacard still takes rules, so
+  // this is one function away from coming back if it is ever wanted.
   function ruleLines() {
-    const out = [];
-    const between = (a, b, short) => {
-      if (!a || !b) return;
-      const y = (a.offsetTop + a.offsetHeight + b.offsetTop) / 2;
-      out.push(short ? { y, short: 0.34, w: Math.max(1.1, fontPx() * 0.075) } : { y });
-    };
-    const who = cap.querySelector('.who');
-    const line = cap.querySelector('.line, .name, .pos');
-    if (who) between(who, line, false);
-    between(cap.querySelector('.line'), cap.querySelector('.answer'), true);
-    return out;
+    return [];
   }
   // The card is redrawn whenever the block changes size: the visitor's answer grows a line, the
   // window is resized, a longer sentence arrives. One pen, one seed per caption, so it does not
