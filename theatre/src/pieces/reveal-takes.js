@@ -110,7 +110,7 @@ export function turnPose(phi, H) {
 export function handFrames(hand, specs) {
   const out = [];
   for (const s of specs) {
-    const draw = !s || s.off ? () => hand.off() : () => hand.at(s.x, s.y ?? 0, s.z, { yaw: s.yaw ?? 0, pose: s.pose ?? 'splay', side: s.side ?? 'R' });
+    const draw = !s || s.off ? () => hand.off() : () => hand.at(s.x, s.y ?? 0, s.z, { yaw: s.yaw ?? 0, pose: s.pose ?? 'splay', side: s.side ?? 'R', floor: s.floor ?? 0 });
     for (let i = 0; i < (s?.n ?? 1); i++) out.push(draw);
   }
   return out;

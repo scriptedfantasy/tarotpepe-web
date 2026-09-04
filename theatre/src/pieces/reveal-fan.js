@@ -40,8 +40,6 @@ const PI = Math.PI;
 const lerp = (a, b, u) => a + (b - a) * u;
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 const _r = {};
-const _v = new THREE.Vector3();
-const _e = new THREE.Euler();
 
 // player: { play(frames, opts) → Promise } — the piece's take player (reveal.js)
 // hand: the reveal-hand api, or null. His hand does the laying, the taking and the sweeping: it
@@ -123,10 +121,6 @@ export function buildFan(ctx, cards, player, hand = null) {
     return p;
   }
   const deckYaw = () => (deck ? deck.rotation.y : ctx.layout.deck.rotY);
-  // world pose of the top card of the packet while it holds n cards (face-down Euler y)
-  function packetTop(n) {
-    return { p: deckToWorld(PK.x, nRest() * T + (n - 1) * T + T / 2, PK.z), ry: -(deckYaw() + PK.ry) };
-  }
 
   // ---- the cards in the fan --------------------------------------------------------------------
   // entry: { i (position, 0 = left), mesh, slug, u (-1..1 along the arc), j* (a hand's jitter),
@@ -230,89 +224,164 @@ export function buildFan(ctx, cards, player, hand = null) {
   }
 
   // ---- the takes -------------------------------------------------------------------------------
-  // The fan dealt: the deck as it is · the packet cut off the top, lifted · set down crooked on the
-  // rest · a hold · then a card every second frame flicked from the packet to its place, four
-  // drawings of flight with the apex held, a landing, a settle; the packet thins as they leave.
+  // the ribbon's arc at any point along it (u = -1 … 1, left to right)
+  const arcAt = (u) => {
+    const th = FAN.A * u;
+    return { th, x: FAN.R * Math.sin(th), z: zp + FAN.R * Math.cos(th), ry: -th * FAN.rake };
+  };
+  // A card lies face DOWN — Euler x = π — so its Euler y is the negative of the way it points on
+  // the cloth, while his hand is posed by the yaw itself. Anything that has to lie along a card
+  // converts here. The fan's hand used to be handed the card's Euler y raw, which raked it the
+  // wrong way: at the ends of the ribbon the hand lay 60° across the card it was laying.
+  const handYawFor = (ry) => -ry;
+
+  // The packet in his hand: `held` cards squared to his own yaw, their underside `y` above the
+  // cloth, centred on his palm. The stack is a child of the deck group, so it is placed in the
+  // deck's own frame however far from the deck his hand has carried it.
+  // Twenty-one cards are 17 mm thick and his hand, a flat cut-out hinged at the wrist, is 16 mm
+  // above the cloth at the knuckles: at true thickness the packet stands taller than the hand
+  // holding it and draws over it. The packet in his hand is therefore drawn at two fifths of its
+  // thickness — from overhead that is a rim of hairlines either way, and it still thins card by
+  // card as the ribbon goes down.
+  const DRAWN = 0.4;
+  const _pw = new THREE.Vector3();
+  function packetInHand(x, z, yaw, held, y) {
+    const s = stacks();
+    if (!s) return;
+    if (held <= 0) {
+      PACKET.visible = false;
+      return;
+    }
+    s.cards(PACKET, held, nRest());
+    PACKET.scale.y *= DRAWN;
+    _pw.set(x, Y + y + (held * T * DRAWN) / 2, z);
+    deck.updateMatrixWorld(true);
+    deck.worldToLocal(_pw);
+    PACKET.position.copy(_pw);
+    PACKET.rotation.set(0, yaw - deckYaw(), 0);
+  }
+
+  // THE FAN DEALT — and the cards come out of HIS HAND, not out of the deck. The deck stands
+  // upstage-right of this frame since the layout moved it (round 5), so a card flown from it
+  // crosses the top edge and is cut by it for half its flight, twenty-one times over; the old take
+  // had a card sliced by the frame's edge in most of its drawings. So: his hand comes in over the
+  // deck, cuts a packet off the top and lifts it, carries it across to the left end of the arc,
+  // and sweeps right — a card sliding out from under the packet every second drawing into its
+  // place in the ribbon, the packet thinning over it. Nothing but his own hand crosses an edge,
+  // and it crosses once.
   function fanFrames() {
     makeEntries();
-    const s = stacks();
+    stacks();
     const n = FAN.n;
-    const start = 4, every = 2;
-    const lifted = (k) => Math.min(n, Math.max(0, Math.floor((k - start - 1) / every) + 1));
-    const len = start + every * (n - 1) + 7;
-    const deckTrack = [];
-    for (let k = 0; k < len; k++) {
-      if (k === 0)
-        deckTrack.push(() => {
-          deckReal();
-          for (const e of entries) {
-            e.mesh.visible = false;
-            e.flying = true;
-          }
-        });
-      else if (k === 1)
-        deckTrack.push(() => {
-          deckDrawing(0);
-          if (s) {
-            s.cards(PACKET, n, nRest());
-            s.pivot(PACKET, _v.set(-0.02, nRest() * T + 0.028, 0.006), _e.set(0, 0.1, 0.16), -s.W / 2, -0.5, 0);
-          }
-          sound('deal');
-          pepe()?.deal?.(0, 'R'); // the packet is cut and dealt by the hand beside the deck
-        });
-      else if (k === 2)
-        deckTrack.push(() => {
-          deckDrawing(n);
-          sound('settle');
-        });
-      else deckTrack.push(() => deckDrawing(n - lifted(k)));
-    }
-    const tracks = [{ offset: 0, frames: deckTrack }];
-    entries.forEach((e, i) => {
-      const from = packetTop(n - i);
-      const r = restPose(e, {});
-      const to = { p: new THREE.Vector3(r.x, r.y, r.z), ry: r.ry };
-      const fr = dealTrack(e.mesh, from, to, {
-        cues: {
-          lift: () => {
-            sound('deal');
-            if (i % 7 === 3) pepe()?.deal?.(i, 'R');
-          },
-          land: () => sound('settle'),
-        },
+    const IN = 1, CUT = 1, CARRY = 3;
+    const start = IN + CUT + CARRY; // the drawing on which the first card is laid
+    const every = 2;
+    const dk = deckToWorld(PK.x, 0, PK.z);
+    const du = 2 / (n - 1);
+    const lead = 1.7 * du; // how far along the arc his hand runs ahead of the card it lays
+    const uAt = (i) => -1 + i * du;
+    const HOLD = 0.006; // the underside of the packet, above the cloth
+
+    // one pose per drawing: where his fingertips are, where the packet under them is, how many
+    // cards are still in it. `py` is the packet's underside — during the sweep it is one card up,
+    // because the card leaving is the one at the bottom of the packet.
+    const poses = [];
+    const P = (x, z, yaw, held, py) =>
+      poses.push({
+        x,
+        z,
+        yaw,
+        held,
+        py,
+        // the hand lies flat ON the packet: `floor` is the packet's top, `y` the fingertips over it
+        floor: py + Math.max(0, held) * T * DRAWN,
+        y: 0.003,
+        // Where the packet sits under the drawing: 45 mm back along the hand's own axis from the
+        // fingertips — under the knuckles, not under the middle of the palm, so its far end does
+        // not run out behind his wrist and over the cuff.
+        px: x - 0.045 * Math.sin(yaw),
+        pz: z - 0.045 * Math.cos(yaw),
       });
-      fr[0] = () => {
-        e.flying = true;
-        e.mesh.visible = false;
-      };
-      fr[fr.length - 1] = () => {
+    // in from the top of the frame, over the deck; the cut: a packet off the top, and lifted
+    P(dk.x, dk.z - 0.20, -0.16, n, HOLD + 0.055);
+    P(dk.x, dk.z, -0.16, n, HOLD + 0.012);
+    // carried across to the left end of the arc, over the cloth
+    const a0 = arcAt(uAt(0) + lead);
+    for (let j = 1; j <= CARRY; j++) {
+      const u = j / CARRY;
+      P(lerp(dk.x, a0.x, u), lerp(dk.z, a0.z + 0.03, u), lerp(-0.16, handYawFor(a0.ry), u), n, HOLD + 0.05 * Math.sin(PI * u));
+    }
+    // the sweep: a card every second drawing, the packet thinning under his hand
+    for (let i = 0; i < n; i++) {
+      const a = arcAt(Math.min(1, uAt(i) + lead));
+      for (let j = 0; j < every; j++) P(a.x, a.z + 0.03, handYawFor(a.ry), n - i - 1, HOLD + T);
+    }
+    // the ribbon complete: the empty hand presses its right end flat, then off the top of the frame
+    const aE = arcAt(1);
+    P(aE.x, aE.z + 0.02, handYawFor(aE.ry), 0, 0.002);
+    P(aE.x, aE.z + 0.02, handYawFor(aE.ry), 0, 0.002);
+    P(aE.x, aE.z - 0.12, handYawFor(aE.ry), 0, 0.046);
+    P(aE.x, aE.z - 0.30, handYawFor(aE.ry), 0, 0.096);
+
+    // the deck and the packet, one drawing per pose
+    const tracks = [
+      {
+        offset: 0,
+        frames: poses.map((p, k) => () => {
+          if (k < IN) {
+            deckReal();
+            for (const e of entries) {
+              e.mesh.visible = false;
+              e.flying = true;
+            }
+            return;
+          }
+          if (k === IN) {
+            sound('deal');
+            pepe()?.deal?.(0, 'R'); // the packet is cut by the hand beside the deck
+          }
+          deckDrawing(0);
+          packetInHand(p.px, p.pz, p.yaw, p.held, p.py);
+        }),
+      },
+    ];
+
+    // each card slides out from under the packet into its place: hidden, then three drawings
+    entries.forEach((e, i) => {
+      const k = start + every * i;
+      const p = poses[Math.min(k, poses.length - 1)];
+      const from = { x: p.px, y: Y + HOLD + T / 2, z: p.pz, ry: -p.yaw };
+      const r = restPose(e, {});
+      const fr = [
+        () => {
+          e.flying = true;
+          e.mesh.visible = false;
+        },
+      ];
+      [0.34, 0.74, 1].forEach((u, j) => {
+        fr.push(() => {
+          e.flying = true;
+          e.mesh.visible = true;
+          e.mesh.position.set(lerp(from.x, r.x, u), lerp(from.y, r.y, u) + 0.003 * Math.sin(PI * u), lerp(from.z, r.z, u));
+          e.mesh.rotation.set(PI, lerp(from.ry, r.ry, u), r.roll * u);
+          if (j === 0) sound('deal');
+        });
+      });
+      fr.push(() => {
         e.flying = false;
         e.lift = e.liftTarget = 0;
         applyEntry(e);
-      };
-      tracks.push({ offset: start + every * i, frames: fr });
+      });
+      tracks.push({ offset: k - 1, frames: fr });
     });
-    // His hand: in from the top of the frame, a hold on the cut packet while the first cards come
-    // out from under it, then a sweep left to right along the arc, laying a card every second
-    // frame under the heel of the hand, and away. Card i settles at frame start + 2i + 6.
-    if (hand) {
-      // the heel of the hand on the near half of the card just laid, so the next one arrives from
-      // upstage and slides in under his fingers instead of landing on top of them
-      const land = (i) => {
-        const r = restPose(entries[i], {});
-        return { x: r.x, y: 0.006, z: r.z + 0.05, yaw: r.ry, pose: 'splay' };
-      };
-      const pk = deckToWorld(PK.x - 0.01, 0, PK.z);
-      const specs = [
-        { x: pk.x, y: 0.09, z: pk.z - 0.26, yaw: -0.16, pose: 'splay' },
-        { x: pk.x, y: (nRest() + n) * T + 0.004, z: pk.z, yaw: -0.16, pose: 'splay', n: 4 }, // the hold on the packet
-      ];
-      for (let i = 0; i < n; i++) specs.push({ ...land(i), n: 2 });
-      const last = land(n - 1);
-      specs.push({ ...last, y: 0.05, z: last.z - 0.16, n: 2 }, { ...last, y: 0.09, z: last.z - 0.34 }, { off: true });
-      // card i settles at frame start + 2i + 6, so the hand is over its place as it lands
-      tracks.push({ offset: 4, frames: handFrames(hand, specs) });
-    }
+    if (hand)
+      tracks.push({
+        offset: 0,
+        frames: handFrames(
+          hand,
+          poses.map((p) => ({ x: p.x, y: p.y, z: p.z, yaw: p.yaw, floor: p.floor, pose: 'splay', side: 'R' })),
+        ).concat([() => hand.off()]),
+      });
     return compose(tracks);
   }
 
@@ -463,10 +532,13 @@ export function buildFan(ctx, cards, player, hand = null) {
     const dk = deckToWorld(0.003, 0, 0.002);
     const sweep = (f) => {
       const th = FAN.A * (2 * f - 1);
-      return { x: FAN.R * Math.sin(th), y: 0.004 + f * 0.008, z: zp + FAN.R * Math.cos(th), yaw: -th * FAN.rake, pose: 'splay' };
+      // handYawFor: a card's Euler y is the negative of the way it lies on the cloth, so the hand
+      // sweeping along the ribbon takes +th·rake, not the cards' own -th·rake — which had it
+      // crossing the ribbon at 60° at the ends instead of running along it
+      return { x: FAN.R * Math.sin(th), y: 0.004 + f * 0.008, z: zp + FAN.R * Math.cos(th), yaw: handYawFor(-th * FAN.rake), pose: 'splay' };
     };
-    const packet = { x: closed(0).x, y: R * T + 0.004, z: closed(0).z, yaw: -FAN.A * FAN.rake, pose: 'splay' };
-    const deckYawH = -(deckYaw() + 0.04);
+    const packet = { x: closed(0).x, y: R * T + 0.004, z: closed(0).z, yaw: handYawFor(-FAN.A * FAN.rake), pose: 'splay' };
+    const deckYawH = handYawFor(-(deckYaw() + 0.04));
     const specs = [{ ...sweep(0), y: 0.09, z: sweep(0).z - 0.3 }];
     for (let k = 0; k < SWEEP; k++) specs.push(sweep(k / (SWEEP - 1)));
     specs.push(packet);
@@ -574,9 +646,12 @@ export function buildFan(ctx, cards, player, hand = null) {
   // nothing else in it — his hand waits on the deck at the top of the picture with its fingers on
   // the cloth, and drums them once every two and a half seconds. A held pose, on twos: he is in
   // the shot the whole time the visitor is deciding.
-  // It waits to the right of the spread, clear of the slots and just below the deck, far enough
-  // into the picture that the whole drawing is in frame.
-  const WAIT = { x: 0.44, z: 0.30, yaw: -0.30 };
+  // It waits to the right of the spread and INBOARD of the table's rim. At (0.44, 0.30) his
+  // fingertips were 0.53 m from the table's centre and their outer corner 0.60, which is the rim
+  // itself (the cloth is a disc of 0.608): the drawing sat half off the table with two fingers
+  // over the edge. Here the far corner of the drawing comes to 0.543 — six centimetres of cloth
+  // beyond it — and it is upstage of the slot the third card has not been laid in yet.
+  const WAIT = { x: 0.44, z: 0.17, yaw: -0.18 };
   function waiting() {
     if (!hand) return;
     const k = ctx.clock.frame % 30;

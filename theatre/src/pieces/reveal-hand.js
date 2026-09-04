@@ -58,7 +58,14 @@ export const HAND = {
   // the clutter instead of through it and meets his body where his hand was. From over the cloth
   // it simply runs off the top of the frame.
   anchor: [0.291, 0.828, -0.82],
-  sleeveMax: 1.05,
+  // How much of the forearm is DRAWN. It used to run the whole way to his wrist — up to 1.05 m
+  // from the far end of the ribbon — and the drawing is a single quad with its folds and its
+  // rain-strokes at fixed places on the canvas, so stretched over a metre it came out as a white
+  // plank with seven chevrons in it: a broom handle, not an arm. Every frame the hand is drawn in
+  // (fan, turn, riffle) has its top edge at least 40 cm upstage of where the hand works, so 0.68 m
+  // still runs off the top of the picture from anywhere on the cloth, and the marks stay the size
+  // of marks.
+  sleeveMax: 0.68,
 };
 
 // How far the lens must be tilted down before the drawing may lie on the cloth: the y of the
@@ -539,7 +546,12 @@ export function buildHand(ctx) {
     // fingertip 13 cm up (over a riffle bridge, or on the edge of a card standing on end) the hand
     // rises bodily instead of pinning its wrist to the cloth and pointing its fingers at the sky.
     // Pinned, the palm ended up under the very cards the fingers were working and vanished.
-    const floatY = Math.max(0, lift - G.z * Math.sin(pitch));
+    // `floor` is the height of whatever the hand is lying ON — a packet of cards he is holding,
+    // say. The drawing is raised bodily by it and keeps its own flat pose, because a cut-out that
+    // stays pinned to the cloth is drawn OVER by anything thicker than the 4 mm it floats: a hand
+    // holding twenty-one cards came out as three green fingertips under a slab.
+    const floor = Math.max(0, w.floor ?? 0);
+    const floatY = Math.max(0, lift - G.z * Math.sin(pitch)) + floor;
     group.position.set(wx, Y + HAND.y + floatY, wz);
     group.rotation.set(0, Yaw, 0);
     group.scale.x = m;
@@ -570,9 +582,12 @@ export function buildHand(ctx) {
     // 'L' is the same drawing mirrored and anchored to his other wrist, so a card on the left of
     // the spread is turned by the hand that is nearest it and no arm crosses the whole cloth.
     // `yaw` is always given as if for the right hand; the left mirrors it.
-    at(x, y, z, { yaw = 0, pose = 'splay', side = 'R' } = {}) {
+    // `floor` raises the whole drawing: the height of the thing it is lying on (a packet of cards
+    // in his hand), so the hand is drawn over it instead of under it. `y` stays the fingertip's
+    // height above that floor.
+    at(x, y, z, { yaw = 0, pose = 'splay', side = 'R', floor = 0 } = {}) {
       claimed = true;
-      want = { x, y, z, yaw, pose, side };
+      want = { x, y, z, yaw, pose, side, floor };
       wantFrame = ctx.clock.frame;
       place(want);
     },

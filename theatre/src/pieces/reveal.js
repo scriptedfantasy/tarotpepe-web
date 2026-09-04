@@ -19,9 +19,8 @@
 //   deal(slugs) → Promise<meshes>          three cards from the deck to the slots, face down
 //   picks (the picks so far), stop(), setState(name)
 //   states: dealt · turning · revealed · fan (stills) · shuffle · fanning · pick · gather · deal · turn (motion)
-import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
-import { FPS, compose, hold, dealTrack, turnTrack, turnPose, turnEdge, handFrames, handSide } from './reveal-takes.js';
+import { FPS, compose, hold, turnTrack, turnPose, turnEdge, handFrames, handSide } from './reveal-takes.js';
 import { buildShuffle } from './reveal-shuffle.js';
 import { buildFan } from './reveal-fan.js';
 import { buildHand } from './reveal-hand.js';
@@ -99,19 +98,6 @@ export async function build(ctx) {
   // ---- where things are -------------------------------------------------------------------------
   const deck = cards?.deck;
   const deckTop = deck?.getObjectByName?.('deck-top') ?? null;
-  // the top surface of the deck's blocks (where the loose top card lies), deck-local
-  const blocksTop = () => {
-    if (deckTop) return deckTop.position.y - T / 2 - 0.0012;
-    return (deck?.userData?.height ?? 0.036) - T - 0.0012;
-  };
-  // world pose of a card lying j-th from the top of a stack of `n` on the deck (deck-top hidden)
-  function onDeck(j, n) {
-    deck.updateMatrixWorld(true);
-    const rng = mulberry32(400 + j);
-    const p = new THREE.Vector3(0.0028 + (rng() - 0.5) * 0.002, blocksTop() + T / 2 + (n - 1 - j) * T + 0.0004 * (n - 1 - j), 0.0015 + (rng() - 0.5) * 0.002);
-    deck.localToWorld(p);
-    return { p, ry: (deck.rotation.y ?? 0) + 0.05 + (rng() - 0.5) * 0.03 };
-  }
   const poseOf = (m) => ({ p: m.position.clone(), ry: m.rotation.y });
   // where a card ends up after a hand has turned it: a millimetre or two off where it lay
   function landedPose(m, i) {
@@ -149,56 +135,85 @@ export async function build(ctx) {
     return shuffleTake?.frames ?? [() => {}];
   }
 
-  // His hand resting on the deck while the cards leave it: it comes in from the top of the frame,
-  // presses on the stack, and the card slides out from under it; between cards it breathes up a
-  // centimetre and comes back down. `at` are the master frames at which a card leaves.
   const DECK_SIDE = 'R'; // the deck stands at his right, so the hand that works it is that one
-  function deckHandFrames(at, gap) {
-    const d = ctx.layout.deck.pos;
-    const top = (deck?.userData?.height ?? 0.036) + 0.002;
-    // yawed well across, the same way the riffle's hand is: pointed straight down the frame his
-    // palm sits directly upstage of the deck and the deck hides it, and all that reaches the
-    // picture is three green fingertips with nothing attached to them.
-    const on = (y, dz = 0, pose = 'splay') => ({ x: d[0] - 0.004, y, z: d[2] + dz, yaw: 0.42, pose, side: DECK_SIDE });
-    const specs = [{ ...on(0.07, -0.3) }];
-    at.forEach((k, i) => {
-      const prev = i ? at[i - 1] + 5 : 1; // where the last card's hold ended
-      if (k > prev) specs.push({ ...on(top + 0.05, -0.02), n: k - prev }); // lifted between cards
-      specs.push(on(top + 0.022)); // the press: the card slides out from under his hand
-      specs.push({ ...on(top + 0.022), n: 4 }); // held four frames
-    });
-    specs.push({ ...on(top + 0.06, -0.05), n: 2 }, { ...on(0.10, -0.3) }, { off: true });
-    return handFrames(hand, specs);
-  }
 
-  // the three cards stacked on the deck, then flicked to their slots one after another
-  function dealFrames(meshes, gap = 4) {
-    const tracks = meshes.map((m, i) => {
+  // THE THREE CARDS LAID, and they come in with HIS HAND. The deck stands upstage-right of the
+  // frame the cards are read in since the layout moved it (round 5), so a card thrown from it
+  // crosses the top edge and is cut by it for most of its flight; he brings the three in instead,
+  // in a little packet under his fingers, and lays them left to right — each one sliding out from
+  // under his hand into its slot. Nothing but his own hand crosses an edge of the frame.
+  function dealFrames(meshes) {
+    const n = meshes.length;
+    const HOLD = 0.006; // the underside of the packet, above the cloth
+    const d = ctx.layout.deck.pos;
+    // one pose per drawing: his fingertips, the packet under them, and how many cards it still has
+    const poses = [];
+    const P = (x, z, yaw, held, py) =>
+      poses.push({ x, z, yaw, held, py, floor: py + Math.max(0, held) * T, y: 0.003, px: x - 0.045 * Math.sin(yaw), pz: z - 0.045 * Math.cos(yaw) });
+    const lay = []; // the drawing on which each card leaves his hand
+    // in from the top of the frame, from the deck's side of the table
+    P(d[0] - 0.10, d[2] + 0.16, -0.16, n, HOLD + 0.075);
+    P(d[0] - 0.16, d[2] + 0.30, -0.20, n, HOLD + 0.055);
+    for (let i = 0; i < n; i++) {
+      const s = slots[Math.min(i, slots.length - 1)];
+      // He carries each card level with its slot, never upstage of it: the frame's top edge falls
+      // only nine centimetres above the row, so a card held any further back is cut by it.
+      const yaw = -0.22, over = { x: s[0] + 0.085, z: s[2] + 0.02 };
+      P(over.x, over.z, yaw, n - i, HOLD + 0.042); // carried over the slot
+      P(over.x, over.z, yaw, n - i, HOLD + 0.012); // and down onto it
+      lay.push(poses.length); // the card slides out from under his hand on this drawing
+      P(s[0] + 0.052, s[2] + 0.045, yaw, n - i - 1, HOLD);
+      P(s[0] + 0.052, s[2] + 0.045, yaw, n - i - 1, HOLD); // pressed flat, held
+      P(s[0] + 0.052, s[2] - 0.010, yaw, n - i - 1, HOLD + 0.028); // lifted off it
+    }
+    P(d[0] - 0.16, d[2] + 0.30, -0.20, 0, HOLD + 0.06);
+    P(d[0] - 0.10, d[2] + 0.14, -0.16, 0, HOLD + 0.10);
+
+    const laidBy = (k) => lay.reduce((c, L) => c + (L <= k ? 1 : 0), 0);
+    const tracks = [
+      {
+        offset: 0,
+        frames: poses.map((p, k) => () => {
+          if (deckTop) deckTop.visible = k >= poses.length - 2;
+        }),
+      },
+    ];
+    meshes.forEach((m, i) => {
       const to = poseOf(m);
-      const from = onDeck(i, meshes.length);
-      const frames = dealTrack(m, from, to, {
-        cues: {
-          lift: () => {
-            sound('deal');
-            pepe()?.deal?.(i, DECK_SIDE); // his own shoulder agrees with the drawn hand on the deck
-            if (deckTop && i === meshes.length - 1) deckTop.visible = true;
-          },
-          land: () => sound('settle'),
-        },
-      });
-      if (deckTop) {
-        const first = frames[0];
-        frames[0] = () => {
-          first();
-          deckTop.visible = false;
-        };
+      const k0 = lay[i];
+      const frames = [];
+      // carried in his hand, at its place in the little packet
+      for (let k = 0; k < k0; k++) {
+        const p = poses[k], j = i - laidBy(k);
+        frames.push(() => {
+          m.visible = true;
+          m.position.set(p.px, slots[0][1] + p.py + j * T + T / 2, p.pz);
+          m.rotation.set(Math.PI, -p.yaw, 0);
+        });
       }
-      return { offset: i * (frames.length + gap), frames };
+      // and slid out from under his fingers into its slot, four drawings
+      const p0 = poses[k0 - 1];
+      const from = { x: p0.px, y: slots[0][1] + p0.py + T / 2, z: p0.pz, ry: -p0.yaw };
+      [0.3, 0.68, 0.9, 1].forEach((u, j) => {
+        frames.push(() => {
+          m.visible = true;
+          m.position.set(from.x + (to.p.x - from.x) * u, from.y + (to.p.y - from.y) * u + 0.005 * Math.sin(Math.PI * u), from.z + (to.p.z - from.z) * u);
+          m.rotation.set(Math.PI, from.ry + (to.ry - from.ry) * u, 0);
+          if (j === 0) {
+            sound('deal');
+            pepe()?.deal?.(i, handSide(to.p.x));
+          } else if (j === 2) sound('settle');
+        });
+      });
+      tracks.push({ offset: 0, frames });
     });
-    // the hand presses on the deck one frame before each card leaves (dealTrack's lift is its
-    // second drawing), holds four, and lets the next one come
-    const leaves = tracks.map((t) => t.offset + 1);
-    tracks.push({ offset: 0, frames: deckHandFrames(leaves, gap) });
+    tracks.push({
+      offset: 0,
+      frames: handFrames(
+        hand,
+        poses.map((p) => ({ x: p.x, y: p.y, z: p.z, yaw: p.yaw, floor: p.floor, pose: 'splay', side: DECK_SIDE })),
+      ).concat([() => hand.off()]),
+    });
     return compose(tracks);
   }
 
