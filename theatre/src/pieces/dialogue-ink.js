@@ -1,13 +1,46 @@
-// dialogue-ink.js — the pen for the two drawn objects the dialogue owns: the visitor's caret
-// (a short ink dash under the last letter) and the microphone that stands on the table beside the
-// ashtray. Both are drawn twice: once wide in paper (so the hatching behind them is knocked out
-// the way an inker leaves a gap around a drawn object) and once in ink at the pen's own weight.
+// dialogue-ink.js — the pen for everything the dialogue draws:
 //
-// Nothing here is a box, a band or a background. Everything is a stroke.
+//   drawPlacard  the card every line arrives on — a hand-cut sheet with a deckled edge, four
+//                strokes that cross at every corner, and the ink rules across it
+//   drawName     a name LETTERED in the sign hand (titles-sign.js) rather than set in a font
+//   drawCaret    the visitor's caret: a short ink dash on the baseline
+//   drawMic      the carbon microphone that stands on the table beside the ashtray
+//
+// The caret and the microphone are drawn twice — once wide in paper, so the hatching behind them
+// is knocked out the way an inker leaves a gap around a drawn object, and once in ink at the pen's
+// own weight. Nothing here is a box, a band or a background. Everything is a stroke.
 import { INK, PAPER } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
+import { signCaps, signGlyphs, SIGN_ASCENT, SIGN_DESCENT, SIGN_HAS } from './titles-sign.js';
 
 export const SVGNS = 'http://www.w3.org/2000/svg';
+
+// The name on the card — the speaker above the rule, the card's own name in an intertitle — is
+// LETTERED, not set: the small hand-cut alphabet the titles piece cut for exactly this (its note
+// in titles-sign.js names the placard). Nothing inside the drawing is allowed to be a system font.
+// Drawn into a canvas at the display's own resolution (times two, so the pen keeps its edge when
+// the browser scales it), sized from the same measurement the letters are cut from.
+export function drawName(canvas, text, capH, { seed = 5, tracking = 0.3, pen = null, boil = 0 } = {}) {
+  const opts = { capH, tracking, seed, boil, ...(pen ? { pen } : {}) };
+  const m = signGlyphs(text, opts);
+  const pad = Math.max(2, capH * 0.3);
+  const w = Math.ceil(m.width + pad * 2);
+  const h = Math.ceil(capH * (1 + SIGN_ASCENT + SIGN_DESCENT)) + 2;
+  const dpr = Math.min(4, Math.max(2, (window.devicePixelRatio || 1) * 2));
+  if (canvas.dataset.k !== `${text}|${w}|${h}|${seed}`) {
+    canvas.dataset.k = `${text}|${w}|${h}|${seed}`;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    const g = canvas.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    signCaps(g, text, w / 2, capH * SIGN_ASCENT + 1, { ...opts, align: 'center', baseline: 'top' });
+  }
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+  return { w, h };
+}
+export const CAN_LETTER = SIGN_HAS;
 
 // One pen stroke: points every ~10 units, drifting off the straight line by a slow random walk,
 // the ends a little past the corners.
@@ -114,16 +147,74 @@ export function drawMic(svg, seed = 31) {
 }
 
 
-// The placard the line brings with it into the picture, like the sign held up in the metro carriage
-// of the Aline sequence: a card of the same paper as the drawing, its four sides drawn as four
-// separate pen strokes whose corners cross by a few pixels. The fill follows the same wobble,
-// trimmed of the overshoots, so no paper shows past the rule.
+// ---------------------------------------------------------------------------------------------
+// THE PLACARD — the card the line brings with it into the picture, like the sign the passenger
+// holds up in the metro carriage of the Aline sequence (reference/fd-anim-metro-carriage.png):
+// a hand-cut card of the same paper as the drawing, framed in one pen.
+//
+// Three things make it a drawn object rather than a rectangle with a border:
+//
+//   1. DECKLE. Every side is a torn/hand-cut paper edge, not a ruled line: a slow bow across the
+//      whole side (a card is never flat), a random walk over it, and now and then a bite where a
+//      fibre came away. The paper fill follows exactly that outline, so the shape you see IS the
+//      cut of the card.
+//   2. CORNERS THAT CROSS. The frame is four separate strokes, each drawn a good few pixels past
+//      both corners, the way a hand rules a box and does not stop on the mark. No corner closes.
+//   3. THE RULE. A wobbly ink rule under the speaker's name, as the brief asks, and a shorter one
+//      dividing his line from the visitor's own words. Drawn with the same pen as the frame.
 //
 // The user asked for this card back after a critic had it removed in favour of free-floating type;
 // see BRIEF.md. It is not a web element with a border: it is a drawn object.
-export const PLACARD_BLEED = 12; // px the svg extends past the box, for the overshooting corners
+export const PLACARD_BLEED = 15; // px the svg extends past the box, for the overshooting corners
 
-export function drawPlacard(svg, w, h, seed = 7, lw = 2.4) {
+// A hand-cut paper edge from (x1,y1) to (x2,y2). Positive offsets go INWARD (the normal (-dy,dx)
+// points into the box for a clockwise traversal), so the same points serve the fill and the rule.
+function deckle(x1, y1, x2, y2, rng, { amp = 0.9, bow = 1.5 } = {}) {
+  const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+  const dx = (x2 - x1) / len, dy = (y2 - y1) / len;
+  const nx = -dy, ny = dx;
+  const n = Math.max(8, Math.min(80, Math.round(len / 9)));
+  const b = (rng() - 0.5) * 2 * bow; // the whole side bows one way
+  const pts = [];
+  let slow = (rng() - 0.5) * amp;
+  for (let i = 0; i <= n; i++) {
+    const u = i / n;
+    slow = Math.max(-amp * 1.5, Math.min(amp * 1.5, slow + (rng() - 0.5) * amp * 0.62));
+    // a fibre came away: a short bite out of the edge, or a whisker left on it
+    const bite = rng() < 0.05 ? (rng() - 0.4) * amp * 2.2 : 0;
+    const off = b * Math.sin(u * Math.PI) + slow + bite;
+    pts.push([x1 + dx * len * u + nx * off, y1 + dy * len * u + ny * off]);
+  }
+  return pts;
+}
+
+// Push the two ends of a polyline out along their own direction: the pen ran past the corner.
+function runOn(pts, d0, d1) {
+  const out = pts.map((p) => p.slice());
+  const n = pts.length;
+  if (n < 2) return out;
+  const ext = (a, b, d) => {
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    return [b[0] + ((b[0] - a[0]) / l) * d, b[1] + ((b[1] - a[1]) / l) * d];
+  };
+  out[0] = ext(pts[1], pts[0], d0);
+  out[n - 1] = ext(pts[n - 2], pts[n - 1], d1);
+  return out;
+}
+
+const shift = (pts, x1, y1, x2, y2, d) => {
+  const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+  const nx = -((y2 - y1) / len) * d, ny = ((x2 - x1) / len) * d;
+  return pts.map(([px, py]) => [px + nx, py + ny]);
+};
+
+/**
+ * Draw the card. `rules` are the ink rules across it — {y} in box pixels (0 = the top of the
+ * caption's box), with an optional `inset` (px from each side, default the card's own margin),
+ * `w` (pen width, default a hair under the frame's) and `short` (a fraction of the measure, for a
+ * centred divider). Returns nothing; the svg is replaced.
+ */
+export function drawPlacard(svg, w, h, seed = 7, lw = 2.4, rules = []) {
   const rng = mulberry32(seed);
   const B = PLACARD_BLEED;
   const W = w + 2 * B, H = h + 2 * B;
@@ -131,10 +222,37 @@ export function drawPlacard(svg, w, h, seed = 7, lw = 2.4) {
   svg.setAttribute('width', W);
   svg.setAttribute('height', H);
   const x0 = B, y0 = B, x1 = B + w, y1 = B + h;
-  const o = { wobble: 1.15, overshoot: 2.6 };
-  const sides = [stroke(x0, y0, x1, y0, rng, o), stroke(x1, y0, x1, y1, rng, o), stroke(x1, y1, x0, y1, rng, o), stroke(x0, y1, x0, y0, rng, o)];
-  const inner = sides.map((pts) => pts.slice(1, -1)).flat();
+  // the cut of the paper, clockwise from the top-left corner
+  const amp = Math.max(1.0, Math.min(2.2, w * 0.0028));
+  const corners = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  const cut = corners.map((a, i) => {
+    const b = corners[(i + 1) % 4];
+    // a long edge bows more than a short one, as a sheet of card does
+    const bow = Math.min(7, Math.max(1.2, Math.hypot(b[0] - a[0], b[1] - a[1]) * 0.009));
+    return deckle(a[0], a[1], b[0], b[1], rng, { amp, bow });
+  });
+  const fill = cut.flat();
+  // the pen frames the card just inside its edge, each side run well past both corners
+  const frame = cut.map((pts, i) => {
+    const a = corners[i], b = corners[(i + 1) % 4];
+    const inked = shift(pts, a[0], a[1], b[0], b[1], lw * 0.75 + 0.6);
+    return runOn(inked, 3.5 + rng() * 6.5, 3.5 + rng() * 6.5);
+  });
+
+  const pad = Math.max(10, Math.min(30, w * 0.045));
+  const ruleD = rules.map((r) => {
+    const ins = r.inset ?? pad;
+    const span = (w - 2 * ins) * (r.short ?? 1);
+    const cx = B + w / 2;
+    const ry = B + r.y;
+    // ruled with the same hand as the card's own edge: a slow bow, not a straight line
+    const a = amp * (r.short ? 0.5 : 0.8);
+    const pts = deckle(cx - span / 2, ry, cx + span / 2, ry, rng, { amp: a * 0.55, bow: a * 2.4 });
+    return { d: pathD(runOn(pts, 1 + rng() * 2.5, 1 + rng() * 2.5)), w: r.w ?? lw * 0.72 };
+  });
+
   svg.innerHTML =
-    `<path d="${pathD(inner)}Z" fill="${PAPER}" stroke="none"/>` +
-    sides.map((pts) => `<path d="${pathD(pts)}" fill="none" stroke="${INK}" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+    `<path d="${pathD(fill)}Z" fill="${PAPER}" stroke="none"/>` +
+    frame.map((pts) => `<path d="${pathD(pts)}" fill="none" stroke="${INK}" stroke-width="${lw.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`).join('') +
+    ruleD.map((r) => `<path d="${r.d}" fill="none" stroke="${INK}" stroke-width="${r.w.toFixed(2)}" stroke-linecap="round"/>`).join('');
 }

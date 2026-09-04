@@ -1,22 +1,28 @@
 // PIECE: dialogue — what Tarot Pepe says and how it appears.
 //
-// The writing lives in ./script.js (all data). This file is the presentation, and it follows the
-// bible's rule for text in the drawn world (STYLE.md §1.7, `fd-anim-cast-labels-van`): typewriter
-// serif capitals, letter-spaced, solid ink, centred, standing on the bare paper of the drawing
-// itself. No placard, no card, no band, no background, no rule. The speaker is named once per beat
-// in smaller tracked capitals above the first line, the way a credit names a person once.
+// The writing lives in ./script.js (all data). This file is the presentation.
 //
-// Legibility without a box. Every caption is drawn twice: once wide in paper (`.layer.halo`,
-// a paper stroke around each glyph) and once in ink over it. On bare paper the halo is invisible;
-// where a hatch stroke would run into a letter it knocks the stroke out for a hair's breadth, which
-// is exactly what an inker does — the hatching stops at the lettering. It never becomes an edge,
-// because it has none: it is the shape of the words.
+// THE CARD. Every line Pepe says arrives on a drawn placard — a hand-cut card of the drawing's own
+// paper, framed in one pen, like the sign the passenger holds up in the metro carriage of the Aline
+// sequence (reference/fd-anim-metro-carriage.png). This is the user's decision and it is settled
+// (BRIEF.md); a critic once had it removed in favour of free-floating type and the user asked for
+// the card back. It is drawn in dialogue-ink.js: a deckled edge that bows and bites, four strokes
+// that cross at every corner, and the wobbly ink rule that divides the name from the words.
 //
-// Placement. `anchors` names a spot per camera shot — {shot: {x, y, w}}, the centre and the width
-// of the block as fractions of the frame — chosen from the bare passage of paper in each shot
-// (measured off the frame, not guessed). Shots with no entry fall back to the foot of the picture.
+// ONE VOICE OF TYPE, ONE HAND OF LETTERING, and nothing else on the card:
+//   · the words — his line and the visitor's alike — are the typewriter serif, capitals, tracked,
+//     the film's own face for labels beside a figure (STYLE.md §1.7, `fd-anim-cast-labels-van`);
+//   · the NAMES — the speaker over the rule, a card's name in an intertitle — are LETTERED, in the
+//     small hand-cut alphabet of titles-sign.js, drawn on a canvas. Nothing inside the drawing is
+//     set in a system font (the checklist's rule 7).
+// The visitor's words carry no label at all. A short ruled stroke divides them from his line, and
+// the ink caret blinks under them; the "YOU" that used to stand over an empty block was a form
+// label in a film frame, and it is gone.
 //
-// The visitor's answer is drawn, not typed into a form: a block of the same hand that wraps to as
+// Placement. `anchors` names a spot per camera shot — {shot: {x, y, w, floor}} — and every shot has
+// the same one: centred at the foot of the frame, where a film puts its subtitles. See ANCHORS.
+//
+// The visitor's answer is drawn, not typed into a form: a block of the same face that wraps to as
 // many lines as it needs, with an ink dash for a caret that blinks on the 12 fps clock. A hidden
 // input takes the real keystrokes (and the speech recogniser's words) and nothing else.
 //
@@ -35,18 +41,18 @@
 //   asking                                     true while the visitor's block is up
 //   voice                                      {on, canListen, canSpeak}; setVoice(on)
 //   reply(answer) → string                     the line that folds the answer back, verbatim
-//   intertitle(slug, position, {hold})         the card's held title, on bare paper beside it
+//   intertitle(slug, position, {hold})         the card's held title, on a card of its own
 //   read(slug, position) → Promise             intertitle, then the card's lines (speaker named once)
 //   folio(beat)                                names the beat (greeting, question, ...)
 //   lineFor/linesFor(slug, position)           the card's lines for that position
 //   clear()                                    cuts whatever is up
-//   anchors                                    {shot: {x, y, w}} — editable
+//   anchors                                    {shot: {x, y, w, floor}} — editable; flow.js sets the same
 //   setState(name)                             greeting | question | reading | farewell (+ any script key)
 import { SCRIPT, lineFor, linesFor, reply as scriptReply, POSITIONS, positionKey } from './script.js';
 import { bySlug } from '../core/deck.js';
-import { INK, PAPER } from '../core/strokes.js';
+import { INK } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
-import { SVGNS, drawCaret, drawMic, drawPlacard, PLACARD_BLEED } from './dialogue-ink.js';
+import { SVGNS, drawCaret, drawMic, drawPlacard, drawName, CAN_LETTER, PLACARD_BLEED } from './dialogue-ink.js';
 
 export const meta = {
   name: 'dialogue',
@@ -60,27 +66,38 @@ const BAR = 0.07; // the titles piece's letterbox bar, fraction of the frame
 const BLINK = 6; // frames the caret is on, then off (12fps → half a second each)
 const BLINK_LISTEN = 3; // ... while the microphone is listening: twice as quick
 
-// Where the caption stands, per camera shot: the centre (x, y) and the width of the block, as
-// fractions of the frame. Every one of these is a passage of bare paper in that shot, measured off
-// the rendered frame (tools/_bare.mjs): the cloth in front of him in the mediums, the wall left of
-// the deck in the wide, the empty corner of the cloth in the top-downs.
-// Where the card stands, per shot: x centre, y the TOP of the block, w its measure, all fractions
-// of the frame. `floor` is the lowest line its bottom edge may reach — measured just above Pepe's
-// crown, so a growing card climbs into the bare wall instead of coming down over his head.
-// flow.js overrides these while the evening runs; keep the two tables in step.
-const ANCHORS = {
-  home: { x: 0.5, y: 0.235, w: 0.28, floor: 0.375 },
-  wide: { x: 0.5, y: 0.3, w: 0.26, floor: 0.51 },
-  pepe: { x: 0.52, y: 0.235, w: 0.32, floor: 0.39 },
-  table: { x: 0.5, y: 0.81, w: 0.34 },
-  spread: { x: 0.5, y: 0.06, w: 0.34 },
-  fan: { x: 0.5, y: 0.035, w: 0.34 },
-  card0: { x: 0.78, y: 0.3, w: 0.3 },
-  card1: { x: 0.78, y: 0.3, w: 0.3 },
-  card2: { x: 0.78, y: 0.3, w: 0.3 },
-  deck: { x: 0.5, y: 0.14, w: 0.3 },
-  door: { x: 0.5, y: 0.78, w: 0.28 },
-};
+// WHERE THE CARD STANDS. Centred at the foot of the frame, in every shot, the way a film puts its
+// subtitles — the user's own decision, and the whole of it:
+//
+//   "if the text box were always centered at the bottom, that may look more logical - its where
+//    movies have their captions too for example"
+//
+// So this table has one anchor in it, wearing every shot's name. It reverses the earlier rounds
+// that measured the barest passage of paper in each shot and stood the words there (on the plaster
+// over his head in the mediums, on the cloth in the top-downs): a card that lands somewhere else in
+// every shot is a card that jumps about the screen all evening, and an opaque card needs no bare
+// paper under it anyway. flow.js sets the same anchor at runtime; the two tables agree.
+//
+// The contract: `x` is the centre, `y` the TOP of the block and `floor` the lowest line its bottom
+// edge may reach, all fractions of the frame. A `y` BELOW the floor hangs the block by its BOTTOM
+// edge instead — every caption, of one line or of five, stands on the same line of the picture and
+// grows upwards. `w` is the measure, recomputed for the window's width (see `measure`).
+const CAPTION = { x: 0.5, y: 0.99, floor: 0.945 };
+const SHOTS = ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'deck', 'card0', 'card1', 'card2', 'door', 'window', 'threshold'];
+const ANCHORS = {};
+// The measure, in characters rather than in fractions: the caption face is clamp(9px, 1vw, 20px),
+// so below a 900 px window the type stops shrinking while the window does not, and a third of a
+// phone's width would be four words a line. ~46 characters, plus the card's own margins, capped so
+// the card never runs to the edges of the paper.
+function measure(w) {
+  const fs = Math.min(20, Math.max(9, w / 100));
+  return Math.min(0.86, Math.max(0.3, (34.5 * fs) / Math.max(1, w)));
+}
+function setAnchors(w) {
+  const a = { ...CAPTION, w: measure(w) };
+  for (const shot of SHOTS) ANCHORS[shot] = { ...a };
+}
+setAnchors(typeof window === 'undefined' ? 1600 : window.innerWidth || 1600);
 
 // The microphone's place on the table: beside the ashtray (table-objects PLACES.ashtray is
 // [-0.15, -0.13]), a little towards the visitor. Metres, table space; y is the cloth.
@@ -113,53 +130,44 @@ function buildStyle() {
       color: ${INK}; -webkit-font-smoothing: antialiased;
       --typewriter: 'American Typewriter', 'Rockwell', 'Courier New', 'Georgia', serif;
     }
-    /* the caption: type standing on the paper of the drawing. No box, no band, no rule. */
+    /* THE CARD. One voice of type on it and one only: the typewriter serif, capitals, tracked —
+       his line and the visitor's own words are set exactly alike, as a film's subtitles are. The
+       only other lettering on the card is DRAWN (the sign hand, on a canvas), never set. */
     #dialogue .cap {
       position: absolute; left: 50%; top: 50%; transform: translate(-50%, 0);
       width: max-content; max-width: 30%; box-sizing: border-box; text-align: center;
-      padding: 0.85em 1.15em 0.9em;
+      padding: 0.9em 1.35em 0.95em;
       font-family: var(--typewriter);
-      font-size: clamp(9px, 1vw, 20px); line-height: 1.48;
+      font-size: clamp(9px, 1vw, 20px); line-height: 1.5;
       letter-spacing: 0.085em; text-indent: 0.085em; text-transform: uppercase;
       font-weight: 600; color: ${INK};
     }
     #dialogue .cap.mid { transform: translate(-50%, -50%); }
-    /* the two passes: paper under, ink over, the same words in the same places */
-    #dialogue .cap .layer.halo {
-      position: absolute; left: 0; top: 0; width: 100%; z-index: 0; pointer-events: none;
-      color: ${PAPER}; -webkit-text-stroke: 0.38em ${PAPER};
-    }
-    #dialogue .cap .layer.ink { position: relative; z-index: 1; }
     /* the drawn card the words stand on (the user asked for it back; see BRIEF.md) */
     #dialogue .cap > svg.placard {
-      position: absolute; left: -12px; top: -12px; z-index: 0;
+      position: absolute; left: -${PLACARD_BLEED}px; top: -${PLACARD_BLEED}px; z-index: 0;
       overflow: visible; display: block; pointer-events: none;
     }
-    #dialogue .cap.bare > svg.placard { display: none; }
+    #dialogue .cap > * { position: relative; z-index: 1; }
     #dialogue .cap .g { display: inline-block; }
     #dialogue .cap .w { white-space: nowrap; }
     #dialogue .cap .line .w.hid { visibility: hidden; }
-    #dialogue .cap .who {
-      font-size: 0.66em; font-weight: 700; letter-spacing: 0.36em; text-indent: 0.36em;
-      margin-bottom: 0.5em; white-space: nowrap;
-    }
-    /* the card's title, held on bare paper beside the card */
-    #dialogue .cap .n { font-size: 0.76em; letter-spacing: 0.42em; text-indent: 0.42em; font-weight: 500; }
-    #dialogue .cap .name { font-size: 1.5em; font-weight: 700; letter-spacing: 0.2em; text-indent: 0.2em; line-height: 1.2; margin: 0.3em 0 0.34em; }
-    #dialogue .cap .pos { font-size: 0.76em; letter-spacing: 0.32em; text-indent: 0.32em; font-weight: 500; }
-    /* the visitor's own words: the same hand, upper and lower case, wrapping as far as it needs */
-    #dialogue .cap .you {
-      font-size: 0.66em; font-weight: 700; letter-spacing: 0.36em; text-indent: 0.36em;
-      margin: 0.62em 0 0.34em; white-space: nowrap;
-    }
+    /* the speaker's name: lettered by hand above the rule, never set */
+    #dialogue .cap .who { display: block; line-height: 0; margin: 0 auto 0.78em; }
+    #dialogue .cap .who > canvas { display: block; margin: 0 auto; }
+    /* the card's title: its name lettered, the numeral and the position set small */
+    #dialogue .cap .n { font-size: 0.78em; letter-spacing: 0.42em; text-indent: 0.42em; font-weight: 600; }
+    #dialogue .cap .name { display: block; line-height: 0; margin: 0.5em auto 0.46em; }
+    #dialogue .cap .name > canvas { display: block; margin: 0 auto; }
+    #dialogue .cap .pos { font-size: 0.78em; letter-spacing: 0.32em; text-indent: 0.32em; font-weight: 600; }
+    /* the visitor's own words, under the divider: the same face, the same size, the same case */
     #dialogue .cap .answer {
-      font-size: 1em; font-weight: 500; text-transform: none; letter-spacing: 0.045em; text-indent: 0;
-      line-height: 1.5; word-break: break-word;
+      font-size: 1em; font-weight: 600; letter-spacing: 0.085em; text-indent: 0.085em;
+      line-height: 1.5; word-break: break-word; margin: 0.86em 0 0;
     }
     #dialogue .cap .caret { display: inline-block; width: 0.86em; height: 1.12em; vertical-align: baseline; margin-left: 0.06em; }
     #dialogue .cap .caret > svg { display: block; width: 100%; height: 100%; overflow: visible; }
     #dialogue .cap .caret.off { visibility: hidden; }
-    #dialogue .cap .layer.halo .caret path:not(.u) { display: none; }
     /* the keystrokes land here and nowhere else; nothing of it is ever seen */
     #dialogue .cap .keys {
       position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 2;
@@ -215,12 +223,15 @@ function stableGlyphs(text) {
 }
 
 // The line as word spans, all present from the start (hidden) so the rag never moves and no empty
-// space is ever shown waiting for words.
+// space is ever shown waiting for words — EXCEPT the first word, which is inked from the start.
+// A critic caught the card standing empty in two stills out of twenty-four: not a hang (a 1000-
+// sample probe found no blank stretch over 0.1 s) but the single frame between the card being
+// drawn and the clock's first tick. The card and its first word now arrive together.
 function wordMarkup(text) {
   const rng = mulberry32(17 + text.length * 7);
   return text
     .split(' ')
-    .map((w) => `<span class="w hid">${letters(w, rng)}</span>`)
+    .map((w, i) => `<span class="w${i ? ' hid' : ''}">${letters(w, rng)}</span>`)
     .join(' ');
 }
 
@@ -230,6 +241,7 @@ export async function build(ctx) {
   const THREE = ctx.THREE;
   const root = ctx.dom.dialogue;
   document.head.appendChild(buildStyle());
+  setAnchors(ctx.size?.w || window.innerWidth || 1600);
 
   const cap = document.createElement('div');
   cap.className = 'cap';
@@ -423,19 +435,59 @@ export async function build(ctx) {
   }
 
   // ---- the caption itself ------------------------------------------------------------------------
-  let inkLayer = null, haloLayer = null;
-  // Both passes carry the same markup; the paper one sits behind and knocks the hatching out.
+  // The type size the card is set at right now, in px: the rules and the lettering are cut from it.
+  const fontPx = () => parseFloat(getComputedStyle(cap).fontSize) || 14;
   let placard = null;
   let placardSeed = 7;
+  // A name on the card is LETTERED, in the hand titles-sign.js cut for it — never set in a font.
+  // Falls back to the set face only for a string the case does not hold (an accented card name
+  // outside its sorts), which is better than a hole where a word should be.
+  function nameHTML(text, cls) {
+    if (!CAN_LETTER(text)) return `<div class="${cls} set">${glyphs(String(text).toUpperCase(), mulberry32(41 + text.length))}</div>`;
+    return `<div class="${cls}" data-t="${esc(text)}"><canvas aria-hidden="true"></canvas></div>`;
+  }
+  // The cap height a name is cut at: the card's own name is the big line of an intertitle, the
+  // speaker's a small one over the rule. Both are cut from the type size the card is set at, so
+  // they follow the picture when the window changes.
+  const nameCap = (big) => (big ? Math.max(14, fontPx() * 1.12) : Math.max(10, fontPx() * 0.72));
+  function letterNames() {
+    for (const holder of cap.querySelectorAll('[data-t]')) {
+      const canvas = holder.querySelector('canvas');
+      if (!canvas) continue;
+      const big = holder.classList.contains('name');
+      const capH = nameCap(big);
+      drawName(canvas, holder.dataset.t.toUpperCase(), capH, {
+        seed: placardSeed + holder.dataset.t.length,
+        tracking: big ? 0.2 : 0.34,
+        pen: Math.max(1.35, capH * (big ? 0.13 : 0.185)),
+      });
+      holder.setAttribute('aria-label', holder.dataset.t);
+    }
+  }
   function render(html) {
-    cap.innerHTML = `<div class="layer halo" aria-hidden="true">${html}</div><div class="layer ink">${html}</div>`;
-    haloLayer = cap.querySelector('.layer.halo');
-    inkLayer = cap.querySelector('.layer.ink');
+    cap.innerHTML = html;
     placard = document.createElementNS(SVGNS, 'svg');
     placard.setAttribute('class', 'placard');
     placard.setAttribute('aria-hidden', 'true');
     cap.insertBefore(placard, cap.firstChild);
+    letterNames();
     drawCard();
+  }
+  // Where the pen rules the card: under the speaker's name (the brief asks for a wobbly ink one),
+  // and — shorter, centred — between his line and the visitor's own words. Measured off the block,
+  // so a rule always falls in the gap that was left for it.
+  function ruleLines() {
+    const out = [];
+    const between = (a, b, short) => {
+      if (!a || !b) return;
+      const y = (a.offsetTop + a.offsetHeight + b.offsetTop) / 2;
+      out.push(short ? { y, short: 0.34, w: Math.max(1.1, fontPx() * 0.075) } : { y });
+    };
+    const who = cap.querySelector('.who');
+    const line = cap.querySelector('.line, .name, .pos');
+    if (who) between(who, line, false);
+    between(cap.querySelector('.line'), cap.querySelector('.answer'), true);
+    return out;
   }
   // The card is redrawn whenever the block changes size: the visitor's answer grows a line, the
   // window is resized, a longer sentence arrives. One pen, one seed per caption, so it does not
@@ -444,16 +496,17 @@ export async function build(ctx) {
     if (!placard || cap.hidden) return;
     const w = cap.offsetWidth, h = cap.offsetHeight;
     if (!w || !h) return;
-    if (placard.dataset.w === String(w) && placard.dataset.h === String(h)) return;
-    placard.dataset.w = String(w);
-    placard.dataset.h = String(h);
-    const lw = Math.max(1.6, Math.min(3.2, w * 0.006));
-    drawPlacard(placard, w, h, placardSeed, lw);
+    const rules = ruleLines();
+    const key = `${w}x${h}:${rules.map((r) => Math.round(r.y)).join(',')}`;
+    if (placard.dataset.k === key) return;
+    placard.dataset.k = key;
+    const lw = Math.max(1.8, Math.min(3.6, w * 0.0064));
+    drawPlacard(placard, w, h, placardSeed, lw, rules);
   }
   function cut() {
     cap.hidden = true;
     cap.innerHTML = '';
-    inkLayer = haloLayer = null;
+    placard = null;
     mic.hidden = true;
     if (field) {
       const f = field;
@@ -465,17 +518,15 @@ export async function build(ctx) {
   function show(text, who) {
     cut();
     place();
-    const rng = mulberry32(23 + text.length * 7 + (who ? 3 : 0));
     placardSeed = 7 + (text.length % 23) * 3;
-    render(`${who ? `<div class="who">${glyphs(who, rng)}</div>` : ''}<div class="line">${wordMarkup(text)}</div>`);
+    render(`${who ? nameHTML(who, 'who') : ''}<div class="line">${wordMarkup(text)}</div>`);
     cap.hidden = false;
-    const a = [...inkLayer.querySelectorAll('.line .w')];
-    const b = [...haloLayer.querySelectorAll('.line .w')];
+    const els = [...cap.querySelectorAll('.line .w')];
     const words = [];
     let count = 0;
     text.split(' ').forEach((w, i) => {
       count += w.length + 1;
-      words.push({ els: [a[i], b[i]], at: count });
+      words.push({ els: [els[i]], at: count });
     });
     fit();
     drawCard();
@@ -504,31 +555,26 @@ export async function build(ctx) {
   }
 
   // ---- the visitor's block ------------------------------------------------------------------------
+  // Their words are set exactly as his are — the same face, the same size, the same capitals — and
+  // divided from his line by a short ruled stroke, not by a label. There is NO "YOU" over it: a
+  // form label sitting empty in the frame while it waits was the one thing on this card that could
+  // not be a drawing. The rule and the blinking ink caret say whose turn it is.
   function drawAnswer() {
     if (!field) return;
-    const text = field.input.value;
-    const html = stableGlyphs(text);
-    for (const el of field.answer) {
-      el.innerHTML = html;
-      el.appendChild(el._caret);
-    }
+    const el = field.answer;
+    el.innerHTML = stableGlyphs(field.input.value);
+    el.appendChild(field.caret[0]);
     fit();
   }
   function openBlock(value = '') {
-    // the visitor's name and their words go into both passes, under the line Pepe just said
-    const rng = mulberry32(91);
-    const block = `<div class="you">${glyphs('You', rng)}</div><div class="answer"></div>`;
-    for (const layer of [haloLayer, inkLayer]) layer.insertAdjacentHTML('beforeend', block);
-    const answer = [inkLayer.querySelector('.answer'), haloLayer.querySelector('.answer')];
-    for (const el of answer) {
-      const c = document.createElement('span');
-      c.className = 'caret';
-      const s = document.createElementNS(SVGNS, 'svg');
-      s.setAttribute('aria-hidden', 'true');
-      drawCaret(s, 5);
-      c.appendChild(s);
-      el._caret = c;
-    }
+    cap.insertAdjacentHTML('beforeend', '<div class="answer"></div>');
+    const answer = cap.querySelector('.answer');
+    const c = document.createElement('span');
+    c.className = 'caret';
+    const s = document.createElementNS(SVGNS, 'svg');
+    s.setAttribute('aria-hidden', 'true');
+    drawCaret(s, 5);
+    c.appendChild(s);
     const input = document.createElement('input');
     input.className = 'keys';
     input.type = 'text';
@@ -538,7 +584,7 @@ export async function build(ctx) {
     input.setAttribute('aria-label', 'Your answer');
     input.value = value;
     cap.appendChild(input);
-    field = { input, answer, caret: answer.map((el) => el._caret) };
+    field = { input, answer, caret: [c] };
     drawAnswer();
     mic.hidden = !(canListen || canSpeak); // no ear, no prop: a dead object on the table is worse
     place_mic();
@@ -643,9 +689,17 @@ export async function build(ctx) {
       cut();
       place();
       const rng = mulberry32(101 + name.length * 5);
-      render(`<div class="n">${glyphs(n, rng)}</div><div class="name">${glyphs(name, rng)}</div><div class="pos">${glyphs(label, rng)}</div>`);
+      placardSeed = 13 + (name.length % 19) * 5;
+      // The card's own name is hand-lettered, as it is on the card (STYLE.md §2.6); the numeral
+      // above it and the position under it are the caption's set face, small.
+      render(
+        `<div class="n">${glyphs(n, rng)}</div>` +
+          nameHTML(name, 'name') +
+          `<div class="pos">${glyphs(label, rng)}</div>`
+      );
       cap.hidden = false;
       fit();
+      drawCard(); // the card and its title arrive on the same frame, as a caption's do
       ctx.emit?.('dialogue:intertitle', { slug, position });
       return new Promise((res) => {
         inter = { until: ctx.clock.t + hold, done: res };
@@ -821,10 +875,12 @@ export async function build(ctx) {
     },
   };
   ctx.on('resize', () => {
+    setAnchors(ctx.size?.w || window.innerWidth || 1600);
     if (cap.hidden) return;
     place();
+    letterNames(); // the lettering is cut at the display's resolution: re-cut it
     fit();
-    if (placard) placard.dataset.w = ''; // force the card to be re-cut at the new size
+    if (placard) placard.dataset.k = ''; // force the card to be re-cut at the new size
     drawCard();
     place_mic();
   });
