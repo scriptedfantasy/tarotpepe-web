@@ -482,11 +482,11 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
     }
   }
 
-  // ---- the small print on the bare sheet ---------------------------------------------------------------
+  // ---- one line under the mat, and nothing else ---------------------------------------------------------
+  // The corner captions (a series number and an admission line) came off at the user's request: the
+  // first thing anyone sees is a door on a bare sheet, and the invitation under it. It is also what
+  // survives a phone, where a caption in each top corner would crowd the frame.
   if (marks && P.zoom < 1.04) {
-    const sm = Math.max(8, h * 0.0155);
-    letter(g, 'SÉRIE I — N° 1', w * 0.096, h * 0.088, { size: sm, rng, tracking: 0.28, jitter: 0.5, weight: 500, align: 'left' });
-    letter(g, 'ADMISSION: ONE QUESTION', w * 0.904, h * 0.088, { size: sm, rng, tracking: 0.28, jitter: 0.5, weight: 500, align: 'right' });
     letter(g, 'PLEASE COME IN', w / 2, my(-D.mat) + h * 0.058, { size: Math.max(9, h * 0.0185), rng, tracking: 0.34, jitter: 0.6, weight: 500 });
   }
 }
