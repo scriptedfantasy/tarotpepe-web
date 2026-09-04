@@ -90,10 +90,18 @@ export async function build(ctx) {
     min.textContent = folded ? '+' : '–';
   };
 
+  // Every key this page-load has actually touched. It is NOT "everything that differs from
+  // initial": after a reload `initial` holds the values the URL just set, so comparing against it
+  // makes every earlier change look untouched — and the first version of this deleted those from
+  // the URL, which reset them to the shipped defaults. One dial at a time was all that survived.
+  // Keys already in the URL are left exactly as they are unless they are touched again.
+  const touched = new Set();
+
   // Live if ink can take it, a reload if it cannot. The reload is debounced so dragging a slider
   // does not queue twenty of them.
   let pending = null;
-  const push = () => {
+  const push = (key) => {
+    if (key) touched.add(key);
     if (typeof P.apply === 'function') {
       P.apply();
       return;
@@ -101,10 +109,8 @@ export async function build(ctx) {
     clearTimeout(pending);
     pending = setTimeout(() => {
       const u = new URL(location.href);
-      for (const k of keys) {
-        if (P[k] === initial[k]) u.searchParams.delete(`ink.${k}`);
-        else u.searchParams.set(`ink.${k}`, String(P[k]));
-      }
+      // booleans go over as 1/0: ink coerces every value with `+v`, and +"true" is NaN
+      for (const k of touched) u.searchParams.set(`ink.${k}`, typeof P[k] === 'boolean' ? (P[k] ? '1' : '0') : String(P[k]));
       location.replace(u);
     }, 700);
   };
@@ -128,7 +134,7 @@ export async function build(ctx) {
       box.onchange = () => {
         P[k] = box.checked;
         paint();
-        push();
+        push(k);
       };
       lab.insertBefore(box, val);
       readouts.push(() => {
@@ -146,7 +152,7 @@ export async function build(ctx) {
       sl.oninput = () => {
         P[k] = +sl.value;
         paint();
-        push();
+        push(k);
       };
       row.appendChild(sl);
       readouts.push(() => {
@@ -174,9 +180,11 @@ export async function build(ctx) {
   body.appendChild(note);
 
   copy.onclick = async () => {
-    const changed = keys.filter((k) => P[k] !== initial[k]);
+    // What is actually set right now: whatever the URL already carried into this page load, plus
+    // anything touched since. Reading it back off the URL keeps this honest across reloads.
     const u = new URL(location.href);
-    for (const k of changed) u.searchParams.set(`ink.${k}`, String(P[k]));
+    for (const k of touched) u.searchParams.set(`ink.${k}`, typeof P[k] === 'boolean' ? (P[k] ? '1' : '0') : String(P[k]));
+    const changed = [...u.searchParams.keys()].filter((k) => k.startsWith('ink.')).map((k) => k.slice(4));
     const text = changed.length
       ? `${changed.map((k) => `  ${k}: ${P[k]},`).join('\n')}\n\n${u.href}`
       : 'nothing changed';
@@ -188,10 +196,19 @@ export async function build(ctx) {
     }
   };
 
+  // Back to what ships: every override comes off the URL, not just the ones touched here.
   reset.onclick = () => {
-    for (const k of keys) P[k] = initial[k];
-    paint();
-    push();
+    const u = new URL(location.href);
+    for (const k of [...u.searchParams.keys()]) if (k.startsWith('ink.')) u.searchParams.delete(k);
+    if (typeof P.apply === 'function') {
+      for (const k of keys) P[k] = initial[k];
+      touched.clear();
+      paint();
+      P.apply();
+      history.replaceState(null, '', u);
+      return;
+    }
+    location.replace(u);
   };
 
   function paint() {
