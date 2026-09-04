@@ -72,6 +72,7 @@ uniform sampler2D uMap;
 uniform float uHasMap;
 uniform vec3 uColor;
 uniform float uAlphaTest;
+uniform float uLodBias;  // how much sharper than the hardware would the pen looks at a drawing
 uniform float uPacked;   // colorful*128 + hatchIdx*8 + lineIdx, already /255
 uniform float uId;       // 0..65535
 uniform float uDist;     // object distance to camera, metres
@@ -86,7 +87,13 @@ vec3 toSRGB(vec3 c) {
   return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
 }
 void main() {
-  vec4 tex = uHasMap > 0.5 ? texture(uMap, vUv) : vec4(1.0);
+  // A mip filter is an averaging machine and the pen is not: every level it climbs turns ink and
+  // paper into a grey that no pen made, and a hand-lettered label two shelves back arrives as a
+  // dirty rectangle. So the pass looks at a drawing a level SHARPER than the hardware would choose
+  // — it keeps the marks' contrast where the mip would have dissolved it, and the composite's
+  // one-pen rule then puts each surviving mark down at full ink or not at all. Aliasing is the
+  // price, and it is the right price here: an aliased mark is still a mark, a mip-grey is not.
+  vec4 tex = uHasMap > 0.5 ? texture(uMap, vUv, uLodBias) : vec4(1.0);
   if (tex.a < uAlphaTest) discard;
   vec3 n = normalize(gl_FrontFacing ? vNormalW : -vNormalW);
   gAlbedo = vec4(toSRGB(uColor * tex.rgb), uPacked);
@@ -202,7 +209,7 @@ export const EXTEND_FRAG = /* glsl */ `
 precision highp float;
 uniform sampler2D tEdge;
 uniform vec2 uRes;
-uniform float uDpr, uSeed, uOvershoot, uMerge;
+uniform float uDpr, uSeed, uOvershoot, uMerge, uThin;
 in vec2 vUv;
 layout(location = 0) out vec4 outColor;
 ${NOISE}
@@ -237,10 +244,16 @@ void main() {
         // both are real; taking one of those left the small props on the table drawn in a broken
         // scratch. What does get merged at a distance is a crease running under a silhouette, or a
         // moulding the map draws again beneath the geometry's own line: one thing described twice.
-        // Touching equals are a different matter — that is one seed two pixels thick, where a
-        // shallow diagonal staircases — and thinning it to one is what keeps the nib's width the
-        // nib's, so at s == 1 an equal is merged as well.
-        if (q.g > e.g + 0.06 || (s == 1 && q.g > e.g - 0.02 && k == 0)) { outColor = vec4(0.0); return; }
+        // Equals that are CLOSER THAN THE NIB CAN SEPARATE are a different matter again. A door's
+        // architrave, a panel's bolection, a picture frame's rebate, the slats of a gallery across
+        // the room: every one of them is two real edges three or four pixels apart, and the pen
+        // drawing both leaves a sliver of paper thinner than a stroke between them — which is not
+        // two lines, it is a black bar with a scratch in it. A draughtsman draws one line there and
+        // moves on (STYLE §1.2: depth is carried by hatch density and overlap, never by weight, and
+        // "a moulding four pixels wide stops being three lines and becomes one"). uThin is that
+        // distance in pixels; beyond it two equals are two sides of something the frame can still
+        // hold apart — a coin, a rail, a slat seen edge-on — and both are drawn.
+        if (q.g > e.g + 0.06 || (float(s) <= uThin && q.g > e.g - 0.02 && k == 0)) { outColor = vec4(0.0); return; }
       }
     }
   }
@@ -370,19 +383,31 @@ void main() {
   // drawn; a wainscot minified until its seams touch scores mid; the inside of a coat, a cat, a
   // shelf carcass or a doorway scores one.
   float wash = 0.0, ringLo = 1.0, ringHi = 0.0;
+  // …and the same reading taken ONE NIB away instead of five. This is the field a single mark
+  // stands in: the paper immediately either side of a letter's stem, of a louvre bar, of a
+  // floorboard seam. It is the only neighbourhood small enough to still separate a mark from its
+  // own background once the frame has minified the drawing, and it is what lets the pen re-state
+  // a word at full ink instead of copying out the grey the mip filter made of it.
+  float tightLo = 1.0, tightHi = 0.0;
   float tHere = 1.0 - lum(alb.rgb);
   {
     const float D = 0.7071;
     vec2 dirs[8] = vec2[8](vec2(1, 0), vec2(-1, 0), vec2(0, 1), vec2(0, -1),
                            vec2(D, D), vec2(-D, -D), vec2(D, -D), vec2(-D, D));
     vec2 r0 = 5.5 * uDpr / uRes;
+    vec2 r1 = 1.8 * uDpr / uRes;
     for (int i = 0; i < 8; i++) {
       float dk = 1.0 - lum(texture(tAlbedo, vUv + dirs[i] * r0).rgb);
       wash += dk;
       ringLo = min(ringLo, dk);
       ringHi = max(ringHi, dk);
+      float dt = 1.0 - lum(texture(tAlbedo, vUv + dirs[i] * r1).rgb);
+      tightLo = min(tightLo, dt);
+      tightHi = max(tightHi, dt);
     }
     wash = (wash + tHere) / 9.0;
+    tightLo = min(tightLo, tHere);
+    tightHi = max(tightHi, tHere);
   }
   // Is the drawing still DRAWABLE here, or has the frame shrunk it below the pen? If the ring
   // holds both paper and ink the marks are still separate and the pen draws them; if the ring is
@@ -569,7 +594,22 @@ void main() {
     // uses, so what recedes loses runs of strokes at full weight and keeps the paper between.
     float keep = step((1.0 - resolved) * 0.92, vnoise(huv * 2.4 + 17.0));
     float draw = step(1.0 - drawable, vnoise(huv * 3.7 + 41.0));
-    stroke = smoothstep(uTexPen.z, uTexPen.w, tHere) * keep * draw;
+    // ONE PEN, ONE PRESSURE — and this is where that was being broken. A mark whose ink the frame
+    // has averaged half-way into its paper (a bottle's VIN, a book's PROVERBES, a doormat's
+    // BIENVENUE — every letter in the set is 3–5 px tall from the door) came through this line as
+    // a ramp and was laid down as a MID GREY. That is the smudge: not a missing mark, a mark drawn
+    // at half pressure, which the world's rules forbid outright and which reads at a glance as a
+    // dirty rectangle where a word should be.
+    // A hand does not do that. It looks at the label, sees which marks are darker than the paper
+    // AROUND THEM, and inks those at full weight — the letters lose their shapes long before they
+    // lose their order, which is why the film's small signage is a row of black ticks in a white
+    // plaque (the CADAZIO door plate, ~10 px) and never a grey box. So: a mark is ink if it is
+    // darker than the midpoint of its own nib-wide field, or dark in absolute terms; otherwise it
+    // is paper. Never anything between.
+    float con = tightHi - tightLo;                      // is there a mark here at all, or one flat field?
+    float mid = (tightHi + tightLo) * 0.5;              // …and where the paper ends and the mark begins
+    float local = step(0.09, con) * step(min(mid + 0.015, uTexPen.w), tHere);
+    stroke = max(local, step(uTexPen.w, tHere)) * keep * draw;
     // …and what the pen can no longer draw — because the marks have closed up OR because they have
     // shrunk under the nib — states its tone instead of being smeared out as a grey. Below the
     // first threshold it states nothing: the pen would not have made a mark that small, and the

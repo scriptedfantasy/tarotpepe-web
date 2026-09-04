@@ -46,16 +46,27 @@ export async function build(ctx) {
   const params = {
     // THE NIB, as a radius in css px: the mark is every pixel within it of a seed, so this IS the
     // half-width of every contour in the frame and nothing else changes it. STYLE §1.2 puts the
-    // film's contour at ≈2 px at 1080p; measured off the folio resampled to our 1600 px frame its
-    // stroke-width mode is 3 px and its median 4, ours was a mode of 3 and a median of 5–6 with a
-    // long tail to 10. 0.95 gives ≈1.9 px of solid ink plus a pixel of shoulder.
-    lineBase: 1.05,
+    // film's contour at ≈2 px at 1080p and near-constant.
+    // Measured (tools/_ink-pen.mjs, every image resampled to 1600 px wide, min-run thickness over
+    // every ink pixel) against the kitchen folio: the film's stroke is mode 3 px, median 4, with
+    // only 6% of its ink one pixel wide. At 1.05 ours was mode 1 with THIRTY-THREE per cent of the
+    // ink one pixel wide — a hairline with a grey shoulder, which is thick-and-thin by another
+    // route and reads as a scratch. The width is quantised (a seed pixel plus whatever the radius
+    // reaches), so 1.05 draws 1 px and 1.15 draws 3; there is no 2. At 1.15 the whole distribution
+    // lands on the film's: mode 3, 6% at one pixel, ink 21.7% of the frame against its 19.9%, and
+    // solid ink (below 70) 12.6% against its 12.7%. It costs 2.5 points of clean paper and it is
+    // the correct pen; the paper is bought back by drawing FEWER lines (see `thin`), never thinner.
+    lineBase: 1.15,
     wobble: 0.9, // css px of hand drift
     breakAmt: 0.03, // how often the pen skips (0 = never)
     overshoot: 1, // 0/1 line ends run past corners
     // px within which two PARALLEL contours are one contour and only the stronger is drawn.
     // 0 turns the merge off. See the note in EXTEND_FRAG: this is the doubled-line rule.
-    merge: 3,
+    merge: 4,
+    // px within which two EQUAL parallel contours are one contour, because the paper between them
+    // is thinner than a stroke: the two edges of a moulding, of a glazing bar, of a slat across the
+    // room. Above this both are drawn. Bounded by `merge`, which is how far the search looks.
+    thin: 3,
     depthThr: 0.012, // silhouette sensitivity (relative to depth)
     // cos of the fold angle that gets a line. A draughtsman inks a corner, not a soft bend: only
     // folds sharper than ≈53° are drawn, so lathed curves and cloth do not fill up with creases.
@@ -85,16 +96,22 @@ export async function build(ctx) {
     texLevels: [0.34, 0.48, 0.58, 0.64],
     // The projected-size rule for a surface's OWN drawing, in texels of that drawing per screen
     // pixel (the G-buffer measures it) and then in how dark a mark must be to be ink at all.
-    // Round 3 taught the pass to stop drawing a PATTERN it could no longer resolve; it went on
-    // inking a shelf's stencil, a bottle's small type and a coat's stripes at any size, because
-    // those keep their contrast to the last pixel — measured, they cost 3.9 points of clean paper
-    // and arrived as illegible smudges. Past ~1.7 texels a pixel the drawn stroke is thinner than
-    // the nib and the pen stops; the tone it averages to is stated instead. The second pair is the
-    // pressure: one pen, so a mark is ink or it is paper, and a half-grey mip average is paper.
-    // Measured on this set: the VOYANTE plate reads at 4.3 texels a pixel and the placard's big
-    // line at 6.5, so a gate that starts before ~9 deletes hand-lettering the frame is meant to
-    // carry. It is a safety net against smearing, not a way to buy clean paper.
+    // Round 3 taught the pass to stop drawing a PATTERN it could no longer resolve, and the same
+    // rule then swallowed the room's hand lettering, which is the one thing in the set that must
+    // survive at any size. Measured on the props shot: the VOYANTE plate reads at 5.6 texels a
+    // pixel, the TAROT placard at 8.3, the bottle labels at 3.5–13 and the book spines at 5.6–7.6
+    // — so ANY gate that starts before ~9 deletes VIN, PROVERBES and BIENVENUE. It is a safety net
+    // against a shutter's louvres smearing at fifty texels a pixel, not a way to buy clean paper.
+    // The last pair is the pressure: one pen, so a mark is ink or it is paper. The lower number is
+    // no longer a ramp's foot — the composite makes the call against the mark's OWN field — and
+    // the upper one is the absolute floor above which anything is ink whatever its surroundings.
     texPen: [9, 20, 0.3, 0.5],
+    // How much sharper than the hardware would the G-buffer looks at a surface's own drawing, in
+    // mip levels. 0 is the trilinear average, which is where the lettering went: at the door's
+    // distance VIN, PROVERBES and BIENVENUE are 3–5 px tall, the mip chain hands the pass a grey
+    // rectangle, and a grey is the one thing the pen cannot draw. -1.25 halves the footprint, so
+    // the marks come back as marks and the composite lays them down at full ink.
+    texSharp: -1.25,
     paper: 0.55, // paper grain amount (the grain itself is already a whisper)
     hatchBoil: 0.003, // tile-units of hatch shiver on twos
     letterbox: null, // e.g. 1.85 → paper-white bars; null → none
@@ -109,6 +126,10 @@ export async function build(ctx) {
     if (!(name in params)) continue;
     params[name] = Array.isArray(params[name]) ? v.split(',').map(Number) : +v;
   }
+  // …and `ink.debug=<mode>` shows one of the probe buffers under ANOTHER piece's camera, which is
+  // how a measurement of what the pass sees at the shelves is taken from the props shot rather than
+  // from ink's own home shot.
+  const debugMode = ctx.params?.get?.('ink.debug');
 
   // ── textures drawn once ──
   // Nothing here is awaited. The hatch tiles come off the bake through ctx.assets, which is TRACKED
@@ -159,6 +180,7 @@ export async function build(ctx) {
       uHasMap: { value: 0 },
       uColor: { value: new THREE.Color(1, 1, 1) },
       uAlphaTest: { value: 0 },
+      uLodBias: { value: params.texSharp },
       uPacked: { value: 0 },
       uId: { value: 0 },
       uDist: { value: 1 },
@@ -249,6 +271,7 @@ export async function build(ctx) {
       uSeed: { value: 0 },
       uOvershoot: { value: params.overshoot },
       uMerge: { value: params.merge },
+      uThin: { value: params.thin },
     },
     depthTest: false,
     depthWrite: false,
@@ -305,7 +328,7 @@ export async function build(ctx) {
 
   const _size = new THREE.Vector2();
   const _clear = new THREE.Color();
-  let mode = 0;
+  let mode = MODES[debugMode] ?? 0;
 
   function render(ctx) {
     const cam = ctx.camera;
@@ -328,6 +351,7 @@ export async function build(ctx) {
 
     // 1. G-buffer
     gMat.uniforms.uCamRot.value.setFromMatrix4(cam.matrixWorld);
+    gMat.uniforms.uLodBias.value = params.texSharp;
     scene.overrideMaterial = gMat;
     renderer.setClearColor(0x000000, 0);
     renderer.setRenderTarget(rt.gbuf);
@@ -367,6 +391,7 @@ export async function build(ctx) {
     xu.uSeed.value = seed;
     xu.uOvershoot.value = params.overshoot;
     xu.uMerge.value = params.merge;
+    xu.uThin.value = params.thin;
     fullscreen(extMat, rt.ext);
 
     // 5. composite to the canvas
