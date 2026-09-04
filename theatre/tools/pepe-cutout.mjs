@@ -73,6 +73,13 @@ const INK = [13, 14, 13]; // the world's ink #0d0e0d (src/core/strokes.js), and 
 // ink as the wainscot — with the same 4% of marks greyer than 90 as the room has.
 const PEN_W = 3.1; // source px: the width the drawing's pen is re-cut to
 const CONTOUR_W = 6.0; // source px: what it is now, where it runs round the outside
+// …and the width the OUTER contour is re-cut to, which is not the same number. A contour drawn on
+// the paper minifies with the paper: the sheet is played at 3.0 texels to the screen pixel in his
+// own shot and 5.4 in the room's wide one, so one width cannot be the room's 2.5–3 px stroke in
+// both. 4.4 source px is the compromise measured across the two — 3.2 px at the pepe shot against
+// the room's 3, and 1.8 px at home — and it is the one place a heavier line than PEN_W is right
+// anyway: a figure's contour carries more weight than the folds inside it in every folio.
+const CONTOUR_PEN = 4.4;
 // And the colour plate is printed a hair out of register under the line, the way the folios' fills
 // sit off their contours (STYLE.md §1.4). The key is stage left, so the paper opens on that side.
 const MISREG = [1.4, 1.6]; // source px, the colour pulled down and to the right
@@ -547,13 +554,14 @@ const CLOTH = await (async () => {
   };
 })();
 
-// ── one pen: re-cut the drawing's marker to the room's weight, and peel its contour off ─────────
+// ── one pen: re-cut the drawing's marker, contour and all, to the room's weight ─────────────────
 // Everything above this line reads the drawing as it was supplied. Everything below prints it.
 // The pen is re-cut about its own centre line: for a pixel `dP` inside a stroke whose local
 // half-width is `R`, the distance to that centre line is `R - dP`, so the stroke survives where
-// `R - dP` is within half the new pen. A stroke already thin enough keeps all of itself. Then the
-// band of ink that ran round the outside is deleted and the alpha eroded to its middle: the ink
-// pass finds the silhouette there and draws it, so his contour is the room's line, not his own.
+// `R - dP` is within half the new pen. A stroke already thin enough keeps all of itself. The OUTER
+// contour goes through the same re-cut as every line inside him (round 7 — see the long note below
+// for why round 6's peel had to come out), and the alpha is grown a little past it so the one hard
+// edge left in him, the alpha test's, falls on bare paper and never through a mark.
 {
   const t0 = Date.now();
   // chamfer distance (hi px) to the nearest zero of a mask, over the whole sheet
@@ -609,18 +617,84 @@ const CLOTH = await (async () => {
   const dP = dist(penMask);
   const ridge = maxFilter(dP, Math.ceil(s(CONTOUR_W) * 0.85));
   const inside = new Uint8Array(N);
-  for (let i = 0; i < N; i++) inside[i] = ALPHA[i] > 127 ? 1 : 0;
-  const dA = dist(inside);
-  const peel = s(CONTOUR_W) / 2; // how far in the middle of the old contour ran
-  const clear = peel + half + s(0.8); // and how far in the ink pass's own line will reach
+  const notInside = new Uint8Array(N);
   for (let i = 0; i < N; i++) {
-    ALPHA[i] = Math.round(clamp(dA[i] - peel + 0.5, 0, 1) * 255);
-    if (!ALPHA[i] || dA[i] < clear) {
-      INKA[i] = 0;
-      continue;
-    }
-    // one pen, one pressure: the stroke is ink or it is paper, never a grey (STYLE.md §1.2)
-    INKA[i] = penMask[i] ? Math.round(clamp((dP[i] - (ridge[i] - half)) / 1.5 + 0.5, 0, 1) * 255) : 0;
+    inside[i] = ALPHA[i] > 127 ? 1 : 0;
+    notInside[i] = 1 - inside[i];
+  }
+  const dA = dist(inside), dOut = dist(notInside);
+  // ── ROUND 7: THE CONTOUR IS DRAWN AGAIN, AND THE SILHOUETTE IS COVERAGE ──────────────────────
+  // Round 6 PEELED the outer contour off the sheet and eroded the alpha to where its middle ran, so
+  // that the ink pass would find the silhouette in the depth buffer and draw it in the room's own
+  // hand. The value that came out was right and the SHAPE was not, and the reason is that the depth
+  // buffer knows nothing about him except where the alpha test said yes:
+  //   · the alpha was written as a ONE-TEXEL STEP, which is a hard threshold. Two halvings down the
+  //     chain it can only land on that level's lattice — a pixel and a half at the home shot — so
+  //     his outline was quantised to a coarse grid and carried texel-scale noise all along it;
+  //   · and the edge pass takes a mark's TANGENT from the gradient of a feature scalar. Across a
+  //     flat card standing in front of a flat wall that scalar is a pure step, so on a curve the
+  //     estimated tangent flipped between 90° and 45° from pixel to pixel. The doubled-line merge
+  //     then stopped recognising the two sides of the boundary as parallel and drew BOTH, and the
+  //     stub test cut holes in what was left. Measured on the delivered frame: a 5 px band of
+  //     mottled dark where the room's stroke is 3, with pepper thrown off it into the paper, and it
+  //     crawled from frame to frame as the lattice slid under him. That is the "messy outlines".
+  // The room's own contours do not have this problem because they are long straight runs or curves
+  // over a depth that varies. His never will be. So his contour goes back on the paper, where a
+  // cut-out's contour belongs — but at the ROOM'S PEN, re-cut to PEN_W about its own centre line
+  // exactly like every interior line, not at the drawing's own three-times-too-fat marker. The ink
+  // pass is left a light line of its own (pepe.js: lineWeight) to ride on top of it, which is the
+  // case the pass is written for: "0.25 means the contour is already in my map, add a whisper".
+  //
+  // Two numbers do the rest. The silhouette is COVERAGE, not a step: the alpha ramps over ALPHA_AA
+  // texels, chosen so that at the widest shot he is played at (5.4 sheet texels to the screen
+  // pixel) it is still about one texel after filtering, and the 0.5 crossing therefore moves a
+  // fraction of a pixel at a time instead of snapping to a lattice. And it is DILATEd outward, so
+  // the hard edge the alpha test finally makes of it falls on bare paper a clear margin outside the
+  // drawn contour and never through it. The distance field both are cut from is smoothed first: the
+  // supplied drawing's own alpha edge carries a texel of ringing from the upscale's unsharp mask,
+  // and a wobble that small is not the hand's, it is the scan's.
+  const ALPHA_AA = s(2.5); // source px of coverage shoulder on the silhouette
+  // …and no more than that: everything inside the alpha is HIS paper, and his paper hides the room.
+  // 1.8 keeps a clear pixel of margin outside the contour at every shot he is played at and stops
+  // short of the white halo that reads as a sticker laid on the drawing.
+  const DILATE = s(1.8); // source px of bare paper kept outside the drawn contour
+  const blurField = (src, r) => {
+    const tmp = new Float32Array(N), out = new Float32Array(N);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        let a = 0, n = 0;
+        for (let k = -r; k <= r; k++) {
+          const xx = x + k;
+          if (xx < 0 || xx >= W) continue;
+          a += src[y * W + xx];
+          n++;
+        }
+        tmp[y * W + x] = a / n;
+      }
+    for (let x = 0; x < W; x++)
+      for (let y = 0; y < H; y++) {
+        let a = 0, n = 0;
+        for (let k = -r; k <= r; k++) {
+          const yy = y + k;
+          if (yy < 0 || yy >= H) continue;
+          a += tmp[yy * W + x];
+          n++;
+        }
+        out[y * W + x] = a / n;
+      }
+    return out;
+  };
+  const sdRaw = new Float32Array(N);
+  for (let i = 0; i < N; i++) sdRaw[i] = inside[i] ? dA[i] : -dOut[i];
+  const sd = blurField(sdRaw, 2);
+  const halfOuter = s(CONTOUR_PEN) / 2;
+  const outer = s(CONTOUR_W) + s(1.5); // how far in from the sheet's edge the contour can run
+  for (let i = 0; i < N; i++) {
+    ALPHA[i] = Math.round(clamp((sd[i] + DILATE) / ALPHA_AA + 0.5, 0, 1) * 255);
+    // one pen, one pressure: the stroke is ink or it is paper, never a grey (STYLE.md §1.2) — and
+    // the OUTER contour is now re-cut by the same rule as every line inside him, at its own weight.
+    const hw = dA[i] < outer ? halfOuter : half;
+    INKA[i] = penMask[i] ? Math.round(clamp((dP[i] - (ridge[i] - hw)) / 1.5 + 0.5, 0, 1) * 255) : 0;
   }
   // the one number that says whether the discipline is being kept: how much of the figure is ink
   let np = 0, ni = 0;
@@ -638,7 +712,7 @@ const CLOTH = await (async () => {
     await sharp(g, { raw: { width: W, height: H, channels: 2 } }).flatten({ background: '#cfcfcf' }).resize(700).png().toFile(PREVIEW + '/onepen.png');
   }
   console.log(`ink coverage: ${((100 * ni) / np).toFixed(1)}% of the figure`);
-  console.log(`one pen: ${PEN_W} src px, contour peeled ${CONTOUR_W} src px (${Date.now() - t0} ms)`);
+  console.log(`one pen: ${PEN_W} src px, contour ${CONTOUR_PEN} src px (was ${CONTOUR_W}) (${Date.now() - t0} ms)`);
 }
 // the colour plate, out of register under the line: where a pixel takes its flat colour from
 const MDX = Math.round(s(MISREG[0])), MDY = Math.round(s(MISREG[1]));

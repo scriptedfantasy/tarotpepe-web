@@ -4,21 +4,26 @@
 //
 // ONE PEN, AND THE PAPER IS THE LIGHT. Three rules govern how he is drawn, and they are enforced
 // partly here, partly in tools/pepe-cutout.mjs and partly in pepe-mips.js:
-//   · The MIP CHAIN IS PRINTED, NOT AVERAGED (pepe-mips.js). This is the round-6 fix and it is the
-//     one that mattered. A `colorful` material is shown verbatim by the ink pass — `base = alb.rgb`
-//     — so unlike every other surface in the room his drawing is never re-stated by the pen: what
-//     the texture unit hands over IS his line. And generateMipmaps hands over an AVERAGE, so the
-//     moment the frame minified him (about three times, in his own shot) every line in his face and
-//     every fold of his robe arrived as a soft mid-grey with an anti-aliased fringe, against the
-//     hard black of a chair 200 px away. The chain is now rebuilt by hand under a printer's rule —
-//     each level is ink or fill and never between — and measured against the room's own contours in
-//     the same frame his marks now sit at the same ink (median lum 14), the same width (median 3 px)
-//     and the same 4% of marks greyer than 90.
-//   · His contour is the INK PASS's line, at the room's lineWeight (1.15), and nothing else. The
-//     generator peels the drawing's own marker — three times the room's weight, smooth, and unable
-//     to boil because it lives in a texture — off the outside and erodes the alpha to where its
-//     middle ran, so the silhouette the ink pass finds is his true contour and is drawn in the
-//     same hand as the wainscot. Every interior line of the drawing is re-cut to the same weight.
+//   · The MIP CHAIN CARRIES PIGMENT AND COVERAGE SEPARATELY (pepe-mips.js). A `colorful` material
+//     is shown verbatim by the ink pass — `base = alb.rgb` — so unlike every other surface in the
+//     room his drawing is never re-stated by the pen: what the texture unit hands over IS his line.
+//     A plain averaging filter hands over a GREY the moment a pen line is thinner than a texel,
+//     which is what made him a soft sticker in round 5; round 6 answered with a hard threshold at
+//     every level, which put the value back and made the EDGE a blocky thing that crawled. The
+//     chain now averages COVERAGE smoothly and restores the pigment with a gain on it, so a mark
+//     loses width as it recedes and never value, and its boundary is still anti-aliased.
+//   · HIS CONTOUR IS DRAWN ON THE PAPER, at the room's pen (round 7). Round 6 peeled the drawing's
+//     own marker off the outside and left the silhouette to the ink pass's line, which is the right
+//     instinct — one pen at every distance — and it cannot be made to work here. The pass finds his
+//     outline in the DEPTH buffer, the depth buffer knows only where the alpha test said yes, and a
+//     flat card in front of a flat wall gives the pass a pure step with no gradient to take a
+//     tangent from: on a curve its estimate flipped from pixel to pixel, its doubled-line merge
+//     stopped firing and its stub test cut holes in what was left. Measured on the delivered frame,
+//     a 5 px band of mottled dark against the room's 3 px stroke, with pepper thrown into the paper
+//     — the user's "his outlines are too messy". So the contour is re-cut in the sheet instead, to
+//     CONTOUR_PEN (tools/pepe-cutout.mjs), and `lineWeight` here is 0: the pass draws no line of
+//     its own round him at all. In the same frame his silhouette now measures core lum 14 at 2 px
+//     against the room's 26 at 2 px, and his robe's marks 41% at 2 px against the room's 37%.
 //     `?view=pepe&state=lines` is the check: one pen across the whole picture.
 //   · The robe is BARE PAPER (85% of it), with drawn tone in three places only — under each
 //     forearm, along the hem the bench holds up, and down the shoulder the key cannot see. He
@@ -139,11 +144,17 @@ export async function build(ctx) {
   // He is drawn with the room's pen or he is a second drawing pasted into the first. Two numbers
   // do that, and they are the whole of it:
   //
-  //   lineWeight 1.1  the room's own weight (room.js: trim 1.15, wood and shutters 1.1). His
-  //                   contour is now the INK PASS's line and nothing else — tools/pepe-cutout.mjs
-  //                   peels the drawing's fat marker off the outside and erodes the alpha to where
-  //                   its middle ran, so the silhouette the ink pass finds is his true contour and
-  //                   it is drawn in the room's hand, with the room's wobble and the room's boil.
+  //   lineWeight 0    the ink pass draws NO line of its own round him. This is the round-7 change
+  //                   and the reason for it is measured at the head of this file: the pass takes a
+  //                   mark's tangent from the gradient of a feature scalar, a flat card in front of
+  //                   a flat wall gives it a pure step to differentiate, and on a curve the estimate
+  //                   flips between 90° and 45° from pixel to pixel — so the doubled-line merge
+  //                   stops recognising the two sides of the silhouette as one line and draws both,
+  //                   and the stub test cuts holes in what is left. A 5 px crust with pepper thrown
+  //                   off it, where the room's stroke is 3 px and continuous. The room's contours
+  //                   never hit this (long straight runs, or curves over a depth that varies) and
+  //                   his never will, so his contour goes back where a cut-out's contour belongs:
+  //                   on the paper, re-cut to CONTOUR_PEN in tools/pepe-cutout.mjs.
   //                   (?view=pepe&state=lines is the proof: one pen across the whole picture.)
   //   hatch 0.02      and NO tone from the ink pass. He is a flat card facing the visitor, so the
   //                   lit pass reads one value across the whole of him and lays one even density
@@ -155,16 +166,17 @@ export async function build(ctx) {
   // head; at lineWeight 0 the edge pass drops their seed entirely, so no line is drawn round a
   // pupil or a mouth that is already drawn.
   const textures = [];
-  const cutMat = (layer, { hatch = 0.02, lineWeight = 1.15 } = {}) => {
+  const cutMat = (layer, { hatch = 0.02, lineWeight = 0 } = {}) => {
     const mat = inkMaterial({ color: '#ffffff', colorful: true, hatch, lineWeight, roughness: 1 });
     mat.alphaTest = 0.5;
     mat.name = layer;
     const p = ctx.assets.texture(`/pepe/${L[layer].file}`).then((t) => {
       t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-      // …and the chain is PRINTED, not averaged (pepe-mips.js). A colorful material shows its
-      // albedo verbatim, so whatever the texture unit hands over IS his pen: with the hardware's
-      // averaging filter every line of his face arrived as a mid-grey the moment the frame
-      // minified him, which is what made him a sticker laid on a drawing instead of a figure in it.
+      // …and the chain filters PIGMENT and COVERAGE apart (pepe-mips.js). A colorful material shows
+      // its albedo verbatim, so whatever the texture unit hands over IS his pen: with the hardware's
+      // averaging filter every line of his face arrived as a mid-grey the moment the frame minified
+      // him, and with round 6's hard threshold it arrived black but blocky, on that level's own
+      // lattice, and crawling. Coverage is averaged; the ink in it is put back by a gain.
       inkFilter(t, ctx.renderer);
       mat.map = t;
       mat.needsUpdate = true;

@@ -22,6 +22,19 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
 
 ## Interactive, and Pepe really speaks (the user's rule)
 
+- **The pull is from the whole deck (the user's rule).** "tarot is pulled from all 78 cards, not a sub
+  section" — so when he lays the cards out for the visitor to choose, all 78 are on the table, not a
+  ribbon of 21. This is a staging problem, not a data one: 78 cards on a 0.62 m cloth overlap heavily
+  and a phone cannot give each one a tap strip, so the interaction has to answer for that (a
+  neighbourhood that opens under the cursor, a pass along the arc, something) — but the deck on the
+  table is the whole deck.
+- **A card lifts UP on hover, never down.** The user's words: "when i hover over the cards, they pop
+  down, they should however pop up on hover (down feels weird because the screen is so crowded at the
+  bottom)". Up means toward the top of the frame, in whatever the current shot's grammar is.
+- **Nothing on the table passes through anything else.** The cards collided with the wine bottle
+  during the shuffle. A puppet show has real objects in a real box; if a beat needs the space, the
+  prop moves out of the way beforehand, in shot, as a piece of business.
+
 - **Tarot Pepe talks to the visitor, powered by an LLM.** His lines come from the `mind` piece, which calls
   `POST /api/pepe` — a streaming proxy in `server/pepe.mjs` wired into the Vite dev server (Anthropic if
   `ANTHROPIC_API_KEY` is set, else OpenRouter if `OPENROUTER_API_KEY`; keys live in `theatre/.env.local`,
@@ -51,6 +64,17 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   the page; the critic reads it as a scene.
 
 ## The world's rules (do not break these)
+
+- **The entrance door is the benchmark for the pen — the user's own words.** "the ink lines that make
+  up the front door at the first shot, are really good. we should have that aestetic in the room
+  aswell". `src/pieces/entrance-door.js` draws with real polylines through `inkLine`/`hatch` at
+  `pen = max(1.4, h/560)` — about 1.6 px on a 900 px frame — with wobble 0.3–1.0, alpha falling off
+  along a stroke, and a `seed` that re-rolls the whole drawing. The room's contours are derived
+  per-pixel by a shader at 3.7 px nominal extent, which is why they read fat and blurry beside it.
+  Judge the room against the door, in the same frame, at 1:1 — not against a film still.
+- **The line boils.** The drawing is re-struck on every 12 fps step, so a held line is never the same
+  line twice: it breathes. This is the film's most recognisable quality and it must be true while
+  nothing is happening, not only during a move.
 
 - **Ink on paper.** Everything is drawn: outlines with a hand's wobble, tone from hatching (vertical
   rain-strokes on walls, cross-hatch on dark masses, dash-strokes for floors), never a smooth gradient,
