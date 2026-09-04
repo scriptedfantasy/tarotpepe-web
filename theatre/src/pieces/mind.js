@@ -44,7 +44,7 @@
 // other states fetch that one beat live and show it in the same block. Nothing here blocks the page
 // on the network: setState returns at once and the conversation fills in.
 import { SCRIPT, lineFor, linesFor, POSITIONS, POSITION_KEYS, positionKey } from './script.js';
-import { stanceOf, readingScript, followupScript, answerScript, beatText } from './mind-voice.js';
+import { stanceOf, readingScript, followupScript, answerScript, beatText, aboutTheSpread } from './mind-voice.js';
 import { intentOf, talkScript, farewellScript, looksLikeOffer } from './mind-talk.js';
 import { bySlug } from '../core/deck.js';
 
@@ -342,9 +342,14 @@ export async function build(ctx) {
     turn(text = '') {
       const said = String(text ?? '').trim();
       const intent = intentOf(said, { offered: talk.offered });
+      const dealt = spread.filter(Boolean);
       // 'draw' means they have just asked for cards, so his answer is the deck coming off the
       // cloth: play these sentences over the shuffle rather than before it.
-      const beat = intent === 'farewell' ? 'farewell' : intent === 'draw' ? 'shuffle' : 'talk';
+      // With cards face up, a line that points at one of them is a follow-up and not table talk:
+      // the written brain answers with that card, and the live voice gets the follow-up direction
+      // (answer with what is on the table, name the one you mean) instead of the talk direction.
+      const beat =
+        intent === 'farewell' ? 'farewell' : intent === 'draw' ? 'shuffle' : dealt.length && aboutTheSpread(said, dealt) ? 'followup' : 'talk';
       if (intent === 'draw') talk.offered = false;
       return { intent, text: said, sentences: api.reply({ beat, user: said, intent }) };
     },
@@ -484,16 +489,19 @@ async function visitorSays(mind, block, text) {
 
 // The canned visit is a conversation, and it is the one thing a critic reads. It shows the offer
 // being made, refused, and then asked for: the cards come out at the visitor's word and not before.
+// Two of the visitor's lines are questions with no question mark on them, because that is how
+// people type: one about him, one about a card. Neither may be mistaken for the visitor reporting
+// on themselves, and the second must be answered with the card it points at.
 const VISIT = {
   said: [
     'I keep starting things and not finishing them.',
     'Four or five. There is a shed I began in March.',
     'Not yet. I would rather talk.',
-    'What are you, exactly?',
+    'do you ever get tired of being asked about the future',
     'All right. Read my cards.',
   ],
   cards: ['the-fool', 'the-house-of-god', 'the-star'],
-  question: 'Which one is the important one?',
+  questions: ['Which one is the important one?', 'what does the middle one mean'],
   bye: 'Thank you. I should go.',
 };
 
@@ -511,7 +519,7 @@ async function cannedVisit(mind, block, ctx) {
     addLine(block, '', '[ the fan; the visitor picks three ]');
     for (let i = 0; i < 3; i++) await speak(mind, block, { beat: 'reading', slug: VISIT.cards[i], position: i });
   }
-  await visitorSays(mind, block, VISIT.question);
+  for (const q of VISIT.questions) await visitorSays(mind, block, q);
   await visitorSays(mind, block, VISIT.bye);
   fit(block);
 }

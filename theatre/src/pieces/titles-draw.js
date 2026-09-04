@@ -768,36 +768,45 @@ export function marquee(g, w, h, text, { capH, ink = INK, bulb = '#f1e0a6', rail
   const k = capH / 100;
   const sAvg = letters.reduce((a, l) => a + l.s, 0) / (letters.length || 1);
 
-  // the rails: two double hairlines behind the word, at the height of the top bars and just
-  // above the feet, running past the word on both sides; diagonal braces between them; a few
-  // short posts hanging below the baseline
+  // The truss the sign is bolted to. It is a piece of ironwork, not a layout guide, so it is drawn
+  // like one: two chords, an X-brace in every bay wide enough to take one, a standard at each end
+  // running past both chords, and short posts under the feet. The truss stands BEHIND the letters,
+  // which are solid panels — so it is only ever seen in the bays between them and past the ends.
+  // No line crosses a glyph, no line stops in mid-air, nothing is drawn at a ghost's opacity.
   if (rails) {
-    const ext = total * 0.045 + capH * 0.05;
+    const ext = total * 0.05 + capH * 0.09;
     const y1 = top + sAvg * 0.62 * k, y2 = top + (100 - sAvg * 0.85) * k;
-    // no two rails are the same length: each end runs out a little differently
-    const ends = [y1, y2].map(() => [x0 - ext * (0.8 + rng() * 0.4), x0 + total + ext * (0.8 + rng() * 0.4)]);
-    [y1, y2].forEach((y, i) => {
-      const [xa, xb] = ends[i];
-      hairline(g, xa, y, xb, y, { color: railInk, rng, width: 0.9, wobble: 0.55, alpha: 0.85 });
-      hairline(g, xa + 3, y + 2.6, xb - 2 + rng() * 6, y + 2.6, { color: railInk, rng, width: 0.8, wobble: 0.55, alpha: 0.7 });
-      // rail ends: a little hook at each end
-      for (const px of [xa, xb]) {
-        hairline(g, px, y - capH * (0.04 + rng() * 0.02), px, y + capH * (0.05 + rng() * 0.03), { color: railInk, rng, width: 1.1, wobble: 0.3 });
-      }
-    });
-    // diagonal braces across the word, top rail to bottom rail, each about two letters wide
-    const n = letters.length;
-    const picks = n >= 6 ? [0, Math.floor(n * 0.42), n - 3] : [0, Math.max(1, n - 2)];
-    for (const i of picks) {
-      const L = letters[i];
-      const xs = x0 + L.x - L.w * 0.04, xe = xs + L.w * (2.1 + rng() * 0.3) + 2 * gap * capH;
-      hairline(g, xs, y1 + 1.3, xe, y2 + 1.3, { color: railInk, rng, width: 0.85, wobble: 0.5, alpha: 0.72 });
+    const xa = x0 - ext, xb = x0 + total + ext;
+    const pad = capH * 0.022;
+    const bays = [];
+    let cx = xa;
+    for (const L of letters) {
+      const bx0 = x0 + L.x - pad, bx1 = x0 + L.x + L.w + pad;
+      if (bx0 - cx > 1) bays.push([cx, bx0]);
+      cx = Math.max(cx, bx1);
     }
-    // a third, mid-height hairline that only runs part of the way
-    const ym = top + 50 * k + (rng() - 0.5) * 6;
-    const xm0 = x0 + total * (0.28 + rng() * 0.1), xm1 = x0 + total + ext * (0.6 + rng() * 0.5);
-    hairline(g, xm0, ym, xm1, ym, { color: railInk, rng, width: 0.75, wobble: 0.5, alpha: 0.38 });
-    // posts below the baseline, at the stem of two or three letters
+    if (xb - cx > 1) bays.push([cx, xb]);
+    const drop = capH * 0.019;
+    for (const [ba, bb] of bays) {
+      if (bb - ba < 2.5) continue;
+      for (const y of [y1, y2]) {
+        hairline(g, ba, y, bb, y, { color: railInk, rng, width: 1, wobble: 0.35, alpha: 0.92 });
+        if (bb - ba > capH * 0.1) hairline(g, ba + 0.8, y + drop, bb - 0.8, y + drop, { color: railInk, rng, width: 0.85, wobble: 0.35, alpha: 0.78 });
+      }
+      // the bay's brace. The bays past the ends of the word get a single raking diagonal, so the
+      // truss reads as running on off the edge rather than closing itself into a bracket; the bay
+      // inside the word (a word-space) is braced both ways, which is where the X belongs.
+      const outer = ba <= xa + 1 || bb >= xb - 1;
+      if (outer || bb - ba < capH * 0.14) continue; // past the word the chords simply run on
+      hairline(g, ba + 1.4, y1 + drop, bb - 1.4, y2, { color: railInk, rng, width: 0.85, wobble: 0.35, alpha: 0.8 });
+      if (bb - ba > capH * 0.34) hairline(g, bb - 1.4, y1 + drop, ba + 1.4, y2, { color: railInk, rng, width: 0.85, wobble: 0.35, alpha: 0.8 });
+    }
+    // the standards: one inside each end, with the chords running on past them
+    for (const px of [xa + capH * 0.1, xb - capH * 0.1]) {
+      hairline(g, px, y1 - capH * 0.075, px, y2 + capH * 0.1, { color: railInk, rng, width: 1.25, wobble: 0.25, alpha: 0.95 });
+      hairline(g, px - capH * 0.022, y2 + capH * 0.095, px + capH * 0.022, y2 + capH * 0.095, { color: railInk, rng, width: 1, wobble: 0.25, alpha: 0.9 });
+    }
+    // and the short posts that carry the sign, under the feet of two or three letters
     const withPost = letters.filter((L) => L.glyph.post != null);
     const chosen = [withPost[0], withPost[Math.floor(withPost.length / 2)], withPost[withPost.length - 1]].filter(Boolean);
     for (const L of chosen) {

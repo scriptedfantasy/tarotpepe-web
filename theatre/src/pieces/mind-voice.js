@@ -1,6 +1,13 @@
 // mind-voice.js — the scripted intelligence behind mind.js. No model, no network.
 //
-// Two jobs the written script could not do on its own:
+// Three jobs the written script could not do on its own:
+//
+//   0. READING THE SENTENCE. `isQuestion()`, `aboutHim()`, `cardRef()`, `aboutTheSpread()`. A
+//      question is a question whether or not the visitor typed the mark, and almost nobody types
+//      it: "what does the middle one mean" is a question, "have a good night" is not. A question
+//      about HIM is not a report on them — "do you ever get tired of this" is his tiredness, not
+//      theirs, and it must not become the evening's subject. And when cards are down, a line that
+//      points at one — by name, by place, or with a finger — is answered with THAT card.
 //
 //   1. THE VISITOR'S ANSWER HAS TO MATTER. The visitor types one sentence. `stanceOf()` reads it
 //      for one of ten plain stances (a thing begun and unfinished, a decision, a person, work, a
@@ -43,15 +50,77 @@ const sentencesOf = (text) =>
 const firstSentence = (text) => sentencesOf(text)[0] ?? String(text ?? '').trim();
 const firstTwo = (text) => sentencesOf(text).slice(0, 2).join(' ') || String(text ?? '').trim();
 
-// three or four of their own words, for the quotation
-function fewWords(text, n = 4) {
-  const words = String(text ?? '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .filter(Boolean);
-  const take = words.slice(0, Math.max(3, Math.min(n, words.length)));
-  return take.join(' ').replace(/[.,;:!?…]+$/, '');
+// ---------------------------------------------------------------------------------------------
+// Reading a sentence. Three things have to be true of this before anything else works.
+//
+//   isQuestion()   A question is a question whether or not the visitor typed the mark. Nobody
+//                  types the mark. "what does the middle one mean" is a question; "have a good
+//                  night" and "do not tell me the future" are not, though they open with the
+//                  same words.
+//   aboutHim()     A question about HIM is not the visitor reporting on themselves. "do you ever
+//                  get tired of this" is not a tired visitor, and must not be answered as one.
+//   cardRef()      Which card on the table they mean, by name, by place, or by pointing.
+// ---------------------------------------------------------------------------------------------
+
+// the noises people put in front of the sentence they actually mean
+const LEAD =
+  /^(?:(?:so|and|but|well|ok|okay|alright|all right|right|now|then|hey|hi|hello|please|sorry|excuse me|actually|honestly|anyway|um|uh|erm|hmm+|oh|yeah|yes|no|nah|pepe|tarot pepe|sir)\b[,.!\s]+)+/;
+
+// the words a question opens with
+const OPENS =
+  /^(what|whats|why|how|hows|who|whos|whose|whom|when|where|which|do|does|did|can|could|will|would|shall|should|are|is|am|was|were|have|has|had|may|might|must)\b/;
+// ... except when it opens a refusal or an instruction: "do not ask me", "will not happen"
+const NOT_ASKING = /^(?:do|does|did|will|would|can|could|should|shall|may|might|must|have|has|had|is|are|was|were|am)\s+(?:not|never)\b/;
+// "have a good night", "have a look" — an imperative, not "have you"
+const IMPERATIVE = /^(?:have|has|had)\s+(?!(?:i|you|we|they|he|she|it|any|anyone|anybody|there|that|this|the)\b)/;
+// "what a night", "how strange" — an exclamation wearing a question's hat
+const EXCLAIM = /^(?:what (?:a|an) \w+|how (?:strange|odd|nice|funny|sad|awful|lovely|curious|interesting|kind|rude|convenient|very))\b/;
+// a contraction only asks when a subject follows it: "don't you think" asks, "don't tell me" does not
+const CONTRACTED =
+  /^(?:don'?t|doesn'?t|didn'?t|can'?t|won'?t|wouldn'?t|couldn'?t|shouldn'?t|isn'?t|aren'?t|ain'?t|haven'?t|hasn'?t|weren'?t|wasn'?t)\s+(?:i|you|we|they|he|she|it|that|this|there)\b/;
+// a question buried in a request: "tell me what you do", "I wonder why he left"
+const ASKS_INSIDE =
+  /\b(?:tell me|i wonder|i want to know|i would like to know|i'd like to know|do you know|any idea|no idea)\b[ ,]+(?:what|whats|why|how|who|when|where|which|whether|if|about)\b/;
+
+// Is this a question? The mark if it is there, otherwise the shape of the first or the last
+// sentence — a visitor types one line and the question is at one end of it or the other.
+export function isQuestion(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text) return false;
+  if (/\?/.test(text)) return true;
+  const parts = sentencesOf(text);
+  // the first sentence, the last sentence, and the last clause of it: people put the question at
+  // the end of a line and hold it on with a comma — "I am so tired, what am I supposed to do"
+  const tail = parts[parts.length - 1] ?? '';
+  const clauses = tail.split(/[,;–—]+/);
+  for (const part of [parts[0], tail, clauses[clauses.length - 1]]) {
+    if (!part) continue;
+    const t = norm(part).replace(LEAD, '');
+    if (!t) continue;
+    if (ASKS_INSIDE.test(t) || CONTRACTED.test(t)) return true;
+    if (NOT_ASKING.test(t) || IMPERATIVE.test(t) || EXCLAIM.test(t)) continue;
+    if (OPENS.test(t)) return true;
+  }
+  return false;
+}
+
+const SECOND = /\b(you|your|yours|yourself|frog|frogs)\b/;
+const FIRST = /\b(i|i'm|im|i've|ive|i'd|i'll|me|my|mine|myself|we|us|our|ours|we're)\b/;
+// "what do you make of that" is about the thing on the table, not about the frog. It only counts
+// when the pointing is the end of the sentence; "how much of this do you believe" is about him.
+const OF_A_THING = /\b(?:of|about) (?:that|it|this|these|those|them|the card|the cards|the spread)\s*[?.!]*$/;
+
+// A question about him: second person, no first person, not pointed at a thing on the table.
+// "tell me what you do all day" and "do you get many people like me" are still questions about
+// him: the visitor is in the sentence, but only as the one doing the asking or the comparing.
+const ASIDE =
+  /^(?:tell me|i wonder|i want to know|i would like to know|i'd like to know|do you know|any idea)\b[ ,]*|\b(?:like|about|of|for|with|to|from) (?:me|us)\b|\b(?:remember|recognise|recognize|know|see|hear|understand|believe|like|mind|judge|charge) (?:me|us)\b/g;
+
+export function aboutHim(raw) {
+  const t = norm(raw);
+  if (!t || !SECOND.test(t)) return false;
+  if (FIRST.test(t.replace(ASIDE, ' ')) || OF_A_THING.test(t)) return false;
+  return isQuestion(t);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -67,7 +136,11 @@ const TESTS = [
   ['nothing', /^(nothing|nothing much|not much|no idea|dunno|i dunno|idk|no comment|pass)\.?$/],
   ['joke', /^(hi|hello|hey|yo|sup|test|testing|lol|lmao|haha+|ha|ok|okay|k|nope|yep|yes|no|blah|meh|hmm+|frog|pepe|feels good man|asdf+|qwerty|[^a-z\s]+)\.?$/],
   ['joke', /^[bcdfghjklmnpqrstvwxz]{5,}$/],
-  ['loss', /\b(died|dying|dead|death|passed away|funeral|grief|grieving|mourning|buried|hospice|terminal|widow|widowed|miscarriage|suicide|broke up|breakup|divorce|divorced|separated|left me|dumped me|it ended|ended it)\b/],
+  ['joke', /\b(walks? into a bar|knock knock|why did the (chicken|frog|man)|a (man|frog|priest|horse) walks into|that is the joke|thats the joke|just kidding|only joking|ribbit)\b/],
+  [
+    'loss',
+    /\b(died|dying|dead|death|passed away|funeral|grief|grieving|mourning|buried|hospice|terminal|widow|widowed|miscarriage|miscarried|stillborn|suicide|broke up|breakup|divorce|divorced|separated|left me|dumped me|it ended|ended it|lost (my|the|our) (baby|child|son|daughter|mother|mum|mom|father|dad|brother|sister|wife|husband|partner|friend|dog|cat))\b/,
+  ],
   ['decision', /\b(should i|i should|shall i|whether|decide|deciding|decision|choose|choosing|choice|torn|or not|either way|can'?t decide|can'?t choose|two (jobs|offers|options|people|places)|leave (him|her|them|my))\b/],
   ['unfinished', /\b(start(ing|ed)? (things|stuff|something|projects)|never finish|not finish(ing)?|don'?t finish|unfinished|half (done|finished|way)|halfway|abandon|gave up|give up|procrastinat|put(ting)? (it|things) off)\b/],
   ['person', RELATION],
@@ -76,7 +149,6 @@ const TESTS = [
   ['work', /\b(job|jobs|work|working|career|boss|office|company|business|startup|client|clients|promotion|fired|redundan|quit|colleague|salary|money|rent|freelance|deadline|the firm)\b/],
   ['tired', /\b(tired|exhaust|burn(t|ed) out|burnout|no energy|worn out|can'?t sleep|insomnia|drained|knackered|wiped)\b/],
   ['fear', /\b(afraid|scared|scary|frightened|terrified|worried|worry|worrying|anxious|anxiety|nervous|dread|panic|fear)\b/],
-  ['question', /\?\s*$/],
 ];
 
 // → {key, subject, they, them, Cap} or {key:null}
@@ -92,12 +164,15 @@ export function stanceOf(raw) {
   else if (/\b(he|him|his)\b/.test(text)) Object.assign(out, { they: 'he', them: 'him', Cap: 'He' });
 
   if (!text) return { ...out, key: 'nothing' };
+  // A question about him is not a report on them: "do you ever get tired of this" is his
+  // tiredness, not theirs, and it must never become the visitor's stance for the evening.
+  if (aboutHim(text)) return { ...out, key: 'question' };
   // "lost my job" is work, not a bereavement
   if (/\b(lost|losing|quit|fired|laid off|made redundant)\b/.test(text) && /\b(job|work|role|position|company|contract)\b/.test(text)) {
     return { ...out, key: 'work' };
   }
   for (const [key, re] of TESTS) if (re.test(text)) return { ...out, key };
-  return out;
+  return isQuestion(text) ? { ...out, key: 'question' } : out;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -181,7 +256,9 @@ export function tieFor(stance, position) {
   const rows = TIES[stance.key];
   if (!rows) return null;
   const variants = rows[POS_INDEX[positionKey(position)] ?? 0] ?? [];
-  const usable = variants.filter((v) => !/\{it\}/.test(v) || stance.subject);
+  let usable = variants.filter((v) => !/\{it\}/.test(v) || stance.subject);
+  // they named somebody: he uses the name, not "a person"
+  if (stance.subject && usable.some((v) => /\{it\}|\{them\}/.test(v))) usable = usable.filter((v) => /\{it\}|\{them\}/.test(v));
   if (!usable.length) return null;
   const pick = usable[hash(stance.subject ?? stance.key) % usable.length];
   return fill(pick, stance).replace(/\s+/g, ' ').trim();
@@ -219,49 +296,118 @@ function heldBack(card, stance) {
 // ---------------------------------------------------------------------------------------------
 const ALIASES = {
   tower: 'the-house-of-god',
-  'the tower': 'the-house-of-god',
+  'house of god': 'the-house-of-god',
   magician: 'the-juggler',
-  'the magician': 'the-juggler',
   'high priestess': 'the-popess',
+  priestess: 'the-popess',
   hierophant: 'the-pope',
+  wheel: 'wheel-of-fortune',
   'wheel of fortune': 'wheel-of-fortune',
   'hanged man': 'the-hanged-man',
+  'hanged frog': 'the-hanged-man',
+  'last judgement': 'judgement',
+  judgment: 'judgement',
+  'the star card': 'the-star',
 };
 
-// Which card are they asking about? A name, an alias, or a place on the table. null if unstated.
-function namedCard(text, drawn) {
+// Where on the table, in the words people actually use. "left" only counts as a place when it is
+// wearing a determiner: "she left me" is not a card.
+// An ordinal only counts with a determiner in front or a noun behind it, so that "first, I should
+// say something" and "she left me" are not cards.
+const PLACES = [
+  [/\bthe (?:first|1st)\b|\b(?:first|1st) (?:one|card|picture)\b|\bnumber one\b|\bcard (?:one|1)\b|\bthe left(?:most| one| card| hand)?\b|\bleftmost\b|\bfar left\b|\bleft.hand (?:one|card)\b/, 0],
+  [/\bthe (?:second|2nd)\b|\b(?:second|2nd) (?:one|card|picture)\b|\bnumber two\b|\bcard (?:two|2)\b|\bthe (?:middle|centre|center)\b|\b(?:middle|centre|center) (?:one|card|picture)\b/, 1],
+  [
+    /\bthe (?:third|3rd|last|final)\b|\b(?:third|3rd|last|final) (?:one|card|picture)\b|\bnumber three\b|\bcard (?:three|3)\b|\bthe right(?:most| one| card| hand)?\b|\brightmost\b|\bfar right\b|\bright.hand (?:one|card)\b/,
+    2,
+  ],
+];
+
+// pointing at one without naming it: "this one", "that card", "the one you turned"
+const DEICTIC = /\b(?:this|that|the) (?:one|card|picture)\b|\bthe one (?:you|i) (?:just )?(?:turned|read|said|did)\b|\bthat picture\b/;
+const SUITS = /\b(cups?|pentacles?|coins?|swords?|wands?|batons?|staves)\b/;
+const SUIT_OF = { cup: 'cups', cups: 'cups', pentacle: 'pentacles', pentacles: 'pentacles', coin: 'pentacles', coins: 'pentacles', sword: 'swords', swords: 'swords', wand: 'wands', wands: 'wands', baton: 'wands', batons: 'wands', staves: 'wands' };
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Which card are they pointing at? → {card, index, how} or null. `how` is 'name' | 'place' |
+// 'suit' | 'point', which is also how sure he is allowed to sound about it.
+export function cardRef(text, spread = []) {
+  const drawn = (spread ?? []).filter(Boolean);
   if (!drawn.length) return null;
   const t = norm(text);
+  const at = (card, how) => (card ? { card, index: drawn.indexOf(card), how } : null);
+
   for (const [alias, slug] of Object.entries(ALIASES)) {
     if (t.includes(alias)) {
       const c = drawn.find((d) => d.slug === slug);
-      if (c) return c;
+      if (c) return at(c, 'name');
     }
   }
   for (const c of drawn) {
     const n = norm(c.name);
-    if (t.includes(n) || t.includes(n.replace(/^the /, ''))) return c;
+    const bare = n.replace(/^the /, '');
+    if (t.includes(n) || new RegExp(`\\b${esc(bare)}\\b`).test(t)) return at(c, 'name');
   }
-  if (/\b(first|1st|left|leftmost|one on the left)\b/.test(t)) return drawn[0] ?? null;
-  if (/\b(second|2nd|middle|centre|center)\b/.test(t)) return drawn[1] ?? drawn[0] ?? null;
-  if (/\b(third|3rd|last|right|rightmost|final)\b/.test(t)) return drawn[drawn.length - 1] ?? null;
+  for (const [re, i] of PLACES) if (re.test(t)) return at(drawn[Math.min(i, drawn.length - 1)], 'place');
+  // one card of that suit is on the table and they said the suit: that is the one they mean
+  const suit = t.match(SUITS);
+  if (suit) {
+    const want = SUIT_OF[suit[1]];
+    const hits = drawn.filter((c) => norm(c.name).endsWith(want));
+    if (hits.length === 1) return at(hits[0], 'suit');
+  }
+  if (DEICTIC.test(t)) return at(drawn[drawn.length - 1], 'point');
   return null;
+}
+
+// Is this line about the cards lying there at all? A named card, a place, the word itself, or a
+// question of the kind the table answers.
+export function aboutTheSpread(text, spread = []) {
+  const drawn = (spread ?? []).filter(Boolean);
+  if (!drawn.length) return false;
+  if (aboutHim(text)) return false;
+  if (cardRef(text, drawn)) return true;
+  const t = norm(text);
+  // "deal me another one" is not a question and is still about the table
+  if (questionShape(t) === 'more') return true;
+  // anything else that is not a question and does not point at a card is table talk, and table
+  // talk is answered as talk: "I have never had my cards read before" wants no card in the answer.
+  if (!isQuestion(text)) return false;
+  // "reading" and "table" are words about the evening, not about a card: "what would a reading
+  // even tell me" is talk. The cards themselves are not.
+  if (/\b(cards?|deck|spread|picture|pictures|arcana)\b/.test(t)) return true;
+  return ['which', 'meaning', 'bad', 'good', 'do', 'more', 'self', 'judge', 'decide'].includes(questionShape(text));
+}
+
+// What he calls the card's place at the table, in the visitor's own terms.
+function placeOf(card, drawn) {
+  const i = drawn.indexOf(card);
+  if (i < 0 || drawn.length < 2) return 'That card';
+  if (i === 0) return 'The first one';
+  if (i === drawn.length - 1) return drawn.length > 2 ? 'The third one' : 'The second one';
+  return 'The middle one';
 }
 
 // The shape a real question takes at this table.
 export function questionShape(text) {
-  const t = norm(text);
+  // "I mean" is a noise, not the verb: "is it going to be all right, I mean really" is not a
+  // question about what a card means.
+  const t = norm(text).replace(/\bi mean\b[, ]*/g, ' ').replace(/\s+/g, ' ').trim();
   if (!t) return 'none';
-  if (/\b(another card|one more card|a fourth|fourth card|more cards|draw again|deal again|one more)\b/.test(t)) return 'more';
-  if (/\b(are you|were you|do you (believe|mind|remember|live|like)|how long have you|what are you|who are you|are frogs)\b/.test(t)) return 'pepe';
-  if (/\b(what (should|do|can) i do|what now|what next|where do i start|how do i start|so what do i)\b/.test(t)) return 'do';
+  if (/\b(another card|another one|one more card|a fourth|fourth card|more cards|draw again|deal again|turn another)\b/.test(t)) return 'more';
+  if (aboutHim(t) || /\b(are you|were you|how long have you|what are you|who are you|are frogs)\b/.test(t)) return 'pepe';
+  if (/\b(what (should|do|can) i do|what am i (supposed to do|to do)|what now|what next|now what|where do i (start|begin)|how do i (start|begin)|so what do i)\b/.test(t)) return 'do';
   if (/\bwhich\b|\bmost important\b|\bthe important one\b|\bmatters most\b|\bwhich one counts\b/.test(t)) return 'which';
   // "is that bad" is about the table; "am I a bad person" is not
   const table = /\b(that|it|this|these|they|card|cards|deck|spread|the (first|second|third|middle|last))\b/;
+  // asking him to pass sentence on them: "do you think I am a bad person"
+  if (/\b(do you think|would you say|do you reckon|am i|are we)\b/.test(t) && /\b(bad|good|terrible|awful|stupid|foolish|a fool|mad|crazy|wrong|selfish|weak|hopeless|a bad person|a good person|too old|too late)\b/.test(t)) return 'judge';
   if (/\bshould i be worr/.test(t)) return 'bad';
+  // asking him to make the choice: he does not make it, and he says so
+  if (/\b(should i|shall i|ought i|do you think i should|is it worth|do i (call|leave|stay|go|tell|say|forgive|wait))\b/.test(t)) return 'decide';
   if (/\b(bad|worse|worst|ominous|awful|terrible|frightening|bad news)\b/.test(t) && table.test(t)) return 'bad';
   if (/\b(good|fine|okay|ok|alright|good news)\b/.test(t) && table.test(t)) return 'good';
-  if (/\b(will i|am i|will (she|he|they|it)|is (she|he|they) going to|when will|how long until|do i (ever|still)|going to be (ok|okay|alright|fine))\b/.test(t)) return 'self';
+  if (/\b(will i|am i|will (she|he|they|it)|is (she|he|they) going to|when will|how long until|do i (ever|still)|going to be (ok|okay|alright|all right|fine)|be all right|work out in the end)\b/.test(t)) return 'self';
   if (/\b(what does|what do|meaning|means|mean|explain|tell me (more )?about|what is (the|that)|what about)\b/.test(t)) return 'meaning';
   return 'plain';
 }
@@ -273,13 +419,35 @@ export function followupScript(question, spread = [], stance = null) {
   const said = String(question ?? '').trim();
   if (!drawn.length) {
     return said
-      ? scriptReply(/\?\s*$/.test(said) ? said : `${said}?`)
+      ? scriptReply(isQuestion(said) && !/\?\s*$/.test(said) ? `${said}?` : said)
       : 'No question. The cards are on the table; you may look at them for as long as you like.';
   }
   const mid = drawn[1] ?? drawn[0];
   const last = drawn[drawn.length - 1];
-  const target = namedCard(said, drawn) ?? mid;
+  const ref = cardRef(said, drawn);
+  // Nothing named: "that" after the last card was read means the last card.
+  const target = ref?.card ?? (/\b(that|it|this)\b/.test(norm(said)) ? last : mid);
+  const place = placeOf(target, drawn);
   const shape = questionShape(said);
+  const asked = isQuestion(said);
+
+  // "is that the tower?" — they have named it, and on this deck it is called something else.
+  if (ref?.how === 'name' && /^(?:is|are|was|isn'?t|that'?s|this is)\b/.test(norm(said))) {
+    return norm(said).includes(norm(target.name))
+      ? `Yes. ${target.name}. ${firstSentence(heldBack(target, stance))}`
+      : `It is called ${target.name} on this deck. The same picture, an older printer. ${firstSentence(heldBack(target, stance))}`;
+  }
+
+  // They pointed at a card and did not ask anything: he says what it is and stops.
+  if (ref && !asked) {
+    const said1 = firstSentence(heldBack(target, stance));
+    const banks = [
+      `${place} is ${target.name}. ${said1} It will not change while you look at it.`,
+      `${target.name}, then. ${said1} Say what it is you see in it.`,
+      `${target.name}. ${said1} That is the whole of that one.`,
+    ];
+    return banks[hash(said + target.slug) % banks.length];
+  }
 
   switch (shape) {
     case 'none':
@@ -292,7 +460,7 @@ export function followupScript(question, spread = [], stance = null) {
       return 'A frog. I read cards in a rented room and I have done it a long time. The cards are the more interesting half of the table.';
 
     case 'do':
-      return `${firstTwo(linesFor(last.slug, 'do')[0])} That was the third card. It has not improved in the last minute.`;
+      return `${firstTwo(linesFor(last.slug, 'do')[0])} That was ${last.name}, the third card. It has not improved in the last minute.`;
 
     case 'which':
       return drawn.length > 2
@@ -308,11 +476,20 @@ export function followupScript(question, spread = [], stance = null) {
     case 'self':
       return `I cannot tell you that. The cards are lying on a table; they have no news from Thursday. What is true tonight is ${mid.name}.`;
 
-    case 'meaning':
-      return `${heldBack(target, stance)} That is what it means. Pictures do not keep a second meaning in reserve.`;
+    case 'decide':
+      return `I do not decide for people. ${last.name} is the third card and it is an instruction, not a suggestion.`;
 
-    default:
-      return `“${fewWords(said)}.” Look at ${target.name} again. ${firstSentence(heldBack(target, stance))}`;
+    case 'judge':
+      return `Not on the table, and not mine to say. ${mid.name} is on the table, and it has no opinion of your character.`;
+
+    case 'meaning':
+      return `${place} is ${target.name}. ${firstSentence(heldBack(target, stance))} Pictures do not keep a second meaning in reserve.`;
+
+    default: {
+      const head = `${place} is ${target.name}. ${firstSentence(heldBack(target, stance))}`;
+      if (ref) return head;
+      return asked ? `${head} If that is not what you asked, ask it again shorter.` : `${head} You may look at it as long as you like.`;
+    }
   }
 }
 

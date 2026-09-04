@@ -17,6 +17,8 @@
 import { INK, PAPER, inkLine, hatch, letter } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 import { marquee, marqueeFit, marqueeSize } from './titles-draw.js';
+// the small hand-cut face, so nothing on the door is set in a system font (STYLE.md checklist 7)
+import { signCaps } from './titles-sign.js';
 
 // ---- the case, in metres, lifted from room.js buildDoor -------------------------------------------
 export const D = {
@@ -398,14 +400,7 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
     }
     // his name, and only his name: one term on the door. It stands in the glass of the fanlight
     // where the trade word used to be, so the visitor reads it once, above the handle.
-    letter(g, 'TAROT PEPE', mx(D.opening / 2), my((ty0 + ty1) / 2), {
-      size: px(0.086),
-      rng,
-      tracking: 0.1,
-      jitter: Math.max(0.5, px(0.004)),
-      weight: 700,
-      family: "'Futura', 'Jost', sans-serif",
-    });
+    signCaps(g, 'TAROT PEPE', mx(D.opening / 2), my((ty0 + ty1) / 2), { size: px(0.086), rng, tracking: 0.18, weight: 700 });
   }
   // architrave, plinth blocks, the cap over the head
   const archL = rect(-D.arch, D.plinth, 0, D.head + D.archHead, pen, { fill: PAPER });
@@ -487,7 +482,7 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, name = nu
   // first thing anyone sees is a door on a bare sheet, and the invitation under it. It is also what
   // survives a phone, where a caption in each top corner would crowd the frame.
   if (marks && P.zoom < 1.04) {
-    letter(g, 'PLEASE COME IN', w / 2, my(-D.mat) + h * 0.058, { size: Math.max(9, h * 0.0185), rng, tracking: 0.34, jitter: 0.6, weight: 500 });
+    signCaps(g, 'PLEASE COME IN', w / 2, my(-D.mat) + h * 0.058, { capH: Math.max(14, h * 0.02), rng, tracking: 0.34 });
   }
 }
 

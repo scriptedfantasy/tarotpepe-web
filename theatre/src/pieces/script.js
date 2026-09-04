@@ -47,7 +47,8 @@ const interjections = {
     'That is a paragraph. I have read it. We will proceed with “{first}”; the rest can stand by the door.',
   ],
   question: [
-    '“{answer}” That ends in a question mark. The cards do not answer questions; they change them.',
+    // never say "that ends in a question mark": most people ask without typing one
+    '“{answer}” That is a question. The cards do not answer questions; they change them.',
     '“{answer}” A question. Fair. I will answer it with three pictures, which is what I have.',
   ],
   again: ['You have said that already. It is not less true the second time.'],

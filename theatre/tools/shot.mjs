@@ -85,14 +85,17 @@ if (!ready) errors.push(`page never became ready within ${readyTimeout}ms (windo
 await page.waitForTimeout(wait);
 
 if (frames <= 1) {
-  await page.screenshot({ path: out });
+  // Playwright defaults to 30 s for a screenshot, which a piece mid-rewrite can exceed while the
+  // page is still building (the ink tiles are drawn live until they are baked). Wait longer rather
+  // than fail a frame that would have arrived.
+  await page.screenshot({ path: out, timeout: 120000 });
   let stillReady = false;
   try { stillReady = await page.evaluate(() => window.__theatreReady === true); } catch {}
   if (ready && !stillReady) errors.push('the page reloaded or broke while the frame was being captured; retry');
 } else {
   const bufs = [];
   for (let i = 0; i < frames; i++) {
-    bufs.push(await page.screenshot());
+    bufs.push(await page.screenshot({ timeout: 120000 }));
     await page.waitForTimeout(interval);
   }
   const cols = Math.ceil(frames / 2);
