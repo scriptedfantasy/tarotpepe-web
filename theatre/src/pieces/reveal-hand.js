@@ -283,13 +283,12 @@ export function buildHand(ctx) {
   const sleeve = new THREE.Mesh(quadXZ(HAND.sleeveW, 1, { z0: 0.014, z1: -1, flipV: true }), mat(tex(160, 512, drawArm), true));
   sleeve.castShadow = true;
   sleevePivot.add(sleeve);
-  // where each arm goes: the puppet's own wrists, read off him if he built
+  // where each arm goes: the puppet's own wrists at rest, read off him if he built
   const ANCH = { R: new THREE.Vector3(...HAND.anchor), L: new THREE.Vector3(-HAND.anchor[0], HAND.anchor[1], HAND.anchor[2]) };
+  ctx.pieces.pepe?.root?.updateMatrixWorld(true);
   for (const s of ['L', 'R']) {
     const h0 = puppetHand(s);
-    if (!h0) continue;
-    h0.updateMatrixWorld(true);
-    h0.getWorldPosition(ANCH[s]);
+    if (h0?.matrixWorld) h0.getWorldPosition(ANCH[s]);
   }
 
   // the hand, hinged at the wrist so it can tilt up off the cloth

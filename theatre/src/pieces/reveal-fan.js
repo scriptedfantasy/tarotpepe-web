@@ -542,6 +542,20 @@ export function buildFan(ctx, cards, player, hand = null) {
     await player.play(gatherFrames());
     clear();
   }
+  // While the ribbon is out and the visitor is choosing — half a minute, in a locked frame with
+  // nothing else in it — his hand waits on the deck at the top of the picture with its fingers on
+  // the cloth, and drums them once every two and a half seconds. A held pose, on twos: he is in
+  // the shot the whole time the visitor is deciding.
+  // It waits to the right of the spread, clear of the slots and just below the deck, far enough
+  // into the picture that the whole drawing is in frame.
+  const WAIT = { x: 0.395, z: 0.225, yaw: -0.26 };
+  function waiting() {
+    if (!hand) return;
+    const k = ctx.clock.frame % 30;
+    const up = k === 24 || k === 27 ? 0.012 : k === 25 || k === 26 ? 0.024 : 0;
+    hand.at(WAIT.x, 0.004 + up, WAIT.z + up * 0.5, { yaw: WAIT.yaw, pose: 'splay' });
+  }
+
   // the hover in-betweens, on the stepped clock
   function step() {
     if (!entries.length) return;
@@ -549,6 +563,7 @@ export function buildFan(ctx, cards, player, hand = null) {
       if (e.lift !== e.liftTarget) e.lift = e.lift < e.liftTarget ? Math.min(e.liftTarget, e.lift + 0.5) : Math.max(e.liftTarget, e.lift - 0.5);
       applyEntry(e);
     }
+    if (armed && !picking) waiting();
   }
   // where the cards are on screen (CSS px): the visible strip of each, for tests and for a
   // caption that points at "the third from the left"

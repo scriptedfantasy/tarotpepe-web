@@ -1,19 +1,21 @@
 // table-textures — the drawn PATTERNS of the things on the table (what they are made of, what is
 // printed or stitched on them). No shading, no outlines: the ink pass draws those.
 //
-// The cloth is a woven check (a café gingham) drawn the way the sweeper's coat is drawn in
-// fd-anim-courtyard-sweeper-hires: every stripe of the weave is a band of pen strokes running the
-// way the thread runs, so where two stripes cross the strokes cross too and the square reads dark,
-// where one stripe runs it reads mid, and the squares between are bare paper. Over that: the fold
-// creases a cloth keeps from the drawer, the ring a glass left, crumbs. Strokes are 2 px wide and
-// solid so they survive the judging distance (the top's texture is ~1:1 with the screen there).
+// The cloth is a woven check drawn the way the sweeper's checked coat is drawn in
+// fd-anim-courtyard-sweeper-hires: NOT a ruled lattice. Every stripe is ONE pen stroke that
+// wanders over its length, the spacing between stripes varies by ±40 %, a few stripes are doubled
+// and a few are simply missing, and the little cross-hatch clumps at the crossings are placed by
+// jitter, not on a grid. And the check is not everywhere: like the rain-hatch on a wall in the
+// reference it is dense at the rim and at the far edge and thins to bare paper across the middle,
+// where the three cards and the fan lie — a stroke is drawn in pieces and each piece is kept or
+// dropped by the local density, so a stripe frays into dashes and then into nothing.
+// Over that: the fold creases a cloth keeps from the drawer, the ring a glass left, crumbs.
 import * as THREE from 'three';
-import { drawTexture, paper, inkLine, inkRect, hatch, crossHatch, letter, INK } from '../core/strokes.js';
-import { clothLocal, CLOTH_ROT } from './table-geo.js';
+import { drawTexture, paper, inkLine, inkRect, hatch, crossHatch, letter, INK, PAPER } from '../core/strokes.js';
+import { clothLocal, CLOTH_ROT, smooth } from './table-geo.js';
 
-export const PITCH = 0.1; // metres between the stripes of the check
-const STRIPE = 0.35; // stripe width as a fraction of the pitch
-const CLOTH_PAPER = '#f7f3eb';
+export const PITCH = 0.1; // metres between the stripes of the check (nominal; each gap varies ±40 %)
+const CLOTH_PAPER = PAPER; // the cloth is the same sheet as everything else; its centre IS bare paper
 
 // a wobbly circle drawn as short pen segments
 function inkCircle(g, cx, cy, r, { width = 1.6, wobble = 1, rng = Math.random, alpha = 1, color = INK, gaps = 0 } = {}) {
@@ -51,56 +53,115 @@ function longStroke(g, axis, pos, from, to, rng, { width = 1.9, alpha = 0.95, dr
   }
 }
 
-// the check: vertical stripes (strokes running down), horizontal stripes (strokes running
-// across), and where two stripes cross a light diagonal hatch so the crossing reads as the dark
-// square of a gingham. rect = [x0, y0, x1, y1] in the current canvas transform.
-function gingham(g, rect, rng, { pitchX, pitchY, originX = 0, originY = 0, width = 1.9, alpha = 0.95, cross = true }) {
-  const [x0, y0, x1, y1] = rect;
-  const stripeX = pitchX * STRIPE, stripeY = pitchY * STRIPE;
-  const first = (o, p, lo) => o - Math.ceil((o - lo) / p) * p;
-  const xs = [], ys = [];
-  for (let X = first(originX, pitchX, x0); X < x1 + pitchX; X += pitchX) xs.push(X);
-  for (let Y = first(originY, pitchY, y0); Y < y1 + pitchY; Y += pitchY) ys.push(Y);
-  if (cross) {
-    for (const X of xs)
-      for (const Y of ys) {
-        if (rng() < 0.08) continue; // the pen skips a square now and then
-        const a = Math.PI / 4 + (rng() - 0.5) * 0.3;
-        hatch(g, X - stripeX / 2, Y - stripeY / 2, stripeX, stripeY, { angle: a, spacing: 6, width: 1.6, wobble: 0.5, broken: 0, rng, alpha: 0.8, jitter: 1 });
+// ---------- the check, drawn thread by thread ----------
+// The threads of one direction: a walk across the cloth in gaps of pitch ±40 %, dropping one now
+// and then, doubling one now and then. Each carries its own wander, weight and phase, so no two
+// are parallel and no interval repeats.
+function threads(lo, hi, pitch, rng) {
+  const out = [];
+  let p = lo - pitch * (0.4 + rng());
+  while (p < hi + pitch) {
+    p += pitch * (0.6 + rng() * 0.8);
+    if (rng() < 0.12) continue; // the weaver dropped one
+    out.push({
+      pos: p,
+      amp: 1.3 + rng() * 2.0, // ±3 px of wander over the length
+      freq: 1 / (140 + rng() * 280),
+      phase: rng() * Math.PI * 2,
+      w: 0.82 + rng() * 0.5,
+      twin: rng() < 0.36 ? (rng() < 0.5 ? -1 : 1) * (3.0 + rng() * 4.5) : 0,
+    });
+  }
+  return out;
+}
+
+// One thread: drawn in pieces along its length. `density(x, y)` 0..1 decides whether each piece is
+// there at all and how heavy it is, so the stripe frays into dashes and then into bare paper.
+function thread(g, axis, s, from, to, rng, { width, alpha, density, off = 0 }) {
+  const wander = (t) => off + s.amp * Math.sin(t * s.freq + s.phase) + s.amp * 0.4 * Math.sin(t * s.freq * 2.6 + s.phase * 1.9);
+  let t = from;
+  while (t < to) {
+    const p = s.pos + wander(t + 34);
+    const d = density(axis === 'y' ? p : t + 34, axis === 'y' ? t + 34 : p);
+    // long and continuous where the weave is solid, short broken dashes where it is dying out
+    const len = (30 + rng() * 90) * (0.4 + 1.6 * d);
+    const e = Math.min(to, t + len);
+    if (rng() < d * 1.06) {
+      const a = alpha * (0.5 + 0.5 * d);
+      const wd = width * s.w * (0.78 + 0.32 * d);
+      const p0 = s.pos + wander(t), p1 = s.pos + wander(e);
+      if (axis === 'y') inkLine(g, p0, t, p1, e, { width: wd, wobble: 0.75, rng, alpha: a });
+      else inkLine(g, t, p0, e, p1, { width: wd, wobble: 0.75, rng, alpha: a });
+    }
+    t = e + (rng() < 0.34 * (1.3 - 0.7 * d) ? 3 + rng() * 18 : 0);
+  }
+}
+
+// Where two threads cross, the weave doubles: a small clump of short diagonal strokes. Placed off
+// the crossing by up to a quarter pitch and skipped more often than not, so they never fall on a
+// grid; scarce in the middle of the cloth, thick at the rim.
+function weaveClumps(g, xs, ys, rng, { pitch, density, width, alpha }) {
+  for (const X of xs)
+    for (const Y of ys) {
+      const cx = X.pos + (rng() - 0.5) * pitch * 0.5, cy = Y.pos + (rng() - 0.5) * pitch * 0.5;
+      const d = density(cx, cy);
+      // no clumps out on the bare cloth: with no threads to sit on they read as scratches
+      if (d < 0.45 || rng() > d * 0.66) continue;
+      const s = pitch * (0.1 + rng() * 0.14);
+      const a = Math.PI / 4 + (rng() - 0.5) * 1.0;
+      const n = 2 + Math.floor(rng() * 3);
+      for (let k = 0; k < n; k++) {
+        const o = (k - (n - 1) / 2) * (2.1 + rng() * 2.4);
+        const L = s * (0.65 + rng() * 0.85);
+        const mx = cx - Math.sin(a) * o, my = cy + Math.cos(a) * o;
+        inkLine(g, mx - Math.cos(a) * L, my - Math.sin(a) * L, mx + Math.cos(a) * L, my + Math.sin(a) * L, {
+          width: width * (0.68 + rng() * 0.42),
+          wobble: 0.5,
+          rng,
+          alpha: alpha * (0.45 + 0.55 * d),
+          segments: 2,
+        });
       }
-  }
-  // two or three strokes to a stripe: a double line that now and then gains a third
-  for (const X of xs) {
-    const n = 2 + (rng() < 0.4 ? 1 : 0);
-    for (let k = 0; k < n; k++) {
-      const x = X - stripeX / 2 + (k + 0.5) * (stripeX / n) + (rng() - 0.5) * 1.6;
-      longStroke(g, 'y', x, y0 - 6, y1 + 6, rng, { width, alpha });
     }
+}
+
+// rect = [x0, y0, x1, y1] in the current canvas transform. `density(x, y)` → 0..1.
+function handCheck(g, rect, rng, { pitch, density, width = 1.5, alpha = 0.88 }) {
+  const [x0, y0, x1, y1] = rect;
+  const xs = threads(x0, x1, pitch, rng);
+  const ys = threads(y0, y1, pitch, rng);
+  weaveClumps(g, xs, ys, rng, { pitch, density, width, alpha });
+  for (const s of xs) {
+    thread(g, 'y', s, y0, y1, rng, { width, alpha, density });
+    if (s.twin) thread(g, 'y', s, y0, y1, rng, { width: width * 0.78, alpha: alpha * 0.8, density, off: s.twin });
   }
-  for (const Y of ys) {
-    const n = 2 + (rng() < 0.4 ? 1 : 0);
-    for (let k = 0; k < n; k++) {
-      const y = Y - stripeY / 2 + (k + 0.5) * (stripeY / n) + (rng() - 0.5) * 1.6;
-      longStroke(g, 'x', y, x0 - 6, x1 + 6, rng, { width, alpha });
-    }
+  for (const s of ys) {
+    thread(g, 'x', s, x0, x1, rng, { width, alpha, density });
+    if (s.twin) thread(g, 'x', s, x0, x1, rng, { width: width * 0.78, alpha: alpha * 0.8, density, off: s.twin });
   }
 }
 
 // a fold crease: a broken pen line along an axis with a few short ticks on its shadow side
-function crease(g, axis, pos, from, to, rng, { width = 1.7, alpha = 0.85, ticks = true, side = 1 } = {}) {
+function crease(g, axis, pos, from, to, rng, { width = 1.7, alpha = 0.85, ticks = true, side = 1, density = null } = {}) {
+  // a crease survives on bare cloth — it is the one line the pen leaves there, and on the quiet
+  // middle of the cloth it is all the drawing there is
+  const dens = (t) => (density ? 0.66 + 0.34 * density(axis === 'y' ? pos : t, axis === 'y' ? t : pos) : 1);
   let t = from;
   while (t < to) {
     const len = 40 + rng() * 110;
     const e = Math.min(to, t + len);
+    const d = dens((t + e) / 2);
     const p0 = pos + (rng() - 0.5) * 3, p1 = pos + (rng() - 0.5) * 3;
-    if (axis === 'y') inkLine(g, p0, t, p1, e, { width, wobble: 1.1, rng, alpha });
-    else inkLine(g, t, p0, e, p1, { width, wobble: 1.1, rng, alpha });
-    t = e + 8 + rng() * 26;
+    if (rng() < d + 0.15) {
+      if (axis === 'y') inkLine(g, p0, t, p1, e, { width: width * (0.8 + 0.3 * d), wobble: 1.1, rng, alpha: alpha * d });
+      else inkLine(g, t, p0, e, p1, { width: width * (0.8 + 0.3 * d), wobble: 1.1, rng, alpha: alpha * d });
+    }
+    t = e + 10 + rng() * 34;
   }
   if (!ticks) return;
-  for (let s = from + 10 + rng() * 20; s < to; s += 16 + rng() * 26) {
-    if (rng() < 0.35) continue;
-    const L = 6 + rng() * 9, o = { width: 1.4, wobble: 0.4, rng, alpha: 0.7, segments: 2 };
+  for (let s = from + 10 + rng() * 20; s < to; s += 20 + rng() * 34) {
+    if (rng() > dens(s) - 0.25) continue;
+    const L = 6 + rng() * 9, o = { width: 1.3, wobble: 0.4, rng, alpha: 0.6, segments: 2 };
     if (axis === 'y') inkLine(g, pos + side * 3, s, pos + side * (3 + L), s + (rng() - 0.5) * 4, o);
     else inkLine(g, s, pos + side * 3, s + (rng() - 0.5) * 4, pos + side * (3 + L), o);
   }
@@ -156,28 +217,47 @@ export function clothTopTexture(R, marks = {}) {
     1024,
     1024,
     (g, w, h, rng) => {
-      paper(g, w, h, CLOTH_PAPER, { grain: 0.03, seed: 21 });
+      paper(g, w, h, CLOTH_PAPER, { grain: 0, seed: 21 });
       const c = w / 2;
       const pxm = w / (2 * R); // px per metre
+      // CircleGeometry's uv comes off its own XY plane and the mesh is laid down with rotation.x
+      // = -PI/2, so the geometry's +y is the cloth's -z: v grows towards the visitor and the
+      // canvas row is c + lz·pxm (this was the wrong way round, which put the glass rings on the
+      // far side of the table from the glasses).
       const toCanvas = (x, z) => {
         const [lx, lz] = clothLocal(x, z);
-        return [c + lx * pxm, c - lz * pxm];
+        return [c + lx * pxm, c + lz * pxm];
       };
       const pitch = PITCH * pxm;
-      // the check runs square to the room (the cloth is laid corner-forward, so the weave is
-      // rotated back here), the fold creases run with the weave: a cross through the centre and
-      // a fainter line either side of it, each way
+      // The check runs square to the room, so the weave is drawn with the cloth's corner-forward
+      // rotation taken back out. Inside this transform the drawing space is the room's, turned a
+      // quarter: px = -z·pxm, py = x·pxm. Everything below works in metres and converts.
       g.save();
       g.translate(c, c);
       g.rotate(-CLOTH_ROT);
       const E = w * 0.75;
-      gingham(g, [-E, -E, E, E], rng, { pitchX: pitch, pitchY: pitch, originX: pitch / 2, originY: pitch / 2 });
-      const q = 0.39 * pxm;
-      crease(g, 'y', 0, -E, E, rng, { width: 1.9, alpha: 0.9, side: 1 });
-      crease(g, 'x', 0, -E, E, rng, { width: 1.9, alpha: 0.9, side: -1 });
+      // Where the cloth is drawn at all. A quiet basin through the near middle — an ellipse over
+      // the three slots (z ≈ +0.14, x = 0, ±0.36) and the fan's arc (z ≈ 0.28–0.56) — stays close
+      // to bare paper so a card has something to read against; outside it the weave comes up,
+      // full across the far half under the still life and round the whole rim.
+      const density = (px, py) => {
+        const x = py / pxm, z = -px / pxm; // back to the room's metres
+        // the basin holds all three slot cards (x = 0, ±0.36, z ≈ 0.03–0.25) with room to spare
+        const e = Math.hypot(x / 0.68, (z - 0.26) / 0.36);
+        const r = Math.hypot(x, z) / R;
+        // never nothing: the basin keeps a scatter of short weave dashes, the way a bare wall in
+        // the reference still carries a few rain-strokes
+        return Math.min(1, 0.26 + 0.74 * Math.max(smooth(0.62, 1.04, e), smooth(0.7, 0.99, r)));
+      };
+      handCheck(g, [-E, -E, E, E], rng, { pitch, density, width: 1.8, alpha: 0.9 });
+      // the fold creases the cloth kept from the drawer: a cross, laid a little off centre because
+      // the cloth is not, and a fainter line either side of it each way
+      const q = 0.39 * pxm, ox = 0.045 * pxm, oy = 0.055 * pxm;
+      crease(g, 'y', ox, -E, E, rng, { width: 1.6, alpha: 0.72, side: 1, density });
+      crease(g, 'x', oy, -E, E, rng, { width: 1.6, alpha: 0.72, side: -1, density });
       for (const s of [-1, 1]) {
-        crease(g, 'y', s * q, -E, E, rng, { width: 1.5, alpha: 0.7, ticks: false });
-        crease(g, 'x', s * q, -E, E, rng, { width: 1.5, alpha: 0.7, ticks: false });
+        crease(g, 'y', ox + s * q, -E, E, rng, { width: 1.35, alpha: 0.58, ticks: false, density });
+        crease(g, 'x', oy + s * q, -E, E, rng, { width: 1.35, alpha: 0.58, ticks: false, density });
       }
       g.restore();
       // wear: rings left by the glasses, in two passes (a wet glass set down twice)
@@ -223,14 +303,20 @@ export function skirtTexture(W = 0.78, Rtop = 0.608) {
     2048,
     512,
     (g, w, h, rng) => {
-      paper(g, w, h, CLOTH_PAPER, { grain: 0.03, seed: 22 });
+      paper(g, w, h, CLOTH_PAPER, { grain: 0, seed: 22 });
       const pxmY = h / 0.5; // 1024 px per metre down
       const pxmX = w / (Math.PI * Rtop); // px per metre around, at the rim
       const hem = h - 2;
       // the border band: 2 cm to 7.5 cm above the hem, bare paper with rules and a motif row
       const y1 = hem - 0.02 * pxmY, y2 = hem - 0.075 * pxmY;
-      // the check above the band, its last horizontal stripe just clear of the band
-      gingham(g, [0, 0, w, y2 - 10], rng, { pitchX: PITCH * pxmX, pitchY: PITCH * pxmY, originX: (PITCH * pxmX) / 2, originY: y2 - 10 - PITCH * pxmY * 0.5 });
+      // the skirt IS the hem, so the weave is at full strength here — a shade lighter where it
+      // turns over the table's rim so it meets the thinned check of the top without a jump
+      handCheck(g, [0, 0, w, y2 - 10], rng, {
+        pitch: PITCH * pxmX,
+        density: (x, y) => 0.62 + 0.38 * smooth(0, y2, y),
+        width: 1.55,
+        alpha: 0.88,
+      });
       g.fillStyle = CLOTH_PAPER;
       g.fillRect(0, y2 - 4, w, hem - y2 + 6);
       // stitched hem: a row of short dashes just above the edge

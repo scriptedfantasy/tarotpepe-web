@@ -8,35 +8,34 @@
 // spectacles; a tumbler of water; a candle stuck in a wine bottle. Paper-white with drawn
 // patterns; the ink pass draws the outlines and the tone.
 import * as THREE from 'three';
-import { inkMaterial } from '../core/strokes.js';
+import { inkMaterial, INK } from '../core/strokes.js';
 import { lathe, surface, smooth } from './table-geo.js';
 import { bottleLabelTexture, newspaperTexture, matchboxTexture, coinTexture, chinaTexture, glassMaskTexture, noteTexture, watchTexture, wrapRepeat } from './table-textures.js';
 
-const DARK = '#2a2622';
+// The still life follows the same rule as the props on the shelves: every object gets ONE solid
+// black and ONE bare white area, and there are fewer of them than there were — the spectacles, the
+// fountain pen, the tumbler, the watch's chain and half the coins are gone, and what is left has
+// been pushed upstage off the card row so the near half of the cloth is clear.
+const DARK = INK;
 
 // where things stand on the top (world x, z), shared with the cloth texture for rings and crumbs
 export const PLACES = {
-  plate: [-0.52, 0.02],
-  tumbler: [-0.52, -0.22],
-  newspaper: [-0.38, -0.13],
-  ashtray: [-0.15, -0.13],
-  matchbox: [-0.01, -0.09],
-  watch: [0.14, -0.15],
-  note: [0.3, -0.13],
+  plate: [-0.53, -0.05],
+  tumbler: [-0.52, -0.22], // gone; the ring it left is still drawn into the cloth
+  newspaper: [-0.38, -0.15],
+  ashtray: [-0.15, -0.15],
+  matchbox: [-0.02, -0.15],
+  watch: [0.15, -0.17],
+  note: [0.31, -0.15],
   spectacles: [0.45, -0.08],
-  wineGlass: [0.55, -0.1],
+  wineGlass: [0.55, -0.12],
   bottle: [0.44, -0.34],
-  pen: [0.35, -0.07],
   coins: [
-    [0.04, -0.2, 0.3],
-    [0.075, -0.215, 1.4],
-    [0.1, -0.11, 2.2],
-    [0.16, -0.24, 0.9],
-    [0.22, -0.2, 2.8],
-    [0.2, -0.09, 1.1],
-    [-0.06, -0.21, 0.5],
-    [0.25, -0.24, 1.9],
-    [0.06, -0.14, 2.5],
+    [0.06, -0.22, 0.3],
+    [0.1, -0.12, 2.2],
+    [0.17, -0.25, 0.9],
+    [0.22, -0.19, 2.8],
+    [-0.05, -0.22, 0.5],
   ],
 };
 
@@ -128,26 +127,9 @@ export function buildStillLife(ctx, top) {
     at(grp, 'wineGlass');
   }
 
-  // ---------- a tumbler of water ----------
-  {
-    const prof = [
-      [0.0, 0.0],
-      [0.026, 0.0],
-      [0.027, 0.004],
-      [0.03, 0.075],
-      [0.0285, 0.075],
-      [0.0255, 0.006],
-      [0.0, 0.005],
-    ];
-    const grp = new THREE.Group();
-    // profile indices: 0..2 base, 2..3 wall outside, 3..4 rim, 4..6 inside
-    grp.add(mesh(lathe(prof, 28), glassMat([[0, 2 / 6], [3 / 6, 4 / 6]]), { shadow: false }));
-    // the water: a flat disc whose edge the pen draws as the level
-    grp.add(mesh(lathe([[0, 0.005], [0.0265, 0.005], [0.0275, 0.04], [0, 0.04]], 28), inkMaterial({ hatch: 0.25 }), { shadow: false }));
-    at(grp, 'tumbler');
-  }
-
   // ---------- ashtray with two stubs, a heap of ash ----------
+  // white glass dish, blackened only inside: one solid black, one bare white, like the ashtray on
+  // the table in fd-anim-kitchen-table-cards-hires
   {
     const grp = new THREE.Group();
     const body = [
@@ -160,7 +142,9 @@ export function buildStillLife(ctx, top) {
       [0.04, 0.005],
       [0.0, 0.004],
     ];
-    grp.add(mesh(lathe(body, 40), dark));
+    grp.add(mesh(lathe(body, 40), white));
+    // the well: burnt black, the one solid the pen fills in
+    grp.add(mesh(lathe([[0.0, 0.0045], [0.041, 0.0055], [0.047, 0.0092], [0.0, 0.0092]], 40), dark, { shadow: false }));
     // the upper rim in three arcs: the gaps are the cigarette rests
     const rim = [
       [0.058, 0.012],
@@ -171,7 +155,7 @@ export function buildStillLife(ctx, top) {
     for (let k = 0; k < 3; k++) {
       const arc = 2 * Math.PI * 0.3;
       const start = (k * 2 * Math.PI) / 3 + Math.PI * 0.05;
-      grp.add(mesh(lathe(rim, 20, arc, start), dark));
+      grp.add(mesh(lathe(rim, 20, arc, start), white));
     }
     const stub = (len, bend, rot) => {
       const s = new THREE.Group();
@@ -358,8 +342,6 @@ export function buildStillLife(ctx, top) {
     set.rotation.y = 0.12;
     set.position.set(PLACES.newspaper[0] + 0.005, top + paperTh, PLACES.newspaper[1] + 0.005);
     g.add(set);
-    // a second sugar cube dropped beside the paper
-    g.add(mesh(new THREE.BoxGeometry(0.017, 0.012, 0.017), white, { x: PLACES.newspaper[0] + 0.12, y: top + 0.006, z: PLACES.newspaper[1] + 0.09, ry: -0.3 }));
   }
 
   // ---------- a plate with a crumpled napkin, three olive stones and a knife ----------
@@ -385,7 +367,6 @@ export function buildStillLife(ctx, top) {
     for (const [x, z, r] of [
       [0.035, 0.02, 0.2],
       [0.042, -0.012, 1.1],
-      [0.02, 0.04, 2.3],
     ]) {
       const s = mesh(new THREE.SphereGeometry(0.0045, 8, 6), dark, { x, y: 0.011, z, ry: r });
       s.scale.set(1.5, 0.8, 1);
@@ -415,10 +396,8 @@ export function buildStillLife(ctx, top) {
       return c;
     };
     for (const [x, z, r] of PLACES.coins) g.add(coin(x, z, r));
-    // two stacked on the first, and a big one half under the second
-    g.add(coin(PLACES.coins[0][0] + 0.004, PLACES.coins[0][1] - 0.003, 1.9, top + 0.002));
-    g.add(coin(PLACES.coins[0][0] + 0.007, PLACES.coins[0][1] + 0.002, 0.7, top + 0.004));
-    g.add(coin(PLACES.coins[3][0] + 0.02, PLACES.coins[3][1] + 0.012, 2.2, top, 0.017));
+    // one lying on the first, off square
+    g.add(coin(PLACES.coins[0][0] + 0.006, PLACES.coins[0][1] - 0.004, 1.9, top + 0.002));
   }
 
   // ---------- a pocket watch on its chain ----------
@@ -435,17 +414,14 @@ export function buildStillLife(ctx, top) {
     grp.add(mesh(new THREE.TorusGeometry(0.0235, 0.0016, 8, 40), brass, { y: 0.009, rx: Math.PI / 2 }));
     grp.add(mesh(new THREE.CylinderGeometry(0.0032, 0.0032, 0.006, 8), brass, { y: 0.0045, z: 0.027, rx: Math.PI / 2 }));
     grp.add(mesh(new THREE.TorusGeometry(0.0055, 0.0013, 6, 16), brass, { y: 0.0045, z: 0.036, rx: Math.PI / 2 }));
-    // the chain: little links curling away from the bow
+    // a short stub of chain off the bow — four links, no fob: the rest is in his pocket
     const link = new THREE.TorusGeometry(0.0038, 0.0009, 5, 12);
-    for (let i = 0; i < 11; i++) {
-      const t = i / 10;
+    for (let i = 0; i < 4; i++) {
+      const t = i / 5;
       const x = 0.006 + t * 0.09 + 0.02 * Math.sin(t * Math.PI);
       const z = 0.042 + t * 0.03 - 0.03 * Math.sin(t * Math.PI * 1.3);
-      const l = mesh(link, brass, { x, y: 0.001, z, rx: Math.PI / 2 + (i % 2) * 0.8, ry: t * 1.4 });
-      grp.add(l);
+      grp.add(mesh(link, brass, { x, y: 0.001, z, rx: Math.PI / 2 + (i % 2) * 0.8, ry: t * 1.4 }));
     }
-    // the fob at the chain's end: a small solid disc
-    grp.add(mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.003, 12), dark, { x: 0.118, y: 0.0015, z: 0.06 }));
     grp.rotation.y = 2.7;
     at(grp, 'watch');
   }
@@ -467,39 +443,6 @@ export function buildStillLife(ctx, top) {
     grp.add(mesh(new THREE.CylinderGeometry(T, T, D, 8), pageMat, { x: W * 0.5 + 0.001, y: T * 1.2, rx: Math.PI / 2 }));
     grp.rotation.y = 0.35;
     at(grp, 'note');
-  }
-
-  // ---------- a black fountain pen, capped, lying by the letter ----------
-  {
-    const pen = new THREE.Group();
-    const barrel = mesh(new THREE.CylinderGeometry(0.0055, 0.005, 0.075, 12), dark, { rz: Math.PI / 2, x: -0.0125 });
-    pen.add(barrel);
-    pen.add(mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.045, 12), dark, { rz: Math.PI / 2, x: 0.0475 }));
-    // the cap's band and the clip, in paper white; a rounded end on the barrel
-    pen.add(mesh(new THREE.CylinderGeometry(0.0063, 0.0063, 0.004, 12), white, { rz: Math.PI / 2, x: 0.027 }));
-    pen.add(mesh(new THREE.BoxGeometry(0.03, 0.0016, 0.003), white, { x: 0.052, y: 0.0068, z: 0.0 }));
-    pen.add(mesh(new THREE.SphereGeometry(0.005, 10, 8), dark, { x: -0.05 }));
-    pen.position.y = 0.006;
-    const grp = new THREE.Group();
-    grp.add(pen);
-    grp.rotation.y = 0.55;
-    at(grp, 'pen');
-  }
-
-  // ---------- a pair of folded spectacles ----------
-  {
-    const spec = new THREE.Group();
-    const wire = inkMaterial({ hatch: 0.6, lineWeight: 0.7 });
-    for (const s of [-1, 1]) {
-      const ring = mesh(new THREE.TorusGeometry(0.019, 0.0015, 6, 24), wire, { x: s * 0.022, rx: Math.PI / 2 });
-      spec.add(ring);
-    }
-    spec.add(mesh(new THREE.CylinderGeometry(0.0013, 0.0013, 0.008, 6), wire, { rz: Math.PI / 2, y: 0.002 }));
-    // arms folded back across the lenses
-    spec.add(mesh(new THREE.BoxGeometry(0.066, 0.0018, 0.0028), wire, { x: 0.006, y: 0.0035, z: 0.006, ry: 0.22 }));
-    spec.add(mesh(new THREE.BoxGeometry(0.066, 0.0018, 0.0028), wire, { x: -0.006, y: 0.0055, z: 0.009, ry: -0.22 }));
-    spec.rotation.y = -0.2;
-    at(spec, 'spectacles', top + 0.0016);
   }
 
   return g;
