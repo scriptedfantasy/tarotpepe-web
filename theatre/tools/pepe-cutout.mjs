@@ -405,35 +405,58 @@ const CLOTH = await (async () => {
   // The three places the pen is allowed, read off the drawing (source px). Everywhere else the
   // robe is bare paper — the chest, the front of the lap, the lit shoulder, the whole near sleeve.
   // (k weights them: the key is stage left, so his lit side takes less than his shaded one)
+  // `base` is the wedge's own floor of tone — how much of it is covered simply for being in shade.
+  // The three upright wedges take a level of it, the way a level of rain covers a wall. THE LAP
+  // TAKES ALMOST NONE (0.16), and this is the round-6 fix to the panel that was the weakest thing
+  // on the figure: the lap is not a wall, it is a HORIZONTAL surface with the light above it, so
+  // its top is the brightest paper on the whole garment and every stroke on it belongs UNDER
+  // something — under a shin, under the fold of a knee, along the hem the bench holds up. At 0.52
+  // the wedge covered the whole band at one density whatever the drawing underneath was doing, and
+  // long strokes ran across three folds at once: a scrub of eraser dirt, not drawn shade. With the
+  // floor down at 0.16 only the crowding terms below can put a stroke down, so the pen goes where
+  // the drawing already has a line and the flat of the shins stays bare. `len` shortens the stroke
+  // to match: a mark that hangs off a fold is half the length of one that hangs down a sleeve.
   const WEDGES = [
-    { c: [150, 332], r: [78, 42], k: 0.84 }, // under his right forearm — the lit side, a little lighter
-    { c: [346, 324], r: [66, 38], k: 1.0 }, // under his left forearm
-    { c: [244, 396], r: [146, 34], k: 0.95 }, // under the crossed legs, along the hem on the bench
+    { c: [150, 332], r: [78, 42], k: 0.84, base: 0.52, len: 1 }, // under his right forearm — the lit side, a little lighter
+    { c: [346, 324], r: [66, 38], k: 1.0, base: 0.52, len: 1 }, // under his left forearm
+    { c: [244, 394], r: [150, 32], k: 0.94, base: 0.16, len: 0.5 }, // the crossed legs and the hem on the bench
     // the shoulder and upper arm away from the lamp. It STOPS above the elbow: run it down to the
     // forearm and the two wedges join into one long band down his side, which is a wash again.
-    { c: [346, 222], r: [42, 62], k: 1.0 },
+    { c: [346, 222], r: [42, 62], k: 1.0, base: 0.52, len: 1 },
   ];
   // a wedge is a PATCH with a ragged edge, not a soft blob: full weight over most of its area and
-  // gone within a few pixels of its rim
+  // gone within a few pixels of its rim. The strongest one at a point also owns its stroke.
   const wedge = (x, y) => {
-    let z = 0;
-    for (const w of WEDGES) z = Math.max(z, w.k * clamp((1 - Math.hypot((x - w.c[0]) / w.r[0], (y - w.c[1]) / w.r[1])) * 2.4, 0, 1));
-    return z;
+    let z = 0, best = WEDGES[0];
+    for (const w of WEDGES) {
+      const v = w.k * clamp((1 - Math.hypot((x - w.c[0]) / w.r[0], (y - w.c[1]) / w.r[1])) * 2.4, 0, 1);
+      if (v > z) {
+        z = v;
+        best = w;
+      }
+    }
+    return { z, w: best };
   };
   const tone = (x, y) => {
     if (!robe(x, y)) return 0;
-    const z = wedge(x, y);
+    const { z, w } = wedge(x, y);
     if (z <= 0.02) return 0;
     const k = x + y * SW;
     // inside a wedge the tone is still read the way a draughtsman reads it: crowding to the lines
     // the drawing already made, heaviest immediately under a ledge (the light is above him) and
     // along the hem the bench holds up.
-    let t = 0.52; // the wedge itself is one level of tone, the way a level of rain covers a wall
+    let t = w.base;
     t += 0.55 * Math.pow(1 - clamp(dEdge[k] / 11, 0, 1), 1.25); // crowding to the drawing's lines
     t += 0.52 * (1 - clamp(dUp[k] / 22, 0, 1)); // and hardest immediately under a ledge
     t += 0.45 * (1 - clamp(dDown[k] / 13, 0, 1)) * (y > 340 ? 1 : 0); // the hem on the bench
     return t * z;
   };
+  // Below the waist the cloth falls off the crossed legs and OPENS OUT, so the strokes fan: plumb
+  // down the middle, raked a little further outboard the further from the centre line they start.
+  // It used to be a hard switch at x = 244 — every stroke on his right at 116°, every stroke on his
+  // left at 64°, meeting in a seam straight down the middle of the lap that no fold in the drawing
+  // accounts for. Same two angles at the edges; no seam.
+  const fan = (x) => Math.PI / 2 + rad(30) * clamp((244 - x) / 150, -1, 1);
 
   // ---- the pen
   const paths = [];
@@ -472,8 +495,9 @@ const CLOTH = await (async () => {
       const t = tone(ix, iy);
       if (t < 0.24) continue;
       if (t < 0.66 && rng() > (t - 0.20) * 2.3) continue; // the edge of a patch of hatch is ragged
-      const base = iy > 312 ? rad(64 + (px > 244 ? 0 : 52)) : Math.PI / 2;
-      stroke(px, py, base + (rng() - 0.5) * 0.2, 18 + 34 * Math.min(1, t), { width: 2.0, opacity: 1, wob: 0.42, stopAtInk: 1.6 });
+      const base = iy > 312 ? fan(px) : Math.PI / 2;
+      const L = wedge(ix, iy).w.len;
+      stroke(px, py, base + (rng() - 0.5) * 0.2, (18 + 34 * Math.min(1, t)) * L, { width: 2.0, opacity: 1, wob: 0.42, stopAtInk: 1.6 });
     }
   // the second direction, only where the wedge runs right up under a line: cross-hatch is how a
   // mass gets built, and it is the only place on this garment that gets one.

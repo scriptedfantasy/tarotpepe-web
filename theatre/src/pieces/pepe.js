@@ -33,7 +33,8 @@
 //   parts = { head, headPivot, headMesh, body, handL, handR, bench, lids:[L,R], pupils:[L,R],
 //             eyelines, mouths:{rest,o,flat}, eyes:[L,R] }     (lids/pupils/mouths: { mat, show() })
 import * as THREE from 'three';
-import { inkMaterial, PAPER } from '../core/strokes.js';
+import { inkMaterial } from '../core/strokes.js';
+import { buildBench } from './pepe-bench.js';
 // The cut-out manifest is imported, not fetched. In the headless judging browser nothing a page
 // requests is served for the first few seconds of its life, so a single await on a file inside
 // build() costs the whole page four seconds that have nothing to do with this piece's work.
@@ -44,7 +45,7 @@ import MANIFEST from '../../public/pepe/cutout.json';
 export const meta = {
   name: 'pepe',
   judge: { shot: 'pepe', states: ['default'] },
-  files: ['src/pieces/pepe.js', 'tools/pepe-cutout.mjs', 'public/pepe/cutout.json'],
+  files: ['src/pieces/pepe.js', 'src/pieces/pepe-bench.js', 'tools/pepe-cutout.mjs', 'public/pepe/cutout.json'],
 };
 
 export const SKIN = '#69b964';
@@ -270,12 +271,10 @@ export async function build(ctx) {
   // it cast, the shadow of his crossed legs would fall DOWNSTAGE across the cloth at about
   // (−0.12, 0.76, −0.04) — a paper puppet's silhouette lying on the table, in view, for free.
   //
-  // ── the bench: a plain paper-white block he sits on; the table hides it in the home shot ──
-  const benchW = 0.94 * BODY_X, benchD = 0.36;
-  const bench = new THREE.Mesh(new THREE.BoxGeometry(benchW, feetY, benchD), inkMaterial({ color: PAPER, hatch: 0.55, lineWeight: 1 }));
-  bench.name = 'bench';
-  bench.position.set(0, feetY / 2, 0);
-  bench.castShadow = bench.receiveShadow = true;
+  // ── the bench he sits on: turned legs, a scalloped valance, a box stretcher, a moulded seat
+  //    board. See pepe-bench.js for why each part is there. The seat top is feetY and nothing
+  //    else: his hands are on the cloth, and the table top is the contract. ──
+  const bench = buildBench({ seatY: feetY, width: 0.92, depth: 0.34 });
   root.add(bench);
 
   ctx.scene.add(root);
