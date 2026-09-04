@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import { cardGeometry } from './cards-geometry.js';
-import { compose, dealTrack, handFrames } from './reveal-takes.js';
+import { compose, dealTrack, handFrames, handSide } from './reveal-takes.js';
 import { deckStacks } from './reveal-shuffle.js';
 
 // The arc: pivot at (0, zMid - R), radius R, half-angle A. Every corner stays on the cloth and
@@ -208,7 +208,7 @@ export function buildFan(ctx, cards, player, hand = null) {
   }
   // the fan gone (the picks stay readable until the next fan is dealt)
   function clear() {
-    hand?.hide();
+    hand?.clear();
     for (const e of entries) group.remove(e.mesh);
     entries.length = 0;
     hover = null;
@@ -248,7 +248,7 @@ export function buildFan(ctx, cards, player, hand = null) {
             s.pivot(PACKET, _v.set(-0.02, nRest() * T + 0.028, 0.006), _e.set(0, 0.1, 0.16), -s.W / 2, -0.5, 0);
           }
           sound('deal');
-          pepe()?.deal?.(0);
+          pepe()?.deal?.(0, 'R'); // the packet is cut and dealt by the hand beside the deck
         });
       else if (k === 2)
         deckTrack.push(() => {
@@ -266,7 +266,7 @@ export function buildFan(ctx, cards, player, hand = null) {
         cues: {
           lift: () => {
             sound('deal');
-            if (i % 7 === 3) pepe()?.deal?.(i);
+            if (i % 7 === 3) pepe()?.deal?.(i, 'R');
           },
           land: () => sound('settle'),
         },
@@ -318,6 +318,8 @@ export function buildFan(ctx, cards, player, hand = null) {
   function pickFrames(e, slot) {
     const from = { p: e.mesh.position.clone(), ry: e.mesh.rotation.y };
     const to = slotPose(slot);
+    const side = handSide(from.p.x); // the hand nearest the card he is taking
+    const sgn = side === 'L' ? -1 : 1;
     const fr = dealTrack(e.mesh, from, to, {
       spin: 0.12,
       apex: hand ? 0.026 : 0.05, // carried in his fingers, not flicked: it stays near the cloth
@@ -325,7 +327,7 @@ export function buildFan(ctx, cards, player, hand = null) {
       cues: {
         lift: () => {
           sound('pick');
-          pepe()?.deal?.(slot);
+          pepe()?.deal?.(slot, side); // the shoulder that agrees with the drawn hand doing it
         },
         land: () => sound('settle'),
       },
@@ -359,8 +361,6 @@ export function buildFan(ctx, cards, player, hand = null) {
     // forefinger down on the card, a two-frame hold, and only then does the card travel — under
     // his fingers the whole way — to its slot, where he presses it flat and lets go.
     const D = 4; // the card waits while the hand comes in and holds
-    const side = from.p.x < -0.08 ? 'L' : 'R'; // the hand nearest the card he is taking
-    const sgn = side === 'L' ? -1 : 1;
     const pinch = (p, ry, y) => ({ x: p.x, y: y ?? 0.006, z: p.z + 0.03, yaw: sgn * -ry * 0.6 - 0.12, side, pose: 'pinch' });
     // his fingers stay on the card for every drawing of the flight; `compose` holds a track's last
     // drawing for ever, so each of the three hand tracks ends by letting the hand go
@@ -431,7 +431,7 @@ export function buildFan(ctx, cards, player, hand = null) {
         e.mesh.position.y += 0.03;
       });
       sound('deal');
-      pepe()?.deal?.(3);
+      pepe()?.deal?.(3, 'R'); // the packet is carried to the deck by the hand beside it
     });
     F(() => {
       rem.forEach((e, r) => set(e, onDeck(r), onDeck(r), 1));

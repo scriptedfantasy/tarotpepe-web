@@ -21,7 +21,7 @@
 //   states: dealt · turning · revealed · fan (stills) · shuffle · fanning · pick · gather · deal · turn (motion)
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
-import { FPS, compose, hold, dealTrack, turnTrack, turnPose, turnEdge, handFrames } from './reveal-takes.js';
+import { FPS, compose, hold, dealTrack, turnTrack, turnPose, turnEdge, handFrames, handSide } from './reveal-takes.js';
 import { buildShuffle } from './reveal-shuffle.js';
 import { buildFan } from './reveal-fan.js';
 import { buildHand } from './reveal-hand.js';
@@ -32,9 +32,14 @@ export const meta = {
   files: ['src/pieces/reveal.js', 'src/pieces/reveal-takes.js', 'src/pieces/reveal-shuffle.js', 'src/pieces/reveal-fan.js', 'src/pieces/reveal-hand.js'],
 };
 
-// The states shot from over the cloth, where his hand does the work: they are judged from the
-// 'fan' shot, not the piece's default 'table'.
-const OVERHEAD = new Set(['fan', 'fanning', 'pick', 'gather']);
+// Where each judging state is shot from. His hand is a flat cut-out lying IN the cloth
+// (reveal-hand.js) and only reads from a lens well above the table — it takes itself off the
+// cloth from anywhere else — so every state in which it touches a card is staged from `fan`, the
+// high three-quarter that holds the whole arc. Not from `spread`, the straight-down: a card stood
+// on its edge to show its face to the visitor is exactly edge-on to that lens and vanishes, and
+// the turn is built around that drawing. The stills in which nothing touches anything (dealt,
+// revealed) keep the piece's frontal 'table' frame.
+const SHOT = { fan: 'fan', fanning: 'fan', pick: 'fan', gather: 'fan', deal: 'fan', turn: 'fan', turning: 'fan' };
 
 const SLUGS = ['the-fool', 'the-star', 'the-house-of-god'];
 
@@ -55,7 +60,7 @@ export async function build(ctx) {
   function stop() {
     for (const p of playing) p.resolve?.();
     playing.length = 0;
-    hand?.hide();
+    hand?.clear();
   }
   function tick(t) {
     if (!playing.length) return; // a still state has posed the hand itself: leave it alone
@@ -141,18 +146,19 @@ export async function build(ctx) {
   // His hand resting on the deck while the cards leave it: it comes in from the top of the frame,
   // presses on the stack, and the card slides out from under it; between cards it breathes up a
   // centimetre and comes back down. `at` are the master frames at which a card leaves.
+  const DECK_SIDE = 'R'; // the deck stands at his right, so the hand that works it is that one
   function deckHandFrames(at, gap) {
     const d = ctx.layout.deck.pos;
     const top = (deck?.userData?.height ?? 0.036) + 0.002;
-    const on = (y, dz = 0, pose = 'splay') => ({ x: d[0] - 0.012, y, z: d[2] + dz, yaw: -0.16, pose });
-    const specs = [{ x: d[0] - 0.012, y: 0.07, z: d[2] - 0.3, yaw: -0.16, pose: 'splay' }];
+    const on = (y, dz = 0, pose = 'splay') => ({ x: d[0] - 0.012, y, z: d[2] + dz, yaw: -0.16, pose, side: DECK_SIDE });
+    const specs = [{ ...on(0.07, -0.3) }];
     at.forEach((k, i) => {
       const prev = i ? at[i - 1] + 5 : 1; // where the last card's hold ended
       if (k > prev) specs.push({ ...on(top + 0.02, -0.02), n: k - prev }); // lifted between cards
       specs.push(on(top)); // the press: the card slides out
       specs.push({ ...on(top), n: 4 }); // held four frames
     });
-    specs.push({ ...on(top + 0.03, -0.05), n: 2 }, { x: d[0] - 0.012, y: 0.07, z: d[2] - 0.3, yaw: -0.16, pose: 'splay' }, { off: true });
+    specs.push({ ...on(top + 0.03, -0.05), n: 2 }, { ...on(0.07, -0.3) }, { off: true });
     return handFrames(hand, specs);
   }
 
@@ -165,7 +171,7 @@ export async function build(ctx) {
         cues: {
           lift: () => {
             sound('deal');
-            pepe()?.deal?.(i);
+            pepe()?.deal?.(i, DECK_SIDE); // his own shoulder agrees with the drawn hand on the deck
             if (deckTop && i === meshes.length - 1) deckTop.visible = true;
           },
           land: () => sound('settle'),
@@ -195,7 +201,9 @@ export async function build(ctx) {
     return turnTrack(m, slot, landed, H, {
       hand,
       cues: {
-        touch: () => pepe()?.turn?.(i),
+        // the hand nearest the card turns it (turnTrack draws that one), so his puppet body is
+        // told which shoulder is doing it and the other stays at rest
+        touch: () => pepe()?.turn?.(i, handSide(slot.p.x)),
         lift: () => sound('flip'),
         land: () => sound('settle'),
       },
@@ -218,7 +226,7 @@ export async function build(ctx) {
     // and his fingers still on the edge that reared it up. On edge the card is a wall at the same
     // x as the hand, so for the still the fingers are slid out to its corner where they read.
     const e = turnEdge(90, H);
-    const side = slot.p.x < -0.08 ? 'L' : 'R';
+    const side = handSide(slot.p.x);
     hand.at(slot.p.x + (side === 'L' ? -0.078 : 0.078), Math.min(e.y, 0.9 * hand.HAND.reach) + 0.002, slot.p.z + e.z, { yaw: -0.3, side, pose: 'point' });
   }
   function faceUpAsTurned(m, i) {
@@ -294,10 +302,14 @@ export async function build(ctx) {
     stop,
     // where the fan's cards are on screen (CSS px), left to right — for tests and captions
     fanScreenPositions: () => fan.screenPositions(),
+    // His drawn hand on the cloth. It takes itself off whenever the camera is not overhead (see
+    // reveal-hand.js), so a cut to `pepe` or `home` needs no call; `hand.hide()` / `hand.show()`
+    // are there for a piece that wants the cloth to itself while the camera stays where it is.
+    hand,
     _fan: fan,
     async setState(name) {
-      // the beats over the cloth are judged from the overhead 'fan' shot, the rest from 'table'
-      ctx.pieces.camera?.cut?.(OVERHEAD.has(name) ? 'fan' : 'table');
+      // the beats over the cloth are judged from above, the rest from the frontal 'table'
+      ctx.pieces.camera?.cut?.(SHOT[name] ?? 'table');
       if (name === 'dealt' || name === 'default') await lay(SLUGS, false);
       else if (name === 'turning') {
         const meshes = await lay(SLUGS, false);
@@ -340,14 +352,18 @@ export async function build(ctx) {
         fan.fakePicks([5, 10, 16]);
         loopPlay(fan.gatherFrames(), 12);
       } else await lay(SLUGS, false);
-      // draw the first frame at once so a frozen clock shows the right drawing
+      // draw the first frame at once so a frozen clock shows the right drawing: the hand answers
+      // the camera first (the state has just cut it), then the take draws with that answer
+      hand.step();
       tick(ctx.clock.t);
       fan.step();
+      hand.step();
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
       if (playing.length) tick(ctx.clock.t);
       fan.step();
+      hand.step(); // the withdrawal, one drawing a frame, when the camera is not overhead
     },
   };
   return api;

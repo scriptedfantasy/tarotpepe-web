@@ -1,37 +1,46 @@
-// PIECE: flow — the whole evening, beat by beat, with the visitor in it.
+// PIECE: flow — the whole evening, which is a conversation.
 //
-//   title card · Chapter One, The Question · Pepe greets · asks · the visitor answers (typed, or
-//   spoken) · Pepe folds it back · Chapter Two, The Cards · the shuffle · the fan · the visitor
-//   picks three (a click, or "the third from the left") · the gather · Chapter Three, The Reading ·
-//   each card turned, an insert of its face with its title placard, Pepe reads it · one follow-up
-//   question · the farewell · Epilogue, The Door · the closing card · a click starts again.
+//   the door · Pepe greets · and then the visitor talks to him, and he answers, for as long as
+//   they like · when the visitor asks for a reading — in whatever words — the story card, the
+//   shuffle, the fan, three picks, the gather, three cards turned and read · and then the
+//   conversation carries on, from the same field, with the cards on the table · when the visitor
+//   says good night, the door, and the sign-off card · a click starts the evening again.
 //
-// Every beat is stepped, held, cut: a card is up, then it is not; the camera cuts, or rides a rail
-// once (the push in to the table for the shuffle). Pepe's words come from the mind (the LLM, or the
-// script when it is silent) one sentence at a time through dialogue.say. Nothing waits for ever:
-// the mind's sentences, the visitor's answers and every animation have a timeout or a way out.
+// There is no script of beats any more and no fixed number of exchanges. The loop is one line
+// long: the visitor says something, the mind answers, the visitor says something. Everything else
+// — the cards, the camera moves, the story card — hangs off the intent the mind reports for a
+// turn ('talk' · 'draw' · 'farewell'). He never deals on his own schedule.
+//
+// The field is under his words, not beside them: his last sentence of a turn is held back and
+// said by dialogue.ask, so the caption the visitor is answering and the block they type into are
+// one drawn card, up together, and the field is open for the whole of the visitor's move. (It
+// cannot stay open while he is speaking his earlier sentences: dialogue.say cuts the caption, and
+// with it the field. See the round's contract note.)
+//
+// Nothing waits for ever and nothing ends by itself: the mind's sentences and every animation have
+// a timeout, and a silence at the field is answered with a line and another open field, never with
+// a farewell the visitor did not ask for.
 //
 // The visitor's keys: space / Return show the line whole (again: cut it); Escape drops the rest of
-// the beat's lines; a click on the picture does what space does, or picks a card at the fan, or
-// starts the evening again from the closing card.
+// his turn; a click on the picture does what space does, or picks a card at the fan, or starts the
+// evening again from the sign-off card.
 //
-// API: start(), restart(), beat, setState(name)
-//   states: title · greeting · question · shuffle · fan · dealt · reading · farewell (stills)
-import { PROMPTS, SAMPLE_ANSWER, scriptedLines, parsePick } from './flow-lines.js';
+// API: start(), restart(), beat, intent, readings, setState(name)
+//   states: greeting · talk · shuffle · fan · dealt · reading · farewell (stills)
+import { PROMPTS, SAMPLE_ANSWER, scriptedLines, splitSentences, parsePick, detectIntent } from './flow-lines.js';
 
 export const meta = {
   name: 'flow',
-  judge: { shot: 'home', states: ['title', 'greeting', 'question', 'shuffle', 'fan', 'dealt', 'reading', 'farewell'], dom: true },
+  judge: { shot: 'home', states: ['greeting', 'talk', 'shuffle', 'fan', 'dealt', 'reading', 'farewell'], dom: true },
   files: ['src/pieces/flow.js', 'src/pieces/flow-lines.js'],
 };
 
 const TIMEOUT = Symbol('timeout');
 const FIRST_SENTENCE_S = 14; // the mind's first sentence of a turn; after this the script speaks
 const NEXT_SENTENCE_S = 9; // ... each further sentence
-const ANSWER_S = 120; // the visitor's silence at the question: taken as nothing said
+const TURN_S = 22; // mind.turn(), when it answers with a finished object rather than a stream
+const IDLE_S = 90; // the visitor's silence at the field: he says a line and opens it again
 const PICK_S = 75; // ... at the fan: Pepe chooses
-const FOLLOWUP_S = 75; // ... at the follow-up: straight to the farewell
-const TITLE_S = 2.6;
 const CHAPTER_S = 1.7;
 const DOOR_S = 3.4;
 
@@ -61,6 +70,9 @@ const ANCHORS = {
   card2: { x: 0.78, y: 0.3, w: 0.3 },
 };
 
+// What the mind may report for a turn. Anything else is talk, which is the safe answer.
+const INTENTS = ['talk', 'draw', 'farewell'];
+
 export async function build(ctx) {
   const P = ctx.pieces;
   const D = P.dialogue, R = P.reveal, C = P.camera, T = P.titles, M = P.mind, S = P.sound, K = P.cards;
@@ -68,7 +80,7 @@ export async function build(ctx) {
 
   let run = 0; // the visit's token: a restart bumps it and every wait in the old visit lets go
   let skips = 0; // skip gestures (a key, a click) so far; a skippable hold ends when it changes
-  let skipBeat = false; // Escape: the rest of this beat's lines are dropped
+  let skipBeat = false; // Escape: the rest of this turn's lines are dropped
   let picking = false; // the fan is armed: clicks belong to the cards
   const alive = (token) => token === run;
 
@@ -94,64 +106,118 @@ export async function build(ctx) {
     cue('cut');
   }
 
-  // ---- Pepe's turn: the mind's sentences, one placard each; the script when the mind is silent ---
-  // keepLast: the last sentence is returned unsaid (it becomes the prompt over the field).
+  // ---- Pepe's sentences, one placard each ---------------------------------------------------------
+  // The source may be an array, an iterator or an async generator (the mind streams, so the first
+  // sentence is up while the rest is still being written).
+  function iterate(source) {
+    if (!source) return null;
+    if (typeof source === 'string') return splitSentences(source)[Symbol.iterator]();
+    if (typeof source[Symbol.asyncIterator] === 'function') return source[Symbol.asyncIterator]();
+    if (typeof source[Symbol.iterator] === 'function') return source[Symbol.iterator]();
+    if (typeof source.next === 'function') return source;
+    return null;
+  }
+
+  // keepLast: the last sentence is returned unsaid (it becomes the line over the open field).
   // each(k, sentence): called before sentence k is said (a cut mid-turn).
-  async function speak(args, { hold = 1.2, keepLast = false, each = null } = {}) {
+  // → { said: how many went up, held: the one kept back }
+  async function render(source, { hold = 1.2, keepLast = false, each = null } = {}) {
     const token = run;
-    skipBeat = false;
-    let count = 0, last = null;
+    const it = iterate(source);
+    let said = 0, held = null;
+    if (!it) return { said, held };
     const emit = async (s) => {
-      const k = count++;
       if (keepLast) {
-        const prev = last;
-        last = s;
+        const prev = held;
+        held = s;
         if (prev == null) return;
-        each?.(k - 1, prev);
+        each?.(said, prev);
         await say(prev, { hold });
+        said++;
         return;
       }
-      each?.(k, s);
+      each?.(said, s);
       await say(s, { hold });
+      said++;
     };
-    const gen = M?.reply ? M.reply(args) : null;
-    if (gen) {
-      let n = 0;
-      if (M.available) P.pepeAnim?.consider?.(3); // he thinks while the first sentence comes
-      try {
-        for (;;) {
-          if (!alive(token) || skipBeat) {
-            gen.return?.();
-            break;
-          }
-          const r = await timeout(gen.next(), n ? NEXT_SENTENCE_S : FIRST_SENTENCE_S);
-          if (r === TIMEOUT) {
-            M.abort?.();
-            gen.return?.();
-            break;
-          }
-          if (r.done) break;
-          n++;
-          if (!alive(token) || skipBeat) break;
-          await emit(r.value);
+    try {
+      for (let n = 0; ; n++) {
+        if (!alive(token) || skipBeat) {
+          it.return?.();
+          break;
         }
-      } catch (e) {
-        console.warn('[flow] the mind stumbled; the script continues:', e?.message ?? e);
-      }
-    }
-    if (!count && alive(token) && !skipBeat && D?.script) {
-      for (const s of scriptedLines(D.script, args)) {
+        const r = await timeout(it.next(), n ? NEXT_SENTENCE_S : FIRST_SENTENCE_S);
+        if (r === TIMEOUT) {
+          M?.abort?.();
+          it.return?.();
+          break;
+        }
+        if (r.done) break;
+        const s = String(r.value ?? '').trim();
+        if (!s) continue;
         if (!alive(token) || skipBeat) break;
         await emit(s);
       }
+    } catch (e) {
+      console.warn('[flow] the mind stumbled; the script continues:', e?.message ?? e);
     }
-    return keepLast ? last : null;
+    return { said, held };
   }
 
-  // ---- a chapter card: cut in, typed, held, cut out (a key or a click ends the hold) ----------------
+  // One of the beats the mind still owns as a beat: the greeting, the shuffle, the fan, a reading,
+  // the farewell. The script speaks if the mind says nothing at all.
+  async function speak(args, opts = {}) {
+    const token = run;
+    skipBeat = false;
+    if (M?.available) P.pepeAnim?.consider?.(3); // he thinks while the first sentence comes
+    let r = await render(M?.reply ? M.reply(args) : null, opts);
+    if (!r.said && r.held == null && alive(token) && !skipBeat && D?.script) r = await render(scriptedLines(D.script, args), opts);
+    return r;
+  }
+
+  // ---- one turn of the conversation -----------------------------------------------------------------
+  // THE CONTRACT WITH mind: `mind.turn(text)` → { intent, sentences }. The intent — talk · draw ·
+  // farewell — is known AT ONCE, before a word of the reply is spoken, so the flow can decide what
+  // the reply is played over: talk, and it is played to the visitor with the field opening under
+  // the last sentence; draw, and it is played over the shuffle, because those sentences are his
+  // shuffle line; farewell, and it is the good night. `sentences` is a stream (an async generator)
+  // or an array; either is played the same way. A mind without turn() — or one whose call fails —
+  // is asked for a beat instead, and the flow reads the intent off the visitor's own words: a
+  // backstop, not the design.
+  const sentencesOf = (t) => {
+    if (!t || t === TIMEOUT) return null;
+    if (typeof t === 'string') return t;
+    return t.sentences ?? t.lines ?? t.text ?? t.reply ?? null;
+  };
+  const intentOf = (t) => {
+    const i = t && typeof t === 'object' ? (t.intent ?? t.action ?? null) : null;
+    return INTENTS.includes(i) ? i : null;
+  };
+
+  // What he makes of what the visitor said. Nothing is spoken here: the sentences are handed back
+  // unplayed, because where they are played depends on the intent.
+  async function listen(said) {
+    skipBeat = false;
+    P.pepeAnim?.consider?.(3); // he thinks; the field is closed and the frame must not be dead
+    let turn = null;
+    if (M?.turn) {
+      try {
+        turn = await timeout(M.turn(said), TURN_S);
+      } catch (e) {
+        console.warn('[flow] the mind stumbled on a turn; the beat speaks:', e?.message ?? e);
+      }
+      if (turn === TIMEOUT) {
+        M.abort?.();
+        turn = null;
+      }
+    }
+    return { intent: intentOf(turn) ?? detectIntent(said), sentences: sentencesOf(turn) };
+  }
+
+  // ---- a story card: cut in, typed, held, cut out (a key or a click ends the hold) ------------------
   async function chapter(n, behind = null) {
-    // the titles piece cuts the chapters it does not want; a cut one is an instant hinge, not a
-    // hold on an empty frame
+    // the titles piece cuts the hinges it does not want; a cut one is an instant hinge, not a hold
+    // on an empty frame
     if (!T?.chapter?.(n)) {
       behind?.();
       return;
@@ -209,8 +275,7 @@ export async function build(ctx) {
         // table). Seen from the table's own height it foreshortens into a green blade lying across
         // the cloth; from `home`, which looks down on the table, it reads as what it is — his arm
         // out, his fingers on the cloth beside the deck — and covers his own right hand rather than
-        // doubling it. See the note to reveal in the round's return: with a way to take that hand
-        // off the cloth for two seconds this cut belongs on `pepe`, where the start would read.
+        // doubling it.
         if (k < 2) {
           await wait(0.35);
           cut('home');
@@ -254,83 +319,143 @@ export async function build(ctx) {
     }
   }
 
-  // ---- the evening ----------------------------------------------------------------------------------
-  async function evening(token) {
-    // the clock only runs once the loop does: two frames, so the first hold is a whole one
-    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
-    if (!alive(token)) return;
-    // 1. the title, then Chapter One
-    api.beat = 'title';
-    cut('home');
-    T?.title?.();
-    cue('title');
-    cue('snap');
-    await wait(TITLE_S, { skippable: true });
-    if (!alive(token)) return;
-    T?.hide?.();
-    await wait(0.5);
-    await chapter(0, () => C?.cut?.('pepe'));
+  // ---- the cards, because the visitor asked for them ----------------------------------------------
+  // `sentences` is the turn in which he agreed to it: the mind writes that turn as the shuffle
+  // line, so it is said over his working hands, not before them. Returns the line the conversation
+  // picks up on afterwards (said over the open field).
+  async function drawing(token, nth, sentences) {
+    // the one story card in the evening, and this is where it belongs: the cards coming out. A
+    // second reading does not get one — a card twice is a slideshow.
+    if (nth === 0) await chapter(1, () => C?.cut?.('home'));
+    else {
+      M?.newSpread?.(); // the cloth cleared, the conversation kept
+      cut('home');
+      await wait(0.5);
+    }
+    if (!alive(token)) return null;
 
-    // 2. the greeting and the question
-    api.beat = 'greeting';
-    D.folio?.('greeting');
-    await wait(0.5);
-    await speak({ beat: 'greeting' });
-    if (!alive(token)) return;
-    api.beat = 'question';
-    D.folio?.('question');
-    const prompt = await speak({ beat: 'question' }, { keepLast: true, hold: 1.0 });
-    const answer = await D.ask(prompt ?? D.script.question[0], { timeout: ANSWER_S, hold: 0.3 });
-    if (!alive(token)) return;
-    api.beat = 'answer';
-    D.folio?.('answer');
-    await speak({ beat: 'answer', user: answer ?? '' }, { hold: 1.4 });
-    if (!alive(token)) return;
-
-    // 3. Chapter Two: the shuffle, the fan, the picks
-    await chapter(1, () => C?.cut?.('home'));
     api.beat = 'shuffle';
     D.folio?.('shuffle');
     const shuffling = R?.shuffle?.() ?? Promise.resolve();
     C?.move?.('table', { kind: 'push' });
-    await speak({ beat: 'shuffle' }, { hold: 1.2 });
+    const over = await render(sentences, { hold: 1.2 });
+    if (!over.said) await speak({ beat: 'shuffle' }, { hold: 1.2 });
     await timeout(shuffling, 12);
-    if (!alive(token)) return;
+    if (!alive(token)) return null;
     await wait(0.5);
+
     api.beat = 'fan';
     D.folio?.('fan');
     cut('fan');
     const fanning = R?.fan?.() ?? Promise.resolve();
     await speak({ beat: 'fan' }, { hold: 1.2 });
     await timeout(fanning, 15);
-    if (!alive(token)) return;
+    if (!alive(token)) return null;
     await wait(0.4);
+
     await pickThree(token);
-    if (!alive(token)) return;
+    if (!alive(token)) return null;
     await wait(0.5);
     await timeout(R?.gather?.() ?? Promise.resolve(), 10);
     api.beat = 'dealt';
     cut('table');
     await wait(0.9);
 
-    // 4. Chapter Three: the reading
-    await chapter(2);
     await readings(token);
-    if (!alive(token)) return;
+    if (!alive(token)) return null;
 
-    // 5. one question, the farewell, the door
-    api.beat = 'followup';
-    D.folio?.('followup');
+    // and back to the table talk, with three cards face up on it
     cut('pepe');
     await wait(0.5);
-    const q = await D.ask(PROMPTS.followup, { timeout: FOLLOWUP_S, hold: 0.4 });
+    return PROMPTS.afterReading[Math.min(nth, PROMPTS.afterReading.length - 1)];
+  }
+
+  // ---- the conversation ------------------------------------------------------------------------------
+  // The whole evening between the greeting and the good night. It ends only when the visitor ends
+  // it: a silence is answered with a line and the same open field, never with a farewell.
+  async function conversation(token, opening) {
+    let prompt = opening || PROMPTS.opening;
+    let quiet = 0;
+    for (;;) {
+      if (!alive(token)) return { spoke: false };
+      api.beat = 'talk';
+      // the folio stays on 'talk' for the whole conversation, so his name is not set over every
+      // line he says; dialogue puts it back after a long silence, which is where it belongs
+      D.folio?.('talk');
+      // after the last of his waiting lines the field simply stays open, with no timer at all
+      const patient = quiet >= PROMPTS.quiet.length;
+      const said = await D.ask(prompt, { timeout: patient ? 0 : IDLE_S, hold: 0.35 });
+      if (!alive(token)) return { spoke: false };
+      if (!said) {
+        // nothing typed (a silence, an Escape, an empty Return): he says one thing and waits again
+        prompt = PROMPTS.quiet[Math.min(quiet++, PROMPTS.quiet.length - 1)];
+        continue;
+      }
+      quiet = 0;
+      api.beat = 'reply';
+      const { intent, sentences } = await listen(said);
+      if (!alive(token)) return { spoke: false };
+      api.intent = intent;
+
+      // the cards, because they were asked for. His turn is the shuffle line: it goes over the
+      // deck, not in front of it, so the story card cuts in the moment he agrees.
+      if (intent === 'draw') {
+        const back = await drawing(token, api.readings++, sentences);
+        if (!alive(token)) return { spoke: false };
+        prompt = back ?? PROMPTS.afterReading[0];
+        continue;
+      }
+      // the good night. His turn is the goodbye.
+      if (intent === 'farewell') {
+        api.beat = 'farewell';
+        D.folio?.('farewell');
+        const bye = await render(sentences, { hold: 1.6 });
+        return { spoke: bye.said > 0 };
+      }
+      // talk: the last sentence is kept back to stand over the open field
+      let r = await render(sentences, { hold: 1.3, keepLast: true });
+      if (!r.said && r.held == null && alive(token) && !skipBeat) {
+        // nothing came of the turn (no mind.turn, a dead call): his answer comes from the beat he
+        // would be on — with the cards down, the beat that answers a question about them
+        r = await speak({ beat: api.readings > 0 ? 'followup' : 'answer', user: said, question: said }, { hold: 1.3, keepLast: true });
+      }
+      if (!alive(token)) return { spoke: false };
+      prompt = r.held ?? PROMPTS.lost;
+    }
+  }
+
+  // ---- the evening ----------------------------------------------------------------------------------
+  async function evening(token) {
+    // the clock only runs once the loop does: two frames, so the first hold is a whole one
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
     if (!alive(token)) return;
-    if (q) await speak({ beat: 'followup', question: q }, { hold: 1.4 });
-    else if (q === '') await say(PROMPTS.followupNone, { hold: 1.2 });
+
+    // 1. the door. The film opens on the entrance — a drawn door on a bare sheet, with the name on
+    // it — and waits there for the visitor's click; it resolves inside the parlour, at `home`.
+    api.beat = 'door';
+    if (P.entrance?.open) await P.entrance.open();
+    else C?.cut?.('home');
     if (!alive(token)) return;
+    await wait(0.9); // the parlour, seen from the doorway, before we sit down
+    if (!alive(token)) return;
+
+    // 2. good evening — and then it is the visitor's evening, not ours
+    cut('pepe');
+    api.beat = 'greeting';
+    D.folio?.('greeting');
+    await wait(0.4);
+    const g = await speak({ beat: 'greeting' }, { keepLast: true, hold: 1.2 });
+    if (!alive(token)) return;
+    const out = await conversation(token, g.held);
+    if (!alive(token)) return;
+
+    // 3. the good night he asked for, the door, the sign-off card
     api.beat = 'farewell';
     D.folio?.('farewell');
-    await speak({ beat: 'farewell' }, { hold: 1.6 });
+    if (!out.spoke) {
+      const f = await speak({ beat: 'farewell' }, { hold: 1.6 });
+      if (!f.said && f.held == null) await say(PROMPTS.farewellNone, { hold: 1.4 });
+    }
     if (!alive(token)) return;
     await wait(0.6);
     await chapter(3, () => C?.cut?.('door'));
@@ -375,10 +500,14 @@ export async function build(ctx) {
 
   const api = {
     beat: 'idle',
+    intent: null, // what the mind made of the visitor's last line
+    readings: 0, // how many times the cards have come out tonight
     start() {
       const token = ++run;
       skipBeat = false;
       picking = false;
+      api.intent = null;
+      api.readings = 0;
       M?.abort?.();
       M?.reset?.();
       D?.clear?.();
@@ -406,17 +535,15 @@ export async function build(ctx) {
       D?.clear?.();
       api.beat = name;
       const cam = (shot) => C?.cut?.(shot);
-      if (name === 'title') {
-        cam('home');
-        T?.title?.();
-      } else if (name === 'greeting') {
+      if (name === 'greeting') {
         cam('pepe');
         D.folio?.('greeting');
         D.setState('greeting');
-      } else if (name === 'question') {
+      } else if (name === 'talk') {
+        // mid-conversation: his line above, the visitor's next one being typed underneath
         cam('pepe');
-        D.folio?.('question');
-        D.ask(D.script.question[0], { instant: true, value: SAMPLE_ANSWER });
+        D.folio?.('talk');
+        D.ask(D.reply(SAMPLE_ANSWER), { instant: true, value: 'can you read my cards' });
       } else if (name === 'shuffle') {
         cam('table');
         await R?.setState?.('shuffle');

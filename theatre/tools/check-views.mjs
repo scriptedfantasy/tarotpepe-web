@@ -17,9 +17,10 @@ const VIEWS = {
   lighting: ['default', 'evening', 'lamp'],
   sound: ['default'],
   camera: ['home', 'wide', 'pepe', 'table', 'spread', 'door', 'fan'],
+  entrance: ['closed', 'opening', 'open'],
   titles: ['title', 'chapter', 'closing', 'hidden'],
   dialogue: ['greeting', 'question', 'reading', 'farewell'],
-  flow: ['title', 'greeting', 'question', 'shuffle', 'fan', 'dealt', 'reading', 'farewell'],
+  flow: ['greeting', 'talk', 'shuffle', 'fan', 'dealt', 'reading', 'farewell'],
   mind: ['greeting', 'question', 'reading', 'transcript'],
 };
 const only = process.argv.slice(2);

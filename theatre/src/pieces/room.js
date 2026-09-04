@@ -56,27 +56,34 @@ export async function build(ctx) {
   const grain = grainTexture();
   const M = {
     paper: mat('wallpaper', wallpaperTexture(), { hatch: 0.3 }),
-    side: mat('sidewall', plainTexture({ seed: 77 }), { hatch: 0.34 }),
+    side: mat('sidewall', plainTexture(), { hatch: 0.34 }),
     // The frieze — the band between the picture rail and the cornice, all round the room — is bare
     // plaster: no pattern, no motif, the lightest hatch in the set. It is the room's one big rest,
     // the empty upper wall the drawings always keep (fd-anim-kitchen-table-cards-hires), and the
     // rail below it and the cornice above are its contour.
-    plaster: mat('plaster', plainTexture({ seed: 80 }), { hatch: 0.12 }),
-    wainscot: mat('wainscot', wainscotTexture(), { hatch: 0.36 }),
-    floor: mat('floor', floorTexture(), { hatch: 0.35 }),
+    plaster: mat('plaster', plainTexture(), { hatch: 0.12 }),
+    // The wainscot band is the room's point of rest below the dado: broad boards, four seams to
+    // the metre, and tone only in the corners the light cannot reach. It used to ask for 0.36 of
+    // hatch on top of a picket-fence texture and it went to half ink.
+    wainscot: mat('wainscot', wainscotTexture(), { hatch: 0.24 }),
+    floor: mat('floor', floorTexture(), { hatch: 0.3 }),
     // The joinery — cornice, rails, skirting, architraves, sashes, shutters — is PAINTED WOOD and
     // the drawings leave it white: a cornice is two lines, a shutter is a white leaf with a dozen
     // strokes across it. These faces are narrow (a 60 mm soffit is ten screen pixels), so any hatch
     // they take lands as scribble rather than tone. Hence the low numbers: the line does the work.
-    trim: mat('trim', plainTexture({ seed: 72 }), { hatch: 0.22, lineWeight: 1.15 }),
-    reveal: mat('reveal', plainTexture({ seed: 78 }), { hatch: 0.66, lineWeight: 1.1 }), // the inside faces of the openings carry tone
-    wood: mat('wood', grain, { hatch: 0.44, lineWeight: 1.1 }), // the door
-    shutter: mat('shutter', plainTexture({ seed: 81 }), { hatch: 0.24, lineWeight: 1.1 }), // painted: no grain drawn on a shutter
-    glass: mat('glass', plainTexture({ tint: '#fbf9f3', seed: 73 }), { hatch: 0.04, lineWeight: 0.8 }),
-    ceiling: mat('ceiling', plainTexture({ seed: 74 }), { hatch: 0.08 }),
-    metal: mat('metal', plainTexture({ seed: 75 }), { hatch: 0.85, lineWeight: 1.2 }),
-    iron: mat('iron', plainTexture({ seed: 76 }), { hatch: 0.42, lineWeight: 1.1 }),
-    dark: mat('dark', plainTexture({ seed: 79 }), { hatch: 1, lineWeight: 1 }), // a hole: cross-hatched to black
+    trim: mat('trim', plainTexture(), { hatch: 0.22, lineWeight: 1.15 }),
+    // The inside faces of the openings carry tone — but only a little more than plain paper. At
+    // 0.66 the standing bias put a jamb straight onto the ink pass's crowded level, and a lining
+    // seen near edge-on (which is how a reveal is nearly always seen) came out as a wire brush
+    // rather than as rain strokes. The pocket term does the rest where the set folds in on itself.
+    reveal: mat('reveal', plainTexture(), { hatch: 0.55, lineWeight: 1.1 }),
+    wood: mat('wood', grain, { hatch: 0.38, lineWeight: 1.1 }), // the door leaves
+    shutter: mat('shutter', plainTexture(), { hatch: 0.24, lineWeight: 1.1 }), // painted: no grain drawn on a shutter
+    glass: mat('glass', plainTexture({ tint: '#fbf9f3' }), { hatch: 0.04, lineWeight: 0.8 }),
+    ceiling: mat('ceiling', plainTexture(), { hatch: 0.08 }),
+    metal: mat('metal', plainTexture(), { hatch: 0.85, lineWeight: 1.2 }),
+    iron: mat('iron', plainTexture(), { hatch: 0.42, lineWeight: 1.1 }),
+    dark: mat('dark', plainTexture(), { hatch: 1, lineWeight: 1 }), // a hole: cross-hatched to black
   };
 
   // every vertex goes through the hand's warp: no edge in the set is ruler-straight
@@ -88,16 +95,18 @@ export async function build(ctx) {
   }
 
   // ---- openings (in each wall's own plane: u along the wall, y up) ----
-  const win = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.16 };
+  const win = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.21 };
   const door = { x0: 1.05, x1: 1.95, y0: 0, y1: 2.45, top: 2.12, depth: 0.1 };
   // a second window on the stage-right wall; its u axis is world z (u = z)
-  const sideWin = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.16 };
+  const sideWin = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.21 };
   // Downstage on each side wall, level with the visitor's shoulder, a second door: the way in from
   // the landing (stage right) and the door of a press (stage left). They sit in the stretch of side
   // wall that only the long door/window/track shots see — in those the lens is a metre from the
   // wall and it races across a third of the frame, so it has to carry drawing, not bare paper.
-  const sideDoorR = { x0: 0.86, x1: 1.98, y0: 0, y1: 2.12, depth: 0.09 };
-  const sideDoorL = { x0: 0.94, x1: 1.82, y0: 0, y1: 2.12, depth: 0.09 };
+  // 0.98 m and 0.86 m in the clear: a door reads as a door at that proportion to its 2.12 m head.
+  // (The right one was 1.12 m — a barn opening, which is part of why it looked like scenery.)
+  const sideDoorR = { x0: 0.9, x1: 1.88, y0: 0, y1: 2.12, depth: 0.11 };
+  const sideDoorL = { x0: 0.96, x1: 1.82, y0: 0, y1: 2.12, depth: 0.11 };
 
   // ---- floor and ceiling ----
   P.plane(W, D + overrun, 0, 0, overrun / 2, M.floor, { rx: -Math.PI / 2, receive: true });
@@ -212,16 +221,27 @@ function buildWindow(P, M, w, zb, jit = Math.random) {
   P.boxFrom(x0 - 0.01, x1 + 0.01, y0 - 0.01, y0, zr, zb, M.reveal, { receive: true });
   // back of the reveal: daylight (paper), behind the casement
   P.plane(x1 - x0, y1 - y0, (x0 + x1) / 2, (y0 + y1) / 2, zr + 0.002, M.glass);
-  // architrave on the wall face
+  // architrave on the wall face, with a bead on its inner edge (the same case as the doors)
   const a = 0.09, ad = 0.028;
   P.boxFrom(x0 - a, x0, y0 - 0.02, y1 + a, zb, zb + ad, M.trim, { cast: true, receive: true });
   P.boxFrom(x1, x1 + a, y0 - 0.02, y1 + a, zb, zb + ad, M.trim, { cast: true, receive: true });
   P.boxFrom(x0 - a, x1 + a, y1, y1 + a, zb, zb + ad, M.trim, { cast: true, receive: true });
+  const wb = 0.015;
+  P.boxFrom(x0 - wb, x0, y0 - 0.02, y1 + wb, zb + ad, zb + ad + 0.011, M.trim, { cast: true });
+  P.boxFrom(x1, x1 + wb, y0 - 0.02, y1 + wb, zb + ad, zb + ad + 0.011, M.trim, { cast: true });
+  P.boxFrom(x0 - wb, x1 + wb, y1, y1 + wb, zb + ad, zb + ad + 0.011, M.trim, { cast: true, uvSwap: true });
   // a small cap moulding over the head
   P.boxFrom(x0 - a - 0.02, x1 + a + 0.02, y1 + a, y1 + a + 0.03, zb, zb + ad + 0.02, M.trim, { cast: true });
-  // sill: a board proud of the wall, with an apron below
-  P.boxFrom(x0 - a - 0.03, x1 + a + 0.03, y0 - 0.04, y0, zr + 0.02, zb + 0.07, M.trim, { cast: true, receive: true });
-  P.boxFrom(x0 - a, x1 + a, y0 - 0.09, y0 - 0.04, zb, zb + 0.03, M.trim, { cast: true });
+  // Sill: a board that oversails the architrave, with a moulded nose under it and an apron below.
+  // It used to be one 40 mm slab whose whole drawing was a single line, and the bar cart in front
+  // of it swallowed that line whole. Now it is three lines deep and it projects 130 mm, so it
+  // reads over the top of anything props stand under it (fd-anim-staircase-guitar-room's windows
+  // sit on exactly this: a board, a nose, an apron).
+  P.boxFrom(x0 - a - 0.045, x1 + a + 0.045, y0 - 0.045, y0, zr + 0.02, zb + 0.13, M.trim, { cast: true, receive: true });
+  P.boxFrom(x0 - a - 0.03, x1 + a + 0.03, y0 - 0.075, y0 - 0.045, zr + 0.02, zb + 0.1, M.trim, { cast: true });
+  P.boxFrom(x0 - a + 0.01, x1 + a - 0.01, y0 - 0.14, y0 - 0.075, zb, zb + 0.032, M.trim, { cast: true });
+  // two small brackets under the apron, at the ends
+  for (const bx of [x0 - a + 0.06, x1 + a - 0.06]) P.box(0.03, 0.09, 0.06, bx, y0 - 0.105, zb + 0.05, M.trim, { cast: true });
 
   // casement: frame ring in the reveal, a centre mullion, two leaves each with a transom bar
   const zf0 = zr + 0.03, zf1 = zr + 0.08; // frame depth band
@@ -244,28 +264,42 @@ function buildWindow(P, M, w, zb, jit = Math.random) {
     P.boxFrom(lx1 - s, lx1, y0 + f, y1 - f, zl0, zl1, M.trim);
     P.boxFrom(lx0, lx1, y1 - f - rt, y1 - f, zl0, zl1, M.trim);
     P.boxFrom(lx0, lx1, y0 + f, y0 + f + rb, zl0, zl1, M.trim);
-    // one transom bar a third of the way down; no glazing bars (the film's casements are two
-    // plain leaves with one bar each)
+    // One glazing bar a third of the way down: it cuts a small upper light off each leaf, which is
+    // exactly what the casements in fd-anim-staircase-guitar-room do. The bar is a BAR — 26 mm, so
+    // the pen draws two lines close together, not a 7-pixel black stripe.
     const yt = y1 - f - (y1 - y0 - 2 * f) * 0.34;
-    P.boxFrom(lx0, lx1, yt - 0.018, yt + 0.018, zl0, zl1, M.trim);
-    // glass, one pane behind the bar
-    P.plane(lx1 - lx0 - 2 * s, y1 - y0 - 2 * f - rt - rb, (lx0 + lx1) / 2, (y0 + f + rb + y1 - f - rt) / 2, (zl0 + zl1) / 2, M.glass);
+    P.boxFrom(lx0, lx1, yt - 0.013, yt + 0.013, zl0, zl1, M.trim, { uvSwap: true });
+    // glass: two panes, the small upper light and the tall one, each its own sheet so the bar has
+    // glass on both sides of it and the daylight stays bare paper (it is never a fill: M.glass
+    // asks the ink pass for almost no tone, so what is drawn here is the joinery and nothing else)
+    const gx = (lx0 + lx1) / 2, gw = lx1 - lx0 - 2 * s;
+    const gz = (zl0 + zl1) / 2;
+    P.plane(gw, y1 - f - rt - (yt + 0.013), gx, (y1 - f - rt + yt + 0.013) / 2, gz, M.glass);
+    P.plane(gw, yt - 0.013 - (y0 + f + rb), gx, (yt - 0.013 + y0 + f + rb) / 2, gz, M.glass);
   }
-  // espagnolette on the right leaf's meeting stile: two keepers and a lever hanging down (no long
-  // rod: at the wide shot it turned the meeting stiles into one black bar)
+  // The fastening on the meeting stiles, drawn as an object: a slim backplate down the right
+  // leaf's stile, a keeper on the left leaf that it shuts against, a rose and a lever that hangs
+  // down at an angle. (It was a rod, two blocks and a long bar, and at the wide shot the whole
+  // middle of the window went to one ragged black smear.)
   {
     const [lx0] = leaves[1];
-    const rx = lx0 + s / 2, rz = zl1 + 0.012;
-    const ry0 = y0 + f + rb + 0.04, ry1 = y1 - f - rt - 0.04;
-    for (const y of [ry0 + 0.02, ry1 - 0.02]) P.box(0.024, 0.03, 0.018, rx, y, rz - 0.003, M.metal);
-    const ly = (y0 + y1) / 2 - 0.05;
-    P.cylinder(0.014, 0.014, 0.03, rx, ly, rz + 0.01, M.metal, { rx: Math.PI / 2, segments: 10 });
-    P.box(0.018, 0.13, 0.014, rx + 0.012, ly - 0.075, rz + 0.026, M.metal, { rz: -0.18, cast: true });
+    const rx = lx0 + s / 2, rz = zl1 + 0.008;
+    const ly = (y0 + y1) / 2 - 0.04;
+    P.box(0.024, 0.19, 0.005, rx, ly + 0.02, rz, M.metal, { cast: true });
+    for (const y of [ly - 0.055, ly + 0.095]) P.cylinder(0.005, 0.005, 0.004, rx, y, rz + 0.004, M.metal, { rx: Math.PI / 2, segments: 8 });
+    P.cylinder(0.017, 0.017, 0.007, rx, ly, rz + 0.005, M.metal, { rx: Math.PI / 2, segments: 12, cast: true });
+    P.box(0.014, 0.085, 0.011, rx + 0.016, ly - 0.05, rz + 0.014, M.metal, { rz: -0.3, cast: true });
+    P.sphere(0.012, rx + 0.03, ly - 0.09, rz + 0.014, M.metal, { cast: true });
+    // the keeper the lever drops into, on the left leaf
+    const [, klx1] = leaves[0];
+    P.box(0.018, 0.026, 0.014, klx1 - s / 2, ly, zl1 + 0.006, M.metal, { cast: true });
   }
-  // a small stay on the left leaf
+  // a casement stay on the left leaf: a perforated bar on a pivot
   {
     const [, lx1] = leaves[0];
-    P.box(0.016, 0.07, 0.012, lx1 - s / 2, (y0 + y1) / 2 - 0.1, zl1 + 0.006, M.metal);
+    const sx = lx1 - s / 2, sy = (y0 + y1) / 2 - 0.12;
+    P.cylinder(0.011, 0.011, 0.005, sx, sy, zl1 + 0.004, M.metal, { rx: Math.PI / 2, segments: 10 });
+    P.box(0.012, 0.16, 0.006, sx - 0.01, sy - 0.08, zl1 + 0.008, M.metal, { rz: 0.12, cast: true });
   }
 
   // shutters: two leaves folded flat against the wall outside the architrave
@@ -477,11 +511,23 @@ function buildDoor(P, M, d, zb) {
   P.boxFrom(x0 - 0.01, x1 + 0.01, y0, y0 + 0.018, zr, zb + 0.01, M.trim, { receive: true });
 }
 
-// The two side-wall doors: the same joinery as the front door, drawn with a third of the parts,
-// because they are only ever seen raked and small. Architrave with a cap, a shallow lining, two
-// stiles, three rails, two flat panels with a single bolection step, a knob and a keyhole plate.
-// `press` gives the narrower stage-left leaf a pair of long panels and no threshold, so it reads as
-// a cupboard rather than a way out.
+// The two side-wall doors. Round 3 built these as a genuine set extension but admitted they were
+// cheap joinery, sound only at a raking angle. They are now built to the same specification as the
+// front door, because the entrance piece may cut to one square-on and a flat rectangle with a knob
+// on it would be found out in one frame:
+//
+//   · a moulded architrave — a flat board, a proud bead on its inner edge, plinth blocks at the
+//     foot and a capped head — so the case is three lines, not one;
+//   · a lining with a planted door stop, so the leaf sits in a rebate;
+//   · two stiles, three rails, two panels, and each panel a full bolection: a step out of the
+//     field, a second smaller step, and a raised fielded centre. Six lines round a panel is what
+//     the pen sees on the doors of the Cadazio street and in the kitchen folio;
+//   · ironmongery drawn as OBJECTS — a knob on a rose with a turned spindle, an escutcheon with a
+//     keyhole actually cut through it, a finger plate above the knob, and three strap hinges with
+//     a barrel, a pin and their screws.
+//
+// `press` gives the narrower stage-left leaf longer panels, a turn-button instead of a lock, and no
+// threshold, so it reads as a cupboard rather than a way out.
 function buildSideDoor(P, M, d, zb, { knob = 1, press = false } = {}) {
   const { x0, x1, y0, y1, depth } = d;
   const zr = zb - depth;
@@ -489,52 +535,94 @@ function buildSideDoor(P, M, d, zb, { knob = 1, press = false } = {}) {
   P.boxFrom(x0 - 0.01, x0, y0, y1, zr, zb, M.reveal, { receive: true });
   P.boxFrom(x1, x1 + 0.01, y0, y1, zr, zb, M.reveal, { receive: true });
   P.boxFrom(x0 - 0.01, x1 + 0.01, y1, y1 + 0.01, zr, zb, M.reveal, { receive: true });
-  const lin = 0.03;
-  P.boxFrom(x0, x0 + lin, y0, y1, zr + 0.01, zb - 0.01, M.reveal, { receive: true });
-  P.boxFrom(x1 - lin, x1, y0, y1, zr + 0.01, zb - 0.01, M.reveal, { receive: true });
-  P.boxFrom(x0, x1, y1 - lin, y1, zr + 0.01, zb - 0.01, M.reveal, { receive: true });
-  // architrave, plinth blocks, a cap over the head
-  const a = 0.085, ad = 0.024;
-  P.boxFrom(x0 - a, x0, y0 + 0.2, y1 + a, zb, zb + ad, M.trim, { cast: true, receive: true });
-  P.boxFrom(x1, x1 + a, y0 + 0.2, y1 + a, zb, zb + ad, M.trim, { cast: true, receive: true });
+  const lin = 0.032;
+  P.boxFrom(x0, x0 + lin, y0, y1, zr + 0.008, zb - 0.008, M.reveal, { receive: true });
+  P.boxFrom(x1 - lin, x1, y0, y1, zr + 0.008, zb - 0.008, M.reveal, { receive: true });
+  P.boxFrom(x0, x1, y1 - lin, y1, zr + 0.008, zb - 0.008, M.reveal, { receive: true });
+  // door stops planted on the lining: the leaf shuts into a rebate, so the reveal draws as two
+  // lines and the gap round the leaf is not a slot straight through the wall
+  const sz = zr + 0.066;
+  P.boxFrom(x0 + lin, x0 + lin + 0.012, y0, y1 - lin, sz, sz + 0.02, M.trim);
+  P.boxFrom(x1 - lin - 0.012, x1 - lin, y0, y1 - lin, sz, sz + 0.02, M.trim);
+  P.boxFrom(x0 + lin, x1 - lin, y1 - lin - 0.012, y1 - lin, sz, sz + 0.02, M.trim, { uvSwap: true });
+  // architrave: a flat board with a bead on its inner edge, plinth blocks, a capped head
+  const a = 0.095, ad = 0.024;
+  P.boxFrom(x0 - a, x0, y0 + 0.21, y1 + a, zb, zb + ad, M.trim, { cast: true, receive: true });
+  P.boxFrom(x1, x1 + a, y0 + 0.21, y1 + a, zb, zb + ad, M.trim, { cast: true, receive: true });
   P.boxFrom(x0 - a, x1 + a, y1, y1 + a, zb, zb + ad, M.trim, { cast: true, receive: true });
-  P.boxFrom(x0 - a - 0.012, x0, y0, y0 + 0.2, zb, zb + ad + 0.008, M.trim, { cast: true });
-  P.boxFrom(x1, x1 + a + 0.012, y0, y0 + 0.2, zb, zb + ad + 0.008, M.trim, { cast: true });
-  P.boxFrom(x0 - a - 0.018, x1 + a + 0.018, y1 + a, y1 + a + 0.03, zb, zb + ad + 0.02, M.trim, { cast: true });
+  // the bead: a narrow strip standing proud along the opening, mitred round the head
+  const bw = 0.016, bz = zb + ad;
+  P.boxFrom(x0 - bw, x0, y0 + 0.21, y1 + bw, bz, bz + 0.012, M.trim, { cast: true });
+  P.boxFrom(x1, x1 + bw, y0 + 0.21, y1 + bw, bz, bz + 0.012, M.trim, { cast: true });
+  P.boxFrom(x0 - bw, x1 + bw, y1, y1 + bw, bz, bz + 0.012, M.trim, { cast: true, uvSwap: true });
+  // plinth blocks: wider and deeper than the architrave, stopping it at the foot
+  P.boxFrom(x0 - a - 0.014, x0 + 0.004, y0, y0 + 0.21, zb, zb + ad + 0.012, M.trim, { cast: true });
+  P.boxFrom(x1 - 0.004, x1 + a + 0.014, y0, y0 + 0.21, zb, zb + ad + 0.012, M.trim, { cast: true });
+  // the head: a frieze board and a cap that oversails it
+  P.boxFrom(x0 - a - 0.008, x1 + a + 0.008, y1 + a, y1 + a + 0.024, zb, zb + ad + 0.014, M.trim, { cast: true });
+  P.boxFrom(x0 - a - 0.026, x1 + a + 0.026, y1 + a + 0.024, y1 + a + 0.046, zb, zb + ad + 0.03, M.trim, { cast: true });
   // the slab
-  const dz0 = zr + 0.012, dz1 = dz0 + 0.042;
+  const dz0 = zr + 0.014, dz1 = dz0 + 0.044;
   const dx0 = x0 + lin + 0.004, dx1 = x1 - lin - 0.004;
   const dy0 = y0 + 0.006, dy1 = y1 - lin - 0.006;
-  const stile = 0.1;
+  const stile = 0.105;
   const rails = press
-    ? [[dy1 - 0.11, dy1], [dy0 + 0.9, dy0 + 1.0], [dy0, dy0 + 0.17]]
-    : [[dy1 - 0.11, dy1], [dy0 + 0.86, dy0 + 0.96], [dy0, dy0 + 0.19]];
+    ? [[dy1 - 0.115, dy1], [dy0 + 0.9, dy0 + 1.0], [dy0, dy0 + 0.17]]
+    : [[dy1 - 0.115, dy1], [dy0 + 0.86, dy0 + 0.97], [dy0, dy0 + 0.2]];
   P.boxFrom(dx0, dx0 + stile, dy0, dy1, dz0, dz1, M.wood, { cast: true, receive: true });
   P.boxFrom(dx1 - stile, dx1, dy0, dy1, dz0, dz1, M.wood, { cast: true, receive: true });
   for (const [ry0, ry1] of rails) P.boxFrom(dx0 + stile, dx1 - stile, ry0, ry1, dz0, dz1, M.wood, { cast: true, receive: true, uvSwap: true });
   const px0 = dx0 + stile, px1 = dx1 - stile;
   for (const [py0, py1] of [[rails[1][1], rails[0][0]], [rails[2][1], rails[1][0]]]) {
-    const fz = dz1 - 0.02;
+    // the field, set back; then two steps of bolection out of it; then a raised centre
+    const fz = dz1 - 0.021;
     P.boxFrom(px0, px1, py0, py1, dz0, fz, M.wood, { receive: true });
-    const b = 0.028, bd = 0.011;
+    const b = 0.03, bd = 0.012;
     P.boxFrom(px0, px0 + b, py0, py1, fz, fz + bd, M.wood, { cast: true });
     P.boxFrom(px1 - b, px1, py0, py1, fz, fz + bd, M.wood, { cast: true });
     P.boxFrom(px0 + b, px1 - b, py1 - b, py1, fz, fz + bd, M.wood, { uvSwap: true, cast: true });
     P.boxFrom(px0 + b, px1 - b, py0, py0 + b, fz, fz + bd, M.wood, { uvSwap: true, cast: true });
+    const b2 = 0.012;
+    P.boxFrom(px0 + b, px0 + b + b2, py0 + b, py1 - b, fz, fz + bd * 0.5, M.wood);
+    P.boxFrom(px1 - b - b2, px1 - b, py0 + b, py1 - b, fz, fz + bd * 0.5, M.wood);
+    P.boxFrom(px0 + b + b2, px1 - b - b2, py1 - b - b2, py1 - b, fz, fz + bd * 0.5, M.wood, { uvSwap: true });
+    P.boxFrom(px0 + b + b2, px1 - b - b2, py0 + b, py0 + b + b2, fz, fz + bd * 0.5, M.wood, { uvSwap: true });
+    const inset = 0.078;
+    P.boxFrom(px0 + inset, px1 - inset, py0 + inset, py1 - inset, fz, fz + 0.009, M.wood, { receive: true, cast: true });
   }
-  // a knob on the closing stile, an escutcheon under it
+  // ---- ironmongery, drawn as objects ----
   const kx = knob > 0 ? dx1 - stile / 2 : dx0 + stile / 2;
   const ky = 1.02;
-  P.cylinder(0.03, 0.03, 0.007, kx, ky, dz1 + 0.004, M.metal, { rx: Math.PI / 2, cast: true });
-  P.cylinder(0.011, 0.011, 0.042, kx, ky, dz1 + 0.026, M.metal, { rx: Math.PI / 2 });
-  P.sphere(0.026, kx, ky, dz1 + 0.052, M.metal, { cast: true });
-  P.box(0.026, 0.06, 0.005, kx, ky - 0.095, dz1 + 0.003, M.metal, { cast: true });
-  // two strap hinges on the hanging stile
+  // knob: a rose plate, a turned spindle with a collar, a ball
+  P.cylinder(0.032, 0.032, 0.007, kx, ky, dz1 + 0.004, M.metal, { rx: Math.PI / 2, cast: true });
+  P.cylinder(0.011, 0.011, 0.03, kx, ky, dz1 + 0.022, M.metal, { rx: Math.PI / 2 });
+  P.cylinder(0.019, 0.019, 0.008, kx, ky, dz1 + 0.041, M.metal, { rx: Math.PI / 2, cast: true });
+  P.sphere(0.027, kx, ky, dz1 + 0.066, M.metal, { cast: true });
+  if (press) {
+    // the cupboard has no lock: a turn-button on the stile above the knob, screwed through its middle
+    P.cylinder(0.014, 0.014, 0.006, kx, ky + 0.13, dz1 + 0.003, M.metal, { rx: Math.PI / 2 });
+    P.box(0.02, 0.085, 0.008, kx, ky + 0.13, dz1 + 0.008, M.metal, { rz: 0.42, cast: true });
+  } else {
+    // escutcheon: a plate with the keyhole actually cut through it (a round eye and a tapered
+    // slot in M.dark — the ink pass draws a hole as solid), and a drop cover pivoted above it
+    const ey = ky - 0.1;
+    P.box(0.03, 0.072, 0.005, kx, ey, dz1 + 0.0025, M.metal, { cast: true });
+    P.cylinder(0.007, 0.007, 0.004, kx, ey + 0.008, dz1 + 0.006, M.dark, { rx: Math.PI / 2 });
+    P.box(0.006, 0.022, 0.004, kx, ey - 0.006, dz1 + 0.006, M.dark);
+    P.cylinder(0.011, 0.011, 0.004, kx + 0.019, ey + 0.028, dz1 + 0.006, M.metal, { rx: Math.PI / 2 });
+    // finger plate above the knob: a long thin plate with a screw at each end
+    P.box(0.05, 0.2, 0.004, kx, ky + 0.24, dz1 + 0.002, M.metal, { cast: true });
+    for (const y of [ky + 0.15, ky + 0.33]) P.cylinder(0.005, 0.005, 0.004, kx, y, dz1 + 0.005, M.metal, { rx: Math.PI / 2 });
+  }
+  // three strap hinges on the hanging stile: a barrel and pin at the jamb, a tapered strap across
+  // the stile, three screws down it
   const hx2 = knob > 0 ? dx0 : dx1;
   const dir = knob > 0 ? 1 : -1;
-  for (const y of [dy0 + 0.3, dy1 - 0.3]) {
-    P.box(0.2, 0.04, 0.007, hx2 + dir * 0.1, y, dz1 + 0.0035, M.metal, { cast: true });
-    P.cylinder(0.012, 0.012, 0.06, hx2 - dir * 0.002, y, dz1 + 0.0035, M.metal, { cast: true });
+  for (const y of [dy0 + 0.28, (dy0 + dy1) / 2, dy1 - 0.28]) {
+    P.box(0.21, 0.042, 0.007, hx2 + dir * 0.105, y, dz1 + 0.0035, M.metal, { cast: true });
+    P.cylinder(0.013, 0.013, 0.068, hx2 - dir * 0.002, y, dz1 + 0.0035, M.metal, { cast: true });
+    P.cylinder(0.006, 0.006, 0.006, hx2 - dir * 0.002, y + 0.04, dz1 + 0.0035, M.metal); // the pin's head
+    for (const t of [0.34, 0.6, 0.86]) P.box(0.012, 0.012, 0.007, hx2 + dir * 0.21 * t, y, dz1 + 0.0085, M.metal);
   }
   if (!press) P.boxFrom(x0 - 0.01, x1 + 0.01, y0, y0 + 0.016, zr, zb + 0.01, M.trim, { receive: true });
 }

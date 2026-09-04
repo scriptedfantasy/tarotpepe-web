@@ -37,6 +37,11 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
 - **Chat or voice.** The visitor answers by typing (`dialogue.ask`, a drawn input in the picture) or by voice
   (a mic button: the browser's SpeechRecognition; when voice is on, Pepe is also spoken by speechSynthesis).
   Chat is the default, voice a toggle; both must work in Chrome.
+- **It is a conversation, not a script of beats (the user's rule).** The visitor talks to Pepe freely,
+  by typing or by voice, and he answers; back and forth for as long as they like. He may offer a
+  reading. He NEVER shuffles or deals on his own schedule: the cards come out only when the visitor
+  asks for them, in whatever words they use. `mind` owns the conversation loop and detects that
+  intent; `flow` waits for it before it touches `reveal`.
 - **The visitor chooses the cards.** After the shuffle Pepe fans the deck face down across the table and the
   visitor picks three — click/tap a card in the fan, or say/type "the third from the left" — and each pick
   slides to its slot before it is turned. `reveal` owns `fan()`, `pick(i)`, `awaitPick()` (raycast + a

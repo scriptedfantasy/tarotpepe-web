@@ -17,6 +17,11 @@ const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
 
+// Which of his hands reaches a thing at x on the cloth: the near one, so no arm ever crosses the
+// whole spread. One rule, used by every take and told to pepeAnim so his puppet body agrees with
+// the drawing on the cloth (pepeAnim.deal(i, side) / turn(i, side)).
+export const handSide = (x) => (x < -0.08 ? 'L' : 'R');
+
 // Repeat the last drawing n more frames (a hold).
 export function hold(frames, n) {
   const last = frames[frames.length - 1];
@@ -151,7 +156,7 @@ export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 
   ];
   if (!hand) return card;
   // the hand nearest this card, so no arm crosses the whole cloth
-  const side = slot.p.x < -0.08 ? 'L' : 'R';
+  const side = handSide(slot.p.x);
   const s = side === 'L' ? -1 : 1;
   const X = slot.p.x + s * dx;
   const base = { yaw, side, pose: 'point' };

@@ -1,19 +1,40 @@
-// PIECE: mind — what Tarot Pepe says, thought up live. Talks to POST /api/pepe (server/pepe.mjs,
-// a streaming proxy to Anthropic or OpenRouter) with the beat, the conversation so far, what the
-// visitor just said and the scripted line for the card as a hint of his voice; falls back to the
-// scripted lines in script.js when there is no key or the call fails, so the show never stops.
+// PIECE: mind — Tarot Pepe's side of a conversation. Talks to POST /api/pepe (server/pepe.mjs, a
+// streaming proxy to Anthropic or OpenRouter) with the conversation so far and what the visitor
+// just said; falls back to the written brain in mind-talk.js / mind-voice.js / script.js when there
+// is no key or the call fails, so the show never stops.
+//
+// THE VISITOR TALKS TO HIM. There is no march of beats any more: the evening is a conversation, and
+// the cards only come out when the visitor asks for them.
+//
+//   const t = mind.turn(text);              // text is whatever they typed or said, possibly ''
+//   t.intent                                 // 'talk' | 'draw' | 'farewell'   — known at once
+//   for await (const s of t.sentences) …     // his reply, one placard-sized sentence at a time
+//
+//   'talk'      keep the conversation going: ask him again when he has finished speaking.
+//   'draw'      the visitor asked for a reading, in their own words, or said yes to his offer.
+//               His sentences ARE the shuffle line, so start the shuffle and say them over it;
+//               then the fan and the picks, then mind.reply({beat:'reading', slug, position}) for
+//               each card, then back to mind.turn() — the conversation simply continues.
+//   'farewell'  they are leaving. His sentences are the goodbye; play them and close the evening.
+//
+// Nothing else in the piece decides to deal. mind.offered says whether his last turn put a reading
+// on offer (so that a bare "yes" means yes); mind.hasSpread whether cards are down.
 //
 // API (ctx.pieces.mind):
+//   turn(text)           → {intent, sentences, text}   the conversation loop (above)
+//   intentOf(text)       → 'talk' | 'draw' | 'farewell' without speaking (peek during the fan)
+//   offered, hasSpread   bool
 //   available            bool, true once health() has answered with a provider
 //   provider, model      'anthropic' | 'openrouter' | 'none', and the model id
 //   ready                Promise → available (health, never longer than 3 s)
 //   health()             → Promise<bool>; refreshes available/provider/model
 //   reply({beat, user, slug, position, question}) → async generator of SENTENCES
-//                        beat: greeting | question | answer | shuffle | fan | reading | followup | farewell
-//                        user: what the visitor said (answer / followup); question: alias for followup
+//                        beat: greeting | talk | reading | followup | farewell | question | answer |
+//                              shuffle | fan
 //                        slug + position (0..2 | 'brought'|'going'|'do' | label) for a reading
 //   history              [{role:'visitor'|'pepe', text}] the conversation so far (also `transcript`)
 //   spread               [{position, label, slug, name, numeral}] the cards on the table so far
+//   newSpread()          clears the cards, keeps the conversation (a second reading)
 //   reset()              forgets the conversation and the spread
 //   abort()              stops the current reply mid-stream (the generator ends)
 //   setState(name)       greeting | question | reading | transcript (judging; see below)
@@ -22,13 +43,15 @@
 // line into #transcript (appended to #ui); window.__mindDone flips true when it is finished. The
 // other states fetch that one beat live and show it in the same block. Nothing here blocks the page
 // on the network: setState returns at once and the conversation fills in.
-import { SCRIPT, lineFor, linesFor, reply as scriptReply, POSITIONS, POSITION_KEYS, positionKey } from './script.js';
+import { SCRIPT, lineFor, linesFor, POSITIONS, POSITION_KEYS, positionKey } from './script.js';
+import { stanceOf, readingScript, followupScript, answerScript, beatText } from './mind-voice.js';
+import { intentOf, talkScript, farewellScript, looksLikeOffer } from './mind-talk.js';
 import { bySlug } from '../core/deck.js';
 
 export const meta = {
   name: 'mind',
   judge: { shot: 'pepe', states: ['greeting', 'question', 'reading', 'transcript'], dom: true },
-  files: ['src/pieces/mind.js', 'server/pepe.mjs', 'vite.config.js'],
+  files: ['src/pieces/mind.js', 'src/pieces/mind-talk.js', 'src/pieces/mind-voice.js', 'server/pepe.mjs', 'vite.config.js'],
 };
 
 const HEALTH_MS = 5000; // the page may be busy building when this is asked; a timeout is retried once
@@ -68,43 +91,35 @@ function tidy(s) {
 }
 
 // --- the scripted fallback -------------------------------------------------------------------
-// The one beat where the visitor asks something of their own. Without a live voice he still has to
-// answer it, and the only honest material is the three cards that are lying there.
-function followupAnswer(said, spread = []) {
-  const drawn = spread.filter(Boolean);
-  const mid = drawn[1] ?? drawn[0];
-  const last = drawn[2] ?? drawn[drawn.length - 1];
-  if (!mid) return said ? scriptReply(/\?\s*$/.test(said) ? said : said + '?') : SCRIPT.interjections.question[1].replace('“{answer}” ', '');
-  const q = said ? `“${said}” ` : '';
-  const options = [
-    `${q}The middle one. ${mid.name} is what is actually going on, and it is the one you did not choose to bring.`,
-    `${q}${mid.name}, in the middle. The first card is what you carried in; that one you already knew.`,
-    `${q}Look at ${mid.name} again, then at ${last?.name ?? 'the last card'}. The second names it, the third tells you what to do on Tuesday.`,
-  ];
-  return options[(said.length + drawn.length) % options.length];
-}
-
-function scripted({ beat, user, slug, position, question, spread = [] }) {
+// Everything he says when there is no live voice. `talk` is the conversation's own state (turns
+// taken, lines already spent, whether a reading is on offer, the stance he has made of the
+// visitor) and lives in build(); the writing is in mind-talk.js and mind-voice.js.
+// Returns {text, offered}: `offered` is true when this turn put a reading on the table to be
+// accepted, so that the visitor's next "yes" means yes.
+function scripted({ beat, user, slug, position, question, spread = [] }, talk) {
   const said = (user ?? question ?? '').trim();
   switch (beat) {
+    case 'talk':
+      return talkScript(said, talk);
     case 'reading':
-      return slug ? lineFor(slug, position ?? 0) : SCRIPT.turn[Number(position) || 0];
+      return { text: slug ? readingScript(slug, position ?? 0, talk.stance) : SCRIPT.turn[Number(position) || 0], offered: false };
     case 'answer':
-      return scriptReply(said);
+      return { text: answerScript(said, stanceOf(said)), offered: false };
     case 'followup':
-      // He answers with the cards on the table, not with a dodge: the middle card is the one that
-      // matters, and it is named. `spread` is filled in as the cards are read.
-      return followupAnswer(said, spread);
-    case 'fan':
-      return SCRIPT.draw[0];
+      return { text: followupScript(said, spread, talk.stance), offered: false };
+    case 'farewell':
+      return { text: farewellScript(talk), offered: false };
     default:
-      return (SCRIPT[beat] ?? SCRIPT.greeting)[0];
+      return { text: beatText(beat), offered: false };
   }
 }
 
 export async function build(ctx) {
   const history = [];
   const spread = [];
+  // the conversation's own memory: how many turns the visitor has taken, every line he has already
+  // spent (so he never recites), whether a reading is on offer, and what he has made of them.
+  const talk = { turns: 0, used: new Set(), offered: false, stance: null, spread };
   let controller = null;
   let retriedHealth = false;
   let latchedAt = 0; // when the live voice last failed fatally (0 = not latched)
@@ -202,11 +217,12 @@ export async function build(ctx) {
     },
 
     // One turn of Pepe's, as sentences. Records the visitor's line and his reply in history.
-    async *reply({ beat = 'greeting', user = '', slug = null, position = 0, question = '' } = {}) {
+    async *reply({ beat = 'greeting', user = '', slug = null, position = 0, question = '', intent = null } = {}) {
       const said = String(user || question || '').trim();
       const args = { beat, user: said, slug, position, question: said };
       const card = slug ? bySlug[slug] : null;
       const posIndex = POSITION_KEYS.indexOf(positionKey(position));
+      if (beat === 'talk') talk.turns++;
       const body = {
         beat,
         history: history.map((h) => ({ role: h.role, text: h.text })),
@@ -219,6 +235,11 @@ export async function build(ctx) {
         positionLabel: POSITIONS[posIndex] ?? null,
         hint: beat === 'reading' && slug ? lineFor(slug, position) : null,
         facts: beat === 'reading' && slug ? cardFacts(slug, position) : null,
+        // the conversation's own facts, so the live voice knows what the room knows
+        intent: intent ?? null,
+        offered: talk.offered,
+        dealt: spread.filter(Boolean).length,
+        turns: talk.turns,
         spread: spread.map((c) => ({ position: c.position, label: c.label, name: c.name, numeral: c.numeral })),
       };
       if (beat === 'reading' && slug && card) {
@@ -240,9 +261,14 @@ export async function build(ctx) {
         await api.health();
       }
       let count = 0;
+      let offeredOut = null; // the script knows; the live voice is read for it
       const yielded = [];
       const finish = () => {
         entry.text = yielded.join(' ');
+        if (beat === 'talk' || beat === 'greeting' || beat === 'question') {
+          talk.offered = offeredOut ?? looksLikeOffer(entry.text);
+          api.offered = talk.offered;
+        }
       };
 
       if (api.available) {
@@ -301,17 +327,54 @@ export async function build(ctx) {
       }
 
       // the script
-      for (const s of splitSentences(scripted({ ...args, spread }))) {
+      const written = scripted({ ...args, spread }, talk);
+      offeredOut = !!written.offered;
+      for (const s of splitSentences(written.text)) {
         yielded.push(s);
         yield s;
       }
       finish();
     },
 
+    // ---- the conversation ------------------------------------------------------------------------
+    // Whatever the visitor said, and what he does with it. `intent` is known before he opens his
+    // mouth, so the caller can arm the shuffle while he is still speaking.
+    turn(text = '') {
+      const said = String(text ?? '').trim();
+      const intent = intentOf(said, { offered: talk.offered });
+      // 'draw' means they have just asked for cards, so his answer is the deck coming off the
+      // cloth: play these sentences over the shuffle rather than before it.
+      const beat = intent === 'farewell' ? 'farewell' : intent === 'draw' ? 'shuffle' : 'talk';
+      if (intent === 'draw') talk.offered = false;
+      return { intent, text: said, sentences: api.reply({ beat, user: said, intent }) };
+    },
+
+    // the same reading of their words, without speaking: for a caller that wants to peek.
+    intentOf(text = '') {
+      return intentOf(String(text ?? '').trim(), { offered: talk.offered });
+    },
+
+    offered: false,
+    get hasSpread() {
+      return spread.filter(Boolean).length > 0;
+    },
+
+    // a second reading in the same evening: the cards go, the conversation stays
+    newSpread() {
+      spread.length = 0;
+      talk.offered = false;
+      api.offered = false;
+    },
+
     reset() {
       api.abort();
       history.length = 0;
       spread.length = 0;
+      talk.turns = 0;
+      talk.used.clear();
+      talk.offered = false;
+      talk.stance = null;
+      api.offered = false;
       // a new visitor deserves a fresh look at the endpoint: a key may have arrived meanwhile
       latchedAt = 0;
       retriedHealth = false;
@@ -375,9 +438,10 @@ function addLine(block, who, text = '') {
   const p = document.createElement('div');
   p.style.margin = '0 0 0.55em';
   const w = document.createElement('span');
-  w.textContent = `${who} — `;
+  w.textContent = who ? `${who} — ` : '';
   w.style.fontWeight = '700';
   w.style.letterSpacing = '0.06em';
+  if (!who) p.style.opacity = '0.55';
   const t = document.createElement('span');
   t.textContent = text;
   p.append(w, t);
@@ -408,10 +472,29 @@ async function speak(mind, block, args) {
   for await (const s of mind.reply(args)) line.add(s);
 }
 
+// The visitor's half of the canned visit: whatever they say, and the intent it carries. The block
+// prints the intent beside each line so the critic can see where the cards were asked for.
+async function visitorSays(mind, block, text) {
+  const t = mind.turn(text);
+  addLine(block, 'VISITOR', text === '' ? '(says nothing)' : text);
+  const line = addLine(block, 'TAROT PEPE');
+  for await (const s of t.sentences) line.add(s);
+  return t.intent;
+}
+
+// The canned visit is a conversation, and it is the one thing a critic reads. It shows the offer
+// being made, refused, and then asked for: the cards come out at the visitor's word and not before.
 const VISIT = {
-  answer: 'I keep starting things and not finishing them.',
+  said: [
+    'I keep starting things and not finishing them.',
+    'Four or five. There is a shed I began in March.',
+    'Not yet. I would rather talk.',
+    'What are you, exactly?',
+    'All right. Read my cards.',
+  ],
   cards: ['the-fool', 'the-house-of-god', 'the-star'],
   question: 'Which one is the important one?',
+  bye: 'Thank you. I should go.',
 };
 
 async function cannedVisit(mind, block, ctx) {
@@ -419,12 +502,17 @@ async function cannedVisit(mind, block, ctx) {
   block.innerHTML = '';
   await speak(mind, block, { beat: 'greeting' });
   await speak(mind, block, { beat: 'question' });
-  addLine(block, 'VISITOR', VISIT.answer);
-  await speak(mind, block, { beat: 'answer', user: VISIT.answer });
-  for (let i = 0; i < 3; i++) await speak(mind, block, { beat: 'reading', slug: VISIT.cards[i], position: i });
-  addLine(block, 'VISITOR', VISIT.question);
-  await speak(mind, block, { beat: 'followup', question: VISIT.question });
-  await speak(mind, block, { beat: 'farewell' });
+  let intent = 'talk';
+  for (const said of VISIT.said) {
+    intent = await visitorSays(mind, block, said);
+    if (intent === 'draw') break;
+  }
+  if (intent === 'draw') {
+    addLine(block, '', '[ the fan; the visitor picks three ]');
+    for (let i = 0; i < 3; i++) await speak(mind, block, { beat: 'reading', slug: VISIT.cards[i], position: i });
+  }
+  await visitorSays(mind, block, VISIT.question);
+  await visitorSays(mind, block, VISIT.bye);
   fit(block);
 }
 
@@ -434,10 +522,9 @@ async function oneBeat(mind, block, ctx, name) {
   if (name === 'reading') {
     const slug = ctx.params.get('card') ?? 'the-moon';
     const pos = +(ctx.params.get('pos') ?? 1);
-    const answer = ctx.params.get('answer') ?? VISIT.answer;
+    const answer = ctx.params.get('answer') ?? VISIT.said[0];
     // the reading is only specific with something to be specific about
-    mind.history.push({ role: 'visitor', text: answer });
-    addLine(block, 'VISITOR', answer);
+    await visitorSays(mind, block, answer);
     await speak(mind, block, { beat: 'reading', slug, position: pos });
   } else {
     await speak(mind, block, { beat: name });

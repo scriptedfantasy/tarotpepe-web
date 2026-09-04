@@ -23,11 +23,12 @@ export const POSITION_KEYS = ['brought', 'going', 'do'];
 // ---------------------------------------------------------------------------------------------
 const greeting = [
   'Good evening. Please sit. The chair is low; it was made for a frog.',
-  'I am Tarot Pepe. I read three cards. Not palms, not leaves, not faces, though I will look at yours.',
-  'Nothing said here leaves the room. The room is small, so that is not saying much.',
+  'I am Tarot Pepe. I read three cards when somebody asks me to. Until then we talk; I am not in a hurry.',
+  'Not palms, not leaves, not faces, though I will look at yours. Nothing said here leaves the room, and the room is small.',
 ];
 
-const question = ['Tell me what you are carrying. One sentence. The second is usually the first one again, louder.'];
+// The visitor is not being interviewed. The last sentence is the one that stands over the field.
+const question = ['You do not have to have a question. Most people arrive with a sentence and put it down. What brings you in tonight?'];
 
 // The visitor's sentence, folded back verbatim. {answer} is replaced by reply().
 const answer = [

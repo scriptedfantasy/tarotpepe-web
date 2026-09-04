@@ -21,8 +21,18 @@
 // Posing is by the FINGERTIP: `at(x, y, z, {yaw, pose})` puts the contact point of the drawing on
 // that spot on the cloth and works the wrist and the sleeve back from it, tilting the hand up about
 // the wrist when the fingertip is above the cloth (a card being reared up on its edge). While the
-// hand is out, the puppet's own right hand — the one that sits beside the deck — is hidden, so he
-// never has three.
+// hand is out, the puppet's own hand on that side is LENT to it — asked for through pepe's own api
+// (`pepe.handOff(side)` / `handOn(side)`, see "lending a hand" in pepe.js), so his shoulder holds
+// still and the hand comes back exactly where it left, and he never has three.
+//
+// THE DRAWING BELONGS TO THE OVERHEAD SHOTS. It is a flat cut-out lying IN the plane of the cloth:
+// from `fan` or `spread`, whose lens is 70° or more above the table, it reads as a hand on the
+// table; from `pepe` or `table`, whose lens is at the height of the table, the same drawing
+// foreshortens to a fifth of its length and lies there as a green blade. So the hand watches the
+// camera, and when the shot is not an overhead one it WITHDRAWS — two drawings back along its own
+// arm, off the top edge of the picture, then gone, and his own cut-out hand comes back on his
+// body. When an overhead shot returns the same drawings play backwards. `hide()` / `show()` let
+// another piece ask for the same withdrawal directly.
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import { INK, PAPER, makeCanvas, canvasTexture, inkLine, hatch, inkMaterial } from '../core/strokes.js';
@@ -45,6 +55,23 @@ export const HAND = {
   anchor: [0.291, 0.828, -0.82],
   sleeveMax: 1.05,
 };
+
+// How far the lens must be tilted down before the drawing may lie on the cloth: the y of the
+// camera's own forward vector. The named shots fall either side of it by a mile — spread and the
+// card inserts are straight down (-1.0), `fan` is -0.95, while `table`, `pepe`, `home`, `wide` and
+// `door` are all level (0.0) — and a shot the camera piece adds later, or the middle of a move
+// between two of them, answers for itself without a list of names to keep in step.
+const OVERHEAD_Y = -0.6;
+// The withdrawal, one drawing per stepped frame: metres back along the hand's own arm, and metres
+// up off the cloth. The frame of the cut, ONE drawing of the hand taken back and up — 0.34 m is
+// half the overhead frame, and the lift tilts the cut-out up about the wrist so it reads as a
+// hand leaving a table and not as a plank lying on it — and it is off the picture. Two drawings,
+// because the shot it is caught in is the shot it does not belong in: any longer and the arm is
+// seen lying across the cloth, any shorter and the hand goes out like a light. The return is the
+// same two drawings backwards.
+const RETREAT = [0, 0.34];
+const LIFT = [0, 0.12];
+const RAMP = RETREAT.length;
 
 const TEX = { w: 384, h: 512 };
 // The contour: stroked at OUT, then the silhouette is re-filled, so half of it shows. The drawing
@@ -311,11 +338,20 @@ export function buildHand(ctx) {
     shown = v;
     sideShown = side;
     group.visible = v;
-    for (const s of ['L', 'R']) {
-      const h = puppetHand(s);
-      if (h) h.visible = !(v && s === side);
-    }
+    // his own cut-out hand on that side steps out of the drawing while this one is on the cloth,
+    // and comes back the moment it leaves: his business, so it is asked for, never reached into
+    for (const s of ['L', 'R']) ctx.pieces.pepe?.[v && s === side ? 'handOff' : 'handOn']?.(s);
   }
+
+  // ── the camera watch ──────────────────────────────────────────────────────────────────────────
+  // `out` is how far through the withdrawal the drawing is (0 on the cloth … RAMP off the
+  // picture). It is a function of the frame count since the answer last changed, not a counter, so
+  // a frozen clock (?t=) shows the settled pose and every frame of a take stays deterministic.
+  const _dir = new THREE.Vector3();
+  const overhead = () => ctx.camera.getWorldDirection(_dir).y <= OVERHEAD_Y;
+  let forced = false; // another piece asked for the hand off the cloth (hide / show)
+  let allowed = true, sinceFrame = -99, out = 0;
+  let want = null, wantFrame = -99; // the last pose asked for, and when: replayed as it withdraws
 
   // Several tracks are composed into ONE drawing (three cards turning, a card carried while the
   // ribbon closes), and `compose` holds a finished track's last drawing for ever after. So the
@@ -323,6 +359,35 @@ export function buildHand(ctx) {
   // track that puts the hand somewhere in that drawing wins, and the hand only leaves the cloth
   // when no track wanted it at all.
   let claimed = false;
+
+  // The drawing, put where `w` asks and slid back along its own arm by however far the withdrawal
+  // has got. Past the last step of the withdrawal it is not drawn at all and his own hand is back.
+  function place(w) {
+    if (out >= RAMP) {
+      setShown(false);
+      return;
+    }
+    const m = w.side === 'L' ? -1 : 1;
+    const Yaw = m * w.yaw;
+    setShown(true, m < 0 ? 'L' : 'R');
+    for (const k in poses) poses[k].visible = k === (poses[w.pose] ? w.pose : 'splay');
+    const lift = Math.max(0, w.y) + LIFT[out];
+    const pitch = Math.asin(Math.min(0.97, lift / HAND.reach));
+    const run = HAND.reach * Math.cos(pitch) + RETREAT[out]; // …plus the withdrawal, straight back up the arm
+    const wx = w.x - Math.sin(Yaw) * run;
+    const wz = w.z - Math.cos(Yaw) * run;
+    group.position.set(wx, Y + HAND.y, wz);
+    group.rotation.set(0, Yaw, 0);
+    group.scale.x = m;
+    wrist.rotation.set(-pitch, 0, 0);
+    // the arm keeps to the cloth and points back at that wrist of his, however the hand is turned
+    const A = ANCH[m < 0 ? 'L' : 'R'];
+    const dx = A.x - wx, dz = A.z - wz;
+    const len = Math.min(HAND.sleeveMax, Math.max(0.3, Math.hypot(dx, dz)));
+    sleevePivot.rotation.set(0, m < 0 ? Math.atan2(dx, -dz) + Yaw : Math.atan2(-dx, -dz) - Yaw, 0);
+    sleeve.rotation.x = Math.asin(Math.max(-0.3, Math.min(0.5, (A.y - (Y + HAND.y + 0.0012)) / len)));
+    sleeve.scale.z = len;
+  }
 
   const api = {
     group,
@@ -343,37 +408,56 @@ export function buildHand(ctx) {
     // `yaw` is always given as if for the right hand; the left mirrors it.
     at(x, y, z, { yaw = 0, pose = 'splay', side = 'R' } = {}) {
       claimed = true;
-      const m = side === 'L' ? -1 : 1;
-      const Yaw = m * yaw;
-      setShown(true, m < 0 ? 'L' : 'R');
-      for (const k in poses) poses[k].visible = k === (poses[pose] ? pose : 'splay');
-      const lift = Math.max(0, y);
-      const pitch = Math.asin(Math.min(0.97, lift / HAND.reach));
-      const run = HAND.reach * Math.cos(pitch);
-      const wx = x - Math.sin(Yaw) * run;
-      const wz = z - Math.cos(Yaw) * run;
-      group.position.set(wx, Y + HAND.y, wz);
-      group.rotation.set(0, Yaw, 0);
-      group.scale.x = m;
-      wrist.rotation.set(-pitch, 0, 0);
-      // the arm keeps to the cloth and points back at that wrist of his, however the hand is turned
-      const A = ANCH[m < 0 ? 'L' : 'R'];
-      const dx = A.x - wx, dz = A.z - wz;
-      const len = Math.min(HAND.sleeveMax, Math.max(0.3, Math.hypot(dx, dz)));
-      sleevePivot.rotation.set(0, m < 0 ? Math.atan2(dx, -dz) + Yaw : Math.atan2(-dx, -dz) - Yaw, 0);
-      sleeve.rotation.x = Math.asin(Math.max(-0.3, Math.min(0.5, (A.y - (Y + HAND.y + 0.0012)) / len)));
-      sleeve.scale.z = len;
+      want = { x, y, z, yaw, pose, side };
+      wantFrame = ctx.clock.frame;
+      place(want);
     },
     // this track has no use for the hand in this drawing; another one may still claim it, so
     // nothing happens here — end() decides
     off() {},
-    // the hand off the cloth at once, whatever anyone claimed (a take stopped, the fan cleared)
+    // One drawing of the withdrawal, or of the return: reveal.update calls it on every stepped
+    // frame, after the takes have drawn, so it sees what they asked for and where the camera is.
+    step() {
+      const a = !forced && overhead();
+      const first = sinceFrame === -99;
+      if (first || a !== allowed) {
+        allowed = a;
+        sinceFrame = first ? ctx.clock.frame - RAMP : ctx.clock.frame; // the first answer is not animated
+      }
+      const k = Math.max(0, ctx.clock.frame - sinceFrame);
+      const o = allowed ? Math.max(0, RAMP - k) : Math.min(RAMP, k);
+      if (o === out) return;
+      out = o;
+      if (want && wantFrame >= ctx.clock.frame) place(want); // still wanted: redraw it at its new remove
+      else if (out >= RAMP) setShown(false);
+    },
+    // Another piece asking for the cloth to itself: the hand withdraws over the next two drawings
+    // and stays off until show() is called. The camera watch does this by itself for every shot
+    // that is not overhead, so a cut away needs no call at all.
     hide() {
+      forced = true;
+      api.step();
+    },
+    show() {
+      forced = false;
+      api.step();
+    },
+    // the hand off the cloth at once, whatever anyone claimed (a take stopped, the fan cleared)
+    clear() {
       claimed = false;
+      want = null;
       setShown(false);
     },
     get shown() {
       return shown;
+    },
+    // whether the hand may be on the cloth at all: the camera is overhead and nobody asked it off
+    get overhead() {
+      return allowed;
+    },
+    // how far through the withdrawal the drawing is: 0 on the cloth … RAMP off the picture (tests)
+    get out() {
+      return out;
     },
     dispose() {
       for (const k in poses) {

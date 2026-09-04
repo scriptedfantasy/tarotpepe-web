@@ -14,8 +14,9 @@ import { DECK, bySlug } from '../core/deck.js';
 import { inkMaterial, makeCanvas, canvasTexture } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 import { cardGeometry } from './cards-geometry.js';
-import { drawBack, drawFront, drawDeckSide, FRONT, frogGlyph, hatchPoly, inkPath } from './cards-art.js';
+import { drawBack, drawFront, drawDeckSide, BAND, FRONT, frogGlyph, starGlyph, moonGlyph, lozenge, qbez, ellArc, hatchPoly, inkPath } from './cards-art.js';
 import { bakedTexture, BAKING } from '../core/bake.js';
+import { inkFilter } from './cards-mips.js';
 
 export const meta = {
   name: 'cards',
@@ -63,7 +64,7 @@ export async function build(ctx) {
   // lattice and the medallion stay black on paper at ninety pixels wide.
   const backMat = inkMaterial({ colorful: false, hatch: 0.2, lineWeight: 1 });
   const backReady = attach(
-    bakedTexture('card-back', 1024, 1792, (g, w, h) => drawBack(g, w, h, mulberry32(21)), { anisotropy: 16, deps: [drawBack, frogGlyph, hatchPoly, inkPath] }),
+    bakedTexture('card-back', 1024, 1792, (g, w, h) => drawBack(g, w, h, mulberry32(21)), { anisotropy: 16, deps: [drawBack, frogGlyph, starGlyph, moonGlyph, lozenge, qbez, ellArc, hatchPoly, inkPath, JSON.stringify(BAND)] }).then((t) => inkFilter(t, ctx.renderer)),
     backMat,
   );
 
@@ -78,12 +79,15 @@ export async function build(ctx) {
     const p = (async () => {
       const tex = await ctx.assets.texture(ctx.assets.cardUrl(slug));
       const img = tex.image;
-      const M = FRONT.M;
-      const cw = (img?.naturalWidth || img?.width || 1024) + 2 * M;
-      const ch = (img?.naturalHeight || img?.height || 1792) + 2 * M;
+      // The canvas is cut to the CARD's aspect, not the plate's, so the geometry's uv does not
+      // stretch the drawing and the paper margin is the same width on every side. The plate is
+      // then laid into it a hair off centre.
+      const cw = (img?.naturalWidth || img?.width || 1024) + 2 * FRONT.M;
+      const ch = Math.round((cw * H) / W);
       const c = makeCanvas(cw, ch);
       drawFront(c.getContext('2d'), cw, ch, img, mulberry32(hashSlug(slug)));
       const t = canvasTexture(c, { anisotropy: 16 });
+      t.anisotropy = Math.max(16, ctx.renderer?.capabilities?.getMaxAnisotropy?.() ?? 16);
       return inkMaterial({ map: t, colorful: true, hatch: 0, lineWeight: 1 });
     })();
     frontCache.set(slug, p);
@@ -94,11 +98,14 @@ export async function build(ctx) {
   // one corner lifted.
   function bendFor(seed) {
     const rng = mulberry32(seed);
+    // a deck that has been shuffled a thousand times: two or three millimetres of cup along the
+    // length, a whisper across it, one corner turned. Small enough that the cards still stack;
+    // large enough that a card lying on the cloth is not a rectangle painted on it.
     return {
-      curl: 0.0009 + rng() * 0.0006,
-      curlX: 0.0001 + rng() * 0.0002,
-      twist: (rng() - 0.5) * 0.0006,
-      dogEar: { sx: rng() < 0.5 ? -1 : 1, sy: rng() < 0.5 ? -1 : 1, amount: 0.0004 + rng() * 0.0005, radius: 0.016 + rng() * 0.012 },
+      curl: 0.0016 + rng() * 0.0012,
+      curlX: 0.0003 + rng() * 0.0005,
+      twist: (rng() - 0.5) * 0.0009,
+      dogEar: { sx: rng() < 0.5 ? -1 : 1, sy: rng() < 0.5 ? -1 : 1, amount: 0.0007 + rng() * 0.0008, radius: 0.018 + rng() * 0.014 },
     };
   }
 
@@ -124,7 +131,7 @@ export async function build(ctx) {
   deck.name = 'deck';
   const blocks = [26, 11, 6]; // cards per block, bottom to top; plus one loose card
   const nTotal = blocks.reduce((a, b) => a + b, 0);
-  const sideTexP = bakedTexture('deck-side', 1024, nTotal * 14, (g, w, h) => drawDeckSide(g, w, h, nTotal, mulberry32(31)), { anisotropy: 8, deps: [drawDeckSide, inkPath] });
+  const sideTexP = bakedTexture('deck-side', 1024, nTotal * 14, (g, w, h) => drawDeckSide(g, w, h, nTotal, mulberry32(31)), { anisotropy: 8, deps: [drawDeckSide, inkPath] }).then((t) => inkFilter(t, ctx.renderer));
   const perimeter = 2 * (W + H) - 8 * R + 2 * Math.PI * R;
   let y = 0, start = 0;
   const untidy = [

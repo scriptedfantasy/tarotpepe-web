@@ -1,9 +1,12 @@
 // flow-lines.js — what the flow itself says (the prompts around the visitor's input), the parser
-// that turns "the third from the left" into a card, the sentence splitter, and the scripted lines
-// the flow falls back on when the mind is silent for too long. All data and pure functions.
+// that turns "the third from the left" into a card, the reader of the visitor's intent when the
+// mind does not report one, the sentence splitter, and the scripted lines the flow falls back on
+// when the mind is silent for too long. All data and pure functions.
 
-// Pepe's prompts at the fan and at the follow-up. The script (script.js) has no lines for the
-// pick, so these are the flow's own; same voice: formal, brief, no winking.
+// Pepe's prompts around the visitor's block: at the fan, in a silence, when a reading is over.
+// The script (script.js) has no lines for these, so they are the flow's own; same voice: formal,
+// brief, no winking. Every one of them is a line said with the field open underneath it, so each
+// has to be a thing a person can answer — never a dead end.
 export const PROMPTS = {
   pick: [
     'Choose a card. Click one, or say which: the third from the left, the one on the far right.',
@@ -14,6 +17,22 @@ export const PROMPTS = {
   pickForYou: 'Very well. I will choose. People do not like it when I choose.',
   followup: 'You may ask one thing about the cards. One.',
   followupNone: 'No question. That is rarer than you would think.',
+  // the field is open and he has nothing to answer: the greeting was lost, or the mind said nothing
+  opening: 'Good evening. Sit, and say what you like. The cards can wait.',
+  // a silence, then another, then the last one: no timer runs after this, so the field simply stays
+  quiet: [
+    'Take your time. I have sat through longer silences than this one.',
+    'Still nothing. That is an answer of a sort. A word will do.',
+    'I will wait. When you want the cards, say so.',
+  ],
+  // the mind gave nothing back at all
+  lost: 'Say that again. The radio was loud.',
+  // the third card has been read and the evening goes on: the field opens under this
+  afterReading: [
+    'That is the three of them. Ask about one, or tell me something else.',
+    'Three more. The same table, the same frog. Ask what you like.',
+  ],
+  farewellNone: 'Good night. The step by the door is lower than it looks.',
 };
 
 // The visitor's sample answer for the judging stills (the same one the mind's transcript uses).
@@ -61,6 +80,38 @@ export function scriptedLines(script, { beat, user = '', slug = null, position =
       text = (Array.isArray(script[beat]) ? script[beat] : script.greeting)[0];
   }
   return splitSentences(text);
+}
+
+// --- what the visitor is asking for ---------------------------------------------------------------
+// The mind owns this: `mind.turn(text)` reports { sentences, intent }. This is the flow's backstop,
+// used only when the mind returns no intent (an older mind, a failed call, the scripted voice), so
+// that "read my cards" still brings the cards out and "goodbye" still ends the evening. It is
+// deliberately shy: anything it is not sure of is talk, because talk is the safe answer — the worst
+// it costs is that the visitor asks twice.
+const NORM = (raw) =>
+  String(raw ?? '')
+    .toLowerCase()
+    .replace(/[’']/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+// an outright request for the cards
+const DRAW = /\b(read (me |my |us |the |our )*(cards?|fortune|palm|leaves)|read for (me|us)|(draw|pull|deal|turn over|lay out|lay down) (me |us )?(a |the |some |three |my |out )*cards?|shuffle|do (a|my|the) reading|(a|another|one more) reading|tell (me )?my fortune|(cards?|reading) (please|now))\b/;
+// a wish, next to the word cards: "yes please, the cards", "I want a reading"
+const WANT = /\b(can|could|would|will|may|please|want|wanted|need|ready|lets|let us|id like|i would like|show me|give me|go on|yes|okay|ok|sure)\b/;
+const CARDS = /\b(cards?|reading|deck|fortune|spread)\b/;
+// ... unless the sentence is plainly about the cards already on the table
+const ABOUT = /\b(mean|means|meaning|why|which|middle|first|second|third|last|about|explain|said|says)\b/;
+const BYE = /\b(goodbye|good bye|bye|goodnight|good night|farewell|see you|until next time|im done|i am done|im finished|thats all|that is all|nothing else|i should go|i must go|i have to go|i will go|im leaving|i am leaving|take care)\b/;
+
+// text → 'draw' | 'farewell' | 'talk'
+export function detectIntent(raw) {
+  const t = NORM(raw);
+  if (!t) return 'talk';
+  const draw = DRAW.test(t) || (WANT.test(t) && CARDS.test(t) && !ABOUT.test(t));
+  if (BYE.test(t) && !draw) return 'farewell';
+  if (draw) return 'draw';
+  return 'talk';
 }
 
 // --- "the third from the left" --------------------------------------------------------------------

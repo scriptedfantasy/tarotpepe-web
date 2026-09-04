@@ -7,7 +7,7 @@
 // back wall is ~200 px/m, so a 6 mm stroke lands at ~1.2 px — the same weight the ink pass
 // draws its outlines with. A finer pen mip-blends into a grey screen.
 import * as THREE from 'three';
-import { INK, PAPER, drawTexture, paper, inkLine, hatch } from '../core/strokes.js';
+import { INK, PAPER, drawTexture, paper, inkLine } from '../core/strokes.js';
 
 const px = (m, ppm) => m * ppm;
 
@@ -124,7 +124,7 @@ export function wallpaperTexture({ tile = 1.02, ppm = 1000, seed = 21 } = {}) {
     size,
     size,
     (g, w, h, rng0) => {
-      paper(g, w, h, PAPER, { grain: 0.012, seed });
+      paper(g, w, h, PAPER, { grain: 0, seed });
       const s = px(0.21, ppm); // motif height
       // instances (with wrap copies so the tile is seamless: the same hand for each copy)
       for (let j = -1; j <= rows; j++)
@@ -155,30 +155,50 @@ export function wallpaperTexture({ tile = 1.02, ppm = 1000, seed = 21 } = {}) {
 // cornice is now bare plaster all round the room — the one big empty area the drawings always keep,
 // as in fd-anim-kitchen-table-cards-hires. room.js paints it with plainTexture: nothing to draw.)
 
-// Wainscot: tongue-and-groove boards, roughly 0.1 m wide but no two alike — ONE seam for each,
-// with a companion line 20 mm off now and then where the pen went twice. (There used to be a bead
-// 5 mm from every seam and a third line at 13 mm: at the wide shot a board is 26 screen pixels, so
-// those three lines landed inside 3 px and smeared into one fat grey stripe per board.)
-// Tile 0.8 m, eight boards.
-export function wainscotTexture({ tile = 0.8, ppm = 1000, seed = 41 } = {}) {
+// Wainscot: broad boarded panelling. FOUR boards to the metre, not ten.
+//
+// This band was the blackest cell in the frame (47–51% ink) and it was a texture, not a decision:
+// eight boards to 0.8 m put a full-height stroke every 0.1 m, which on the raked side walls of the
+// wide shot lands at ELEVEN screen pixels — a picket fence that mip-blends to grey, exactly the
+// "mechanically spaced hatch" STYLE.md §1.3 forbids. The film draws boarded panelling (Bean's hall,
+// the doors on the Cadazio street) with a handful of confident seams a hand's breadth apart and
+// bare paper between them, and the grain inside a board is a *broken* stroke or nothing at all.
+//
+// So: 0.25 m boards — 45 px on the back wall, 34 px on the raked side wall — one seam each, drawn
+// in two or three long strokes with the pen lifted between them, an occasional companion bead where
+// the hand went twice, and grain on only two boards in five, faint and never the board's full height.
+export function wainscotTexture({ tile = 1.0, ppm = 700, seed = 41 } = {}) {
   const size = Math.round(tile * ppm);
   const tex = drawTexture(
     size,
     size,
     (g, w, h, rng) => {
-      paper(g, w, h, PAPER, { grain: 0.012, seed });
-      const boards = 8;
+      paper(g, w, h, PAPER, { grain: 0, seed });
+      const boards = 4;
       const widths = [];
-      for (let i = 0; i < boards; i++) widths.push(0.82 + rng() * 0.36);
+      for (let i = 0; i < boards; i++) widths.push(0.86 + rng() * 0.28);
       const sum = widths.reduce((p, q) => p + q, 0);
       let x = 0;
       for (let i = 0; i < boards; i++) {
         const bw = (w * widths[i]) / sum;
-        const lean = (rng() - 0.5) * 6;
-        inkLine(g, x, -4, x + lean, h + 4, { width: 6, wobble: 2.6, rng, alpha: 0.9, segments: 26 });
-        if (rng() < 0.2) inkLine(g, x + 20, -4, x + 20 + lean, h + 4, { width: 4, wobble: 2.4, rng, alpha: 0.5, segments: 26 });
-        // faint grain: one long broken line per board, well clear of the seam
-        if (rng() < 0.55) hatch(g, x + 40, 0, bw - 55, h, { angle: Math.PI / 2, spacing: 46, width: 2.2, wobble: 2.4, broken: 0.92, rng, alpha: 0.11, jitter: 14 });
+        const lean = (rng() - 0.5) * 7;
+        // the seam, in two or three long strokes with the pen lifted a few mm between them
+        const cuts = rng() < 0.55 ? [0.44 + rng() * 0.14] : [0.3 + rng() * 0.1, 0.66 + rng() * 0.1];
+        const stops = [-0.02, ...cuts, 1.02];
+        for (let k = 0; k < stops.length - 1; k++) {
+          const t0 = stops[k] + (k ? 0.012 + rng() * 0.014 : 0); // the lift
+          const t1 = stops[k + 1];
+          inkLine(g, x + lean * t0, t0 * h, x + lean * t1, t1 * h, { width: 5.5, wobble: 2.2, rng, alpha: 0.92, segments: Math.max(4, Math.round((t1 - t0) * 22)) });
+        }
+        // a companion bead a finger's width off the seam, on one board in three
+        if (rng() < 0.34) inkLine(g, x + 14, -3, x + 14 + lean, h + 3, { width: 3.4, wobble: 2.2, rng, alpha: 0.42, segments: 20 });
+        // grain: two boards in five get ONE broken stroke over part of their height, well clear of
+        // both seams — a mark on the wood, not a second seam
+        if (rng() < 0.42) {
+          const gx = x + bw * (0.3 + rng() * 0.42);
+          const ga = h * (0.06 + rng() * 0.3), gb = ga + h * (0.28 + rng() * 0.34);
+          inkLine(g, gx, ga, gx + (rng() - 0.5) * 5, gb, { width: 2.6, wobble: 2.6, rng, alpha: 0.16, segments: 12 });
+        }
         x += bw;
       }
     },
@@ -189,19 +209,31 @@ export function wainscotTexture({ tile = 0.8, ppm = 1000, seed = 41 } = {}) {
   return tex;
 }
 
-// Floorboards running left–right (parallel to the back wall): long wobbly seams that read from
-// across the room, an end joint every 0.9–1.7 m, a knot now and then drawn as a small loop with
-// the grain bending round it, and a little long broken grain. Everything that crosses the tile
-// edge is drawn again one tile over so the floor is seamless.
-export function floorTexture({ tile = 2.5, ppm = 800, seed = 51, board = 0.2 } = {}) {
+// Floorboards running left–right (parallel to the back wall), drawn the way the folio draws a
+// board floor (fd-anim-staircase-guitar-room, bottom third): LONG WANDERING SEAMS AND ALMOST
+// NOTHING ELSE. Look at that frame — there is not one grain line inside a board, not one end
+// joint, and the boards are a hand's breadth apart. Ours had a seam every 0.2 m, an end joint
+// every 1.2 m, three grain lines per board and three knots a tile; at the front of the wide shot
+// the floor is seen at ten degrees, all of that collapses into the same two screen pixels, and the
+// near floor turned to noise. Now: 0.26 m boards, one confident seam each, an end joint only where
+// a board actually ends (every 2.4–4 m, so most rows have none in frame), grain on one board in
+// four and faint, and a single knot in the tile. Everything that crosses the tile edge is drawn
+// again one tile over so the floor is seamless.
+export function floorTexture({ tile = 2.6, ppm = 500, seed = 51, board = 0.26 } = {}) {
   const size = Math.round(tile * ppm);
   const tex = drawTexture(
     size,
     size,
     (g, w, h, rng) => {
-      paper(g, w, h, '#f4efe5', { grain: 0.012, seed });
+      paper(g, w, h, PAPER, { grain: 0, seed });
       const rows = Math.round(h / px(board, ppm));
-      const rowH = h / rows;
+      // No two boards the same width: a floor laid out of what came off the pile. Widths are
+      // normalised so the last seam still lands on the tile edge and the floor stays seamless.
+      const widths = [];
+      for (let r = 0; r < rows; r++) widths.push(0.78 + ((r * 7919) % 100) / 100 * 0.44);
+      const wsum = widths.reduce((p, q) => p + q, 0);
+      const edge = [0];
+      for (let r = 0; r < rows; r++) edge.push(edge[r] + (h * widths[r]) / wsum);
       const wrapX = (fn) => {
         for (const dx of [-w, 0, w]) {
           g.save();
@@ -211,49 +243,44 @@ export function floorTexture({ tile = 2.5, ppm = 800, seed = 51, board = 0.2 } =
         }
       };
       for (let r = 0; r < rows; r++) {
-        const y = r * rowH;
-        // seam: one long stroke, sometimes lifted for a few cm where the pen skipped
+        const y = edge[r];
+        const rowH = edge[r + 1] - y;
+        // seam: one long stroke that wanders a whole board's thickness over the width of the room
         const seamRng = rng.fork(300 + r);
-        wrapX(() => inkLine(g, -8, y, w + 8, y, { width: 8, wobble: 3.6, rng: seamRng.fork(1), alpha: 0.95, segments: 90 }));
-        // end joints: board lengths 0.9–1.7 m, staggered per row
-        let x = -rng() * px(1.2, ppm);
-        const joints = [];
+        wrapX(() => inkLine(g, -6, y, w + 6, y + (seamRng() - 0.5) * 5, { width: 5, wobble: 2.6, rng: seamRng.fork(1), alpha: 0.95, segments: 60 }));
+        // end joints: boards are 2.4–4 m long and staggered, so a given row has one or none
+        let x = -rng() * px(3.2, ppm);
         while (x < w) {
-          x += px(0.9 + rng() * 0.8, ppm);
-          if (x > 0 && x < w) joints.push(x);
-        }
-        for (const jx of joints) {
-          const jr = rng.fork(500 + r * 31 + Math.round(jx));
-          wrapX(() => inkLine(g, jx, y + 3, jx + (jr() - 0.5) * 4, y + rowH - 3, { width: 7.5, wobble: 1.8, rng: jr.fork(2), alpha: 0.95, segments: 8 }));
-        }
-        // grain: two or three long thin broken lines along the board
-        const nGrain = 2 + Math.floor(rng() * 2);
-        for (let k = 0; k < nGrain; k++) {
-          const gy = y + rowH * (0.18 + rng() * 0.64);
-          let gx = rng() * w * 0.5;
-          while (gx < w) {
-            const len = px(0.3 + rng() * 0.9, ppm);
-            const gr = rng.fork(700 + r * 97 + Math.round(gx));
-            const yy = gy + (rng() - 0.5) * rowH * 0.1;
-            wrapX(() => inkLine(g, gx, yy, gx + len, yy + (gr() - 0.5) * 6, { width: 3, wobble: 2.2, rng: gr.fork(3), alpha: 0.32, segments: Math.round(len / 40) }));
-            gx += len + px(0.2 + rng() * 0.8, ppm);
+          x += px(2.4 + rng() * 1.6, ppm);
+          if (x > 0 && x < w) {
+            const jr = rng.fork(500 + r * 31 + Math.round(x));
+            const jx = x;
+            wrapX(() => inkLine(g, jx, y + 2, jx + (jr() - 0.5) * 4, y + rowH - 2, { width: 4.5, wobble: 1.4, rng: jr.fork(2), alpha: 0.9, segments: 6 }));
           }
         }
+        // grain: one board in four gets ONE broken stroke down part of its length
+        if (rng() < 0.26) {
+          const gy = y + rowH * (0.3 + rng() * 0.4);
+          const gx = rng() * w * 0.7;
+          const len = px(0.7 + rng() * 1.3, ppm);
+          const gr = rng.fork(700 + r);
+          wrapX(() => inkLine(g, gx, gy, gx + len, gy + (gr() - 0.5) * 5, { width: 2.4, wobble: 2, rng: gr.fork(3), alpha: 0.2, segments: Math.max(4, Math.round(len / 60)) }));
+        }
       }
-      // knots: three per tile, a loop inside a loop, the grain swelling round them
-      for (let k = 0; k < 3; k++) {
-        const kx = rng() * w, r = Math.floor(rng() * rows), ky = r * rowH + rowH * (0.35 + rng() * 0.3);
-        const kr = rng.fork(900 + k);
-        const rx = px(0.028, ppm), ry = px(0.014, ppm);
+      // one knot in the tile: a loop inside a loop, the grain swelling round it
+      {
+        const kx = rng() * w, r = Math.floor(rng() * rows);
+        const ky = edge[r] + (edge[r + 1] - edge[r]) * (0.35 + rng() * 0.3);
+        const kr = rng.fork(900);
+        const rx = px(0.03, ppm), ry = px(0.015, ppm);
         wrapX(() => {
-          ring(g, kx, ky, rx, { rng: kr.fork(1), alpha: 0.9, width: 5 });
+          ring(g, kx, ky, rx, { rng: kr.fork(1), alpha: 0.85, width: 4 });
           g.save();
           g.scale(1, ry / rx);
-          ring(g, kx, (ky * rx) / ry, rx * 0.45, { rng: kr.fork(2), alpha: 0.9, width: 4 });
+          ring(g, kx, (ky * rx) / ry, rx * 0.45, { rng: kr.fork(2), alpha: 0.85, width: 3.4 });
           g.restore();
-          // grain bending around the knot: two arcs above and below
           for (const sgn of [-1, 1]) {
-            penCurve(g, [[kx - rx * 2.6, ky + sgn * ry * 1.9], [kx - rx * 1.2, ky + sgn * ry * 2.4], [kx, ky + sgn * ry * 2.7], [kx + rx * 1.2, ky + sgn * ry * 2.4], [kx + rx * 2.6, ky + sgn * ry * 1.9]], { width: 3.2, wobble: 1.2, rng: kr.fork(3 + sgn), alpha: 0.5 });
+            penCurve(g, [[kx - rx * 2.6, ky + sgn * ry * 1.9], [kx - rx * 1.2, ky + sgn * ry * 2.4], [kx, ky + sgn * ry * 2.7], [kx + rx * 1.2, ky + sgn * ry * 2.4], [kx + rx * 2.6, ky + sgn * ry * 1.9]], { width: 2.6, wobble: 1.2, rng: kr.fork(3 + sgn), alpha: 0.4 });
           }
         });
       }
@@ -265,19 +292,43 @@ export function floorTexture({ tile = 2.5, ppm = 800, seed = 51, board = 0.2 } =
   return tex;
 }
 
-// Wood grain for the door and shutters: a few long broken vertical strokes, the way the film draws
-// a plank door — five or six to a board's width, not fifty. Tile 0.36 m at 1000 ppm, so the strokes
-// sit 55 and 110 mm apart and stay separate lines at every distance the door is seen from; at 7 mm
-// they mip-blended into a flat grey slab.
-export function grainTexture({ tile = 0.36, ppm = 1000, seed = 61, alpha = 0.55 } = {}) {
+// Wood grain for the door leaves: a few long broken vertical strokes, the way the film draws a
+// panelled door (fd-anim-kitchen-table-cards-hires, the door at stage right of that kitchen — eight
+// strokes down a 0.8 m leaf, no more). Strokes 110 and 220 mm apart, so on the back-wall door they
+// land 22 px apart at the wide shot and on a side door seen raking they are still 12 px apart and
+// separate lines. At 55 mm they were a dotted grey haze on any raked leaf.
+// Drawn stroke by stroke rather than with hatch(): hatch() breaks a run into short pieces and
+// subdivides every piece every 6 px, so at the size a door plays at square-on each "grain line" was
+// a wiggling caterpillar. Grain in the folios is a LONG, nearly straight line with one slow bend in
+// it. So: four strokes to the tile, each running most of its height in five segments, plus a few
+// half-length ones between them.
+export function grainTexture({ tile = 0.44, ppm = 800, seed = 61, alpha = 0.5 } = {}) {
   const size = Math.round(tile * ppm);
   const tex = drawTexture(
     size,
     size,
     (g, w, h, rng) => {
-      paper(g, w, h, PAPER, { grain: 0.012, seed });
-      hatch(g, 0, 0, w, h, { angle: Math.PI / 2, spacing: 55, width: 5, wobble: 3.4, broken: 0.72, rng, alpha: alpha * 0.9, jitter: 16 });
-      hatch(g, 0, 0, w, h, { angle: Math.PI / 2, spacing: 110, width: 3, wobble: 4.6, broken: 0.85, rng, alpha: alpha * 0.5, jitter: 26 });
+      paper(g, w, h, PAPER, { grain: 0, seed });
+      const stroke = (x, y0, y1, width, a) => {
+        const bend = (rng() - 0.5) * 7;
+        // wrap in x so the tile joins: the same stroke drawn one tile either side
+        for (const dx of [-w, 0, w]) inkLine(g, x + dx, y0, x + dx + bend, y1, { width, wobble: 1.6, rng, alpha: a, segments: 5 });
+      };
+      const n = 4; // 0.11 m apart
+      for (let i = 0; i < n; i++) {
+        const x = (i + 0.5) * (w / n) + (rng() - 0.5) * (w / n) * 0.5;
+        // a long stroke, occasionally lifted for a moment near one end
+        if (rng() < 0.3) {
+          const c = 0.2 + rng() * 0.5;
+          stroke(x, -6, c * h, 4.2, alpha * 0.95);
+          stroke(x + (rng() - 0.5) * 3, c * h + h * 0.05, h + 6, 4.2, alpha * 0.95);
+        } else stroke(x, -6, h + 6, 4.2, alpha * 0.95);
+        // a fainter half-length companion, a third of the way to the next stroke
+        if (rng() < 0.6) {
+          const y0 = h * (rng() * 0.4), y1 = y0 + h * (0.35 + rng() * 0.4);
+          stroke(x + (w / n) * (0.3 + rng() * 0.3), y0, y1, 2.6, alpha * 0.45);
+        }
+      }
     },
     { seed },
   );
@@ -287,9 +338,21 @@ export function grainTexture({ tile = 0.36, ppm = 1000, seed = 61, alpha = 0.55 
 }
 
 // Plain paper (ceiling, glass, painted trim).
-export function plainTexture({ tint = PAPER, seed = 71 } = {}) {
-  const tex = drawTexture(256, 256, (g, w, h) => paper(g, w, h, tint, { grain: 0.01, seed }), { seed });
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.userData.tile = 0.5;
+//
+// No fibre grain: at the amplitude that was here it was ±1.5 of 255 — invisible in the frame, and
+// the ink pass lays its own paper grain over everything at the end anyway — but it cost a full
+// per-pixel pass over every canvas the room draws (about four megapixels of getImageData between
+// the wallpaper, the wainscot, the floor and nine copies of this one). And with no noise in it,
+// every plain sheet is byte-for-byte the same sheet, so the room now draws ONE and hands it to the
+// ceiling, the trim, the reveals, the shutters, the metal and the iron. Room build: ~210 ms → ~85.
+const _plain = new Map();
+export function plainTexture({ tint = PAPER } = {}) {
+  let tex = _plain.get(tint);
+  if (!tex) {
+    tex = drawTexture(256, 256, (g, w, h) => paper(g, w, h, tint, { grain: 0 }));
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.userData.tile = 0.5;
+    _plain.set(tint, tex);
+  }
   return tex;
 }
