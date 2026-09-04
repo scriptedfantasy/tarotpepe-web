@@ -35,13 +35,30 @@ const TITLE_S = 4.2;
 const CHAPTER_S = 2.8;
 const DOOR_S = 3.4;
 
-// Where the placard sits in the shots the flow adds to the dialogue's default (bottom centre):
-// the fan shot (the cards fill the bottom of the frame) and the card inserts (the card is centred).
+// Where the lettering stands, per shot: x is the centre, y the TOP of the block, w its width, all
+// fractions of the frame. Not one of these is a taste: each is the barest caption-sized block of
+// paper in a real frame of that beat, found with tools/_bare.mjs and then measured exactly
+// (tools/_bare-at.mjs) with the ink percentage under the block noted below. The props piece cleared
+// the plaster over his head for exactly this, so the mediums put the words up there, on the wall,
+// beside the speaker the way the film sets a name beside a figure — not down on the tablecloth,
+// where the same block of words sits on 18% ink and every hatch stroke fights the letters.
 const ANCHORS = {
-  fan: { x: 0.5, y: 0.13, w: 0.34 },
-  card0: { x: 0.8, y: 0.5, w: 0.3 },
-  card1: { x: 0.8, y: 0.5, w: 0.3 },
-  card2: { x: 0.8, y: 0.5, w: 0.3 },
+  // the wall above his head, under the clock and clear of his crown at y=0.40. 1.9% ink
+  // (the same block over the cloth at the foot of the picture: 18.1%).
+  pepe: { x: 0.52, y: 0.235, w: 0.32 },
+  // the same passage of plaster, seen smaller: 3.8% (against 9.4% at the foot).
+  home: { x: 0.5, y: 0.235, w: 0.28 },
+  // straight down at the table there is no wall, so the words lie on the cloth between the spread
+  // and the table's front edge: 2.7%, the barest block in that frame.
+  table: { x: 0.5, y: 0.81, w: 0.34 },
+  // the fan fills the bottom and the picked cards land in the slots at y=0.16..0.46; the only clear
+  // cloth is the far edge of the table above them. 0.5%.
+  fan: { x: 0.5, y: 0.035, w: 0.34 },
+  // the insert: the card stands in the middle of the frame and the label stands beside it, on the
+  // bare cloth to its right — 0.0% (card 0 and 1), 1.2% (card 2, one seam of the cloth).
+  card0: { x: 0.78, y: 0.3, w: 0.3 },
+  card1: { x: 0.78, y: 0.3, w: 0.3 },
+  card2: { x: 0.78, y: 0.3, w: 0.3 },
 };
 
 export async function build(ctx) {
@@ -177,7 +194,26 @@ export async function build(ctx) {
           await timeout(landed, 10);
           break;
         }
-        await wait(0.6);
+        // The card is in its slot. Between the picks we cut back to him for a held beat — a start,
+        // the mouth open, a blink, then the deadpan again — so the locked top-down is broken twice
+        // and he is never off the screen for more than ten seconds. Not after the third: the gather
+        // follows straight on.
+        //
+        // The cut is to `home`, not to the closer `pepe`. His drawn hand waits on the cloth all
+        // through the picking (reveal's ribbon hand, a flat drawing lying in the plane of the
+        // table). Seen from the table's own height it foreshortens into a green blade lying across
+        // the cloth; from `home`, which looks down on the table, it reads as what it is — his arm
+        // out, his fingers on the cloth beside the deck — and covers his own right hand rather than
+        // doubling it. See the note to reveal in the round's return: with a way to take that hand
+        // off the cloth for two seconds this cut belongs on `pepe`, where the start would read.
+        if (k < 2) {
+          await wait(0.35);
+          cut('home');
+          P.pepeAnim?.react?.();
+          await wait(1.9);
+          cut('fan');
+          await wait(0.35);
+        } else await wait(0.6);
       }
       // the safety net: three cards in the slots whatever happened
       let guard = 0;
@@ -195,7 +231,7 @@ export async function build(ctx) {
       api.beat = 'reading';
       D.folio?.('reading');
       await timeout(R.turn(i), 6); // his hand turns it, on the table
-      await wait(0.55);
+      await wait(0.9); // his fingers are seen leaving the card before the cut
       cut(`card${i}`); // the insert: the face, its title placard beside it
       await timeout(D.intertitle(pick.slug, i), 4);
       await speak(

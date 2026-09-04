@@ -46,7 +46,7 @@ for (const v of cfg.variants) {
     ({ v }) => {
       const C = window.__theatre.pieces.camera;
       const D = window.__theatre.pieces.dialogue;
-      const name = v.name;
+      const name = v.cut ?? v.name;
       if (v.shot) {
         const base = C.shots[v.base ?? name] ?? {};
         const s = { ...base, ...v.shot };

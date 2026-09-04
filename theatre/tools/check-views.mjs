@@ -15,6 +15,7 @@ const VIEWS = {
   cards: ['default', 'back', 'deck', 'three'],
   reveal: ['dealt', 'turning', 'revealed', 'fan', 'shuffle', 'fanning', 'pick', 'gather', 'deal', 'turn'],
   lighting: ['default', 'evening', 'lamp'],
+  sound: ['default'],
   camera: ['home', 'wide', 'pepe', 'table', 'spread', 'door', 'fan'],
   titles: ['title', 'chapter', 'closing', 'hidden'],
   dialogue: ['greeting', 'question', 'reading', 'farewell'],

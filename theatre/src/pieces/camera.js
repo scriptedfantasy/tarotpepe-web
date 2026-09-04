@@ -58,10 +58,16 @@ export async function build(ctx) {
     card2: down(L.spread.slots[2][0], 1.25, L.spread.slots[2][2], 30),
     // the deck: square on, close, the lens dropped onto the stack
     deck: flat([L.deck.pos[0], 1.06, L.deck.pos[2] + 0.86], 24, [0, 0.5]),
-    // the door: dead centre on the door, mat to sign
-    door: flat([doorX, 1.45, 6.0], 19, [0, 0.06]),
+    // the door: the doormat to the VOYANTE board, the door on the axis. The lens stands 8 cm inboard
+    // of the door's centre and is a little wider than it was: at 19° on the door's own axis the left
+    // edge fell at x = -0.39 in Pepe's plane and sliced him and his table down the middle, which is
+    // the one thing a frame must never do to a figure. At 20° from x = 1.42 the edge falls at -0.57:
+    // he sits whole, small, at the left, the table runs off the frame the way a foreground table
+    // should, and the door still stands within 1.5% of the middle of the picture. Any wider or any
+    // further back and the frame overruns the front edge of the stage-right wall.
+    door: flat([doorX - 0.08, 1.45, 6.0], 20, [0, 0.09]),
     // the window: the same frame slid across to the window (the track runs between these two)
-    window: flat([winX, 1.45, 6.0], 19, [0, 0.06]),
+    window: flat([winX + 0.08, 1.45, 6.0], 20, [0, 0.09]),
     // from the threshold: the visitor's first look into the parlour, before the wide
     threshold: flat([0, 1.55, 6.2], 22, [0, 0.05]),
   };

@@ -66,7 +66,7 @@ const state = () =>
       shot: T.pieces.camera?.current,
       caption: cap && !cap.hidden ? cap.textContent.replace(/\s+/g, ' ').trim().slice(0, 90) : null,
       inter: !!(cap && !cap.hidden && cap.classList.contains('inter')),
-      field: !!document.querySelector('#dialogue input.field'),
+      field: !!document.querySelector('#dialogue input.keys'), // the dialogue's hidden key-taker (was input.field)
       mic: !!document.querySelector('#dialogue button.mic'),
       title: !!document.querySelector('#titles .card'),
       fan: T.pieces.reveal?.fanCount ?? 0,
