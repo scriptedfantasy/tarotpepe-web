@@ -8,8 +8,11 @@
 // deterministic and a frozen clock shows a definite frame. Modes: idle, talk, gesture, consider.
 // One-shots (a gesture, a reaction, the deal, a shuffle, a turn) overlay the mode for their length.
 //
-// api: play(mode), say(text, seconds), gesture(side, hold), consider(seconds), react(kind), deal(i),
-//      shuffle(), turn(i), setState(name), update(ctx)
+// api: play(mode), say(text, seconds), gesture(side, hold), consider(seconds), react(kind),
+//      deal(i, side), shuffle(), turn(i, side), setState(name), update(ctx)
+// deal and turn take the side of the hand that does it, so his body agrees with whichever drawn
+// hand the reveal has on the cloth; left out it is his right, as before. A hand lent away with
+// pepe.reach(side) is left alone here, so it comes back exactly where it left.
 import * as THREE from 'three';
 import { hash } from '../core/rng.js';
 
@@ -257,6 +260,9 @@ export async function build(ctx) {
     P.head.position.set(0, headY + H.lift - H.drop, Z_HEAD);
     P.headPivot.rotation.set(0, 0, H.tilt);
     for (const side of ['L', 'R']) {
+      // a hand lent to the cloth (pepe.reach) is not posed at all: the shoulder holds still and it
+      // comes back exactly where it left, the way a puppet's limb waits in the tray
+      if (pepe.handIsOff?.(side)) continue;
       const g = P['hand' + side], h = pose.hands[side];
       const rest = g.userData.rest;
       g.rotation.set(0, 0, (side === 'L' ? -1 : 1) * h.up);
@@ -284,6 +290,7 @@ export async function build(ctx) {
       }
     },
     gesture(side = 'R', hold = 1.6) {
+      ctx.pieces.sound?.play?.('creak'); // the bench takes his weight when he shifts it
       shot = { kind: 'gesture', side: side === 'L' ? 'L' : 'R', since: ctx.clock.t, frames: Math.round(hold * FPS) + 5 };
       return shot.frames / FPS;
     },
@@ -293,19 +300,22 @@ export async function build(ctx) {
       considerUntil = ctx.clock.t + seconds;
     },
     react(kind = 'surprise') {
+      ctx.pieces.sound?.play?.('creak');
       shot = { kind: 'react', since: ctx.clock.t, frames: 14 };
       return shot.frames / FPS;
     },
-    deal(i = 0) {
-      shot = { kind: 'deal', side: 'R', since: ctx.clock.t, frames: 11 };
+    // `side` says which hand does it, so his puppet body agrees with whichever drawn hand the
+    // reveal has on the cloth. Left out, it is the one beside the deck, as it always was.
+    deal(i = 0, side = 'R') {
+      shot = { kind: 'deal', side: side === 'L' ? 'L' : 'R', since: ctx.clock.t, frames: 11 };
       return shot.frames / FPS;
     },
     shuffle(seconds = 1.5) {
       shot = { kind: 'shuffle', since: ctx.clock.t, frames: Math.round(seconds * FPS) };
       return shot.frames / FPS;
     },
-    turn(i = 0) {
-      shot = { kind: 'turn', side: 'R', since: ctx.clock.t, frames: 9 };
+    turn(i = 0, side = 'R') {
+      shot = { kind: 'turn', side: side === 'L' ? 'L' : 'R', since: ctx.clock.t, frames: 9 };
       return shot.frames / FPS;
     },
     setState(name) {

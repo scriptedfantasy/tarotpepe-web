@@ -64,13 +64,17 @@ const BLINK_LISTEN = 3; // ... while the microphone is listening: twice as quick
 // fractions of the frame. Every one of these is a passage of bare paper in that shot, measured off
 // the rendered frame (tools/_bare.mjs): the cloth in front of him in the mediums, the wall left of
 // the deck in the wide, the empty corner of the cloth in the top-downs.
+// Where the card stands, per shot: x centre, y the TOP of the block, w its measure, all fractions
+// of the frame. `floor` is the lowest line its bottom edge may reach — measured just above Pepe's
+// crown, so a growing card climbs into the bare wall instead of coming down over his head.
+// flow.js overrides these while the evening runs; keep the two tables in step.
 const ANCHORS = {
-  home: { x: 0.5, y: 0.815, w: 0.28 },
-  wide: { x: 0.5, y: 0.82, w: 0.26 },
-  pepe: { x: 0.5, y: 0.845, w: 0.33 },
-  table: { x: 0.5, y: 0.845, w: 0.36 },
+  home: { x: 0.5, y: 0.235, w: 0.28, floor: 0.375 },
+  wide: { x: 0.5, y: 0.3, w: 0.26, floor: 0.51 },
+  pepe: { x: 0.52, y: 0.235, w: 0.32, floor: 0.39 },
+  table: { x: 0.5, y: 0.81, w: 0.34 },
   spread: { x: 0.5, y: 0.06, w: 0.34 },
-  fan: { x: 0.5, y: 0.06, w: 0.34 },
+  fan: { x: 0.5, y: 0.035, w: 0.34 },
   card0: { x: 0.78, y: 0.3, w: 0.3 },
   card1: { x: 0.78, y: 0.3, w: 0.3 },
   card2: { x: 0.78, y: 0.3, w: 0.3 },
@@ -401,10 +405,16 @@ export async function build(ctx) {
     }
   }
   // Keep a growing block inside the picture.
+  // A card must never come down over the speaker. An anchor may set `floor`: the lowest line of
+  // the frame its bottom edge may reach (a fraction, measured to just above Pepe's crown). When the
+  // block grows — a longer sentence, the visitor's answer wrapping — it grows UP into the bare wall
+  // instead of down onto his head.
   function fit() {
     if (!anchored || cap.hidden) return;
     const h = ctx.size.h || window.innerHeight;
-    const lo = h * 0.035, hi = h * (1 - barFrac() - 0.028);
+    const a = ANCHORS[shotName()];
+    const lo = h * 0.035;
+    const hi = h * Math.min(a?.floor ?? 1, 1 - barFrac() - 0.028);
     const r = cap.getBoundingClientRect();
     let top = r.top;
     if (r.bottom > hi) top = Math.max(lo, top - (r.bottom - hi));

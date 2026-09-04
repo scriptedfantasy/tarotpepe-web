@@ -31,8 +31,8 @@ const NEXT_SENTENCE_S = 9; // ... each further sentence
 const ANSWER_S = 120; // the visitor's silence at the question: taken as nothing said
 const PICK_S = 75; // ... at the fan: Pepe chooses
 const FOLLOWUP_S = 75; // ... at the follow-up: straight to the farewell
-const TITLE_S = 4.2;
-const CHAPTER_S = 2.8;
+const TITLE_S = 2.6;
+const CHAPTER_S = 1.7;
 const DOOR_S = 3.4;
 
 // Where the lettering stands, per shot: x is the centre, y the TOP of the block, w its width, all
@@ -45,9 +45,9 @@ const DOOR_S = 3.4;
 const ANCHORS = {
   // the wall above his head, under the clock and clear of his crown at y=0.40. 1.9% ink
   // (the same block over the cloth at the foot of the picture: 18.1%).
-  pepe: { x: 0.52, y: 0.235, w: 0.32 },
+  pepe: { x: 0.52, y: 0.235, w: 0.32, floor: 0.39 },
   // the same passage of plaster, seen smaller: 3.8% (against 9.4% at the foot).
-  home: { x: 0.5, y: 0.235, w: 0.28 },
+  home: { x: 0.5, y: 0.235, w: 0.28, floor: 0.375 },
   // straight down at the table there is no wall, so the words lie on the cloth between the spread
   // and the table's front edge: 2.7%, the barest block in that frame.
   table: { x: 0.5, y: 0.81, w: 0.34 },
@@ -150,7 +150,12 @@ export async function build(ctx) {
 
   // ---- a chapter card: cut in, typed, held, cut out (a key or a click ends the hold) ----------------
   async function chapter(n, behind = null) {
-    T?.chapter?.(n, undefined, { type: true });
+    // the titles piece cuts the chapters it does not want; a cut one is an instant hinge, not a
+    // hold on an empty frame
+    if (!T?.chapter?.(n)) {
+      behind?.();
+      return;
+    }
     cue('snap');
     await wait(CHAPTER_S, { skippable: true });
     behind?.();
@@ -257,7 +262,7 @@ export async function build(ctx) {
     // 1. the title, then Chapter One
     api.beat = 'title';
     cut('home');
-    T?.title?.({ type: true });
+    T?.title?.();
     cue('title');
     cue('snap');
     await wait(TITLE_S, { skippable: true });

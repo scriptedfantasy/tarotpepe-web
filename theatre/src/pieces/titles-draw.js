@@ -251,6 +251,51 @@ function roundVerts(verts, closed = true, per = 6) {
   return out;
 }
 
+// Samples along an ellipse arc (rx, ry), for letters the signwriter swept rather than ruled.
+function arcPts(cx, cy, rx, ry, a0, a1, per = 0.15) {
+  const n = Math.max(2, Math.ceil(Math.abs(a1 - a0) / per));
+  const out = [];
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + (a1 - a0) * (i / n);
+    out.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)]);
+  }
+  return out;
+}
+
+// A stroke of constant width `t` laid around a centreline and cut square at both ends — the way a
+// letter is cut from a swept spine. Only the four cap corners count as corners for the overshoot.
+function strokePoly(pts, t) {
+  const n = pts.length;
+  const nor = pts.map((p, i) => {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+    const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+    return [-dy / l, dx / l];
+  });
+  const L = pts.map((p, i) => [p[0] + (nor[i][0] * t) / 2, p[1] + (nor[i][1] * t) / 2]);
+  const R = pts.map((p, i) => [p[0] - (nor[i][0] * t) / 2, p[1] - (nor[i][1] * t) / 2]).reverse();
+  const out = [...L, ...R];
+  out.forEach((p) => (p.sharp = false));
+  for (const i of [0, n - 1, n, out.length - 1]) delete out[i].sharp;
+  return out;
+}
+
+// Cut `d` of arc-length off each end of a polyline (where a stroke's dots stop short of its edge).
+function trimEnds(pts, d) {
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const total = cum[cum.length - 1];
+  const at = (t) => {
+    let i = 0;
+    while (i < pts.length - 2 && cum[i + 1] < t) i++;
+    const u = (t - cum[i]) / (cum[i + 1] - cum[i] || 1);
+    return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * u, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * u];
+  };
+  const out = [at(d)];
+  for (let i = 0; i < pts.length; i++) if (cum[i] > d && cum[i] < total - d) out.push(pts[i]);
+  out.push(at(total - d));
+  return out;
+}
+
 // A short hairline rule with a four-point star in the middle: rule — ✦ — rule.
 export function starRule(g, w, h, { color = INK, seed = 5, star = true, width = 1.1 } = {}) {
   const rng = mulberry32(seed);
@@ -384,8 +429,33 @@ export function manicule(g, w, h, { seed = 31, color = INK } = {}) {
   hatch(g, ...S(14, 20), 10 * k, 5.2 * (h / 30), { angle: Math.PI / 2 + 0.35, spacing: Math.max(2, 1.9 * k), width: W(0.5), wobble: 0.25, broken: 0.2, rng, color, alpha: 0.6, jitter: 0.5 });
 }
 
+// The parlour door, standing open on a lit hall — the sign-off mark on the closing card, and all
+// that survives of the "Epilogue: The Door" that used to be a whole card of its own. Panelled leaf
+// swung toward the viewer, a knocker, and the light beyond drawn as hatching, never as a glow.
+export function doorAjar(g, w, h, { seed = 61, color = INK } = {}) {
+  const rng = mulberry32(seed);
+  const k = w / 60, ky = h / 100;
+  const S = (x, y) => [x * k, y * ky];
+  const W = (n) => Math.max(0.75, n * k);
+  const line = (pts, width, wobble = 0.9) => inkPoly(g, [pts], { fill: null, color, width, wobble, rng, overshoot: W(2.2), period: 26 });
+  const gap = [S(36, 7), S(58, 3), S(58, 97), S(36, 93)];
+  // the jamb, and the lit hall standing open behind the leaf: light drawn as strokes, never a glow
+  line([S(0, 1), S(59, 1), S(59, 99), S(0, 99)], W(1.6));
+  hatchIn(g, gap, [0, 0, w, h], { angle: Math.PI / 2 + 0.16, spacing: Math.max(2.6, 3.2 * k), width: W(0.6), wobble: 0.45, broken: 0.15, rng, color, alpha: 0.9, jitter: 0.7 });
+  hatchIn(g, gap, [0, 0, w, h], { angle: 0.5, spacing: Math.max(3.2, 4.4 * k), width: W(0.55), wobble: 0.45, broken: 0.3, rng, color, alpha: 0.65, jitter: 0.7 });
+  line(gap, W(1.0));
+  // the leaf, swung toward us: two long panels, a knocker on the upper rail, a knob at the edge
+  line([S(3, 4), S(34, 10), S(34, 90), S(3, 96)], W(1.5));
+  line([S(9, 16), S(28, 19), S(28, 44), S(9, 43)], W(0.9));
+  line([S(9, 55), S(28, 57), S(28, 83), S(9, 84)], W(0.9));
+  stroke(g, ellipsePts(...S(18.5, 31), 3.6 * k, 3.4 * ky, 16), { rng, width: W(1.0), wobble: 0.25, color, close: true });
+  inkLine(g, ...S(18.5, 27.4), ...S(18.5, 24), { width: W(1.0), wobble: 0.2, rng, color });
+  stroke(g, ellipsePts(...S(31, 52), 1.7 * k, 1.7 * ky, 12), { rng, width: W(0.85), wobble: 0.2, color, fill: color, close: true });
+  inkLine(g, ...S(0, 99), ...S(59, 99), { width: W(1.3), wobble: 0.4, rng, color });
+}
+
 // A row of three small drawn cards (a page indicator): the current one is filled with ink.
-export function cardRow(g, w, h, current = 0, { seed = 41, color = INK, count = 3 } = {}) {
+export function cardRow(g, w, h, current = 0, { seed = 41, color = INK, count = 3, back = false } = {}) {
   const rng = mulberry32(seed);
   const ch = h * 0.8, cw = ch * 0.64, gap = cw * 0.7;
   const total = count * cw + (count - 1) * gap;
@@ -394,7 +464,14 @@ export function cardRow(g, w, h, current = 0, { seed = 41, color = INK, count = 
   for (let i = 0; i < count; i++) {
     inkRect(g, x, y, cw, ch, { width: Math.max(1, ch * 0.05), wobble: 0.35, rng, color, overshoot: 1.2 });
     inkRect(g, x + cw * 0.16, y + ch * 0.12, cw * 0.68, ch * 0.76, { width: Math.max(0.6, ch * 0.028), wobble: 0.25, rng, color, overshoot: 0.5 });
-    if (i === current) hatch(g, x + cw * 0.16, y + ch * 0.12, cw * 0.68, ch * 0.76, { angle: Math.PI / 4, spacing: Math.max(2, ch * 0.1), width: Math.max(0.7, ch * 0.04), wobble: 0.25, broken: 0, rng, color, alpha: 1, jitter: 0.4 });
+    // face down: the back's ornament is a cross-hatch, drawn a little differently on every card
+    if (back || i === current) {
+      const dense = i === current;
+      const box = [x + cw * 0.16, y + ch * 0.12, cw * 0.68, ch * 0.76];
+      const sp = Math.max(2.4, ch * (dense ? 0.1 : 0.15));
+      hatch(g, ...box, { angle: Math.PI / 4, spacing: sp, width: Math.max(0.6, ch * 0.028), wobble: 0.3, broken: dense ? 0 : 0.12, rng, color, alpha: dense ? 1 : 0.9, jitter: 0.5 });
+      if (!dense) hatch(g, ...box, { angle: -Math.PI / 4, spacing: sp, width: Math.max(0.6, ch * 0.028), wobble: 0.3, broken: 0.12, rng, color, alpha: 0.9, jitter: 0.5 });
+    }
     x += cw + gap;
   }
 }
@@ -518,12 +595,130 @@ const GLYPHS = {
       post: xLc(100),
     };
   },
+  H: (s, g) => {
+    const e = s / 2 - g / 2, j = s / 2 + g / 2 + g;
+    const W = 84;
+    return {
+      w: W,
+      polys: [[[0, 0], [s, 0], [s, 50 - s / 2], [W - s, 50 - s / 2], [W - s, 0], [W, 0], [W, 100], [W - s, 100], [W - s, 50 + s / 2], [s, 50 + s / 2], [s, 100], [0, 100]]],
+      skel: [
+        { pts: [[s / 2, e], [s / 2, 100 - e]] },
+        { pts: [[W - s / 2, e], [W - s / 2, 100 - e]] },
+        { pts: [[j, 50], [W - j, 50]] },
+      ],
+      post: s / 2,
+    };
+  },
+  N: (s, g) => {
+    const e = s / 2 - g / 2;
+    const W = 86;
+    const yA = (100 * (W - 2 * s)) / (W - s); // diagonal's right edge meets the right stem
+    const yB = (100 * s) / (W - s); //           diagonal's left edge meets the left stem
+    const dx = W - s;
+    return {
+      w: W,
+      polys: [[[0, 0], [s, 0], [W - s, yA], [W - s, 0], [W, 0], [W, 100], [W - s, 100], [s, yB], [s, 100], [0, 100]]],
+      skel: [
+        { pts: [[s / 2, e], [s / 2, 100 - e]] },
+        { pts: [[W - s / 2, e], [W - s / 2, 100 - e]] },
+        { pts: [[s / 2 + dx * 0.21, 21], [s / 2 + dx * 0.79, 79]] },
+      ],
+      post: s / 2,
+    };
+  },
+  D: (s, g) => {
+    const e = s / 2 - g / 2, j = s / 2 + g / 2 + g;
+    const W = 84, R = 40, r = 22;
+    return {
+      w: W,
+      polys: [
+        roundVerts([[0, 0], [W, 0, R], [W, 100, R], [0, 100]], true, 8),
+        roundVerts([[s, s], [W - s, s, r], [W - s, 100 - s, r], [s, 100 - s]], true, 8),
+      ],
+      skel: [
+        { pts: [[s / 2, e], [s / 2, 100 - e]] },
+        { pts: roundVerts([[j, s / 2], [W - s / 2, s / 2, R - s / 2], [W - s / 2, 100 - s / 2, R - s / 2], [j, 100 - s / 2]], false, 8) },
+      ],
+      post: s / 2,
+    };
+  },
+  C: (s, g) => {
+    const e = s / 2 - g / 2;
+    const W = 74, xT = 70, R = 34;
+    const outer = roundVerts([[xT, 0], [0, 0, R], [0, 100, R], [xT, 100]], false, 9);
+    const inner = roundVerts([[xT, 100 - s], [s, 100 - s, R - s], [s, s, R - s], [xT, s]], false, 9);
+    return {
+      w: W,
+      polys: [[...outer, ...inner]],
+      skel: [{ pts: roundVerts([[xT - e, s / 2], [s / 2, s / 2, R - s / 2], [s / 2, 100 - s / 2, R - s / 2], [xT - e, 100 - s / 2]], false, 9) }],
+      post: null,
+    };
+  },
+  // Swept, not ruled: two tangent bowls of the same radius, offset to the stem's weight. The
+  // vertical radius is fixed by the cap height (r = (100 - s) / 4, so the bowls just touch); the
+  // horizontal one is stretched, which is what gives a heavy S its slot-shaped counters.
+  S: (s, g) => {
+    const e = s / 2 - g / 2;
+    const ry = (100 - s) / 4, rx = ry * 1.25;
+    const cx = rx + s / 2, W = Math.round(2 * rx + s + 3);
+    const spine = [
+      ...arcPts(cx, s / 2 + ry, rx, ry, -0.17 * Math.PI, -1.5 * Math.PI),
+      ...arcPts(cx, 100 - s / 2 - ry, rx, ry, -0.5 * Math.PI, 0.83 * Math.PI).slice(1),
+    ];
+    return { w: W, polys: [strokePoly(spine, s)], skel: [{ pts: trimEnds(spine, e) }], post: null };
+  },
+  U: (s, g) => {
+    const e = s / 2 - g / 2;
+    const W = 84, R = 36;
+    const outer = roundVerts([[0, 0], [0, 100, R], [W, 100, R], [W, 0]], false, 9);
+    const inner = roundVerts([[W - s, 0], [W - s, 100 - s, R - s], [s, 100 - s, R - s], [s, 0]], false, 9);
+    return {
+      w: W,
+      polys: [[...outer, ...inner]],
+      skel: [{ pts: roundVerts([[s / 2, e], [s / 2, 100 - s / 2, R - s / 2], [W - s / 2, 100 - s / 2, R - s / 2], [W - s / 2, e]], false, 9) }],
+      post: null,
+    };
+  },
+  I: (s, g) => {
+    const e = s / 2 - g / 2;
+    return { w: s + 4, polys: [[[2, 0], [s + 2, 0], [s + 2, 100], [2, 100]]], skel: [{ pts: [[s / 2 + 2, e], [s / 2 + 2, 100 - e]] }], post: s / 2 + 2 };
+  },
+  L: (s, g) => {
+    const e = s / 2 - g / 2, j = s / 2 + g / 2 + g;
+    const W = 68;
+    return {
+      w: W,
+      polys: [[[0, 0], [s, 0], [s, 100 - s], [W, 100 - s], [W, 100], [0, 100]]],
+      skel: [
+        { pts: [[s / 2, e], [s / 2, 100 - e]] },
+        { pts: [[j, 100 - s / 2], [W - e, 100 - s / 2]] },
+      ],
+      post: s / 2,
+    };
+  },
+  F: (s, g) => {
+    const e = s / 2 - g / 2, j = s / 2 + g / 2 + g;
+    const W = 72, mid = 50;
+    return {
+      w: W,
+      polys: [[[0, 0], [W, 0], [W, s], [s, s], [s, mid - s / 2], [W - 9, mid - s / 2], [W - 9, mid + s / 2], [s, mid + s / 2], [s, 100], [0, 100]]],
+      skel: [
+        { pts: [[s / 2, e], [s / 2, 100 - e]] },
+        { pts: [[j, s / 2], [W - e, s / 2]] },
+        { pts: [[j, mid], [W - 9 - e, mid]] },
+      ],
+      post: s / 2,
+    };
+  },
 };
 const SPACE_W = 50;
+// A letter the case does not hold: the compositor sets a blank slug rather than the wrong sort.
+const missingSort = (s) => ({ w: 62, polys: [[[0, 0], [62, 0], [62, 100], [0, 100]]], skel: [], post: 31 });
+export const HAS_SORT = (text) => [...String(text).toUpperCase()].every((c) => c === ' ' || c in GLYPHS);
 
 // Where every glyph sits, and its particular stem width, lean and drop — so both the size
 // measurement and the drawing agree.
-function layoutWord(text, capH, { gap = 0.15, seed = 3 } = {}) {
+function layoutWord(text, capH, { gap = 0.085, seed = 3 } = {}) {
   const rng = mulberry32(seed * 7919 + 1);
   const k = capH / 100;
   const out = [];
@@ -536,8 +731,8 @@ function layoutWord(text, capH, { gap = 0.15, seed = 3 } = {}) {
     // heavy slab stems, a quarter of the cap height, no two alike
     const s = 24 * (0.94 + rng() * 0.12);
     const g = s * DOT_PITCH;
-    const sx = 0.97 + rng() * 0.06;
-    const make = GLYPHS[ch.toUpperCase()] ?? GLYPHS.E;
+    const sx = 0.875 + rng() * 0.05; // the film's caps are condensed: about 0.65-0.79 of the cap height wide
+    const make = GLYPHS[ch.toUpperCase()] ?? missingSort;
     const glyph = make(s, g);
     const w = glyph.w * sx * k;
     out.push({ ch, glyph, x, w, s, g, sx, k, rot: (rng() - 0.5) * 0.02, dy: (rng() - 0.5) * 3, seed: Math.floor(rng() * 1e6) });
@@ -546,14 +741,26 @@ function layoutWord(text, capH, { gap = 0.15, seed = 3 } = {}) {
   return { letters: out, total: x - gap * capH };
 }
 
-export function marqueeSize(text, capH, { gap = 0.15, seed = 3 } = {}) {
+export function marqueeSize(text, capH, { gap = 0.085, seed = 3 } = {}) {
   const { total } = layoutWord(text, capH, { gap, seed });
   const padX = Math.max(capH * 0.32, total * 0.075);
-  return { w: Math.ceil(total + padX * 2), h: Math.ceil(capH * 1.52), textW: total, padX };
+  return { w: Math.ceil(total + padX * 2), h: Math.ceil(capH * 1.52), textW: total, padX, capH };
+}
+
+// The signwriter cuts the letters to the board he has: the cap height comes down until the word,
+// rails and all, fits the measure. Returns the size AND the cap height that produced it.
+export function marqueeFit(text, capH, maxW, opts = {}) {
+  let ms = marqueeSize(text, capH, opts);
+  if (ms.w > maxW) {
+    capH = Math.floor(capH * (maxW / ms.w));
+    ms = marqueeSize(text, capH, opts);
+  }
+  return ms;
 }
 
 // Draw the word onto `g` (a context already scaled to CSS px), in a box w x h.
-export function marquee(g, w, h, text, { capH, ink = INK, bulb = '#f1e0a6', count = Infinity, seed = 3, gap = 0.15, rails = true } = {}) {
+export function marquee(g, w, h, text, { capH, ink = INK, bulb = '#f1e0a6', rail = null, count = Infinity, seed = 3, gap = 0.085, rails = true } = {}) {
+  const railInk = rail || ink;
   const rng = mulberry32(seed);
   const { letters, total } = layoutWord(text, capH, { gap, seed });
   const x0 = (w - total) / 2;
@@ -571,11 +778,11 @@ export function marquee(g, w, h, text, { capH, ink = INK, bulb = '#f1e0a6', coun
     const ends = [y1, y2].map(() => [x0 - ext * (0.8 + rng() * 0.4), x0 + total + ext * (0.8 + rng() * 0.4)]);
     [y1, y2].forEach((y, i) => {
       const [xa, xb] = ends[i];
-      hairline(g, xa, y, xb, y, { color: ink, rng, width: 0.9, wobble: 0.55, alpha: 0.85 });
-      hairline(g, xa + 3, y + 2.6, xb - 2 + rng() * 6, y + 2.6, { color: ink, rng, width: 0.8, wobble: 0.55, alpha: 0.7 });
+      hairline(g, xa, y, xb, y, { color: railInk, rng, width: 0.9, wobble: 0.55, alpha: 0.85 });
+      hairline(g, xa + 3, y + 2.6, xb - 2 + rng() * 6, y + 2.6, { color: railInk, rng, width: 0.8, wobble: 0.55, alpha: 0.7 });
       // rail ends: a little hook at each end
       for (const px of [xa, xb]) {
-        hairline(g, px, y - capH * (0.04 + rng() * 0.02), px, y + capH * (0.05 + rng() * 0.03), { color: ink, rng, width: 1.1, wobble: 0.3 });
+        hairline(g, px, y - capH * (0.04 + rng() * 0.02), px, y + capH * (0.05 + rng() * 0.03), { color: railInk, rng, width: 1.1, wobble: 0.3 });
       }
     });
     // diagonal braces across the word, top rail to bottom rail, each about two letters wide
@@ -584,19 +791,19 @@ export function marquee(g, w, h, text, { capH, ink = INK, bulb = '#f1e0a6', coun
     for (const i of picks) {
       const L = letters[i];
       const xs = x0 + L.x - L.w * 0.04, xe = xs + L.w * (2.1 + rng() * 0.3) + 2 * gap * capH;
-      hairline(g, xs, y1 + 1.3, xe, y2 + 1.3, { color: ink, rng, width: 0.9, wobble: 0.5, alpha: 0.8 });
+      hairline(g, xs, y1 + 1.3, xe, y2 + 1.3, { color: railInk, rng, width: 0.85, wobble: 0.5, alpha: 0.72 });
     }
     // a third, mid-height hairline that only runs part of the way
     const ym = top + 50 * k + (rng() - 0.5) * 6;
     const xm0 = x0 + total * (0.28 + rng() * 0.1), xm1 = x0 + total + ext * (0.6 + rng() * 0.5);
-    hairline(g, xm0, ym, xm1, ym, { color: ink, rng, width: 0.8, wobble: 0.5, alpha: 0.6 });
+    hairline(g, xm0, ym, xm1, ym, { color: railInk, rng, width: 0.75, wobble: 0.5, alpha: 0.38 });
     // posts below the baseline, at the stem of two or three letters
     const withPost = letters.filter((L) => L.glyph.post != null);
     const chosen = [withPost[0], withPost[Math.floor(withPost.length / 2)], withPost[withPost.length - 1]].filter(Boolean);
     for (const L of chosen) {
       const px = x0 + L.x + L.glyph.post * L.sx * k;
       const by = top + 100 * k + L.dy;
-      hairline(g, px, by - 2, px, by + capH * (0.08 + rng() * 0.06), { color: ink, rng, width: 1.1, wobble: 0.3, alpha: 0.9 });
+      hairline(g, px, by - 2, px, by + capH * (0.08 + rng() * 0.06), { color: railInk, rng, width: 1.1, wobble: 0.3, alpha: 0.9 });
     }
   }
 
@@ -618,7 +825,7 @@ export function marquee(g, w, h, text, { capH, ink = INK, bulb = '#f1e0a6', coun
     // the dotted fill: two rows of small pale dots down every stroke, on a lattice that turns
     // each corner as a 2 x 2 block, every dot placed a hair off its mark
     const gpx = L.g * k;
-    const r0 = s * 0.12 * k;
+    const r0 = s * 0.14 * k;
     g.save();
     g.fillStyle = bulb;
     g.strokeStyle = bulb;
