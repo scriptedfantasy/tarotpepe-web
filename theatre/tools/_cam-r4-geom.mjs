@@ -11,6 +11,7 @@ const [sx0, , sz0] = L.spread.slots[1];
 const ahead = (p) => [p[0], p[1], zb];
 const flat = (pos, fov, shift, extra = {}) => ({ pos, look: ahead(pos), fov, shift, ...extra });
 const down = (x, y, z, fov) => ({ pos: [x, y, z], look: [x, spreadY, z], fov, up: [0, 0, -1] });
+const rake = (t, deg, dist, fov) => { const a = deg*Math.PI/180; return { pos: [t[0], t[1]+dist*Math.sin(a), t[2]+dist*Math.cos(a)], look: [...t], fov }; };
 
 const shots = {
   wide: flat([0, 1.45, 6.4], 31, [0, 0]),
@@ -19,8 +20,9 @@ const shots = {
   table: flat([0, 1.86, 2.55], 28, [0, 0.64]),
   spread: down(sx0, 2.12, sz0, 30),
   card1: down(L.spread.slots[1][0], 1.32, L.spread.slots[1][2], 30),
-  riffle: flat([L.deck.pos[0], 0.98, L.deck.pos[2] + 0.52], 30, [0, 0.7]),
-  fan: down(0, 2.27, 0.207, 33),
+  riffle: rake([...L.deck.pos], 50, 0.62, 34),
+  turn: rake([0, spreadY, sz0], 46, 1.15, 32),
+  fan: down(0, 2.32, 0.23, 33),
 };
 
 // The things a top edge must not cut, in the plane they live in.
@@ -51,6 +53,12 @@ const P = {
   'fan mid near': [0, 0.7625, 0.594],
   'fan end x': [0.365, 0.7625, 0.397],
   'deck top': [0.42, 0.7625, -0.06],
+  'stand L top': [-0.36, 0.985, 0.14],
+  'stand C top': [0, 0.985, 0.14],
+  'stand R top': [0.36, 0.985, 0.14],
+  'fan near 0.64': [0, 0.7625, 0.64],
+  'fan x +0.45': [0.45, 0.7625, 0.44],
+  'fan far -0.05': [0, 0.7625, -0.05],
   'deck far L': [0.34, 0.78, -0.18],
   'deck near R': [0.50, 0.78, 0.06],
   'riffle high': [0.42, 0.87, -0.06],

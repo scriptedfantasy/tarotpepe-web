@@ -16,7 +16,7 @@ import * as THREE from 'three';
 
 export const meta = {
   name: 'camera',
-  judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'door', 'track', 'whip'] },
+  judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'track', 'whip'] },
   files: ['src/pieces/camera.js'],
 };
 
@@ -39,6 +39,15 @@ export async function build(ctx) {
   const flat = (pos, fov, shift, extra = {}) => ({ pos, look: ahead(pos), fov, shift, ...extra });
   // Straight down: the lens axis vertical, the frame's up towards Pepe (-z), so the cards read upright.
   const down = (x, y, z, fov) => ({ pos: [x, y, z], look: [x, spreadY, z], fov, up: [0, 0, -1] });
+  // Down at an angle, on the table's own axis — the one kind of shot that is neither square to the
+  // wall nor square to the cloth, and it exists for one reason: a card standing on its edge. The
+  // reveal piece holds a turning card at 78° and riffles the deck in profile, and from directly
+  // overhead both of those are a hairline. `deg` is the lens's height above the cloth, `dist` its
+  // distance from the point it looks at, and the frame's up stays world-up so the row reads level.
+  const rake = (target, deg, dist, fov) => {
+    const a = (deg * Math.PI) / 180;
+    return { pos: [target[0], target[1] + dist * Math.sin(a), target[2] + dist * Math.cos(a)], look: [...target], fov };
+  };
 
   // Every name from the layout survives (other pieces cut to them); the values are ours.
   //
@@ -77,26 +86,36 @@ export async function build(ctx) {
     // the table: frontal, the lens dropped so the cloth is seen from above and Pepe's hands come in
     // from the top. The one frame here whose top edge crosses the wall (it must: a frontal lens low
     // enough to see the cloth cannot also clear the door head) — so the film does not use it; it is
-    // kept because other pieces are judged from it. The cards are read from `spread` instead.
+    // kept because other pieces are judged from it. The cards are read from `turn` instead.
     table: flat([0, 1.86, 2.55], 28, [0, 0.64]),
     // the spread: exactly 90° down, the three cards in a row across the middle of the cloth with an
-    // even hand's breadth of cloth above and below them. This is the frame the cards are turned in.
+    // even hand's breadth of cloth above and below them. The planimetric plate of the row; the film
+    // turns the cards in `turn`, where a card on its edge is not a hairline.
     spread: down(sx0, 2.12, sz0, 30),
     card0: down(L.spread.slots[0][0], 1.32, L.spread.slots[0][2], 30),
     card1: down(L.spread.slots[1][0], 1.32, L.spread.slots[1][2], 30),
     card2: down(L.spread.slots[2][0], 1.32, L.spread.slots[2][2], 30),
     // the deck: square on, close, the lens dropped onto the stack
     deck: flat([L.deck.pos[0], 1.06, L.deck.pos[2] + 0.86], 24, [0, 0.5]),
-    // the riffle: the deck at two thirds of the frame height, seen from just over the cloth's edge
-    // with the lens dropped, so the halves part and bend up in profile — the shuffle is an event
-    // and not a rumour. Square to the wall, on the deck's own axis.
-    riffle: flat([L.deck.pos[0], 0.98, L.deck.pos[2] + 0.52], 30, [0, 0.7]),
+    // the riffle: the deck filling the frame while it is cut, parted and interleaved, from 58°
+    // above the cloth — the angle the reveal piece's own shuffle lens uses, squared onto the deck's
+    // axis so the halves read in profile. The shuffle is an event and not a rumour; round 3 played
+    // it in a wide of the parlour where the deck is nine millimetres of the picture behind a bottle.
+    riffle: rake([...L.deck.pos], 58, 0.6, 32),
+    // the turn: the same cloth from 46°, because a card standing on its edge — which is how the
+    // reveal piece turns one, held at 78° — is a hairline seen from straight down, and that is the
+    // money frame of the whole evening. The reveal piece asks for 40–55°; its drawn hand withdraws
+    // below 37°, so this band keeps the hand in the picture as well.
+    turn: rake([0, spreadY, sz0], 46, 1.15, 32),
     // the fan, and the row the picked cards go to: 90° down, both wholly inside the frame with an
-    // even margin — the slot row at a third of the height, the fan at two thirds, and a clear band
-    // of cloth at the top for the lettering. The old frame was cropped at both ends at once: the
-    // fan's bottom row ran off the foot and the three slots were off the head, which is the one
-    // frame in the evening that must show everything at once (the cards are turned here).
-    fan: down(0, 2.27, 0.207, 33),
+    // even margin. The old frame was cropped at both ends at once — the fan's bottom row ran off
+    // the foot and the three slots were off the head — and this is the one frame in the evening
+    // that has to show everything at once. It holds the reveal piece's whole footprint (z −0.05 to
+    // 0.64, x ±0.45) and the deck beside it (z −0.18 to 0.06), which is what keeps the slot row at
+    // 0.40 of the height rather than a third: with the deck where the layout puts it, a top edge at
+    // z = −0.06 would cut the deck in half, and no edge in this film cuts an object in half. See
+    // the contract note: move the deck upstage and this frame tightens onto the fan alone.
+    fan: down(0, 2.32, 0.23, 33),
     // the door: the doormat to the VOYANTE board, the door on the axis. The lens stands 8 cm inboard
     // of the door's centre and is a little wider than it was: at 19° on the door's own axis the left
     // edge fell at x = -0.39 in Pepe's plane and sliced him and his table down the middle, which is

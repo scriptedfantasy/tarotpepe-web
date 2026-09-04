@@ -17,7 +17,10 @@ export const LAYOUT = Object.freeze({
     labels: ['What you brought', 'What is actually going on', 'What to do about it'],
   },
   // upstage-right, off the row of slots: on the slot row it read as a fourth card crowding the spread
-  deck: { pos: [0.42, 0.7625, -0.06], rotY: -0.06 },
+  // upstage-right and clear of the card row: in the third card insert its near corner used to enter
+  // the frame and overlap that card, and the fan shot had to reach 20 cm further upstage than the
+  // ribbon needed purely to hold the deck whole (camera round 4).
+  deck: { pos: [0.56, 0.7625, -0.38], rotY: -0.06 },
   // Named camera shots. `up` optional. The camera piece may add its own; these are the contract.
   shots: {
     home: { pos: [0, 1.2, 2.55], look: [0, 0.98, -0.45], fov: 30 },
@@ -28,7 +31,7 @@ export const LAYOUT = Object.freeze({
     card0: { pos: [-0.36, 1.25, 0.1401], look: [-0.36, 0.7625, 0.14], fov: 30, up: [0, 0, -1] },
     card1: { pos: [0, 1.25, 0.1401], look: [0, 0.7625, 0.14], fov: 30, up: [0, 0, -1] },
     card2: { pos: [0.36, 1.25, 0.1401], look: [0.36, 0.7625, 0.14], fov: 30, up: [0, 0, -1] },
-    deck: { pos: [0.42, 1.13, 0.53], look: [0.42, 0.76, -0.06], fov: 30 },
+    deck: { pos: [0.56, 1.13, 0.21], look: [0.56, 0.76, -0.38], fov: 30 },
     fan: { pos: [0, 1.78, 0.62], look: [0, 0.76, 0.28], fov: 34 }, // the three slots and the fanned deck, for picking
     door: { pos: [0, 1.4, 4.2], look: [0, 1.2, -2.5], fov: 45 },
   },

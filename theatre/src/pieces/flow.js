@@ -38,10 +38,15 @@ export const meta = {
 const TIMEOUT = Symbol('timeout');
 const FIRST_SENTENCE_S = 14; // the mind's first sentence of a turn; after this the script speaks
 const NEXT_SENTENCE_S = 9; // ... each further sentence
+// ... and, once he has said one sentence and is holding another to say over the open field, this
+// much and no more. From that moment the visitor could already be typing, and the only thing
+// between them and the field is a sentence the mind has not finished writing: three seconds of a
+// still frame is the most that is worth waiting to hear it.
+const IMPATIENT_S = 3;
 const TURN_S = 22; // mind.turn(), when it answers with a finished object rather than a stream
 const IDLE_S = 90; // the visitor's silence at the field: he says a line and opens it again
 const PICK_S = 75; // ... at the fan: Pepe chooses
-const CHAPTER_S = 3.5; // the story card, held long enough to read its four lines (round 3: 1.7 → 2.3s on screen)
+const CHAPTER_S = 4.0; // the story card, held long enough to read its four lines (round 3: 1.7 → 2.3s on screen)
 const DOOR_S = 3.4;
 const LANDING_S = 3.0; // the parlour, held, before anybody says anything
 
@@ -74,11 +79,13 @@ const ANCHORS = {
   table: { x: 0.5, y: 0.81, w: 0.34 },
   // straight down on the row: the cloth below the three cards is the bare half of the frame
   spread: { x: 0.5, y: 0.76, w: 0.34 },
+  // the raked frame the cards are turned in: the same bare cloth, below the row and above the edge
+  turn: { x: 0.5, y: 0.72, w: 0.34 },
   // the deck sits in the lower two thirds of the riffle frame; the cloth above it is empty
   riffle: { x: 0.5, y: 0.045, w: 0.4, floor: 0.17 },
   // the fan's frame now holds the slot row AND the fan with an even margin; the clear band is the
   // cloth above the slot row, which the row's own top edge fixes at 0.155.
-  fan: { x: 0.5, y: 0.022, w: 0.46, floor: 0.15 },
+  fan: { x: 0.5, y: 0.03, w: 0.4, floor: 0.27 },
   // the insert: the card stands in the middle of the frame and the label stands beside it, on the
   // bare cloth to its right — 0.0% (card 0 and 1), 1.2% (card 2, one seam of the cloth).
   card0: { x: 0.78, y: 0.3, w: 0.3 },
@@ -185,10 +192,14 @@ export async function build(ctx) {
           it.return?.();
           break;
         }
-        const r = await timeout(it.next(), n ? NEXT_SENTENCE_S : FIRST_SENTENCE_S);
+        // how long we wait for the next sentence: the mind's whole thinking time for the first,
+        // less for each after it, and barely any once the field could already be open
+        const ready = keepLast && held != null && said >= 1;
+        const r = await timeout(it.next(), ready ? IMPATIENT_S : n ? NEXT_SENTENCE_S : FIRST_SENTENCE_S);
         if (r === TIMEOUT) {
           M?.abort?.();
-          it.return?.();
+          if (ready) drain(it);
+          else it.return?.();
           break;
         }
         if (r.done) break;
@@ -360,7 +371,7 @@ export async function build(ctx) {
         },
       );
       if (!alive(token)) return;
-      cut('spread');
+      cut('turn');
       await wait(0.9);
     }
   }
@@ -389,9 +400,9 @@ export async function build(ctx) {
     // went up in front of it besides.
     api.beat = 'shuffle';
     D.folio?.('shuffle');
-    await wait(0.3);
+    await wait(0.15);
     const shuffling = R?.shuffle?.() ?? Promise.resolve();
-    await wait(0.9); // the cut and the parting before he says a word over them
+    await wait(0.7); // the cut and the parting before he says a word over them
     // his first sentence goes over the riffle; the riffle is two seconds long and his turn is not,
     // so the rest of it is played on him rather than on a deck that has stopped moving
     const over = await render(sentences, { hold: 1.2, each: closer });
@@ -404,7 +415,9 @@ export async function build(ctx) {
     D.folio?.('fan');
     cut('fan');
     const fanning = R?.fan?.() ?? Promise.resolve();
-    await speak({ beat: 'fan' }, { hold: 1.2 });
+    // two sentences here, not three: the pick prompt is the third thing said and the visitor has
+    // been watching cards being dealt for five seconds already
+    await speak({ beat: 'fan' }, { hold: 1.2, max: 2 });
     await timeout(fanning, 15);
     if (!alive(token)) return null;
     await wait(0.4);
@@ -414,7 +427,7 @@ export async function build(ctx) {
     await wait(0.5);
     await timeout(R?.gather?.() ?? Promise.resolve(), 10);
     api.beat = 'dealt';
-    cut('spread'); // straight down on the row: the frame the cards are turned in
+    cut('turn'); // 46° over the cloth: the frame the cards are turned in
     await wait(0.9);
 
     await readings(token);
@@ -631,12 +644,12 @@ export async function build(ctx) {
         D.ask(PROMPTS.pick[0], { instant: true });
       } else if (name === 'dealt') {
         await R?.setState?.('dealt');
-        cam('spread');
+        cam('turn');
         D.folio?.('draw');
         D.setState('draw');
       } else if (name === 'reading') {
         await R?.setState?.('revealed');
-        cam('spread');
+        cam('turn');
         // the caption reads the card that is on the table (reveal's still lays the-fool, the-star, the-house-of-god)
         if (!ctx.params.has('card')) ctx.params.set('card', 'the-star');
         if (!ctx.params.has('pos')) ctx.params.set('pos', '1');
