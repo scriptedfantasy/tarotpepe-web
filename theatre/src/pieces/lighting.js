@@ -109,18 +109,18 @@ const STATES = {
   evening: {
     key: 0,
     keyColor: '#c8d2e4',
-    fill: { sky: '#ffffff', ground: '#5b564c', intensity: 0.42 },
+    fill: { sky: '#ffffff', ground: '#5b564c', intensity: 0.5 },
     bounce: 0.1,
     floorBounce: 0.08,
-    corners: -1.25,
-    pools: -0.3,
+    corners: -1.0,
+    pools: -0.28,
     pendant: 4.6,
     pendantAngle: 0.88,
     pendantDistance: 4.6,
     table: 1.5,
     floor: 2.6,
     night: true,
-    ink: { tone: [0.0, 0.34, 1.05, 0.5], levels: [0.24, 0.46, 0.68, 0.95] },
+    ink: { tone: [0.0, 0.34, 0.9, 0.5], levels: [0.24, 0.46, 0.68, 0.95] },
   },
   // The table lamp and the pendant only: the reading is lit, the room recedes into strokes.
   lamp: {
@@ -129,7 +129,7 @@ const STATES = {
     fill: { sky: '#ffffff', ground: '#5b564c', intensity: 0.24 },
     bounce: 0.04,
     floorBounce: 0.03,
-    corners: -1.15,
+    corners: -1.3,
     pools: -0.32,
     pendant: 4.4,
     pendantDistance: 4.2,
@@ -137,7 +137,7 @@ const STATES = {
     table: 1.7,
     floor: 0,
     night: true,
-    ink: { tone: [0.0, 0.34, 0.95, 0.5], levels: [0.24, 0.46, 0.68, 1.05] },
+    ink: { tone: [0.0, 0.34, 1.02, 0.5], levels: [0.24, 0.46, 0.68, 1.05] },
   },
 };
 
