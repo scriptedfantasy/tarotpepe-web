@@ -42,8 +42,22 @@ export async function build(ctx) {
   const HOOK_Y = railY - 0.02;
 
   // ---- floor ------------------------------------------------------------------------------------
-  const rug = O.rug({ w: 3.2, d: 2.6 });
-  rug.position.set(0, 0, -0.2);
+  // ROUND 5, THE PLAIN FIELD. The rug's far edge, its width and every mark printed on it are where
+  // round 4 left them; what changed is where it STOPS on the visitor's side. It used to end at
+  // z = 1.1, which put its scroll border and fringe between the table's rim (0.62) and the line a
+  // tabletop plate's bottom edge reaches on the FLOOR — measured at z 0.98 on a 390x760 phone,
+  // 1.03 at 360x800, 1.07 at 320x800 — so the border printed across the bottom corners of every
+  // plan view of the cloth. The near edge is now at 1.66 and the border rides out with it: the
+  // first printed mark on the visitor's side is at z 1.222, which is 60 cm of plain ground outside
+  // the rim and 15 cm of margin past the deepest plate any phone asks for.
+  // What that costs the frontal shots: the `wide` (its bottom edge crosses the boards at z 2.24)
+  // still holds the whole rug, fringe and a good stretch of floorboards under it. The `home` frame
+  // crosses at 1.629 — in the rug's outer plain margin — so the conversation shot is closed at the
+  // bottom by the rug's own solid band with nothing bisected but bare ground. Both measured, both
+  // stable across every landscape window (camera-shots.js pins them with `floorZ`).
+  const RUG = { w: 3.2, near: 1.66, far: -1.5 };
+  const rug = O.rug({ w: RUG.w, d: RUG.near - RUG.far });
+  rug.position.set(0, 0, (RUG.near + RUG.far) / 2);
   g.add(rug);
 
   // ---- the back wall's furniture row: a LOW band — bookcase | chest | bookcase --------------------
@@ -383,6 +397,19 @@ export async function build(ctx) {
     // its hook line (rotate that and the board swings on its cord), and w/h are its size in metres.
     // help.js hangs its own tag under the pivot and tips it when the pointer is over the board.
     sign: { mesh: signMesh, pivot: signPivot, w: 1.32, h: 0.33 },
+    // THE RUG, FOR THE CAMERA. `plainFrom` is the largest z at which the ground is still bare —
+    // the first printed mark on the visitor's side is just past it (measured off the sheet itself
+    // with tools/_props-r5-edge.mjs: 1.219, quoted here 3 mm inside that for the pen's own width).
+    // A shot may cross the floor anywhere up to this line and find nothing drawn on it; `near` is
+    // where the rug itself ends and `fringe` how far its comb hangs past that.
+    rug: {
+      w: RUG.w,
+      near: RUG.near,
+      far: RUG.far,
+      border: rug.userData.rug.border,
+      fringe: rug.userData.rug.fringe,
+      plainFrom: RUG.near - rug.userData.rug.border - 0.006,
+    },
     // practicals, for the lighting piece: where the drawn lamps are
     lamps: {
       floor: lamp.position.clone().add(new THREE.Vector3(0, 1.45, 0)),

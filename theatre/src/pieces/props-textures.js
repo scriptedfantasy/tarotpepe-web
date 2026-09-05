@@ -693,38 +693,76 @@ export function clockTexture(seed = 13) {
 }
 
 // ---- rug -----------------------------------------------------------------------------------------
-export function rugTexture(seed = 14) {
+// ROUND 5 — THE ORNAMENT IS DRAWN IN METRES, AND IT SITS IN THE OUTER 44 CM OF THE RUG.
+//
+// The camera builder measured what the tabletop plates land on, twice, and was right the second
+// time: a plan view of the cloth sees past the table's 0.62 m rim, and past the rim the ray carries
+// on to the FLOOR 0.76 m below, so a plate's bottom edge lands at z 0.98 (390x760) to 1.07 (a 320 px
+// phone) — a good half-metre outside the rim, and every centimetre of that used to be this rug's
+// scroll border and fringe, which then printed across the bottom corners of every portrait plate.
+// The rug is not the fault; the rug was simply drawn to end at 1.1. So the rectangle grows
+// downstage instead — near edge 1.10 → 1.66 — and the border, unchanged in every dimension it is
+// drawn at, goes out there with it. What that leaves between the table's foot and the first printed
+// mark is 60 cm of plain ground (measured off the sheet itself: the field begins at z 1.219) —
+// the plates land on bare rug at every phone shape, with 14 cm of margin past the deepest of them.
+//
+// So this draws in METRES at `ppm` texels each, and the sheet is cut to the rug it is going on —
+// the border bands, the scroll's pitch and amplitude, the corner rosettes and the medallion are all
+// quoted in metres and are the same size on the floor whatever rug is asked for. (They used to be
+// px on a 1024x800 sheet, which meant that resizing the rug at all resized every mark on it.)
+const RUG_M = {
+  ppm: 320, // texels per metre — 1024 px across the old 3.2 m rug, kept
+  b0: 0.056, // the outer plain margin, edge to the solid band
+  band: 0.038, // the solid band itself
+  gap: 0.025, // plain, then the rule the scroll's ground starts at
+  ground: 0.281, // the dashed ground the running scroll sits on
+  rule: 0.038, // the double rule that closes the border: field begins after it
+  amp: 0.075, // the scroll loop's radius
+  pitch: 0.172, // one loop of the scroll
+  inset: 0.1375, // how far short of the corner rosette a run of scroll stops
+  rosette: 0.075, // the corner rosette's radius
+};
+// where the field begins, measured in from the rug's edge: everything printed is outside this
+export const rugBorder = RUG_M.b0 + RUG_M.band + RUG_M.gap + RUG_M.ground + RUG_M.rule;
+
+export function rugTexture({ w = 3.2, d = 3.16, seed = 14 } = {}) {
+  const M = RUG_M;
+  const P = (m) => m * M.ppm;
   return drawTexture(
-    1024,
-    800,
+    Math.round(P(w)),
+    Math.round(P(d)),
     (g, W, H, rng) => {
       paper(g, W, H, '#f3eee4', { grain: 0, seed });
       const o = { width: 2.6, wobble: 0.9, rng };
       // a solid outer band, then the scroll border on a dashed ground, then a double rule
-      const b0 = 18, b1 = 128;
+      const b0 = P(M.b0), band = P(M.band), b1 = P(M.b0 + M.band + M.gap + M.ground);
+      const r0 = P(M.b0 + M.band + M.gap); // the rule the dashed ground starts at
       g.fillStyle = INK;
-      g.fillRect(b0, b0, W - 2 * b0, 12);
-      g.fillRect(b0, H - b0 - 12, W - 2 * b0, 12);
-      g.fillRect(b0, b0, 12, H - 2 * b0);
-      g.fillRect(W - b0 - 12, b0, 12, H - 2 * b0);
-      inkRect(g, b0 + 20, b0 + 20, W - 2 * b0 - 40, H - 2 * b0 - 40, { ...o, width: 1.8, overshoot: 0 });
+      g.fillRect(b0, b0, W - 2 * b0, band);
+      g.fillRect(b0, H - b0 - band, W - 2 * b0, band);
+      g.fillRect(b0, b0, band, H - 2 * b0);
+      g.fillRect(W - b0 - band, b0, band, H - 2 * b0);
+      inkRect(g, r0, r0, W - 2 * r0, H - 2 * r0, { ...o, width: 1.8, overshoot: 0 });
       g.save();
       g.beginPath();
-      g.rect(b0 + 20, b0 + 20, W - 2 * b0 - 40, H - 2 * b0 - 40);
+      g.rect(r0, r0, W - 2 * r0, H - 2 * r0);
       g.rect(b1, b1, W - 2 * b1, H - 2 * b1);
       g.clip('evenodd');
-      dashes(g, 0, 0, W, H, { count: 1200, len: 5, width: 1.3, angle: Math.PI / 4, angleJitter: 0.3, rng, alpha: 0.4 });
+      // the dash count is a DENSITY: the same rain of little strokes per square metre of ground
+      // whatever the rug's size (1200 on the old 3.2 x 2.6 sheet)
+      dashes(g, 0, 0, W, H, { count: Math.round((1200 / (1024 * 800)) * W * H), len: 5, width: 1.3, angle: Math.PI / 4, angleJitter: 0.3, rng, alpha: 0.4 });
       g.restore();
       inkRect(g, b1, b1, W - 2 * b1, H - 2 * b1, { ...o, width: 3, overshoot: 0 });
-      inkRect(g, b1 + 12, b1 + 12, W - 2 * b1 - 24, H - 2 * b1 - 24, { ...o, width: 1.4, overshoot: 0 });
+      const rule = P(M.rule); // the pair is a hand's breadth apart — 12 px on the old sheet
+      inkRect(g, b1 + rule, b1 + rule, W - 2 * b1 - 2 * rule, H - 2 * b1 - 2 * rule, { ...o, width: 1.4, overshoot: 0 });
       // the border: a running scroll — loops that curl alternately up and down, a leaf in each
+      const amp = P(M.amp);
       const scroll = (x0, y0, x1, y1, n) => {
         const dx = x1 - x0, dy = y1 - y0;
         const len = Math.hypot(dx, dy) || 1;
         const ux = dx / len, uy = dy / len;
         const nx = -uy, ny = ux;
         const pitch = len / n;
-        const amp = 24;
         for (let i = 0; i < n; i++) {
           const s = i % 2 ? 1 : -1;
           const cxp = x0 + ux * pitch * (i + 0.5), cyp = y0 + uy * pitch * (i + 0.5);
@@ -738,24 +776,27 @@ export function rugTexture(seed = 14) {
           stroke(g, pts, { ...o, width: 3 });
           const lx = cxp + ux * pitch * 0.5, ly = cyp + uy * pitch * 0.5;
           const tip = [lx + nx * s * -amp * 0.9, ly + ny * s * -amp * 0.9];
-          const leaf = [...quad([lx, ly], [lx + ux * 14 + nx * s * -8, ly + uy * 14 + ny * s * -8], tip), ...quad(tip, [lx - ux * 14 + nx * s * -8, ly - uy * 14 + ny * s * -8], [lx, ly])];
+          const lw = P(0.0437), lh = P(0.025); // the leaf: 14 x 8 px on the old sheet
+          const leaf = [...quad([lx, ly], [lx + ux * lw + nx * s * -lh, ly + uy * lw + ny * s * -lh], tip), ...quad(tip, [lx - ux * lw + nx * s * -lh, ly - uy * lw + ny * s * -lh], [lx, ly])];
           fillPoly(g, leaf, INK);
         }
       };
-      const mid = (b0 + 20 + b1) / 2;
-      scroll(mid + 44, mid, W - mid - 44, mid, 14);
-      scroll(mid + 44, H - mid, W - mid - 44, H - mid, 14);
-      scroll(mid, mid + 44, mid, H - mid - 44, 10);
-      scroll(W - mid, mid + 44, W - mid, H - mid - 44, 10);
+      const mid = (r0 + b1) / 2, inset = P(M.inset);
+      const runs = (len) => Math.max(4, Math.round((len - 2 * inset) / P(M.pitch)));
+      scroll(mid + inset, mid, W - mid - inset, mid, runs(W - 2 * mid));
+      scroll(mid + inset, H - mid, W - mid - inset, H - mid, runs(W - 2 * mid));
+      scroll(mid, mid + inset, mid, H - mid - inset, runs(H - 2 * mid));
+      scroll(W - mid, mid + inset, W - mid, H - mid - inset, runs(H - 2 * mid));
       for (const [x, y] of [[mid, mid], [W - mid, mid], [mid, H - mid], [W - mid, H - mid]]) {
-        dot(g, x, y, 24);
-        fillPoly(g, starPoly(x, y, 13), LABEL_PAPER);
+        dot(g, x, y, P(M.rosette));
+        fillPoly(g, starPoly(x, y, P(M.rosette * 0.54)), LABEL_PAPER);
       }
-      // a quiet field with one small central medallion
+      // a quiet field with one small central medallion (under the table, and the same size on the
+      // floor whatever the rug's size: it is a thing woven into it, not a share of it)
       const cx = W / 2, cy = H / 2;
-      for (const [rx, ry, w] of [[130, 82, 2.6], [108, 66, 1.4]]) stroke(g, [[cx, cy - ry], [cx + rx, cy], [cx, cy + ry], [cx - rx, cy]], { ...o, width: w, close: true });
-      fillPoly(g, starPoly(cx, cy, 22), INK);
-      for (const [ddx, ddy] of [[-86, 0], [86, 0], [0, -52], [0, 52]]) dot(g, cx + ddx, cy + ddy, 7);
+      for (const [rx, ry, ww] of [[0.406, 0.256, 2.6], [0.338, 0.206, 1.4]]) stroke(g, [[cx, cy - P(ry)], [cx + P(rx), cy], [cx, cy + P(ry)], [cx - P(rx), cy]], { ...o, width: ww, close: true });
+      fillPoly(g, starPoly(cx, cy, P(0.069)), INK);
+      for (const [ddx, ddy] of [[-0.269, 0], [0.269, 0], [0, -0.1625], [0, 0.1625]]) dot(g, cx + P(ddx), cy + P(ddy), P(0.022));
     },
     { seed },
   );

@@ -658,21 +658,30 @@ export function curtainSet({ x0, x1, rodY, panelW, dropTo, z }) {
 }
 
 // ---- rug ------------------------------------------------------------------------------------------
-export function rug({ w = 3.2, d = 2.6 }) {
+// The sheet is cut for the rug it is going on (T.rugTexture draws in metres), so the border, the
+// scroll and the corner rosettes are the same size on the floor at any size of rug — which is what
+// lets round 5 grow the rectangle downstage, to keep the printed border off the tabletop plates,
+// without the drawing growing with it.
+export function rug({ w = 3.2, d = 3.16 }) {
   const M = materials();
   const g = new THREE.Group();
-  const top = inkMaterial({ map: T.rugTexture(), hatch: 0.6 });
+  const top = inkMaterial({ map: T.rugTexture({ w, d }), hatch: 0.6 });
   const side = inkMaterial({ hatch: 0.7 });
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.012, d), [side, side, top, side, side, side]);
   m.position.y = 0.006;
   m.receiveShadow = true;
   g.add(m);
+  const FRINGE = 0.09;
   for (const s of [1, -1]) {
-    const f = plane(w, 0.09, M.fringe);
+    const f = plane(w, FRINGE, M.fringe);
     f.rotation.set(-Math.PI / 2, 0, s > 0 ? 0 : Math.PI);
     f.position.set(0, 0.004, s * (d / 2 + 0.045));
     g.add(f);
   }
+  // what a camera needs to know about it: how deep the printed border is, so a shot can be framed
+  // against the PLAIN field rather than against the rug's edge (props round 5 — the tabletop plates
+  // look past the table's rim and land on this)
+  g.userData.rug = { w, d, border: T.rugBorder, fringe: FRINGE };
   return g;
 }
 

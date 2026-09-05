@@ -40,8 +40,7 @@
 //     saturation as SKIN #69b964 with the lightness walked from 56% to 34%. It measures 5.13:1 on
 //     the paper against #69b964's 2.28:1, so a 13 px capital on a phone is type and not a stain.
 //     It is still the one colour in this film that means him: no third colour is introduced;
-//   · and his line is cut a step heavier than the visitor's (700 against 600), because a coloured
-//     letter at 13 px has less ink in it than a black one and the weight puts it back;
+//   · both lines are set in one face at one weight: only the colour tells the two voices apart;
 //   · the blinking caret is in the visitor's register and nowhere else: whoever the caret is with
 //     has the pen. It is a pen stroke, not a dash, and it stayed.
 //
@@ -144,9 +143,13 @@ const FONT_MIN = 13;
 // selective-colour rule is intact (only Pepe and the card faces carry colour) and nothing else on
 // the card is coloured. The visitor's words stay INK #0d0e0d, 18.28:1.
 const PEPE_GREEN = '#3a7736';
-// And a step heavier than the visitor's line. A coloured glyph at 13 px carries less ink than a
-// black one at the same weight; the extra cut puts it back without touching the hue or the size.
-const PEPE_WEIGHT = 700;
+// The SAME weight as the visitor's line. Round 7 cut his a step heavier (700 against 600) on the
+// argument that a coloured glyph at 13 px carries less ink than a black one — true, but the user
+// saw the difference immediately and read it as an inconsistency rather than as compensation: "the
+// green is good but the font weight seems different then the users font?". Two people talking in
+// one card are set in one face at one weight; only the colour tells them apart. The green is dark
+// enough (#3a7736, 5.13:1) not to need the help.
+const PEPE_WEIGHT = 600;
 
 // ---- THE DOCK ---------------------------------------------------------------------------------
 // The card is bottom-centred all evening — the user's settled decision — with ONE exception, also
