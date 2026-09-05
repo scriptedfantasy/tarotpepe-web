@@ -86,6 +86,9 @@ const SLACK = 0.045;
 //   rise        [[x, y, z] …]     points ABOVE it that must be in (a card reared on its edge)
 //   whole       [[[x,y,z] …] …]   groups taken wholly in or wholly out (the squared deck, him)
 //   bottom      the largest z the frame's bottom edge may reach on the cloth. THE PIN.
+//   centre, disc  the table's own centre and radius. WHERE THE FRAME IS DEEPER THAN THE TABLE the
+//               pin cannot be honoured usefully and the disc takes the middle of the frame instead
+//               (see rule 2b below).
 //   dist, distMax, fov            the camera rises before the lens opens, as far as the pendant allows
 //   pad         a band at the FOOT of the frame kept clear of the subject, as a fraction of the
 //               frame's height: the caption's drawn placard stands there. On a plate it is small,
@@ -97,7 +100,7 @@ export function plate(spec, aspect) {
   const {
     y, deg = 90, x = 0,
     subject = [], rise = [], whole = [],
-    bottom = null, top = null, axis = null,
+    bottom = null, top = null, axis = null, centre = null, disc = null, floor = null,
     dist = 1.2, distMax = null, fov = 30,
     pad = 0.03, mx = 0.03, my = 0.05,
   } = spec;
@@ -161,6 +164,25 @@ export function plate(spec, aspect) {
       if (vMin < -Mb) want = zc + (-Mb - vMin) * t * d;
       // never so far downstage that the bottom edge is past the rim …
       if (bottom != null) want = Math.min(want, centreFor(bottom));
+      // 2b. … UNLESS THE FRAME IS DEEPER THAN THE TABLE, and then the pin stops being worth
+      // honouring. On a phone held upright the frame is twice as tall as it is wide: 1.37 m of
+      // cloth against a table 1.24 m across. Pinning the bottom edge inside the near rim then
+      // spends the entire difference at the TOP of the picture — 15 cm of bench and floorboards
+      // upstage of the far rim — while the near rim still sits a fifth of the frame's height above
+      // the bottom edge with the rug under it. Both rims in the picture, both wrong.
+      //   The picture that answers the brief in a window that shape is the one the table itself
+      // makes: THE DISC CENTRED, its near and far rims cutting the frame at the same height, the
+      // spread filling its lower half and the two rims closing the composition top and bottom. The
+      // frame's centre IS the point the lens looks at (that is what makes a plate a plate), so
+      // this is one line: put it on the table's centre. What is beyond the rim then is a shallow
+      // symmetric crescent in the four corners — a round table on a rug, seen from above, which is
+      // the drawing — instead of a band of rug across the foot.
+      //   It only fires where it is true. Wherever the frame is shallower than the table — 16:9,
+      // the user's 1200×1100 — the pin governs exactly as it did in round 6 and this is inert.
+      if (centre != null && disc != null) {
+        const depth = edgeZ(zc, d, t, ax, +1) - edgeZ(zc, d, t, ax, -1);
+        if (depth > 2 * disc) want = centre;
+      }
       // … but a frame that has slack to spare should spend it downstage rather than open upstage
       // into the squared deck and swallow it, PROVIDED that only costs a hand's breadth of rim at
       // the foot. Where the slack is a whole table's worth — a phone held upright — it cannot, and
@@ -178,6 +200,16 @@ export function plate(spec, aspect) {
       // geometry allows: the table a circle very nearly centred in the frame, closed top and
       // bottom by the boards, with the caption's placard standing on the near ones.
       if (axis != null) want = Math.max(want, zc + (axis - edgeZ(zc, d, t, ax, -1)));
+      // … AND NOT ONTO THE RUG, WHICH OUTRANKS EVEN THAT. `floor` is the last line of cloth and bare
+      // boards before the rug's scroll border — a hard black double rule with a running scroll and a
+      // comb of fringe under it, 2.5 cm outside the table's rim. A tabletop shot may show the rim
+      // curving away and the bare board past it; the moment that band crosses the bottom of the
+      // frame the picture stops being a plan of a table and becomes a plan of a rug with a table on
+      // it, which is the fault the round-5 critic named and the one the user is still seeing.
+      // Where the window is so tall that the frame cannot both clear the rug and stop short of him,
+      // the rug wins and the excess goes upstage over his own hands on the cloth: a drawn hand at
+      // the top edge of a tabletop plate is the beat; a printed border across the foot is a mistake.
+      if (floor != null) want = Math.min(want, centreFor(floor));
       const step = want - zc;
       if (Math.abs(step) < 5e-4) break;
       zc += deg >= 89.9 ? step : step * 0.7;

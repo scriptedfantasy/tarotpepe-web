@@ -51,9 +51,16 @@ export async function build(ctx) {
 
   // Every name from the layout survives (other pieces cut to them); the values are solved in
   // camera-shots.js for the window we are in, and solved again when it changes shape.
-  const shots = buildShots(L, aspect());
+  //
+  // ROUND 7 — and the plates take their SUBJECT from the reveal piece, not from a constant. The row
+  // of three is where reveal lays it (`reveal.slots`) and the spread is the bows it actually built,
+  // so the tabletop frames follow the cards instead of a number that stopped describing them two
+  // rounds ago. Read fresh on every reframe: the piece is built before the camera, but it re-lays
+  // the cloth between beats and a window dragged to another shape re-reads it.
+  const revealPiece = () => ctx.pieces?.reveal ?? null;
+  const shots = buildShots(L, aspect(), revealPiece());
   const reframe = () => {
-    const next = buildShots(L, aspect());
+    const next = buildShots(L, aspect(), revealPiece());
     for (const k of Object.keys(shots)) delete shots[k];
     Object.assign(shots, next);
   };
