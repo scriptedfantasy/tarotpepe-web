@@ -59,8 +59,9 @@
 // register, with an ink dash for a caret that blinks on the 12 fps clock. Past two lines their
 // register rolls — the head of their sentence rides out of it, a whole line at a time — and the
 // card does not grow. A hidden input takes the real keystrokes (and the speech recogniser's words)
-// and nothing else. What they last said stays in their register while he answers it, so the card
-// always holds the last thing each of them said.
+// and nothing else. Their words are theirs only while they are writing them: the register empties
+// the moment they press Return (the user: "the user knows what they typed they only need to see it
+// as they type, not after"), but it stays RESERVED, so the card never changes shape.
 //
 // The microphone is a prop, not an icon: a pen-drawn carbon microphone on a stand that stands on
 // the table beside the ashtray (its world position is projected into the frame, so it sits in the
@@ -407,9 +408,9 @@ export async function build(ctx) {
   let inter = null; // { until, done }
   let field = null; // { input, answer, caret:[el], submit, dispose }
   let beat = 'idle';
-  // The last thing the VISITOR said. It stands in their register while he answers it, so the card
-  // always holds the last line of each of them and their half of it is never an empty strip once
-  // they have spoken at all.
+  // What is standing in the VISITOR's register. In the running film this is only ever what they are
+  // typing at that moment: it is cleared when they press Return, and the reserved empty register is
+  // what the card shows while he answers.
   let lastAnswer = '';
 
   // ---- the voice: the visitor's (SpeechRecognition) and Pepe's (speechSynthesis) ----
@@ -1124,10 +1125,14 @@ export async function build(ctx) {
           if (voiceOn) listen(submit);
         }
       });
-      // what they said stays in their register while he answers it: the card holds the last line of
-      // each of them, which is what makes it a conversation rather than a caption with a field
+      // Their words go the moment they are said. Round 6 left the last thing they typed standing in
+      // their register while he answered it, on the argument that the card then held both halves of
+      // the exchange — but the user watched it through several of his sentences and it is simply
+      // clutter: "the user knows what they typed they only need to see it as they type, not after".
+      // The register stays RESERVED and empty, so the card does not change shape and the place their
+      // next words will go is still a fixed compartment rather than something they have to look for.
       if (answer != null) {
-        lastAnswer = answer;
+        lastAnswer = '';
         ctx.emit?.('dialogue:answer', { answer });
       }
       if (respond && answer != null) await api.say(scriptReply(answer), { hold: 1.4 });
@@ -1195,11 +1200,12 @@ export async function build(ctx) {
       const i = +(p.get('line') ?? 0);
       const still = (text) => reveal(show(text).words, Infinity);
       api.folio(name);
-      // What the visitor last said, standing in their own register. At the greeting they have not
-      // said anything yet and it is bare paper — which is the state that has to read as a place to
-      // write, so it is a state worth judging rather than one to dress up.
-      const said = p.get('answer') ?? 'my brother has not called since March';
-      lastAnswer = name === 'greeting' ? '' : said;
+      // The visitor's register is bare unless a still is deliberately asking for words in it. In the
+      // running film it only ever holds what they are typing AT THAT MOMENT, so a judging frame with
+      // a sentence sitting in it would be a frame of a state that never happens; `?answer=…` puts one
+      // there for the rare still that wants to show the typing. Bare paper that reads as a place to
+      // write is the state worth judging.
+      lastAnswer = name !== 'greeting' && p.has('answer') ? p.get('answer') : '';
       if (name === 'reading') {
         const slug = p.get('card') ?? 'the-moon';
         const pos = +(p.get('pos') ?? 1);
