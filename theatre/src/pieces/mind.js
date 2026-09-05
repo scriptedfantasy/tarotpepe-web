@@ -7,7 +7,8 @@
 // the cards only come out when the visitor asks for them.
 //
 //   const t = mind.turn(text);              // text is whatever they typed or said, possibly ''
-//   t.intent                                 // 'talk' | 'draw' | 'farewell'   — known at once
+//   t.intent                                 // 'talk' | 'draw' | 'recall' | 'farewell' — at once
+//   t.focus                                  // for a recall: which card they meant, or null
 //   for await (const s of t.sentences) …     // his reply, one placard-sized sentence at a time
 //
 //   'talk'      keep the conversation going: ask him again when he has finished speaking.
@@ -15,22 +16,27 @@
 //               His sentences ARE the shuffle line, so start the shuffle and say them over it;
 //               then the fan and the picks, then mind.reply({beat:'reading', slug, position}) for
 //               each card, then back to mind.turn() — the conversation simply continues.
+//   'recall'    they asked to LOOK at cards that are already down ("show me my cards again", "what
+//               did I draw", "can I see the second one"). NOTHING IS DEALT. Put the camera on the
+//               reading — all three, or `t.focus` when they named one — play his sentences there,
+//               and go back to the frame the conversation was in. With no cards down it still
+//               fires for the memory forms, and he says plainly that nothing has been drawn.
 //   'farewell'  they are leaving. His sentences are the goodbye; play them and close the evening.
 //
 // Nothing else in the piece decides to deal. mind.offered says whether his last turn put a reading
 // on offer (so that a bare "yes" means yes); mind.hasSpread whether cards are down.
 //
 // API (ctx.pieces.mind):
-//   turn(text)           → {intent, sentences, text}   the conversation loop (above)
-//   intentOf(text)       → 'talk' | 'draw' | 'farewell' without speaking (peek during the fan)
+//   turn(text)           → {intent, focus, sentences, text}   the conversation loop (above)
+//   intentOf(text)       → 'talk' | 'draw' | 'recall' | 'farewell' without speaking (peek at the fan)
 //   offered, hasSpread   bool
 //   available            bool, true once health() has answered with a provider
 //   provider, model      'anthropic' | 'openrouter' | 'none', and the model id
 //   ready                Promise → available (health, never longer than 3 s)
 //   health()             → Promise<bool>; refreshes available/provider/model
-//   reply({beat, user, slug, position, question}) → async generator of SENTENCES
-//                        beat: greeting | talk | reading | followup | farewell | question | answer |
-//                              shuffle | fan
+//   reply({beat, user, slug, position, question, focus}) → async generator of SENTENCES
+//                        beat: greeting | talk | reading | recall | followup | farewell | question |
+//                              answer | shuffle | fan
 //                        slug + position (0..2 | 'brought'|'going'|'do' | label) for a reading
 //   history              [{role:'visitor'|'pepe', text}] the conversation so far (also `transcript`)
 //   spread               [{position, label, slug, name, numeral}] the cards on the table so far
@@ -44,7 +50,7 @@
 // other states fetch that one beat live and show it in the same block. Nothing here blocks the page
 // on the network: setState returns at once and the conversation fills in.
 import { SCRIPT, lineFor, linesFor, POSITIONS, POSITION_KEYS, positionKey } from './script.js';
-import { stanceOf, readingScript, followupScript, answerScript, beatText, aboutTheSpread } from './mind-voice.js';
+import { stanceOf, readingScript, followupScript, answerScript, beatText, aboutTheSpread, recallScript, cardRef } from './mind-voice.js';
 import { intentOf, talkScript, farewellScript, looksLikeOffer } from './mind-talk.js';
 import { bySlug } from '../core/deck.js';
 
@@ -96,11 +102,13 @@ function tidy(s) {
 // visitor) and lives in build(); the writing is in mind-talk.js and mind-voice.js.
 // Returns {text, offered}: `offered` is true when this turn put a reading on the table to be
 // accepted, so that the visitor's next "yes" means yes.
-function scripted({ beat, user, slug, position, question, spread = [] }, talk) {
+function scripted({ beat, user, slug, position, question, spread = [], focus = null }, talk) {
   const said = (user ?? question ?? '').trim();
   switch (beat) {
     case 'talk':
       return talkScript(said, talk);
+    case 'recall':
+      return { text: recallScript(said, spread, talk.stance, focus), offered: false };
     case 'reading':
       return { text: slug ? readingScript(slug, position ?? 0, talk.stance) : SCRIPT.turn[Number(position) || 0], offered: false };
     case 'answer':
@@ -217,9 +225,9 @@ export async function build(ctx) {
     },
 
     // One turn of Pepe's, as sentences. Records the visitor's line and his reply in history.
-    async *reply({ beat = 'greeting', user = '', slug = null, position = 0, question = '', intent = null } = {}) {
+    async *reply({ beat = 'greeting', user = '', slug = null, position = 0, question = '', intent = null, focus = null } = {}) {
       const said = String(user || question || '').trim();
-      const args = { beat, user: said, slug, position, question: said };
+      const args = { beat, user: said, slug, position, question: said, focus };
       const card = slug ? bySlug[slug] : null;
       const posIndex = POSITION_KEYS.indexOf(positionKey(position));
       if (beat === 'talk') talk.turns++;
@@ -234,7 +242,10 @@ export async function build(ctx) {
         numeral: card?.numeral ?? null,
         positionLabel: POSITIONS[posIndex] ?? null,
         hint: beat === 'reading' && slug ? lineFor(slug, position) : null,
-        facts: beat === 'reading' && slug ? cardFacts(slug, position) : null,
+        // For a recall the hint is deliberately left off: it is the very line the reading was
+        // written from, and he must not say it twice. The facts — everything in the picture the
+        // reading did NOT spend — are exactly what a second look at a card is for.
+        facts: (beat === 'reading' || beat === 'recall') && slug ? cardFacts(slug, position) : null,
         // the conversation's own facts, so the live voice knows what the room knows
         intent: intent ?? null,
         offered: talk.offered,
@@ -341,22 +352,42 @@ export async function build(ctx) {
     // mouth, so the caller can arm the shuffle while he is still speaking.
     turn(text = '') {
       const said = String(text ?? '').trim();
-      const intent = intentOf(said, { offered: talk.offered });
       const dealt = spread.filter(Boolean);
+      const intent = intentOf(said, { offered: talk.offered, spread: dealt });
       // 'draw' means they have just asked for cards, so his answer is the deck coming off the
       // cloth: play these sentences over the shuffle rather than before it.
       // With cards face up, a line that points at one of them is a follow-up and not table talk:
       // the written brain answers with that card, and the live voice gets the follow-up direction
       // (answer with what is on the table, name the one you mean) instead of the talk direction.
       const beat =
-        intent === 'farewell' ? 'farewell' : intent === 'draw' ? 'shuffle' : dealt.length && aboutTheSpread(said, dealt) ? 'followup' : 'talk';
+        intent === 'farewell'
+          ? 'farewell'
+          : intent === 'draw'
+            ? 'shuffle'
+            : intent === 'recall'
+              ? 'recall'
+              : dealt.length && aboutTheSpread(said, dealt)
+                ? 'followup'
+                : 'talk';
       if (intent === 'draw') talk.offered = false;
-      return { intent, text: said, sentences: api.reply({ beat, user: said, intent }) };
+      // Which card they meant, when they meant one: an index into the cards on the table, or null
+      // for all of them. cardRef reads a name, an alias, a place ("the middle one"), a suit or a
+      // pointing word, so "the tower" and "the second one" arrive here as the same number, and the
+      // caller can put the camera on that card without parsing the sentence a second time.
+      const ref = intent === 'recall' && dealt.length ? cardRef(said, dealt) : null;
+      const focus = ref && ref.index >= 0 ? ref.index : null;
+      const card = focus == null ? null : dealt[focus];
+      return {
+        intent,
+        text: said,
+        focus,
+        sentences: api.reply({ beat, user: said, intent, focus, slug: card?.slug ?? null, position: card ? card.position : 0 }),
+      };
     },
 
     // the same reading of their words, without speaking: for a caller that wants to peek.
     intentOf(text = '') {
-      return intentOf(String(text ?? '').trim(), { offered: talk.offered });
+      return intentOf(String(text ?? '').trim(), { offered: talk.offered, spread: spread.filter(Boolean) });
     },
 
     offered: false,

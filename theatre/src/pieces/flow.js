@@ -9,7 +9,20 @@
 // There is no script of beats any more and no fixed number of exchanges. The loop is one line
 // long: the visitor says something, the mind answers, the visitor says something. Everything else
 // — the cards, the camera moves, the story card — hangs off the intent the mind reports for a
-// turn ('talk' · 'draw' · 'farewell'). He never deals on his own schedule.
+// turn ('talk' · 'draw' · 'recall' · 'farewell'). He never deals on his own schedule.
+//
+// THE CARDS CAN BE GONE BACK TO (round 5, the user: "once the cards are drawn, the user has to be
+// able to see their cards again"). The three stay on the cloth after the reading, but the
+// conversation is framed a metre back, where a laid card is forty pixels of ink — so they are on
+// the table and there is no way to look at them. Both roads a visitor might take now arrive at the
+// same place, `revisit()`:
+//   · they ask — "show me my cards again", "what did I draw", "can I see the second one" — and the
+//     mind reports the intent 'recall' with the card they meant;
+//   · or they put a finger on one of the cards themselves, which is what a thing lying on a table
+//     invites. reveal keeps the laid meshes (reveal.picks), so the hit test is ours.
+// Either way the camera goes to the reading, he says a thing about it he did not say the first
+// time, and the conversation carries on in the frame it was in. Nothing is dealt and nothing is
+// shuffled: this is a digression, not a chapter.
 //
 // The field is under his words, not beside them: his last sentence of a turn is held back and
 // said by dialogue.ask, so the caption the visitor is answering and the block they type into are
@@ -25,13 +38,14 @@
 // his turn; a click on the picture does what space does, or picks a card at the fan, or starts the
 // evening again from the sign-off card.
 //
-// API: start(), restart(), beat, intent, readings, setState(name)
-//   states: greeting · talk · shuffle · fan · dealt · reading · farewell (stills)
-import { PROMPTS, SAMPLE_ANSWER, scriptedLines, splitSentences, parsePick, detectIntent } from './flow-lines.js';
+// API: start(), restart(), beat, intent, readings, recalls, setState(name)
+//   states: greeting · talk · shuffle · fan · dealt · reading · recall · farewell (stills)
+import * as THREE from 'three';
+import { PROMPTS, SAMPLE_ANSWER, scriptedLines, splitSentences, parsePick, detectIntent, recallFocus } from './flow-lines.js';
 
 export const meta = {
   name: 'flow',
-  judge: { shot: 'home', states: ['greeting', 'talk', 'shuffle', 'fan', 'dealt', 'reading', 'farewell'], dom: true },
+  judge: { shot: 'home', states: ['greeting', 'talk', 'shuffle', 'fan', 'dealt', 'reading', 'recall', 'farewell'], dom: true },
   files: ['src/pieces/flow.js', 'src/pieces/flow-lines.js'],
 };
 
@@ -87,29 +101,23 @@ const CAPTION = {
 // so, and it keeps any shot from falling through to dialogue.js's own default.
 const SHOTS = ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'deck', 'card0', 'card1', 'card2', 'door', 'window', 'threshold'];
 
-// The measure of the block, as a fraction of the frame. The caption face is clamp(9px, 1vw, 20px),
-// so on a wide window the type scales with the picture and a third of the width is a comfortable
-// forty-odd characters — but below 900 px the clamp holds the type at 9 px while the window keeps
-// shrinking, and a third of a phone's width is four words a line. Measured in characters instead:
-// ~46 of them, plus the placard's own padding, capped so it never runs to the edges of the paper.
-function measure(w) {
-  const fs = Math.min(20, Math.max(9, w / 100));
-  return Math.min(0.86, Math.max(0.3, (34.5 * fs) / Math.max(1, w)));
-}
+// The MEASURE of the block is not set here. Round 5 kept a character-counting `measure(w)` and
+// wrote its answer into `anchors[shot].w`; dialogue.js has had a measure of its own since, and it
+// takes the larger of the two (dialogue.js, `cardW`), so this one has been dead for two rounds and
+// the dialogue piece has twice asked for it to go. Gone: flow says WHERE the card stands and
+// nothing about how wide it is.
 
 // What the mind may report for a turn. Anything else is talk, which is the safe answer.
-const INTENTS = ['talk', 'draw', 'farewell'];
+const INTENTS = ['talk', 'draw', 'recall', 'farewell'];
 
 export async function build(ctx) {
   const P = ctx.pieces;
   const D = P.dialogue, R = P.reveal, C = P.camera, T = P.titles, M = P.mind, S = P.sound, K = P.cards;
-  // the caption's place, for every shot, remade whenever the window changes shape (the measure is
-  // the only part of it that depends on the window)
+  // the caption's place, for every shot. It is the same anchor in all of them and it does not
+  // depend on the window, so this runs once; dialogue.js re-reads it on every resize of its own.
   function anchors() {
     if (!D?.anchors) return;
-    const w = ctx.size?.w || window.innerWidth || 1600;
-    const a = { ...CAPTION, w: measure(w) };
-    for (const shot of SHOTS) D.anchors[shot] = { ...a };
+    for (const shot of SHOTS) D.anchors[shot] = { ...CAPTION };
   }
   anchors();
   ctx.on?.('resize', anchors);
@@ -118,6 +126,8 @@ export async function build(ctx) {
   let skips = 0; // skip gestures (a key, a click) so far; a skippable hold ends when it changes
   let skipBeat = false; // Escape: the rest of this turn's lines are dropped
   let picking = false; // the fan is armed: clicks belong to the cards
+  let tapped = null; // a laid card the visitor put a finger on, waiting to be shown
+  let askAbort = null; // the open field's controller, so a tap can cut it short
   const alive = (token) => token === run;
 
   // ---- small waits ------------------------------------------------------------------------------
@@ -283,7 +293,11 @@ export async function build(ctx) {
         turn = null;
       }
     }
-    return { intent: intentOf(turn) ?? detectIntent(said), sentences: sentencesOf(turn) };
+    const laid = (R?.picks ?? []).filter(Boolean).length;
+    const intent = intentOf(turn) ?? detectIntent(said, { dealt: laid });
+    // which card a recall points at: the mind's own answer, or the ordinal read off their words
+    const focus = Number.isInteger(turn?.focus) ? turn.focus : intent === 'recall' ? recallFocus(said) : null;
+    return { intent, focus, sentences: sentencesOf(turn) };
   }
 
   // ---- a story card: cut in, typed, held, cut out (a key or a click ends the hold) ------------------
@@ -390,6 +404,80 @@ export async function build(ctx) {
     }
   }
 
+  // ---- the cards, looked at again -----------------------------------------------------------------
+  // The three are still lying where the gather left them; this is the visitor being shown them.
+  // It is a DIGRESSION: no story card, no shuffle, nothing dealt, and the frame the conversation
+  // was in is not touched — the loop's own `cut(frame)` puts the camera back when this returns.
+  //
+  //   focus     the card they meant (0..2), or null for all three
+  //   sentences his turn, if the mind wrote one for it. A finger on a card has none, so he is
+  //             asked for the beat instead — the same beat, and the same lines.
+  //   → the line the conversation picks up on, said over the open field.
+  //
+  // Where the camera goes: the named plates, unchanged. All three go to `spread` (the row alone,
+  // filling the frame) and then walk the three inserts in order, each with the card's own title
+  // placard, which is the grammar the reading itself used — the visitor has seen these frames
+  // before and knows what they mean. One card goes straight to its insert. Neither invents a pose.
+  async function revisit(token, sentences, focus, said = '') {
+    const laid = (R?.picks ?? []).filter(Boolean);
+    // what is on the cloth: reveal's own picks, and failing those the cards piece's laid meshes
+    // (each carries its card in userData) or the mind's memory of the spread
+    const onCloth = (P.cards?.drawn?.children ?? []).map((m) => m.userData?.card?.slug).filter(Boolean);
+    const slugs = laid.length ? laid.map((p) => p.slug) : onCloth.length ? onCloth : (M?.spread ?? []).filter(Boolean).map((c) => c.slug);
+    api.beat = 'recall';
+    api.intent = 'recall';
+    api.recalls++;
+    // Nothing has been drawn. He says so where he is sitting — no cut, because there is nothing to
+    // cut to — and the field opens again under it.
+    if (!slugs.length) {
+      let r = await render(sentences, { hold: 1.3, keepLast: true, each: closer });
+      if (!r.said && r.held == null && alive(token) && !skipBeat) r = await speak({ beat: 'recall', user: said }, { hold: 1.3, keepLast: true, each: closer });
+      if (!alive(token)) return null;
+      return r.held ?? PROMPTS.recallNone;
+    }
+    const one = Number.isInteger(focus) && focus >= 0 && focus < slugs.length ? focus : null;
+    D.folio?.('reading');
+    if (one == null) {
+      cut('spread'); // the row, whole: all three at once, which is what "my cards" means
+      await wait(0.55);
+      // and then their three names, in order. On a phone the row is 390 px wide and a card in it
+      // is 120: the title placard is the only place the visitor can read which card is which, so
+      // the pass earns its seconds. It is held shorter than a reading's — they have seen these
+      // three before and are being reminded, not told.
+      for (let i = 0; i < slugs.length && alive(token); i++) {
+        cut(`card${i}`);
+        await timeout(D.intertitle(slugs[i], i, { hold: 1.0 }), 3.5);
+        await wait(0.15);
+      }
+      if (!alive(token)) return null;
+      cut('spread');
+      await wait(0.3);
+    } else {
+      cut(`card${one}`);
+      await timeout(D.intertitle(slugs[one], one, { hold: 1.2 }), 3.5);
+      await wait(0.2);
+    }
+    if (!alive(token)) return null;
+    // his sentences over the card: the first where the camera is, the second on his face (closer),
+    // the last held back for the open field, by which time the conversation's frame is back.
+    // `focus` as well as the slug: a tap says nothing, so the mind's own script has no sentence to
+    // read the card off and would answer about all three while the camera is on one of them.
+    const args = { beat: 'recall', user: said, focus: one, slug: one == null ? null : slugs[one], position: one ?? 0 };
+    let r = await render(sentences, { hold: 1.4, keepLast: true, each: closer });
+    if (!r.said && r.held == null && alive(token) && !skipBeat) r = await speak(args, { hold: 1.4, keepLast: true, each: closer });
+    if (!alive(token)) return null;
+    // A turn of ONE sentence would be held back entirely and said after the camera had gone home,
+    // which would make this a digression in which he shows them the cards and says nothing about
+    // them. It is said here instead, over the card, and the field gets a line of the flow's own.
+    if (!r.said && r.held != null) {
+      await say(r.held, { hold: 1.4 });
+      r = { said: 1, held: null };
+    }
+    if (!alive(token)) return null;
+    D.folio?.('talk');
+    return r.held ?? PROMPTS.afterRecall[Math.min(api.recalls - 1, PROMPTS.afterRecall.length - 1)];
+  }
+
   // ---- the cards, because the visitor asked for them ----------------------------------------------
   // `sentences` is the turn in which he agreed to it: the mind writes that turn as the shuffle
   // line, so it is said over his working hands, not before them. Returns the line the conversation
@@ -477,8 +565,23 @@ export async function build(ctx) {
       // in, one long blink, a tilt — until something comes back. pepeAnim asked for this: nothing
       // else tells it who has the floor.
       P.pepeAnim?.listen?.();
-      const said = await D.ask(prompt, { timeout: patient ? 0 : IDLE_S, hold: 0.35 });
+      // the field is open, so a finger on one of the cards on the table means it: the pointer
+      // handler puts the card's number in `tapped` and cuts the field short with this signal.
+      const ac = (askAbort = new AbortController());
+      tapped = null;
+      const said = await D.ask(prompt, { timeout: patient ? 0 : IDLE_S, hold: 0.35, signal: ac.signal });
+      askAbort = null;
       if (!alive(token)) return { spoke: false };
+      // A card was touched. It is the same digression the words ask for, and it is not a silence:
+      // the quiet counter does not move and no line is spent on it.
+      if (tapped != null) {
+        const i = tapped;
+        tapped = null;
+        const back = await revisit(token, null, i);
+        if (!alive(token)) return { spoke: false };
+        prompt = back ?? prompt;
+        continue;
+      }
       if (!said) {
         // nothing typed (a silence, an Escape, an empty Return): he says one thing and waits again
         prompt = PROMPTS.quiet[Math.min(quiet++, PROMPTS.quiet.length - 1)];
@@ -486,9 +589,22 @@ export async function build(ctx) {
       }
       quiet = 0;
       api.beat = 'reply';
-      const { intent, sentences } = await listen(said);
+      const { intent, focus, sentences } = await listen(said);
       if (!alive(token)) return { spoke: false };
       api.intent = intent;
+
+      // they asked to see the cards that are already down. The camera goes to them and comes back
+      // to this same frame; nothing is dealt, and `frame` is deliberately left alone.
+      if (intent === 'recall') {
+        const back = await revisit(token, sentences, focus, said);
+        if (!alive(token)) return { spoke: false };
+        // `home` for the same reason a talk turn sets it: the opening wide is for the first
+        // exchange only. With cards down this is already home and the line does nothing; with a
+        // bare table (the "what did I draw" forms) the turn was talk and settles like talk.
+        frame = 'home';
+        prompt = back ?? PROMPTS.afterRecall[0];
+        continue;
+      }
 
       // the cards, because they were asked for. His turn is the shuffle line: it goes over the
       // deck, not in front of it, so the story card cuts in the moment he agrees.
@@ -580,6 +696,52 @@ export async function build(ctx) {
     api.start();
   }
 
+  // ---- a finger on a card that is already lying there --------------------------------------------------
+  // The second road to `revisit`, and the one a visitor reaches for without being told: the cards
+  // are objects on a table, so touching one should bring it up to be looked at.
+  //
+  // Nothing is asked of reveal for this. `reveal.picks` holds {slug, mesh} for each card it laid,
+  // and the meshes stay in the scene until a new fan is dealt, so the hit test is ours: a raycast
+  // against the card's own quad first, because a card is a rectangle and not a blob — and then, if
+  // that misses, the nearest card's centre within a thumb's width, because at the conversation's
+  // framing a laid card is about forty pixels wide and a finger is wider than that.
+  const ray = new THREE.Raycaster();
+  const ndc = new THREE.Vector2();
+  const _v = new THREE.Vector3();
+  function cardAt(ev) {
+    const laid = (R?.picks ?? []).filter((p) => p?.mesh);
+    const cv = ctx.renderer?.domElement;
+    if (!laid.length || !cv || !ctx.camera) return null;
+    const r = cv.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    const x = ev.clientX - r.left, y = ev.clientY - r.top;
+    if (x < 0 || y < 0 || x > r.width || y > r.height) return null;
+    ndc.set((x / r.width) * 2 - 1, -(y / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, ctx.camera);
+    const hit = ray.intersectObjects(laid.map((p) => p.mesh), false)[0];
+    if (hit) {
+      const k = laid.findIndex((p) => p.mesh === hit.object);
+      if (k >= 0) return k;
+    }
+    // the near miss
+    const reach = Math.max(26, Math.min(r.width, r.height) * 0.05);
+    let best = null, bd = reach * reach;
+    laid.forEach((p, i) => {
+      p.mesh.getWorldPosition(_v).project(ctx.camera);
+      if (_v.z > 1) return; // behind the lens
+      const px = ((_v.x + 1) / 2) * r.width, py = ((1 - _v.y) / 2) * r.height;
+      const d = (px - x) ** 2 + (py - y) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+  // a card is only touchable while it is the visitor's turn to speak — never while he is talking,
+  // never at the fan, where every click already belongs to the cards being chosen
+  const cardsLive = () => !picking && !!D?.asking && (R?.picks?.length ?? 0) > 0 && api.beat !== 'recall';
+
   // ---- the visitor's keys and clicks --------------------------------------------------------------------
   function onKey(e) {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -600,24 +762,55 @@ export async function build(ctx) {
   }
   function onPointer(e) {
     if (e.target?.closest?.('#dialogue')) return; // the field, the mic
+    if (cardsLive() && tapped == null) {
+      const i = cardAt(e);
+      if (i != null) {
+        // their own card, touched: it is not a skip and it does not count as a click
+        tapped = i;
+        askAbort?.abort();
+        return;
+      }
+    }
     skips++;
     if (!D?.asking && !picking) D?.skip?.();
+  }
+  // the cursor over a card that can be looked at. It is put back only if this is what set it, so a
+  // cursor belonging to the fan (reveal-fan, while it is armed) or to the help bill is not cleared
+  // out from under them.
+  let cursorMine = false;
+  function onHover(e) {
+    const cv = ctx.renderer?.domElement;
+    if (!cv || e.pointerType === 'touch') return;
+    const want = cardsLive() && cardAt(e) != null;
+    if (want === cursorMine) return;
+    if (want) {
+      cv.style.cursor = 'pointer';
+      cursorMine = true;
+    } else if (cursorMine) {
+      cv.style.cursor = '';
+      cursorMine = false;
+    }
   }
   if (!ctx.shotMode) {
     window.addEventListener('keydown', onKey);
     window.addEventListener('pointerdown', onPointer);
+    window.addEventListener('pointermove', onHover);
   }
 
   const api = {
     beat: 'idle',
     intent: null, // what the mind made of the visitor's last line
     readings: 0, // how many times the cards have come out tonight
+    recalls: 0, // ... and how many times they have been looked at again
     start() {
       const token = ++run;
       skipBeat = false;
       picking = false;
+      tapped = null;
+      askAbort = null;
       api.intent = null;
       api.readings = 0;
+      api.recalls = 0;
       M?.abort?.();
       M?.reset?.();
       D?.clear?.();
@@ -678,6 +871,15 @@ export async function build(ctx) {
         if (!ctx.params.has('pos')) ctx.params.set('pos', '1');
         D.folio?.('reading');
         D.setState('reading');
+      } else if (name === 'recall') {
+        // the visitor has asked to see their cards again: the row, whole, with their three names
+        // under it. The same frame `revisit` opens and closes on.
+        await R?.setState?.('revealed');
+        cam('spread');
+        D.folio?.('reading');
+        const names = (P.cards?.drawn?.children ?? []).map((m) => m.userData?.card?.name).filter(Boolean);
+        const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] ?? 'All three of them');
+        D.say(`${list}. In that order, left to right. They have not moved and they are not going to.`, { keep: true });
       } else if (name === 'farewell') {
         await R?.setState?.('revealed');
         cam('wide');

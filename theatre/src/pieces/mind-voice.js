@@ -494,6 +494,43 @@ export function followupScript(question, spread = [], stance = null) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// The recall: they have asked to look at the cards again, and the camera is on them while he
+// talks. So he does the one thing the picture cannot do — he names them — and then says something
+// he did NOT say when he read them. `heldBack` is exactly that pool: the card's written lines the
+// reading did not spend. Never a summary of the reading; they heard it ten seconds ago.
+//
+// `focus` is the card they meant (an index into the drawn cards) or null for all three.
+// ---------------------------------------------------------------------------------------------
+export function recallScript(said, spread = [], stance = null, focus = null) {
+  const drawn = (spread ?? []).filter(Boolean);
+  if (!drawn.length) return 'Nothing has been drawn. The deck is face down where it has been all evening. Ask, and there will be three of them.';
+  const one = Number.isInteger(focus) && drawn[focus] ? drawn[focus] : (cardRef(said, drawn)?.card ?? null);
+  const t = String(said ?? '');
+  if (one) {
+    const place = placeOf(one, drawn);
+    const held = firstSentence(heldBack(one, stance));
+    const banks = [
+      `${place}: ${one.name}. ${held} It has not changed while we were talking.`,
+      `${one.name}, ${place.toLowerCase()}. ${held}`,
+      `That one is ${one.name}. ${held} Look at it as long as you like.`,
+    ];
+    return banks[hash(t + one.slug) % banks.length];
+  }
+  // He does NOT list the three here. The camera has just been on each card in turn with its
+  // printed name on the placard beside it (flow.js → revisit), which is where a name is legible
+  // and where the visitor is actually looking; three card names in one caption run to sixty
+  // characters, and the placard cuts a long line into takes, so the third of them ends up alone on
+  // a card of its own reading like half a sentence. The names are given; this is the remark over
+  // the row afterwards.
+  const banks = [
+    'All three, where you left them. They have not moved and they are not going to.',
+    'The same three cards. Cards do not improve overnight.',
+    'There they are. Take your time over them; the deck is not waiting for anything.',
+  ];
+  return banks[hash(t + drawn.map((c) => c.slug).join()) % banks.length];
+}
+
+// ---------------------------------------------------------------------------------------------
 // The answer beat: the visitor's sentence, folded back. The script does this well; two stances
 // deserve a line of their own rather than a hash of the length.
 // ---------------------------------------------------------------------------------------------

@@ -2,11 +2,13 @@
 //
 // Two things live here, and neither of them needs a model or a network:
 //
-//   intentOf(text, state) → 'talk' | 'draw' | 'farewell'
+//   intentOf(text, state) → 'talk' | 'draw' | 'recall' | 'farewell'
 //       What the visitor just asked FOR, read from free text. 'draw' is the only thing that puts
 //       cards on the table, and it is only ever returned because the visitor asked for cards, in
 //       their own words, or said yes to an offer he had just made. "not yet", "just talking",
-//       "no thanks" are 'talk' and they also cancel the standing offer.
+//       "no thanks" are 'talk' and they also cancel the standing offer. 'recall' is the visitor
+//       asking to LOOK at cards that are already down — a digression, and never a deal; the whole
+//       of the reasoning that keeps the two apart is at RECALL_NOT, below.
 //
 //   talkScript(text, state) → { text, offered, asked }
 //       What he says back when there is no live voice. He answers what was asked, says he does not
@@ -80,24 +82,39 @@ const DECLINE_START = /^(hold on|in a minute|in a moment|wait)\b/;
 
 // Asking HIM to do it: a verb, pointed at the deck. This is what puts cards on the table.
 const DRAW_ASK =
-  /\b(read (my|the|me|us|our) (cards?|fortune|future|palm)|read for me|read me the cards|do (a|the|my|one) reading|give me (a|the) reading|i (want|need|would like|'?d like) (a reading|the cards|three cards|a spread|my cards read)|can i (have|get) (a reading|the cards|three cards)|may i have (a reading|the cards)|do a spread|do the cards|do your thing|deal( me| the| out)?( the| three| 3)? ?cards?|deal me (in|three|3)|draw (me )?(a|the|some|three|3)? ?cards?|pull (a|some|three|3)? ?cards?|turn (them|the cards|three cards) over|lay (them|the cards|three cards) out|show me (the |my )?cards?|shuffle|let'?s (do|see) (it|this|them)|go on then|tell my fortune|what about (a reading|the cards|three cards)|why (don'?t|do not) you (read|deal|draw|shuffle)|(can|could|will|would) you read (my|the|me|us|our)|(can|could|will|would) you (deal|draw|shuffle)|(can|could|will|would) you do (a|the|my|one) reading|do you (have|do) (a reading|readings|the cards|three cards))\b/;
+  /\b(read (my|the|me|us|our) (cards?|fortune|future|palm)|read for me|read me the cards|do (a|the|my|one|another|a second|a new) reading|give me (a|the|another|a second) reading|i (want|need|would like|'?d like) ((a|another|one more|a second|a new) (reading|spread)|the cards|three cards|my cards read)|can i (have|get) ((a|another|one more|a second|a new) (reading|spread|card)|the cards|three cards)|may i have (a reading|the cards)|do a spread|do the cards|do your thing|deal( me| the| out)?( the| three| 3)? ?cards?|deal me (in|three|3)|draw (me )?(a|the|some|three|3)? ?cards?|pull (a|some|three|3)? ?cards?|turn (them|the cards|three cards) over|lay (them|the cards|three cards) out|(draw|deal|pull) (me |us )?(another|one more|a fourth|three more|more)|shuffle|let'?s (do|see) (it|this|them)|go on then|tell my fortune|what about (a reading|the cards|three cards)|why (don'?t|do not) you (read|deal|draw|shuffle)|(can|could|will|would) you read (my|the|me|us|our)|(can|could|will|would) you (deal|draw|shuffle)|(can|could|will|would) you do (a|the|my|one|another|a second|a new) reading|do you (have|do) (a reading|readings|the cards|three cards))\b/;
 
 // The bare noun. A request only when they are not wondering aloud about the idea of one:
 // "three cards, please" asks; "what would a reading even tell me" does not.
-const DRAW_NOUN = /\b(a reading|my reading|reading please|the cards? please|cards? please|a spread|three cards|3 cards|the three cards)\b/;
+// The "another" forms are here rather than in DRAW_ASK because they are how a visitor asks for a
+// SECOND reading, and a second reading is the thing the recall must never be mistaken for: they
+// are struck out of the recall by RECALL_NOT and land here instead.
+const DRAW_NOUN =
+  /\b(a reading|my reading|reading please|the cards? please|cards? please|a spread|three cards|3 cards|the three cards|(another|one more|a second|a new|a further) (reading|spread|card)|three more cards?|more cards)\b/;
 const MUSING = /^(?:(?:so|and|but|well|ok|okay|hmm+|oh|honestly)\b[,\s]+)*(what|whats|why|how|hows|when|whether|who|which|is|are|does|do|did|would|will|can|could|should)\b/;
 
 const YES = /^(yes|yeah|yep|yup|sure|ok|okay|k|alright|all right|fine|go on|go ahead|please|please do|do it|why not|very well|i suppose|if you like|mhm|uh huh|absolutely|definitely|lets|let's)\b/;
 
 const NO_BARE = /^(no|nope|nah|not really|no thanks)\b/;
 
-// text → 'talk' | 'draw' | 'farewell'. `offered` is true when his last turn put a reading on offer.
-export function intentOf(text, { offered = false } = {}) {
+// text → 'talk' | 'draw' | 'recall' | 'farewell'. `offered` is true when his last turn put a
+// reading on offer; `spread` is what is face up on the table (see RECALL, below).
+export function intentOf(text, { offered = false, spread = [] } = {}) {
   const t = norm(text);
   if (!t) return 'talk';
+  const drawn = (spread ?? []).filter(Boolean);
   if (FAREWELL.test(t)) return 'farewell';
   if (DECLINE.test(t) || DECLINE_START.test(t) || NO_BARE.test(t)) return 'talk';
+  // Asking to LOOK at the cards again, before asking FOR cards — the two overlap in words and not
+  // at all in what they cost, so the recall is read first and anything that wants something new is
+  // struck out of it before either is consulted.
+  if (!RECALL_NOT.test(t)) {
+    if (RECALL_MEMORY.test(t)) return 'recall';
+    if (drawn.length && (RECALL_SHOW.test(t) || RECALL_AGAIN.test(t))) return 'recall';
+    if (drawn.length && RECALL_NAMED.test(t) && cardRef(text, drawn)) return 'recall';
+  }
   if (DRAW_ASK.test(t)) return 'draw';
+  if (DRAW_SHOW.test(t)) return 'draw'; // and there is nothing to show, or the recall took it above
   // a short yes to an offer he has just made — not a question that happens to begin with one
   if (offered && YES.test(t) && (t.split(' ').length <= 4 || !isQuestion(t))) return 'draw';
   if (DRAW_NOUN.test(t) && (/\bplease\b/.test(t) || !MUSING.test(t))) return 'draw';
@@ -115,10 +132,97 @@ const HEAD = `(?:(?:so|and|but|well|ok|okay|alright|right|now|then|hey|hi|hello|
 const TAIL = `(?:[,\\s]+(?:please|then|exactly|really|actually|precisely|anyway|though|here|tonight|first|again|by the way|if you do not mind|if i may|pepe|sir|frog|mate))*[\\s.,!?…]*`;
 const only = (body) => new RegExp(`^${HEAD}(?:${body})${TAIL}$`);
 
+// ---------------------------------------------------------------------------------------------
+// "Show me my cards again." A digression, not a new reading.
+// ---------------------------------------------------------------------------------------------
+// The three cards stay on the cloth when the reading ends, but the conversation is framed a metre
+// back, where a laid card is forty pixels of ink. So the visitor has to be able to ask to LOOK at
+// them again — and that is a different thing from asking for a reading, which is why it has an
+// intent of its own. Confusing the two is the only real risk in the whole feature: a visitor who
+// wanted to see the three cards in front of them, and instead gets the deck swept up, shuffled and
+// dealt again, has lost their reading and cannot get it back. So:
+//
+//   · every pattern is anchored with only(), exactly as the DIRECT answers are, so a card
+//     mentioned in passing — "my grandmother used to show me the cards after supper" — is not a
+//     request for anything;
+//   · anything asking for something NEW (another card, more cards, a fresh reading, "read my
+//     cards again", "shuffle") is struck out first, whatever else the sentence contains, and
+//     falls through to the draw below;
+//   · the SHOW forms overlap with the deal — "show me my cards" on a bare cloth is a request for a
+//     reading — so they only count as a recall when there is something on the table to look at;
+//   · the MEMORY forms ("what did I draw", "remind me what the second one was") are a recall
+//     whether or not any cards are down: with a bare table, "nothing has been drawn" is the true
+//     answer to them, and it is a better answer than a shuffle.
+//
+// The bare pointing forms — "the tower", "what does the middle one mean" — are deliberately NOT
+// here. They are a follow-up: he answers about the card without the camera leaving the room. A
+// recall wants a verb of looking in it, so that the picture only moves when the visitor asked the
+// picture to move.
+
+// asked for something new: never a recall, whatever else is in the sentence
+const RECALL_NOT =
+  /\b(another card|another one|one more|a fourth|fourth card|more cards|new cards|three more|different cards?|another reading|a second reading|new reading|second reading|read (?:me |my |the |us |our )*(?:cards?|fortune|palm)|do (?:it|this|that|the cards) again|start again|go again|deal again|draw again|deal me|draw me|shuffle)\b/;
+
+// asking to see them. Only a recall when there are cards to see.
+const RECALL_SHOW = only(
+  `(?:show|shew) (?:me|us)?\\s?(?:my|the|those|these|our|them)?\\s?(?:three )?(?:cards?|spread)` +
+    `|show (?:me|us) (?:them|it|that|those)(?: again)?` +
+    `|(?:can|could|may|might|will|would) (?:i|we) (?:just )?(?:see|look at|have (?:a|another) look at|get (?:a|another) look at)(?: (?:my|the|those|these|them|it|that|our))?(?: (?:three )?cards?| again)*` +
+    `|(?:can|could|may|might|will|would) (?:i|we) have (?:a|another) look(?: at (?:them|it|the cards?|my cards?))?` +
+    `|let (?:me|us) (?:just )?(?:see|look at|have (?:a|another) look at)(?: (?:my|the|those|these|them|it|that|our))?(?: (?:three )?cards?)?` +
+    `|let (?:me|us) have (?:a|another) look(?: at (?:them|it|the cards?|my cards?))?` +
+    `|(?:i|we) (?:want|need|would like|'?d like|wanted) to (?:see|look at)(?: (?:my|the|those|these|them|it|that|our))?(?: (?:three )?cards?)?` +
+    `|(?:i|we) (?:want|need) (?:my|the|those) cards?` +
+    `|(?:bring|put|get) (?:them|it|the cards?|my cards?) back(?: (?:up|out|over|here))?` +
+    `|(?:back|go back|take me back) to (?:my|the) cards?` +
+    `|where (?:are|did) (?:my|the|those) cards?(?: go| gone)?` +
+    `|what (?:are|were) they`,
+);
+
+// "the second one again", "my cards again": the word does the whole of the work, so it is asked for
+const RECALL_AGAIN = only(
+  `(?:the |my |those |these )?(?:three )?cards? again` +
+    `|(?:the )?(?:first|second|third|middle|last|left|right)(?: one| card)? again` +
+    `|(?:that|this) (?:one|card|picture) again` +
+    `|(?:see|look at) (?:them|it|the cards?|my cards?) again`,
+);
+
+// a verb of looking with a name in it — "show me the tower", "what was the star again". Only ever
+// a recall when the name is a card that is actually lying on the table (cardRef says so).
+const RECALL_NAMED = only(
+  `(?:show|shew) (?:me|us)? ?(?:the|my|that|this) [\\w' ]{2,28}` +
+    `|(?:can|could|may|might|would) (?:i|we) (?:see|look at) (?:the|my|that|this) [\\w' ]{2,28}` +
+    `|let (?:me|us) (?:see|look at) (?:the|my|that|this) [\\w' ]{2,28}` +
+    `|(?:what|which) (?:was|is) (?:the|my|that) [\\w' ]{2,28}`,
+);
+
+// "Show me my cards" with nothing on the cloth is a request for a reading, and it used to live
+// unanchored inside DRAW_ASK, where it read "my grandmother used to show me the cards after
+// supper" as an instruction to shuffle. Anchored, and consulted after the recall, the one sentence
+// means what it says in both rooms: show me what is there, or deal, depending on what is there.
+const DRAW_SHOW = only(`(?:show|shew) (?:me|us)? ?(?:my|the|our)? ?(?:three )?cards?|show me what (?:the cards|you) (?:say|see|have got|make of it)`);
+
+// asked to be reminded. A recall with or without cards down, because "nothing has been drawn" is
+// the honest answer to it and a shuffle is not.
+const RECALL_MEMORY = only(
+  `what (?:did|have) (?:i|we) (?:just )?(?:draw|drawn|pick|picked|get|got|choose|chose|pull|pulled|end up with|turn over|turn|turned over)` +
+    `|what (?:were|was|are) (?:my|the|those|these) (?:three )?(?:cards?|ones)` +
+    `|(?:what|which) (?:cards?|ones) (?:did|do) (?:i|we) (?:draw|drew|pick|picked|get|got|have|choose|chose|pull|pulled)` +
+    `|what (?:was|is) (?:the|my) (?:first|second|third|middle|last)(?: one| card)?(?: called)?` +
+    `|(?:what|which) one (?:was|is) (?:the )?(?:first|second|third|middle|last)` +
+    `|remind me (?:of )?(?:what|which)? ?(?:the |my )?(?:cards?|ones?|first|second|third|middle|last)[\\w' ]{0,24}` +
+    `|remind me (?:what|which) (?:i|we) (?:drew|draw|picked|pick|got|chose|pulled)` +
+    `|(?:i (?:have )?)?forgot(?:ten)?(?: what| which)?(?: the| my)? (?:cards?|ones?|first|second|third|middle|last)[\\w' ]{0,24}` +
+    `|(?:i )?(?:can'?t|cannot|do ?n'?t) remember (?:what|which)? ?(?:the |my )?(?:cards?|ones?|first|second|third|middle|last)[\\w' ]{0,24}` +
+    `|what (?:did|do) you (?:say|call) (?:the|that|my) (?:cards?|ones?|first|second|third|middle|last)[\\w' ]{0,24}` +
+    `|(?:say|tell me|read) (?:the|their|those) names? again` +
+    `|(?:what|which) (?:cards?|ones) (?:are|were) (?:they|those|these|on the table|down)`,
+);
+
 const DIRECT = [
   [
     only(`(?:hi|hello|hey|yo|good evening|good afternoon|good day|evening|hallo|howdy|greetings)(?: there| again| to you| pepe| tarot pepe| frog| my friend| mate)*`),
-    ['Good evening. Please sit. The chair is low; it was made for a frog.', 'Good evening. You are already sitting down, which saves us both a sentence.'],
+    ['Good evening. Come closer. There is nowhere to sit, which keeps the visits honest.', 'Good evening. You are standing, which saves us both a sentence.'],
   ],
   [
     only(

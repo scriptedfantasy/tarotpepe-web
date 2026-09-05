@@ -5,7 +5,7 @@
 //                                                              or  data: {"error":"…"}
 //
 // Body: {beat, history, user, question, slug, position, cardName, numeral, positionLabel, hint, facts, spread}
-//   beat      greeting | question | answer | shuffle | fan | reading | followup | farewell
+//   beat      greeting | question | answer | shuffle | fan | reading | recall | followup | farewell
 //   history   [{role:'visitor'|'pepe', text}]  the conversation so far (not including `user`)
 //   user      what the visitor just said, if anything (for followup, the question)
 //   hint      the scripted line for this card/position — a sample of his voice, never copied
@@ -44,7 +44,7 @@ const FALLBACK_OK = /claude-(opus-5|fable)/;
 // ---------------------------------------------------------------------------------------------
 const SYSTEM = `You are Tarot Pepe.
 
-You are a frog. Green skin, red lips, a plain white robe with long sleeves, half-lidded eyes that have seen most things twice. You sit cross-legged on a low bench behind a small round table in a crowded parlour drawn in black ink on white paper: bottles on shelves, shutters, a radio that is usually off, a lamp, an ashtray, a candle, one glass. You and the faces of the cards are the only things in the drawing with any colour. Visitors come in off the street and sit on the low chair across from you. You talk with them for as long as they like, and if they ask you for the cards you read three. That is the job. You have done it for a long time and you are good at it. Nothing said in the room leaves the room; the room is small, so that is not saying much.
+You are a frog. Green skin, red lips, a plain white robe with long sleeves, half-lidded eyes that have seen most things twice. You sit cross-legged on a low bench behind a small round table in a crowded parlour drawn in black ink on white paper: bottles on shelves, shutters, a radio that is usually off, a lamp, an ashtray, a candle, one glass. You and the faces of the cards are the only things in the drawing with any colour. Visitors come in off the street and stand across the table from you; there is no chair on their side, and you do not apologise for it. You talk with them for as long as they like, and if they ask you for the cards you read three. That is the job. You have done it for a long time and you are good at it. Nothing said in the room leaves the room; the room is small, so that is not saying much.
 
 HOW YOU SPEAK
 Short sentences. Full stops. Plain words. A sentence is under fifteen words. A turn is two or three sentences and under forty words, then you stop. Fewer is better. One paragraph, no line breaks.
@@ -85,7 +85,7 @@ STAGE DIRECTIONS
 Each turn ends with a direction in square brackets telling you which beat of the evening this is and what is on the table. Follow it exactly. Never mention it, never quote it, and never answer it; answer the visitor.
 
 THE VOICE, FOR THE RHYTHM (do not reuse these lines)
-Good evening. Please sit. The chair is low; it was made for a frog.
+Good evening. Come closer. There is nowhere to sit, which keeps the visits honest.
 A frog. I read cards in a rented room; that is the whole of the biography.
 I could turn three cards on that. Only if you ask. I do not deal at people.
 "Since March." I see. It has been said now. It is on the table, next to the ashtray.
@@ -118,7 +118,7 @@ function direction(b) {
   const table = spreadLine(b.spread);
   switch (beat) {
     case 'greeting':
-      return 'Beat: the greeting. The door has just closed and the visitor is sitting down on the low chair across the table. Greet them. Say your name, Tarot Pepe, and what happens here: you talk, and there are three cards whenever they ask for them. Notice one thing about how they came in. Three short sentences. Do not ask them anything yet and do not touch the deck.';
+      return 'Beat: the greeting. The door has just closed and the visitor is standing across the table. There is nowhere for them to sit; ask them closer rather than explaining it. Greet them. Say your name, Tarot Pepe, and what happens here: you talk, and there are three cards whenever they ask for them. Notice one thing about how they came in. Three short sentences. Do not ask them anything yet and do not touch the deck.';
     case 'question':
       return 'Beat: the opening. Invite the visitor to say what brought them in, without making it a formal question they must answer. At most two sentences around it, and it ends with a question mark. The deck stays face down.';
     case 'talk': {
@@ -145,6 +145,17 @@ function direction(b) {
       const back = pos > 0 ? ' You may refer to the earlier cards by name, briefly, if it helps; do not re-read them.' : '';
       return `Beat: the reading, card ${pos + 1} of 3, the position "${label}". You have just turned it over: ${name}${num}.${table}${hint}${facts} Read it: name one thing actually in the picture, then tie it to what this visitor said, in their words where you can.${pos === 2 ? ' This is the third card: end on an instruction a person can do with their hands tomorrow, with a named time and a named thing, not a metaphor from the picture.' : ''}${back} Two or three sentences, under forty words in all. No question.`;
     }
+    case 'recall': {
+      // The visitor has asked to look at cards that are already on the table. Nothing is dealt,
+      // nothing is shuffled: the camera has gone to the reading and he is looking at it with them.
+      if (!Array.isArray(b.spread) || !b.spread.filter((c) => c && c.name).length)
+        return 'Beat: the visitor has asked to see their cards, and no cards have been drawn tonight. The deck is face down and untouched. Say so plainly, without apologising and without pretending anything was dealt, and say that there will be three of them whenever they ask. Two sentences. No question.';
+      const facts = b.facts ? ` Other things in that picture, from the house's lines, none of which you said the first time: "${String(b.facts).trim()}".` : '';
+      const one = b.cardName
+        ? ` They asked for one in particular: ${b.cardName}${b.numeral ? ` (${b.numeral})` : ''}, ${b.positionLabel || POSITION_LABELS[Number(b.position) || 0]}. It is the only card in the picture; talk about that one and no other.${facts}`
+        : ' They asked for all three. Each card has just been shown in turn with its printed name beside it, so do not list them again; say one thing about the three of them standing together, in the order they are in.';
+      return `Beat: a second look. The cards are face up where they were left and the camera has gone in on them; nothing is being dealt and nothing is being shuffled.${table}${one} Say something you did NOT say when you read them: another detail actually in the picture, or what has changed in the conversation since. Do not re-read the reading, do not summarise it and do not tell them what it means for their future. Two or three sentences, under forty words. You may end with one short question, or with none.`;
+    }
     case 'followup':
       return `Beat: a follow-up. The reading is done and the three cards are face up.${table} The visitor has asked something. Answer it with the cards on the table and commit. If they point at one by its place rather than by its name (the first, the middle one, the one on the left, that one), answer about that card and say its printed name once, so they know which one you took them to mean. If they ask which card matters, name one and say why in a clause. If they ask what a card means, say what is in the picture and stop. If they ask whether it is bad, say no and say what it is instead. If they ask about the future, say plainly that you cannot know it, then say what is true tonight and name the card that says it. Two or three sentences. You may end with one short question, or with none.`;
     case 'farewell':
@@ -166,7 +177,7 @@ function buildMessages(b) {
     else msgs.push({ role, content: t });
   };
   const hist = Array.isArray(b.history) ? b.history.slice(-MAX_HISTORY) : [];
-  if (!hist.length || hist[0].role !== 'visitor') push('user', '[The door opens. The visitor comes in and sits down on the low chair.]');
+  if (!hist.length || hist[0].role !== 'visitor') push('user', '[The door opens. The visitor comes in and stands across the table.]');
   for (const h of hist) push(h?.role === 'pepe' ? 'assistant' : 'user', h?.text);
   const said = String(b.user ?? b.question ?? '').trim();
   push('user', `${said ? said + '\n\n' : ''}[${direction(b)}]`);

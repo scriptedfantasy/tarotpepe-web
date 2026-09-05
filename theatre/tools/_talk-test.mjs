@@ -95,7 +95,11 @@ async function types(text) {
 
 try {
   // 1. the door
-  const d = await until('the door', (s) => s.door === 'closed' || s.beat !== 'door', 30);
+  // `beat !== 'door'` used to be enough to say the film had begun inside; flow's beat is 'idle'
+  // until the evening starts, so that resolved on the first sample, the knock never happened and
+  // the test sat in front of a door it had decided was not there. Wait for the sheet, or for a
+  // beat that only happens once we are past it.
+  const d = await until('the door', (s) => s.door === 'closed' || s.beat === 'greeting' || s.beat === 'talk', 40);
   if (d.door === 'closed') {
     await shot('door');
     await page.mouse.click(800, 450);
