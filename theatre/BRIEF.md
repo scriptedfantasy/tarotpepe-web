@@ -47,6 +47,14 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   ink rule, the speaker in small tracked caps above, the line beneath in the caption face. A critic once
   had it removed in favour of free-floating text on the drawing; the user asked for the card back and
   that settles it. Keep the drawn answer block, its ink caret and the microphone prop.
+- **The caption card docks to the TOP for the picking beat, and only that beat (the user's
+  exception).** 2026-09-05: "attach the caption card to the top during the card picking process".
+  Bottom-centred it covered 89 px of a 170 px spread on a phone — 52% of the cards the visitor is
+  being asked to choose from — and the camera cannot give it room: the plate is bound by
+  disc-centring and the rug line, and the spread runs to within 5 cm of the rim. So while the fan is
+  out and the visitor is choosing, the card sits at the top; the moment the three are taken it is
+  back at the bottom. It is the SAME card, same size, same registers; only its anchor moves. This is
+  an exception the user granted, not a licence to move the caption anywhere else.
 - **Chat or voice.** The visitor answers by typing (`dialogue.ask`, a drawn input in the picture) or by voice
   (a mic button: the browser's SpeechRecognition; when voice is on, Pepe is also spoken by speechSynthesis).
   Chat is the default, voice a toggle; both must work in Chrome.
