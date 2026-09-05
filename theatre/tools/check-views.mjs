@@ -20,6 +20,7 @@ const VIEWS = {
   entrance: ['closed', 'opening', 'open'],
   titles: ['title', 'chapter', 'closing', 'hidden'],
   dialogue: ['greeting', 'question', 'reading', 'farewell'],
+  help: ['closed', 'hover', 'open'],
   flow: ['greeting', 'talk', 'shuffle', 'fan', 'dealt', 'reading', 'farewell'],
   mind: ['greeting', 'question', 'reading', 'transcript'],
 };

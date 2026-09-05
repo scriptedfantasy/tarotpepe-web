@@ -35,6 +35,8 @@ export async function build(ctx) {
   const door = room.door ?? { x0: 1.05, x1: 1.95, y0: 0, y1: 2.45, top: 2.12 };
   const railY = room.bands?.rail?.[0] ?? 2.6;
 
+  let signMesh = null, signPivot = null; // the wall board over Pepe's head; published below
+
   const WALL = -D / 2; // back wall plane
   const FLUSH = WALL + 0.04; // furniture backs sit just in front of the skirting
   const HOOK_Y = railY - 0.02;
@@ -258,8 +260,17 @@ export async function build(ctx) {
       border: 'double',
       texW: 1536,
     });
-    sign.position.set(0, railY - 0.17, WALL + 0.045);
-    g.add(sign);
+    // The board hangs from its hook line, not from its middle: a pivot at the top edge, so a piece
+    // that wants to make it shiver on its cord (help.js, when the pointer is over it) tips it the
+    // way a hung board tips — the hooks stay put and the bottom edge swings. The pivot is also what
+    // the help piece hangs its own tag under, and the mesh is what it raycasts against.
+    signPivot = new THREE.Group();
+    signPivot.name = 'sign-board';
+    signPivot.position.set(0, railY - 0.005, WALL + 0.045);
+    sign.position.set(0, -0.165, 0);
+    signPivot.add(sign);
+    g.add(signPivot);
+    signMesh = sign;
     for (const sx of [-1, 1]) {
       const hook = O.sphere(0.009, M.solid, 8, 6);
       hook.position.set(sx * 0.42, railY - 0.005, WALL + 0.02);
@@ -368,6 +379,10 @@ export async function build(ctx) {
 
   return {
     group: g,
+    // the shop's board over Pepe's head. `mesh` is what a pointer is raycast against, `pivot` is
+    // its hook line (rotate that and the board swings on its cord), and w/h are its size in metres.
+    // help.js hangs its own tag under the pivot and tips it when the pointer is over the board.
+    sign: { mesh: signMesh, pivot: signPivot, w: 1.32, h: 0.33 },
     // practicals, for the lighting piece: where the drawn lamps are
     lamps: {
       floor: lamp.position.clone().add(new THREE.Vector3(0, 1.45, 0)),
