@@ -98,12 +98,35 @@ const SLACK = 0.045;
 // edge cutting the outermost bow.
 const MARGIN = 0.045;
 
+// ---- THE CAPTION'S OWN BAND (round 9) --------------------------------------------------------------
+// The caption card docks to the TOP of the frame for the picking beat and only that beat (the
+// user's exception, BRIEF.md 2026-09-05; dialogue.js owns it). So during that beat the top of the
+// picture is not the camera's to compose with: it is an opaque drawn placard. Measured on the page
+// with the block in its asking state — the state the whole picking beat is in — its lower edge sits
+// at 0.214 of the frame's height on a 390x760 phone, 0.206 at 360x800, 0.165 at 1200x1100 and 0.218
+// at 1600x900. Quoted here as one number and not measured per frame, and it costs nothing to do
+// so: the block's height does not depend on what is written in it. Measured at 1600x900 with a
+// nine-character line, a sixty-character one and a hundred-and-fifty-character one, the placard's
+// lower edge is 0.2172 of the frame in all three (tools/_cam-r9-cap3.mjs) — the reply well is a
+// fixed number of lines and the sentence above it is set to the measure. A lens that re-solved
+// itself every time a sentence got longer would breathe; this one does not have to.
+//
+// `capTop` is that band, and what it protects is the SPREAD — the 78 cards the visitor is being
+// asked to click. Cards already taken (`also`) only have to be IN the frame; a card back under the
+// placard is a tally, not a target.
+export const CAP_BAND = 0.22;
+
 // ---- the solver ----------------------------------------------------------------------------------
 // spec:
 //   y           the cloth's height
 //   deg         the rake above the cloth; 90 = dead plan
 //   x           the plate's axis in x (0 for every shot that must be symmetric)
 //   subject     [[x, z] …]        points ON the cloth that must be in the picture
+//   also        [[x, z] …]        …and points that must be in it but are not what it is composed on:
+//                                 they take the plain margins and never the caption's band
+//   capTop      the band at the TOP of the frame the caption's docked placard stands in, as a
+//                                 fraction of the frame's height. `subject` is hung clear of it and
+//                                 centred in what is left; unset, the frame composes on the foot.
 //   rise        [[x, y, z] …]     points ABOVE it that must be in (a card reared on its edge)
 //   whole       [[[x,y,z] …] …]   groups taken wholly in or wholly out (the squared deck, him)
 //   bottom      the largest z the frame's bottom edge may reach on the cloth. THE PIN.
@@ -122,10 +145,10 @@ const MARGIN = 0.045;
 export function plate(spec, aspect) {
   const {
     y, deg = 90, x = 0,
-    subject = [], rise = [], whole = [],
+    subject = [], also = [], rise = [], whole = [],
     bottom = null, top = null, axis = null, centre = null, disc = null, floor = null,
     dist = 1.2, distMax = null, fov = 30,
-    pad = 0.03, mx = null, my = null,
+    pad = 0.03, capTop = null, mx = null, my = null,
   } = spec;
   const A = Math.max(0.05, aspect);
   const ax = planAxes(deg);
@@ -143,30 +166,53 @@ export function plate(spec, aspect) {
   const MY = my ?? 2 * MARGIN * Math.min(1, A);
   const Mx = A * (1 - MX), My = 1 - MY, Mb = 1 - 2 * pad;
 
-  let pts = subject.map(([px, pz]) => [px, y, pz]).concat(rise);
-  const zOf = (p) => p[2];
+  // Every point the frame has to hold, and the ceiling each one is held under: the SUBJECT is what
+  // the plate is composed on and the only thing the caption's band is kept off; everything else
+  // (`also` — cards already taken out of the spread — and the `whole` groups added below) simply
+  // has to be inside the picture.
+  const capV = capTop == null ? null : 1 - 2 * capTop;
+  const top1 = capV == null ? My : Math.min(My, capV);
+  // The 2 % margin at the foot below is thin because THE PIN holds the bottom edge for it. Where
+  // the caption has docked to the top the pin is nowhere near the edge — the frame sits wholly on
+  // the cloth, well inside the rim — and 2 % is 9 px on a 900 px frame, which put the outer bow's
+  // corners on the frame's edge the first time this ran. With no pin under it the foot takes the
+  // same hand's breadth of cloth as every other edge.
+  const Mf = capV == null ? 0.98 : My;
+  let pts = subject.map(([px, pz]) => ({ p: [px, y, pz], top: top1, sub: true }))
+    .concat(rise.map((p) => ({ p, top: top1, sub: true })))
+    .concat(also.map(([px, pz]) => ({ p: [px, y, pz], top: My, sub: false })));
+  const zOf = (e) => e.p[2];
   let zc = pts.length ? (Math.min(...pts.map(zOf)) + Math.max(...pts.map(zOf))) / 2 : 0;
   let t = tanHalf(fov);
 
   const posAt = (zz) => [x, y + d * ax.s, zz + d * ax.c];
   // Everything the frame has to hold, as the frame sees it from a centre at zz: the lens that just
-  // contains it, and where its highest and lowest thing then sit in the picture.
+  // contains it, and where its highest and lowest thing then sit in the picture (`s*` counts the
+  // subject alone, which is what the composition rules hang on).
   const read = (zz) => {
     const pos = posAt(zz);
-    let want = 0.02, aMax = -Infinity, aMin = Infinity;
-    for (const p of pts) {
-      const q = seen(pos, ax, p);
+    let want = 0.02, aMax = -Infinity, aMin = Infinity, sMax = -Infinity, sMin = Infinity;
+    for (const e of pts) {
+      const q = seen(pos, ax, e.p);
       if (!q) continue;
       // The margin at the FOOT is thin — 2% against 5% at the top — because the pin already holds
       // the bottom edge for it, and a fat margin there fights the pin: every millimetre the lens
       // opens moves the pinned edge's centre upstage, which puts the near edge of the ribbon
       // proportionally CLOSER to the foot, which opens the lens again. That runaway is what took
       // the phone's fan to a 74° lens and two and a half metres of cloth.
-      want = Math.max(want, Math.abs(q.b) / Mx, q.a > 0 ? q.a / My : -q.a / 0.98);
+      want = Math.max(want, Math.abs(q.b) / Mx, q.a > 0 ? q.a / e.top : -q.a / Mf);
       aMax = Math.max(aMax, q.a);
       aMin = Math.min(aMin, q.a);
+      if (e.sub) {
+        sMax = Math.max(sMax, q.a);
+        sMin = Math.min(sMin, q.a);
+      }
     }
-    return { t: want, aMax, aMin };
+    if (sMax === -Infinity) {
+      sMax = aMax;
+      sMin = aMin;
+    }
+    return { t: want, aMax, aMin, sMax, sMin };
   };
   // THE THREE RULES, IN ORDER OF PRECEDENCE, settled together because each moves the others.
   //
@@ -189,6 +235,15 @@ export function plate(spec, aspect) {
       let want = zc;
       const vMin = r.aMin / t;
       if (vMin < -Mb) want = zc + (-Mb - vMin) * t * d;
+      // …but where the caption has DOCKED TO THE TOP there is a band at each end of the frame — the
+      // placard above, the thin foot margin below — and the subject is centred in what is left of
+      // the picture between them. That one IS a mark to hang from: the placard is opaque, the cards
+      // under it are the ones being chosen, and a spread pushed to the foot of the frame with the
+      // slack sitting behind the placard is the round-8 picture over again, upside down.
+      if (capV != null) {
+        const mid = (r.sMax + r.sMin) / (2 * t); // where the subject's middle sits now
+        want = zc + ((capV - Mf) / 2 - mid) * t * d;
+      }
       // never so far downstage that the bottom edge is past the rim …
       if (bottom != null) want = Math.min(want, centreFor(bottom));
       // 2b. … UNLESS THE FRAME IS DEEPER THAN THE TABLE, and then the pin stops being worth
@@ -277,7 +332,8 @@ export function plate(spec, aspect) {
         if (Math.abs(q.a) <= t) inside++;
       }
       if (n && inside > 0 && inside < n) {
-        pts = pts.concat(group);
+        // it joins the picture, not the composition: the plain margins, never the caption's band
+        pts = pts.concat(group.map((p) => ({ p, top: My, sub: false })));
         grew = true;
       }
     }

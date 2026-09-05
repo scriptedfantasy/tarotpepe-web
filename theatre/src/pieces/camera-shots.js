@@ -2,6 +2,32 @@
 // for the frontal shots (square to the back wall, framed by a rise of the lens) and camera-plan.js
 // for the tabletop plates (square to the room's own axes, framed by where the camera stands).
 //
+// ROUND 9 — THE PLATE FOLLOWS THE BEAT, and the rug turns out to be 57 cm further away than this
+// file thought. Three changes, and a measurement that says where each of them can possibly matter.
+//
+//  · THE FAN PLATE IS COMPOSED ON WHAT IS ACTUALLY ON THE CLOTH AT THAT MOMENT. Rounds 7 and 8 put
+//    the three reading slots in the subject at every moment; the picked cards must be in frame, but
+//    they are not in frame before they are picked, and until the first one lands that band is a
+//    third of a phone screen reserved for nothing. The subject is now the spread, the occupied
+//    slots join it as they fill (`also`), and the camera moves between them as each card lands
+//    (camera.js). By the third the plate is byte-identical to round 8's.
+//  · WITH A BAND AT THE TOP FOR THE CAPTION, which docks there for this beat and only this beat.
+//    Without it the tight plate simply moves the fault: the placard would stand on the top bow of
+//    the very cards it is asking the visitor to click. See CAP_BAND in camera-plan.js.
+//  · AND THE RUG LINE IS THE MEASURED ONE, `props.rug.plainFrom` = 1.216, not the 0.642 derived in
+//    round 6 from a rug that has since grown. That number is what forced round 8's compromise at
+//    360x800 — the frame driven upstage past the `axis` line until his lap and the bench lay flat
+//    across the top of a plan view. With the true line the two rules stop fighting.
+//
+// WHERE ANY OF IT SHOWS, swept (tools/_cam-r9-sweep.mjs). The spread is 0.634 m wide and 0.33 m
+// deep — a landscape box — so in every window narrower than about 1.15:1 the plate is bound by the
+// spread's WIDTH and its depth is whatever the window's shape makes of that: 1.36 m on a 390x760
+// phone against a table 1.24 m across. In those windows the row costs the plate NOTHING, there is
+// nothing for this round to buy, and every shot is byte-identical to round 8 (measured:
+// tools/_cam-r9-vs.mjs, 390x760 and 1200x1100, at every stage). Past 1.15 the depth binds and the
+// row costs up to 24 %: at 1600x900 the lens is 15.4° while the visitor is choosing against 20.3°
+// with the row full, and the spread goes from 23 % of the frame's drawing to 41 %.
+//
 // ROUND 8 — three things, none of which needed a number in this file changed.
 //
 //  · THE SUBJECT SOLVES ITSELF NOW. The reveal piece published a tighter spread this round and
@@ -91,7 +117,7 @@
 //     (a longer lens over a table keystones less), and where opening up would run the bottom edge
 //     out into bare floorboards the top anchor moves up instead and the pendant comes back in.
 import { fit, place, tanHalf } from './camera-frame.js';
-import { plate } from './camera-plan.js';
+import { plate, CAP_BAND } from './camera-plan.js';
 
 // ---- the tabletop: WHAT IS ACTUALLY ON THE CLOTH (round 7) ----------------------------------------
 // Round 6 wrote the business down as two constants — a row 0.85 m wide and a ribbon reaching 0.571 —
@@ -135,8 +161,10 @@ export function tableSubject(L, reveal) {
   const slots = (Array.isArray(reveal?.slots) && reveal.slots.length && reveal.slots.every((s) => Array.isArray(s) && s.length >= 3 && s.every(num)))
     ? (src.push('reveal.slots'), reveal.slots)
     : (src.push('layout.slots'), L.spread.slots);
-  const rowPts = [];
-  for (const [x, , z] of slots) rowPts.push(...cardCorners(x, z, YAW, C.w, C.h), ...cardCorners(x, z, -YAW, C.w, C.h));
+  // …slot by slot as well as all together, because a slot only belongs in the picture once there is
+  // a card standing in it (round 9).
+  const rows = slots.map(([x, , z]) => [...cardCorners(x, z, YAW, C.w, C.h), ...cardCorners(x, z, -YAW, C.w, C.h)]);
+  const rowPts = rows.flat();
   // 2. THE SPREAD — the 78 cards, from whatever the piece is willing to say about them.
   let spreadPts = null;
   const stated = reveal?.tableBounds ?? reveal?.footprint ?? reveal?.spreadBounds ?? reveal?.bounds;
@@ -173,7 +201,7 @@ export function tableSubject(L, reveal) {
     src.push('fallback bow');
   }
   const row = boxOf(rowPts), spread = boxOf(spreadPts);
-  return { row, spread, all: boxOf(rowPts.concat(spreadPts)), slots, src: src.join(' + ') };
+  return { row, rows, spread, all: boxOf(rowPts.concat(spreadPts)), slots, src: src.join(' + ') };
 }
 
 // The pin: how far downstage the bottom edge of a plate may reach ON THE CLOTH. The rim is at 0.62,
@@ -189,16 +217,22 @@ export function tableSubject(L, reveal) {
 // from the bottom edge. See `centre` in camera-plan.js: past that point the table's own disc takes
 // the middle of the frame and the two rims cut it at the same height.
 const PIN = 0.596;
-// And the last line before the RUG. The rug is 3.2 x 2.6 centred at z = -0.2, so its near edge is
-// at 1.1 and its border is drawn INTO it: 1024x800 px over 3.2x2.6 m, a solid band at 18 px, the
-// scroll's ground from 38, a double rule at 128/140 — which lands the border's inner rule at
-// z = 0.684 and the OUTER of the two at 0.645. So there are 2.5 cm of plain rug between the
-// table's rim and anything printed on it, and a plate whose bottom edge stays inside 0.645 shows
-// the rim curving away over bare ground and nothing else. Past it the frame takes a hard black
-// double rule and a comb of fringe straight across its foot. (Camera round 6 filed this as a
-// contract request against props — widen the rug's plain field — and it does not need one: the
-// frame simply has to stop here, and now it does.)
+// And the last line before anything is PRINTED ON THE RUG. A plate may show the rim curving away
+// over bare ground; what it may not show is the rug's scroll border — a hard black double rule with
+// a running scroll and a comb of fringe — coming across its foot, because at that moment the
+// picture stops being a plan of a table and becomes a plan of a rug with a table on it.
+//
+// ROUND 9: props publishes the line, and it is 57 cm further from the table than this file thought.
+// `props.rug.plainFrom` is measured off the drawn sheet itself (tools/_props-r5-edge.mjs) and quoted
+// 3 mm inside it: 1.216 today, from a rug whose near edge is at 1.66 with a 0.438 border. The 0.642
+// below was derived in round 6 from a rug that reached 1.1 and has been wrong ever since — and it
+// was wrong in the expensive direction. It is what forced round 8's compromise on a 360x800 phone,
+// where honouring it drove the top edge to z −0.86, past the `axis` line, and laid his lap and the
+// bench flat across the top of a plan view. With the true line the two rules stop fighting: the
+// frame keeps every printed mark out AND stops short of him. Kept only as the fallback for a props
+// piece that failed to build.
 const RUGLINE = 0.642;
+const rugLineOf = (props) => (num(props?.rug?.plainFrom) ? props.rug.plainFrom : RUGLINE);
 // The turn's rake: 68° above the cloth in a landscape window, steepening toward the plan as the
 // window narrows (at 0.51 — a phone held upright — 78°, where the standing card still shows two
 // fifths of its face). The reveal piece's hand withdraws below 37°, so every value here keeps it.
@@ -279,7 +313,7 @@ function fitEither(spec, aspect) {
 // L is ctx.layout; `reveal` is ctx.pieces.reveal, which the plates read their subject off (it is
 // built before the camera, and the camera re-reads it on every reframe). Returns the whole table,
 // solved for this window.
-export function buildShots(L, aspect, reveal = null) {
+export function buildShots(L, aspect, reveal = null, opts = {}) {
   const zb = -L.room.depth / 2;
   const spreadY = L.spread.y;
   const [, , sz0] = L.spread.slots[1];
@@ -288,6 +322,14 @@ export function buildShots(L, aspect, reveal = null) {
   const SUB = tableSubject(L, reveal);
   const ROW = SUB.row.pts;
   const CLOTH = SUB.all.pts;
+  const RUGZ = rugLineOf(opts.props);
+  // HOW MANY CARDS ARE STANDING IN THE READING ROW. The camera piece counts them (it can see the
+  // cloth); this file only has to know, because the row is only part of the fan's picture once
+  // there is something in it. Falls back to the piece's own contract — `reveal.picks` — so a probe
+  // that imports this file with nothing but a reveal object still solves the frame the app does.
+  const LAID = Math.max(0, Math.min(SUB.rows.length, Math.round(opts.laid ?? (reveal?.picks?.length ?? 0))));
+  const PICKED = SUB.rows.slice(0, LAID).flat();
+  const CHOOSING = LAID < SUB.rows.length;
   const ahead = (pos) => [pos[0], pos[1], zb];
   // a frontal shot: square to the back wall, the lens axis horizontal, framed by a rise or fall
   const flat = (pos, spec) => fitEither({ pos, look: ahead(pos), ...spec }, aspect);
@@ -382,26 +424,45 @@ export function buildShots(L, aspect, reveal = null) {
       bottom: PIN,
       centre: 0,
       disc: RIM,
-      floor: RUGLINE,
+      floor: RUGZ,
       axis: -0.78,
       dist: 1.28,
       distMax: 1.66, // the pendant's bulbs hang at 2.45; the lens stops a hair under them
       fov: 30,
       pad: 0.08,
     }, aspect),
-    // the fan, and the row the picked cards go to: everything the visitor may click, whole and
-    // symmetric about the frame's vertical axis, with the near rim of the table closing the two
-    // bottom corners.
+    // THE FAN, AND THE PLATE THAT FOLLOWS THE BEAT (round 9). Everything the visitor may click,
+    // whole and symmetric about the frame's vertical axis, with the near rim of the table closing
+    // the two bottom corners — but WHAT IS IN THE PICTURE CHANGES AS THE BEAT DOES, because the
+    // three reading slots are a third of a phone's screen reserved for nothing until a card lands
+    // in one.
     //
-    // What it leaves for the caption's placard, measured: 50 px at 1600×900, 66 at 1200×1100, 46 on
-    // a phone — 6 % of the frame's height in every window, because the spread runs to within 5 cm
-    // of the rim and the pin holds the edge just inside it. There is no lens that gives the placard
-    // more: on a phone the frame is already as far downstage as the rug allows. The band the fan
-    // beat really has for it is the bare cloth between the still life and the spread — y 392..535
-    // of 760 — which is the row the picked cards land in.
+    // Rounds 7 and 8 put the reading row in the subject at every moment, and they were right to:
+    // the reveal builder asked for it, and the three picked cards must be in frame. But they are
+    // not in frame before they are picked. So the plate is composed on the SPREAD, the row's slots
+    // join it one at a time as they fill (`also` — they have to be in the picture, they are not
+    // what it is composed on), and by the third card the plate is what round 8 left. The camera
+    // piece moves between them over a third of a second as each card lands: the landing is the
+    // motivation and the move is the camera answering it.
+    //
+    // The other half of the same beat is the caption. It docks to the TOP while the visitor is
+    // choosing (the user's exception) and comes back to the foot the moment the third card is
+    // taken, so this plate moves its own reserved band with it: `capTop` above while choosing,
+    // `pad` at the foot once the reading row is full. The placard is opaque and the spread is what
+    // the visitor has to click; the band is what keeps the one off the other.
+    //
+    // What it is worth, measured: at 1600x900 the lens goes from 20.3° to 16.6° with the row empty
+    // — the spread's box from 33 % of the frame's area to 51 % — and opens back to 20.3° over the
+    // three picks. In any window narrower than about 1.15:1, INCLUDING EVERY PHONE, it changes
+    // nothing at all and cannot: the spread is 0.634 m wide, so a 390x760 frame that holds it with
+    // a margin is 1.36 m deep whatever else is in the shot, and the depth of the subject never
+    // binds. On a phone the plate has one degree of freedom, where those 1.36 m sit on the cloth,
+    // and the table's own disc has taken it since round 7.
     fan: plate({
       y: spreadY,
-      subject: CLOTH,
+      subject: CHOOSING ? SUB.spread.pts : CLOTH,
+      also: CHOOSING ? PICKED : [],
+      capTop: CHOOSING ? CAP_BAND : null,
       whole: [DECK.box],
       bottom: PIN,
       centre: 0,
@@ -410,8 +471,8 @@ export function buildShots(L, aspect, reveal = null) {
       dist: 1.36,
       distMax: 1.66,
       fov: 30,
-      pad: 0.06,
-      floor: RUGLINE,
+      pad: CHOOSING ? 0 : 0.06,
+      floor: RUGZ,
     }, aspect),
     // THE TURN, and the round's one deliberate compromise. The critic's rule is plan or straight-on,
     // nothing between; the reveal builder's rule is that a card reared on its edge is a hairline
@@ -442,7 +503,7 @@ export function buildShots(L, aspect, reveal = null) {
       bottom: PIN,
       centre: 0,
       disc: RIM,
-      floor: RUGLINE,
+      floor: RUGZ,
       axis: -0.78,
       dist: 1.2,
       distMax: 1.9,

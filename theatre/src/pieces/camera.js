@@ -32,7 +32,7 @@ import { buildShots } from './camera-shots.js';
 export const meta = {
   name: 'camera',
   judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'track', 'whip'] },
-  files: ['src/pieces/camera.js', 'src/pieces/camera-shots.js', 'src/pieces/camera-frame.js'],
+  files: ['src/pieces/camera.js', 'src/pieces/camera-shots.js', 'src/pieces/camera-frame.js', 'src/pieces/camera-plan.js'],
 };
 
 // Motor speeds of the rail: a lateral track, a push. Metres per second.
@@ -40,6 +40,12 @@ const TRACK_SPEED = 0.62;
 const PUSH_SPEED = 0.55;
 // The whip: the fraction of the way travelled at each 12fps frame after the start frame, then a hard stop.
 const WHIP_FRAMES = [0.34, 0.74, 1];
+// THE REFRAME, when a card lands in the reading row and the plate opens to take it (round 9). A
+// third of a second: four frames of the 12fps drawing, short enough to be over before flow cuts to
+// his face for the reaction beat (it waits 0.35 s after the pick), long enough to be a move and not
+// a jump. It leaves at once — the card landing is the cue and the camera answers it — and brakes
+// through the last two thirds, so the picture arrives at rest.
+const OPEN_S = 0.34;
 
 export async function build(ctx) {
   const cam = ctx.camera;
@@ -57,10 +63,30 @@ export async function build(ctx) {
   // so the tabletop frames follow the cards instead of a number that stopped describing them two
   // rounds ago. Read fresh on every reframe: the piece is built before the camera, but it re-lays
   // the cloth between beats and a window dragged to another shape re-reads it.
+  //
+  // ROUND 9 — and one of them follows the BEAT as well as the window. The fan plate is composed on
+  // the spread while the reading row is empty and opens to take each slot as a card lands in it
+  // (camera-shots.js), so the camera has to know how many are down. `reveal.picks` is the contract
+  // and covers the live evening; the judging states lay the row without ever going through a pick
+  // (reveal's `deal` puts three real cards on the slots, `gather` fakes three out of the spread), so
+  // the count is the largest of the three readings rather than the first one that answers. Read
+  // fresh, never cached: a second reading resets it to none.
   const revealPiece = () => ctx.pieces?.reveal ?? null;
-  const shots = buildShots(L, aspect(), revealPiece());
+  const laidCount = () => {
+    const R = revealPiece();
+    const slots = R?.slots?.length ?? 3;
+    const picks = R?.picks?.length ?? 0;
+    if (picks >= slots) return slots;
+    const drawn = ctx.pieces?.cards?.drawn?.children?.length ?? 0;
+    let taken = 0;
+    for (const e of R?._fan?.entries ?? []) if (e?.removed) taken++;
+    return Math.min(slots, Math.max(picks, drawn, taken));
+  };
+  let laid = laidCount();
+  const shots = buildShots(L, aspect(), revealPiece(), { laid, props: ctx.pieces?.props ?? null });
   const reframe = () => {
-    const next = buildShots(L, aspect(), revealPiece());
+    laid = laidCount();
+    const next = buildShots(L, aspect(), revealPiece(), { laid, props: ctx.pieces?.props ?? null });
     for (const k of Object.keys(shots)) delete shots[k];
     Object.assign(shots, next);
   };
@@ -117,14 +143,16 @@ export async function build(ctx) {
     _q.slerpQuaternions(from.q, to.q, u);
     applyPose({ pos: _p, q: _q, fov: from.fov + (to.fov - from.fov) * u, shift: [from.shift[0] + (to.shift[0] - from.shift[0]) * u, from.shift[1] + (to.shift[1] - from.shift[1]) * u] });
   };
-  // the motor: constant speed with a short ramp at each end (a dolly does not ease like a tween)
-  const motor = (u, ramp) => {
-    if (ramp <= 0) return u;
-    const a = ramp; // fraction of the run spent accelerating / braking
-    const v = 1 / (1 - a); // cruise speed so that the area is 1
-    if (u < a) return (v * u * u) / (2 * a);
-    if (u > 1 - a) return 1 - (v * (1 - u) * (1 - u)) / (2 * a);
-    return v * (u - a / 2);
+  // the motor: constant speed with a short ramp at each end (a dolly does not ease like a tween).
+  // The two ramps are separate so a move that is ANSWERING something — the reframe as a card lands
+  // in the reading row — can be off the mark at once and spend the whole of the rest braking, which
+  // is what a camera operator's hand does when the cue is the action rather than the clock.
+  const motor = (u, ramp, brake = ramp) => {
+    if (ramp <= 0 && brake <= 0) return u;
+    const v = 1 / (1 - (ramp + brake) / 2); // cruise speed so that the area is 1
+    if (ramp > 0 && u < ramp) return (v * u * u) / (2 * ramp);
+    if (brake > 0 && u > 1 - brake) return 1 - (v * (1 - u) * (1 - u)) / (2 * brake);
+    return v * (u - ramp / 2);
   };
   const finish = () => {
     const m = move;
@@ -148,7 +176,7 @@ export async function build(ctx) {
     }
     const from = currentPose();
     const dist = from.pos.distanceTo(to.pos);
-    if (duration == null) duration = kind === 'whip' ? WHIP_FRAMES.length / ctx.clock.fps : Math.max(0.4, dist / (kind === 'track' ? TRACK_SPEED : PUSH_SPEED));
+    if (duration == null) duration = kind === 'whip' ? WHIP_FRAMES.length / ctx.clock.fps : kind === 'open' ? OPEN_S : Math.max(0.4, dist / (kind === 'track' ? TRACK_SPEED : PUSH_SPEED));
     move = { from, to, kind, t0: ctx.clock.raw, f0: ctx.clock.frame, duration };
     return new Promise((res) => (move.done = res));
   }
@@ -210,6 +238,26 @@ export async function build(ctx) {
       } else api.cut(name in shots ? name : 'home');
     },
     update(ctx) {
+      // THE BEAT MOVES THE PLATE. A card landing in the reading row is what earns that slot its
+      // place in the fan's frame, so the camera watches the cloth for it rather than being told:
+      // nothing else has to know, and a visitor who picks by clicking, by typing "the third from
+      // the left", or by letting Pepe choose gets the same move. It is a MOVE and not a re-solve
+      // in place — the landing is the motivation and the opening is the answer — and it happens
+      // only where the plate really differs, which is why a phone never sees one (there the frame
+      // is bound by the spread's width and the row costs it nothing).
+      const n = laidCount();
+      if (n !== laid) {
+        const onFan = api.current === 'fan';
+        reframe();
+        if (onFan) {
+          // …and only where there is something to see. The three slots share one band of cloth, so
+          // the first card pays for the whole of the row: at 1600x900 the lens goes 15.4° → 20.3°
+          // as it lands and the second and third cost 0.03° and a millimetre between them. A move
+          // that small is not a move, it is a shiver, so the camera simply re-solves and holds.
+          const to = poseOf(shots.fan), from = move ? move.to : currentPose();
+          if (from.pos.distanceTo(to.pos) > 0.004 || Math.abs(from.fov - to.fov) > 0.08) startMove('fan', 'open', OPEN_S);
+        }
+      }
       if (!move) return;
       const m = move;
       let u;
@@ -220,7 +268,7 @@ export async function build(ctx) {
         u = WHIP_FRAMES[Math.min(k, WHIP_FRAMES.length) - 1];
       } else {
         const raw = Math.min(1, (ctx.clock.raw - m.t0) / m.duration);
-        u = m.kind === 'track' ? motor(raw, 0.06) : motor(raw, 0.22);
+        u = m.kind === 'track' ? motor(raw, 0.06) : m.kind === 'open' ? motor(raw, 0.08, 0.62) : motor(raw, 0.22);
       }
       blend(m.from, m.to, u);
       if (u >= 1) finish();
