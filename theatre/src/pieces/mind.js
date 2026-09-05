@@ -35,9 +35,12 @@
 //   ready                Promise → available (health, never longer than 3 s)
 //   health()             → Promise<bool>; refreshes available/provider/model
 //   reply({beat, user, slug, position, question, focus}) → async generator of SENTENCES
-//                        beat: greeting | talk | reading | recall | followup | farewell | question |
-//                              answer | shuffle | fan
+//                        beat: greeting | talk | object | reading | recall | followup | farewell |
+//                              question | answer | shuffle | fan
 //                        slug + position (0..2 | 'brought'|'going'|'do' | label) for a reading
+//                        'object' is set for you: a line that asks about a thing in the room is
+//                        read by mind-room.js and answered with that thing. It is still a 'talk'
+//                        turn — nothing is dealt, nothing moves — so no caller has to know.
 //   history              [{role:'visitor'|'pepe', text}] the conversation so far (also `transcript`)
 //   spread               [{position, label, slug, name, numeral}] the cards on the table so far
 //   newSpread()          clears the cards, keeps the conversation (a second reading)
@@ -52,12 +55,13 @@
 import { SCRIPT, lineFor, linesFor, POSITIONS, POSITION_KEYS, positionKey } from './script.js';
 import { stanceOf, readingScript, followupScript, answerScript, beatText, aboutTheSpread, recallScript, cardRef } from './mind-voice.js';
 import { intentOf, talkScript, farewellScript, looksLikeOffer } from './mind-talk.js';
+import { objectAsk, objectScript, objectBody, noteTold } from './mind-room.js';
 import { bySlug } from '../core/deck.js';
 
 export const meta = {
   name: 'mind',
   judge: { shot: 'pepe', states: ['greeting', 'question', 'reading', 'transcript'], dom: true },
-  files: ['src/pieces/mind.js', 'src/pieces/mind-talk.js', 'src/pieces/mind-voice.js', 'server/pepe.mjs', 'vite.config.js'],
+  files: ['src/pieces/mind.js', 'src/pieces/mind-talk.js', 'src/pieces/mind-voice.js', 'src/pieces/mind-room.js', 'server/pepe.mjs', 'vite.config.js'],
 };
 
 const HEALTH_MS = 5000; // the page may be busy building when this is asked; a timeout is retried once
@@ -102,11 +106,15 @@ function tidy(s) {
 // visitor) and lives in build(); the writing is in mind-talk.js and mind-voice.js.
 // Returns {text, offered}: `offered` is true when this turn put a reading on the table to be
 // accepted, so that the visitor's next "yes" means yes.
-function scripted({ beat, user, slug, position, question, spread = [], focus = null }, talk) {
+function scripted({ beat, user, slug, position, question, spread = [], focus = null, object = null }, talk) {
   const said = (user ?? question ?? '').trim();
   switch (beat) {
     case 'talk':
       return talkScript(said, talk);
+    // They asked about something in the room. A story if it is one of the ten, a plain
+    // identification if it is not, and never an invented biography.
+    case 'object':
+      return { text: objectScript(said, object, talk) ?? talkScript(said, talk).text, offered: false };
     case 'recall':
       return { text: recallScript(said, spread, talk.stance, focus), offered: false };
     case 'reading':
@@ -127,7 +135,9 @@ export async function build(ctx) {
   const spread = [];
   // the conversation's own memory: how many turns the visitor has taken, every line he has already
   // spent (so he never recites), whether a reading is on offer, and what he has made of them.
-  const talk = { turns: 0, used: new Set(), offered: false, stance: null, spread };
+  // `told` counts how many times each object in the room has been asked about tonight, so the
+  // second telling of a story is not the first one again — in the script and in the live voice.
+  const talk = { turns: 0, used: new Set(), offered: false, stance: null, spread, told: Object.create(null) };
   let controller = null;
   let retriedHealth = false;
   let latchedAt = 0; // when the live voice last failed fatally (0 = not latched)
@@ -225,12 +235,18 @@ export async function build(ctx) {
     },
 
     // One turn of Pepe's, as sentences. Records the visitor's line and his reply in history.
-    async *reply({ beat = 'greeting', user = '', slug = null, position = 0, question = '', intent = null, focus = null } = {}) {
+    async *reply({ beat = 'greeting', user = '', slug = null, position = 0, question = '', intent = null, focus = null, object = null } = {}) {
       const said = String(user || question || '').trim();
-      const args = { beat, user: said, slug, position, question: said, focus };
+      // Did they ask about something in the room? turn() has usually decided this already; a
+      // caller that asks for the 'talk' beat straight out gets the same reading, so the answer to
+      // "why do you keep a barometer" is the barometer whichever door the line came in by.
+      let obj = object;
+      if (!obj && said && (beat === 'talk' || beat === 'object')) obj = objectAsk(said, { spread: spread.filter(Boolean), cardRef });
+      if (obj) beat = 'object';
+      const args = { beat, user: said, slug, position, question: said, focus, object: obj };
       const card = slug ? bySlug[slug] : null;
       const posIndex = POSITION_KEYS.indexOf(positionKey(position));
-      if (beat === 'talk') talk.turns++;
+      if (beat === 'talk' || beat === 'object') talk.turns++;
       const body = {
         beat,
         history: history.map((h) => ({ role: h.role, text: h.text })),
@@ -246,6 +262,10 @@ export async function build(ctx) {
         // written from, and he must not say it twice. The facts — everything in the picture the
         // reading did NOT spend — are exactly what a second look at a card is for.
         facts: (beat === 'reading' || beat === 'recall') && slug ? cardFacts(slug, position) : null,
+        // The thing in the room they asked about: its canon fact, and ONE written line as a hint
+        // of voice — the same arrangement a card gets, and for the same reason. The lines are
+        // nowhere in the persona, so there is no set speech for him to recite.
+        object: objectBody(obj, talk),
         // the conversation's own facts, so the live voice knows what the room knows
         intent: intent ?? null,
         offered: talk.offered,
@@ -253,6 +273,8 @@ export async function build(ctx) {
         turns: talk.turns,
         spread: spread.map((c) => ({ position: c.position, label: c.label, name: c.name, numeral: c.numeral })),
       };
+      // counted once, whether the answer comes from the model or from the script
+      if (obj) noteTold(obj, talk);
       if (beat === 'reading' && slug && card) {
         spread[posIndex] = { position: posIndex, label: POSITIONS[posIndex], slug, name: card.name, numeral: card.numeral };
         body.spread = spread.filter(Boolean).map((c) => ({ position: c.position, label: c.label, name: c.name, numeral: c.numeral }));
@@ -359,6 +381,11 @@ export async function build(ctx) {
       // With cards face up, a line that points at one of them is a follow-up and not table talk:
       // the written brain answers with that card, and the live voice gets the follow-up direction
       // (answer with what is on the table, name the one you mean) instead of the talk direction.
+      // A question about a thing in the room is a 'talk' turn: nothing is dealt, nothing is
+      // shuffled and the camera does not move. It is read here, before aboutTheSpread, because
+      // with cards on the cloth "what is the barometer" has the shape of a question about a card
+      // and is not one. Anything that DOES point at a card wins: objectAsk stands down on it.
+      const object = intent === 'talk' && said ? objectAsk(said, { spread: dealt, cardRef }) : null;
       const beat =
         intent === 'farewell'
           ? 'farewell'
@@ -366,9 +393,11 @@ export async function build(ctx) {
             ? 'shuffle'
             : intent === 'recall'
               ? 'recall'
-              : dealt.length && aboutTheSpread(said, dealt)
-                ? 'followup'
-                : 'talk';
+              : object
+                ? 'object'
+                : dealt.length && aboutTheSpread(said, dealt)
+                  ? 'followup'
+                  : 'talk';
       if (intent === 'draw') talk.offered = false;
       // Which card they meant, when they meant one: an index into the cards on the table, or null
       // for all of them. cardRef reads a name, an alias, a place ("the middle one"), a suit or a
@@ -381,7 +410,7 @@ export async function build(ctx) {
         intent,
         text: said,
         focus,
-        sentences: api.reply({ beat, user: said, intent, focus, slug: card?.slug ?? null, position: card ? card.position : 0 }),
+        sentences: api.reply({ beat, user: said, intent, focus, object, slug: card?.slug ?? null, position: card ? card.position : 0 }),
       };
     },
 
@@ -410,6 +439,7 @@ export async function build(ctx) {
       talk.used.clear();
       talk.offered = false;
       talk.stance = null;
+      talk.told = Object.create(null);
       api.offered = false;
       // a new visitor deserves a fresh look at the endpoint: a key may have arrived meanwhile
       latchedAt = 0;
@@ -455,7 +485,8 @@ function ensureBlock(ctx) {
     top: '6%',
     left: '50%',
     transform: 'translateX(-50%)',
-    width: '60%',
+    // wide enough that a visit with the room's stories in it still fits the frame at 13 px
+    width: '68%',
     boxSizing: 'border-box',
     fontFamily: 'var(--futura)',
     fontSize: '22px',
@@ -523,16 +554,21 @@ async function visitorSays(mind, block, text) {
 // Two of the visitor's lines are questions with no question mark on them, because that is how
 // people type: one about him, one about a card. Neither may be mistaken for the visitor reporting
 // on themselves, and the second must be answered with the card it points at.
+// Two of them ask about the room. One object has a story behind it and one has none, and the
+// difference between the two answers is the whole of that round: he does not volunteer either, he
+// does not invent the second one, and neither question touches the deck.
 const VISIT = {
   said: [
     'I keep starting things and not finishing them.',
     'Four or five. There is a shed I began in March.',
     'Not yet. I would rather talk.',
     'do you ever get tired of being asked about the future',
+    'what is the globe',
+    'what is that radiator',
     'All right. Read my cards.',
   ],
   cards: ['the-fool', 'the-house-of-god', 'the-star'],
-  questions: ['Which one is the important one?', 'what does the middle one mean'],
+  questions: ['Which one is the important one?', 'what does the middle one mean', 'why do you keep a barometer'],
   bye: 'Thank you. I should go.',
 };
 
