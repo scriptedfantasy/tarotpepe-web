@@ -176,6 +176,23 @@ export async function build(ctx) {
   // ---- the fan and the visitor's pick ------------------------------------------------------------
   const fan = buildFan(ctx, cards, { play, stop }, hand, slots);
 
+  // THE WINDOW SHAPE CHOOSES HOW THE 78 ARE LAID (round 10). A portrait plate is bound by the
+  // spread's WIDTH and nothing else (camera round 9), so on a phone the deck goes down narrower and
+  // in more bows — see reveal-spread.js → layoutFor, which is the whole of that argument. This piece
+  // is built before the camera, so its resize listener runs before the camera re-solves its plates
+  // off `SPREAD.tiers`, and the frame it solves is the frame the cards are actually lying in.
+  const aspect = () => {
+    const w = ctx.size?.w || window.innerWidth || 1600, h = ctx.size?.h || window.innerHeight || 900;
+    return w / h;
+  };
+  let shown = null; // the judging state that is up, so a reshape can put it back
+  fan.reshape(aspect());
+  ctx.on?.('resize', () => {
+    if (!fan.reshape(aspect())) return;
+    if (shown === 'fan') fan.liftIndex(fan.keystoneIndex); // the still's raised keystone, again
+    ground.step();
+  });
+
   // ---- the takes --------------------------------------------------------------------------------
   let shuffleTake = null;
   function shuffleFrames() {
@@ -434,6 +451,7 @@ export async function build(ctx) {
     hand,
     _fan: fan,
     async setState(name) {
+      shown = name;
       // the beats over the cloth are judged from above, the rest from the frontal 'table'
       aimInserts();
       aimDeckShots();

@@ -7,7 +7,8 @@
 // back wall is ~200 px/m, so a 6 mm stroke lands at ~1.2 px — the same weight the ink pass
 // draws its outlines with. A finer pen mip-blends into a grey screen.
 import * as THREE from 'three';
-import { INK, PAPER, drawTexture, paper, inkLine } from '../core/strokes.js';
+import { INK, PAPER, drawTexture, paper, inkLine, letter } from '../core/strokes.js';
+import { mulberry32 } from '../core/rng.js';
 
 const px = (m, ppm) => m * ppm;
 
@@ -112,42 +113,146 @@ function sprig(g, s, rng, { alpha = 0.8, width = 5 } = {}) {
   dot(g, bx, by, r * 0.6, { rng, alpha });
 }
 
+// THE LATTICE THE SPRIG SITS ON, WRITTEN IN WORLD METRES.
+//
+// It used to live inside the tile — two motifs across a 1.02 m square, two rows up, the odd row
+// shifted half a pitch — and that is still exactly what it draws. But the room now has to draw the
+// SAME rows twice: once as the tiling paper that covers the whole back wall, and once, at full
+// strength, inside the rectangle where the tall multiple stood (see `ghostTexture`). Two drawings
+// only land on top of each other if they agree about where a sprig is in the ROOM, not about where
+// it is in a tile — hence rows at world y ≡ 0.255 and 0.765, columns every 0.51 m, and a hand per
+// (row parity, column parity) so the wrap copies keep coming out of the same wrist.
+// `visit` is handed world coordinates; the caller turns them into canvas pixels.
+const PITCH = 0.51; // motif pitch, both axes (the tile is two pitches square)
+const MOTIF = 0.21; // motif height, metres
+function eachSprig(x0, x1, y0, y1, seed, visit) {
+  const rng0 = mulberry32(seed);
+  const n0 = Math.floor((y0 - 0.255) / PITCH), n1 = Math.ceil((y1 - 0.255) / PITCH);
+  for (let n = n0; n <= n1; n++) {
+    // rows at y ≡ 0.255 (mod 1.02) are the shifted ones; the hand is chosen by parity, so the
+    // pattern repeats every 1.02 m in both axes however far it is drawn
+    const shifted = (((n % 2) + 2) % 2) === 0;
+    const jj = shifted ? 1 : 0;
+    const rowY = 0.255 + n * PITCH;
+    const off = shifted ? PITCH / 2 : 0;
+    const m0 = Math.floor((x0 - 0.255 - off) / PITCH), m1 = Math.ceil((x1 - 0.255 - off) / PITCH);
+    for (let m = m0; m <= m1; m++) {
+      const ii = ((m % 2) + 2) % 2;
+      const rng = rng0.fork(1000 + jj * 17 + ii * 3);
+      // the draw order is the hand's: its fate, its drift, its tilt, its size, then the sprig
+      const fate = rng();
+      const cx = 0.255 + off + m * PITCH + (rng() - 0.5) * 0.016;
+      const cy = rowY - (rng() - 0.5) * 0.016;
+      const rot = (rng() - 0.5) * 0.24; // ±7°
+      const size = MOTIF * (0.9 + rng() * 0.2);
+      visit({ cx, cy, rot, size, fate, rng });
+    }
+  }
+}
+
 // Wallpaper: one motif in loose offset rows on bare paper. Tile 1.02 m; two motifs across
 // (pitch 0.51 m), two rows up, every second row shifted half a pitch; each instance is drawn
-// separately with its own drift, tilt and pen weight, and one in ten is missing or faded, so the
-// rows visibly wander. Everything between motifs is untouched paper — well over four fifths of it.
-export function wallpaperTexture({ tile = 1.02, ppm = 1000, seed = 21 } = {}) {
+// separately with its own drift, tilt and pen weight. Everything between motifs is untouched
+// paper — well over four fifths of it.
+//
+// This is the FLAT's paper, hung before the exchange was ever put in the room, and it has had
+// forty years of window on it: `drop` and `fade` are what is left of the print. They used to be
+// one in ten missing or faded; they are one in four now, because the rectangle the tall multiple
+// covered is drawn separately (`ghostTexture`) and kept at full strength. The paper is the
+// control; the ghost is the sample that was never exposed.
+export function wallpaperTexture({ tile = 1.02, ppm = 1000, seed = 21, drop = 0.12, fade = 0.32, pen = 0.005, alpha = 0.8 } = {}) {
   const size = Math.round(tile * ppm);
-  const cols = 2, rows = 2;
-  const a = size / cols, b = size / rows;
   const tex = drawTexture(
     size,
     size,
-    (g, w, h, rng0) => {
+    (g, w, h) => {
       paper(g, w, h, PAPER, { grain: 0, seed });
-      const s = px(0.21, ppm); // motif height
-      // instances (with wrap copies so the tile is seamless: the same hand for each copy)
-      for (let j = -1; j <= rows; j++)
-        for (let i = -1; i <= cols; i++) {
-          const jj = ((j % rows) + rows) % rows, ii = ((i % cols) + cols) % cols;
-          const rng = rng0.fork(1000 + jj * 17 + ii * 3);
-          const fate = rng();
-          if (fate < 0.06) continue; // the paper-hanger's blank
-          const alpha = fate < 0.16 ? 0.45 : 0.8; // a faded print now and then
-          const cx = a / 2 + i * a + (j % 2 ? a / 2 : 0) + (rng() - 0.5) * 16;
-          const cy = b / 2 + j * b + (rng() - 0.5) * 16;
-          const rot = (rng() - 0.5) * 0.24; // ±7°
-          g.save();
-          g.translate(cx, cy);
-          g.rotate(rot);
-          sprig(g, s * (0.9 + rng() * 0.2), rng, { alpha, width: 5 });
-          g.restore();
-        }
+      eachSprig(0, tile, 0, tile, seed, ({ cx, cy, rot, size: s, fate, rng }) => {
+        if (fate < drop) return; // the paper-hanger's blank, and what the light took
+        g.save();
+        g.translate(px(cx, ppm), px(tile - cy, ppm)); // canvas y runs down; world y runs up
+        g.rotate(rot);
+        sprig(g, px(s, ppm), rng, { alpha: fate < fade ? alpha * 0.56 : alpha, width: px(pen, ppm) });
+        g.restore();
+      });
     },
     { seed },
   );
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.userData.tile = tile;
+  return tex;
+}
+
+// THE GHOST. One sheet of paper for one place on the wall: the rectangle the tall multiple stood
+// against, unbolted and taken for scrap when the automatic exchange came in. It is not a mark
+// added to the wall — it is the wall with nothing taken off it. Inside the rectangle every sprig
+// is present and drawn at full pen weight, because the paper here never saw the window; outside it
+// the same rows are the faded ones `wallpaperTexture` draws. Same lattice, same hands, same phase,
+// so the boundary cuts THROUGH the pattern instead of framing it, and there is no line round it:
+// what states the rectangle is four bolt holes and two cut cable ends, and the rest is tone.
+//
+// The pen is fatter here — 13 mm against the paper's 5 — and it was measured, not chosen. The back
+// wall runs about 200 px to the metre in the home frame, so the paper's 5 mm stroke lands at one
+// pixel; the ink pass throws away any mark with no dark neighbour a nib away, on the grounds that
+// a lone dark pixel is not a stroke but what the minifier made of one, and it is right. That rule
+// is why the wallpaper has been an invisible drawing on a blank wall for four rounds. At 13 mm the
+// stroke lands at two and a half pixels, which is the weight the pass draws its own contours at,
+// and the sprigs inside the rectangle survive being looked at from a chair across the room. The
+// paper outside stays where it was: it faded, and a faded print is a mark that does not quite
+// arrive, which is exactly what one pixel of pen does here.
+export function ghostTexture({ x0, x1, y0, y1, ppm = 640, seed = 21, pen = 0.013 } = {}) {
+  const w = Math.round((x1 - x0) * ppm), h = Math.round((y1 - y0) * ppm);
+  const X = (mx) => px(mx - x0, ppm);
+  const Y = (my) => px(y1 - my, ppm);
+  const tex = drawTexture(
+    w,
+    h,
+    (g, cw, ch, rng0) => {
+      paper(g, cw, ch, PAPER, { grain: 0, seed });
+      eachSprig(x0 - 0.3, x1 + 0.3, y0 - 0.3, y1 + 0.3, seed, ({ cx, cy, rot, size: s, rng }) => {
+        g.save();
+        g.translate(X(cx), Y(cy));
+        g.rotate(rot);
+        sprig(g, px(s, ppm), rng, { alpha: 0.85, width: px(pen, ppm) });
+        g.restore();
+      });
+      // FOUR BOLT HOLES, in a rectangle, where the frame was through-bolted into the brick. A hole
+      // is solid: a filled disc, a burst of plaster round it where the bolt was pulled rather than
+      // undone, and nothing else. They are what tells the eye the rectangle is a rectangle.
+      // (1.14, not 1.02: below that the chest's lamp and its vase of dried stems stand in front of
+      // the wall and a hole drawn behind them is a hole nobody sees)
+      const r = px(0.019, ppm);
+      for (const bx of [-0.4, 0.4])
+        for (const by of [1.14, 1.7]) {
+          const rng = rng0.fork(Math.round((bx + 2) * 100 + by * 10));
+          const hx = X(bx), hy = Y(by);
+          dot(g, hx, hy, r, { rng, alpha: 0.98 });
+          for (let k = 0; k < 5; k++) {
+            const a = rng() * Math.PI * 2, l = r * (1.5 + rng() * 1.3);
+            inkLine(g, hx + Math.cos(a) * r * 1.1, hy + Math.sin(a) * r * 1.1, hx + Math.cos(a) * l, hy + Math.sin(a) * l, { width: px(0.008, ppm), wobble: 1.2, rng, alpha: 0.7, segments: 2 });
+          }
+        }
+      // TWO CUT CABLE ENDS coming out of the plaster at the top, where the multiple's tails were
+      // cut off flush rather than drawn back. Each is a short black stub with a kink in it and a
+      // frayed end: three strands, splayed.
+      for (const [cx, len, lean] of [
+        [-0.1, 0.1, 0.22],
+        [0.07, 0.075, -0.3],
+      ]) {
+        const rng = rng0.fork(Math.round((cx + 2) * 977));
+        const sx = X(cx), sy = Y(y1 - 0.012);
+        const kx = sx + Math.sin(lean) * px(len * 0.6, ppm), ky = sy + Math.cos(lean) * px(len * 0.6, ppm);
+        const ex = kx + Math.sin(lean * -1.6) * px(len * 0.5, ppm), ey = ky + Math.cos(lean * -1.6) * px(len * 0.5, ppm);
+        penPath(g, [[sx, sy], [kx, ky], [ex, ey]], { width: px(0.019, ppm), wobble: 1.4, rng, alpha: 0.98 });
+        for (let k = -1; k <= 1; k++) {
+          const a = Math.atan2(ey - ky, ex - kx) + k * 0.55;
+          inkLine(g, ex, ey, ex + Math.cos(a) * px(0.026, ppm), ey + Math.sin(a) * px(0.026, ppm), { width: px(0.009, ppm), wobble: 1, rng, alpha: 0.95, segments: 2 });
+        }
+      }
+    },
+    { seed: seed + 7 },
+  );
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   return tex;
 }
 
@@ -335,6 +440,69 @@ export function grainTexture({ tile = 0.44, ppm = 800, seed = 61, alpha = 0.5 } 
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.userData.tile = tile;
   return tex;
+}
+
+// The enamel plate screwed to the door's middle rail. Vitreous enamel, PTT issue: the ground is
+// the ink and the letters are the paper, which is the one place in the room where that is true and
+// the reason it is worth having — it puts a small black rectangle with white writing in it on a
+// door that is otherwise all white joinery. A hairline rule inside the edge, two lines, and four
+// screws through the corners. It reads as a black plate at the wide shot and as writing at the
+// door, which is exactly the joke's timing: you find out what it says only once you are at it.
+export function enamelTexture({ w = 0.3, h = 0.078, ppm = 2000, seed = 83, lines = ['P.T.T.', 'ENTRÉE INTERDITE'], sizes = [0.026, 0.02] } = {}) {
+  const W = Math.round(w * ppm), H = Math.round(h * ppm);
+  return drawTexture(
+    W,
+    H,
+    (g, cw, ch, rng) => {
+      g.fillStyle = INK;
+      g.fillRect(0, 0, cw, ch);
+      // the rule inside the edge: a plate is struck with one, and it is the mark that survives
+      const i = px(0.006, ppm);
+      g.strokeStyle = PAPER;
+      g.lineWidth = px(0.0022, ppm);
+      g.strokeRect(i, i, cw - 2 * i, ch - 2 * i);
+      lines.forEach((t, k) => {
+        const y = ch * (k === 0 ? 0.31 : 0.71);
+        letter(g, t, cw / 2, y, { size: px(sizes[k], ppm), color: PAPER, rng, tracking: 0.14, jitter: px(0.0006, ppm), weight: 700 });
+      });
+      // four screws: a paper disc with an ink slot, at the corners
+      for (const sx of [i * 1.9, cw - i * 1.9])
+        for (const sy of [i * 1.9, ch - i * 1.9]) {
+          g.fillStyle = PAPER;
+          g.beginPath();
+          g.ellipse(sx, sy, px(0.0035, ppm), px(0.0035, ppm), 0, 0, Math.PI * 2);
+          g.fill();
+          inkLine(g, sx - px(0.003, ppm), sy, sx + px(0.003, ppm), sy, { width: px(0.0012, ppm), wobble: 0.4, rng, alpha: 1, segments: 2 });
+        }
+    },
+    { seed },
+  );
+}
+
+// His visiting card, pinned to the panel under the plate. Paper, a rule round it, his name and
+// his trade. Nobody in the room says anything about a card pinned under a notice forbidding entry.
+export function cardTexture({ w = 0.13, h = 0.078, ppm = 2200, seed = 89, lines = ['T. PEPE', 'TAROT'] } = {}) {
+  const W = Math.round(w * ppm), H = Math.round(h * ppm);
+  return drawTexture(
+    W,
+    H,
+    (g, cw, ch, rng) => {
+      paper(g, cw, ch, PAPER, { grain: 0, seed });
+      const i = px(0.006, ppm);
+      const box = [
+        [i, i],
+        [cw - i, i],
+        [cw - i, ch - i],
+        [i, ch - i],
+      ];
+      penPath(g, [...box, box[0]], { width: px(0.0026, ppm), wobble: px(0.0004, ppm), rng, alpha: 0.9 });
+      // one line big enough to be a mark and one under it: at the door the name lands at nine
+      // pixels and the trade at five, which is a card you can see is a card and read when you are at it
+      letter(g, lines[0], cw / 2, ch * 0.4, { size: px(0.026, ppm), rng, tracking: 0.1, jitter: px(0.0005, ppm), weight: 700 });
+      letter(g, lines[1], cw / 2, ch * 0.73, { size: px(0.014, ppm), rng, tracking: 0.3, jitter: px(0.0005, ppm), weight: 600 });
+    },
+    { seed },
+  );
 }
 
 // Plain paper (ceiling, glass, painted trim).

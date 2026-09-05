@@ -3,14 +3,14 @@
 // At each point it works out which card is actually DRAWN there — the one whose footprint covers
 // the point and rides highest, which is exactly what the eye sees, the spread being flat — and
 // asks the pick's own mapping (reveal-spread.js → indexAt) which card it would stand up.
-//   node tools/_rv8-point.mjs
+//   node tools/_rv8-point.mjs [w] [h]   — the window shape chooses the nesting (round 10)
 import { chromium } from 'playwright';
 
 const browser = await chromium.launch({
   headless: true,
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', '--disable-gpu-sandbox'],
 });
-const page = await browser.newPage({ viewport: { width: 900, height: 600 }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width: +(process.argv[2] ?? 900), height: +(process.argv[3] ?? 600) }, deviceScaleFactor: 1 });
 page.on('pageerror', (e) => console.log('ERR', String(e)));
 await page.route('**/@vite/client', (r) => r.fulfill({ contentType: 'application/javascript', body: 'export const createHotContext=()=>({on(){},send(){},accept(){},dispose(){},prune(){},invalidate(){},decline(){}});export const updateStyle=()=>{};export const removeStyle=()=>{};export const injectQuery=(u)=>u;' }));
 await page.goto('http://127.0.0.1:5173/?view=reveal&state=fan', { waitUntil: 'load', timeout: 180000 });

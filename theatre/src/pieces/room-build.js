@@ -40,6 +40,28 @@ export function worldUV(geo, tile = 1, { uOffset = 0, vOffset = 0, swap = false 
   uv.needsUpdate = true;
 }
 
+// A ONE-OFF sheet instead of a repeating pattern: the texture is stretched over a named rectangle
+// of world space (u across [u0,u1], v across [v0,v1]) in the same two in-plane axes worldUV picks.
+// A material carrying `userData.uvRect` is therefore good for one part in one place — which is the
+// point: a drawing that belongs somewhere (the ghost of the multiple on the back wall, the enamel
+// plate on the door's middle rail) cannot be a tile, because a tile repeats and a scar does not.
+export function worldRectUV(geo, { u0, u1, v0, v1 }, { swap = false } = {}) {
+  const pos = geo.attributes.position;
+  const nor = geo.attributes.normal;
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const nx = Math.abs(nor.getX(i)), ny = Math.abs(nor.getY(i)), nz = Math.abs(nor.getZ(i));
+    let u, v;
+    if (nz >= nx && nz >= ny) (u = x), (v = y);
+    else if (nx >= ny) (u = z), (v = y);
+    else (u = x), (v = z);
+    if (swap) [u, v] = [v, u];
+    uv.setXY(i, (u - u0) / (u1 - u0), (v - v0) / (v1 - v0));
+  }
+  uv.needsUpdate = true;
+}
+
 const smooth = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -94,7 +116,8 @@ export class Parts {
     _m.compose(_p, _q, _s);
     if (this.frame) _m.premultiply(this.frame);
     geo.applyMatrix4(_m);
-    worldUV(geo, mat.userData.tile ?? 1, { swap: uvSwap });
+    if (mat.userData.uvRect) worldRectUV(geo, mat.userData.uvRect, { swap: uvSwap });
+    else worldUV(geo, mat.userData.tile ?? 1, { swap: uvSwap });
     this._bucket(mat, { cast, receive }).geos.push(geo);
     return geo;
   }

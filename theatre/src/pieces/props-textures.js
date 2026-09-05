@@ -85,10 +85,6 @@ function starPoly(cx, cy, r) {
   }
   return pts;
 }
-function sparkle(g, cx, cy, r, opts) {
-  inkLine(g, cx - r, cy, cx + r, cy, opts);
-  inkLine(g, cx, cy - r, cx, cy + r, opts);
-}
 
 // ---- the hand ------------------------------------------------------------------------------
 // Everything lettered on a prop — a bottle's label, a book's spine, the clock's numerals, the
@@ -326,19 +322,96 @@ export function woodTexture(seed = 4) {
 
 // ---- the pictures in the frames: each one subject, solid where the film would be solid ------
 const PICTURES = {
-  hand(g, rng, s) {
-    const o = { width: 2.4, wobble: 0.9, rng };
-    // the ground is hatched only where the hand casts against it, not edge to edge: a framed
-    // drawing in the folios is mostly bare paper inside a black mat
-    hatch(g, 0, 52 * s, 100 * s, 48 * s, { angle: Math.PI / 2, spacing: 7 * s, width: 1.2, wobble: 0.6, broken: 0.4, rng, alpha: 0.7 });
-    const P = [[34, 98], [30, 72], [22, 58], [11, 50], [8, 43], [15, 39], [27, 47], [32, 42], [31, 18], [37, 12], [43, 19], [44, 40], [46, 10], [52, 5], [58, 11], [57, 38], [61, 15], [67, 12], [71, 18], [69, 42], [75, 30], [81, 29], [83, 36], [76, 54], [70, 72], [66, 98]];
-    const pts = P.map(([x, y]) => [x * s, y * s]);
-    fillPoly(g, pts, LABEL_PAPER);
-    stroke(g, pts, { ...o, close: true });
-    stroke(g, quad([31 * s, 62 * s], [40 * s, 80 * s], [46 * s, 98 * s]), { ...o, width: 1.6 });
-    stroke(g, quad([28 * s, 56 * s], [50 * s, 62 * s], [72 * s, 60 * s]), { ...o, width: 1.6 });
-    stroke(g, quad([36 * s, 49 * s], [55 * s, 51 * s], [70 * s, 70 * s]), { ...o, width: 1.6 });
-    for (const [x, y] of [[16, 22], [86, 16], [88, 74]]) sparkle(g, x * s, y * s, 4 * s, { width: 1.6, wobble: 0.3, rng });
+  // ROUND 6. The framed circuit diagram, in the place the palmistry hand hung. Eight heavy
+  // verticals, eight heavy horizontals, a black dot at every crossing: a jack field on paper,
+  // which is what the position under it is, and the picture a man keeps who thinks a grid of
+  // pictures tells you something. Drawn BOLD on purpose — the frame is 78 px across in `home`
+  // and a fine line there is a grey.
+  diagram(g, rng, s) {
+    const o = { width: 2, wobble: 0.7, rng };
+    const N = 8, x0 = 13, x1 = 87, p = (x1 - x0) / (N - 1);
+    // the two heavy bus bars a real diagram carries top and bottom, so it is a circuit and not
+    // a chessboard. Drawn first; the grid crosses them.
+    inkLine(g, (x0 - 5) * s, (x0 - 5) * s, (x1 + 5) * s, (x0 - 5) * s, { ...o, width: 3.4 });
+    inkLine(g, (x0 - 5) * s, (x1 + 5) * s, (x1 + 5) * s, (x1 + 5) * s, { ...o, width: 3.4 });
+    for (let i = 0; i < N; i++) {
+      const v = (x0 + i * p) * s;
+      inkLine(g, v, (x0 - 5) * s, v, (x1 + 5) * s, o);
+      inkLine(g, (x0 - 5) * s, v, (x1 + 5) * s, v, o);
+    }
+    // a black dot at every crossing, half again the weight of the line so a junction is a
+    // junction and the plate is not a chequer
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) dot(g, (x0 + i * p) * s, (x0 + j * p) * s, 2.1 * s);
+  },
+  // ROUND 6. The photograph that was on the wall when he took the room: a woman seated side-on
+  // at this board, in a headband, thirty years of it. She is drawn as one solid mass against the
+  // board's solid mass with the paper of the room between them — at 78 px that is a person at a
+  // machine, and nothing smaller than that would survive.
+  operator(g, rng, s) {
+    const o = { width: 2.2, wobble: 0.8, rng };
+    const P = (a) => a.map(([x, y]) => [x * s, y * s]);
+    // the board she faces: a solid panel, stopped ten units short of the plate's edge so a rule
+    // of paper stands between it and the black mat. Without that the right half of the picture
+    // runs into the mat and it stops being a photograph of anything.
+    fillPoly(g, P([[61, 8], [92, 8], [92, 76], [61, 76]]), INK);
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) dot(g, (67 + c * 10) * s, (16 + r * 9) * s, 2.6 * s, LABEL_PAPER);
+    inkLine(g, 62 * s, 58 * s, 91 * s, 58 * s, { width: 2.6, wobble: 0.8, rng, color: LABEL_PAPER });
+    for (let c = 0; c < 5; c++) inkLine(g, (65 + c * 6) * s, 62 * s, (65 + c * 6) * s, 70 * s, { width: 2.2, wobble: 0.6, rng, color: LABEL_PAPER });
+    // her, seated side-on: four solid masses that each say one thing at 55 px — the back, the
+    // lap, the shin, the stool. A seated figure drawn as one outline arrives as a blot.
+    fillPoly(g, P([[25, 68], [22, 54], [26, 42], [33, 37], [39, 40], [40, 52], [38, 66]]), INK);
+    fillPoly(g, P([[26, 59], [52, 57], [54, 66], [27, 68]]), INK);
+    fillPoly(g, P([[46, 63], [55, 62], [57, 88], [48, 88]]), INK);
+    fillPoly(g, P([[17, 65], [31, 65], [31, 70], [17, 70]]), INK);
+    fillPoly(g, P([[19, 70], [24, 70], [23, 88], [18, 88]]), INK);
+    inkLine(g, 6 * s, 90 * s, 60 * s, 90 * s, { ...o, width: 3 });
+    // the arm into the board, and a paper plug where her hand meets it: two black masses that
+    // touch need one bright mark at the join or they read as one mass
+    stroke(g, quad([36 * s, 45 * s], [48 * s, 42 * s], [62 * s, 33 * s]), { ...o, width: 4.4 });
+    dot(g, 62 * s, 33 * s, 2.8 * s, LABEL_PAPER);
+    // the head. It has to survive at 9 px, so the hair is a CAP that stops above the face rather
+    // than a shape around it, the bun sits clear of the head's outline, and the headband is drawn
+    // in PAPER across the black of the hair — a white band on a black crown reads at a size where
+    // a black band on black hair does not.
+    const head = [];
+    for (let i = 0; i <= 22; i++) {
+      const t = (i / 22) * Math.PI * 2;
+      head.push([38 * s + Math.cos(t) * 9.5 * s, 29 * s + Math.sin(t) * 10.5 * s]);
+    }
+    fillPoly(g, head, LABEL_PAPER);
+    stroke(g, head, { ...o, close: true, width: 2.6 });
+    fillPoly(g, P([[29, 28], [29, 22], [34, 17], [43, 18], [47, 24], [47, 28], [43, 22], [35, 21], [31, 25]]), INK);
+    dot(g, 26 * s, 25 * s, 4.5 * s); // the bun
+    stroke(g, quad([30 * s, 24 * s], [38 * s, 17 * s], [47 * s, 25 * s]), { ...o, width: 2.6, color: LABEL_PAPER });
+    dot(g, 30 * s, 31 * s, 3.2 * s); // the receiver at her ear
+    dot(g, 44 * s, 30 * s, 1.9 * s); // the eye
+  },
+  // ROUND 6. The barometer, where the zodiac disc hung. A ring, four numerals, one needle: an
+  // instrument that claims to tell you what is coming and is wrong about twice a month.
+  barometer(g, rng, s) {
+    const o = { width: 2.2, wobble: 0.6, rng };
+    const cx = 50 * s, cy = 50 * s;
+    ring(g, cx, cy, 45 * s, { ...o, width: 2.6, n: 44, wob: 0.02 });
+    ring(g, cx, cy, 39 * s, { ...o, width: 1.4, n: 40, wob: 0.02 });
+    ring(g, cx, cy, 26 * s, { ...o, width: 1.4, n: 32, wob: 0.02 });
+    // the scale stops short of the bottom, the way an instrument's does and a clock's never
+    // does: the one mark that keeps this off the wall as a second clock
+    for (let i = 0; i < 24; i++) {
+      if (i >= 11 && i <= 13) continue;
+      const a = (i / 24) * Math.PI * 2 - Math.PI / 2;
+      const long = i % 3 === 0;
+      inkLine(g, cx + Math.cos(a) * 39 * s, cy + Math.sin(a) * 39 * s, cx + Math.cos(a) * (long ? 29 : 34) * s, cy + Math.sin(a) * (long ? 29 : 34) * s, { ...o, width: long ? 2.6 : 1.4 });
+    }
+    // a French barometer is graduated in centimetres of mercury; four numerals, two digits each,
+    // set inside the scale on the diagonals where the needle never lies
+    for (const [t, x, y] of [['72', 34, 66], ['74', 32, 38], ['76', 68, 38], ['78', 66, 66]]) {
+      penText(g, t, x * s, y * s, { size: 12 * s, weight: 2.4 * s, rng, tracking: 0.1 });
+    }
+    // one needle, and the brass set-hand kept short so that at 12 px only the needle reads
+    inkLine(g, cx, cy, cx + 13 * s, cy - 8 * s, { ...o, width: 1.4 });
+    fillPoly(g, [[50, 50], [32, 30], [28, 24], [34, 30], [54, 46]].map(([x, y]) => [x * s, y * s]), INK);
+    dot(g, cx, cy, 4 * s);
+    dot(g, cx, cy, 1.6 * s, LABEL_PAPER);
   },
   moon(g, rng, s) {
     // a paper crescent and paper stars cut out of a solid night
@@ -353,30 +426,6 @@ const PICTURES = {
     stroke(g, quad([cx + 6 * s, cy + 4 * s], [cx + 16 * s, cy + 8 * s], [cx + 6 * s, cy + 12 * s]), { width: 1.8, wobble: 0.6, rng });
     for (const [x, y, r2] of [[18, 18, 5], [24, 80, 4], [10, 50, 3.5], [82, 12, 3], [88, 84, 4]]) fillPoly(g, starPoly(x * s, y * s, r2 * s), LABEL_PAPER);
     for (const [x, y] of [[40, 8], [90, 40], [70, 92], [6, 90]]) dot(g, x * s, y * s, 1.4 * s, LABEL_PAPER);
-  },
-  portrait(g, rng, s) {
-    const o = { width: 2.4, wobble: 0.9, rng };
-    // a hatched band behind the head only; the rest of the plate stays bare paper
-    hatch(g, 0, 8 * s, 100 * s, 46 * s, { angle: Math.PI / 2, spacing: 9 * s, width: 1, wobble: 0.6, broken: 0.45, rng, alpha: 0.4 });
-    // shoulders: a solid jacket with a paper collar
-    const jacket = [[6, 100], [14, 74], [34, 64], [50, 68], [66, 64], [86, 74], [94, 100]];
-    fillPoly(g, jacket.map(([x, y]) => [x * s, y * s]), INK);
-    fillPoly(g, [[40, 66], [50, 84], [60, 66], [50, 62]].map(([x, y]) => [x * s, y * s]), LABEL_PAPER);
-    // the face
-    const face = [];
-    for (let i = 0; i <= 24; i++) {
-      const t = -Math.PI / 2 + (i / 24) * Math.PI * 2;
-      face.push([50 * s + Math.cos(t) * 19 * s, 40 * s + Math.sin(t) * 24 * s]);
-    }
-    fillPoly(g, face, LABEL_PAPER);
-    stroke(g, face, { ...o, close: true });
-    // solid hair
-    fillPoly(g, [[30, 34], [32, 20], [40, 12], [52, 10], [64, 13], [70, 22], [70, 34], [64, 26], [52, 22], [40, 26], [34, 36]].map(([x, y]) => [x * s, y * s]), INK);
-    dot(g, 43 * s, 40 * s, 2 * s);
-    dot(g, 57 * s, 40 * s, 2 * s);
-    stroke(g, [[50 * s, 40 * s], [47 * s, 50 * s], [52 * s, 51 * s]], { ...o, width: 1.6 });
-    inkLine(g, 45 * s, 57 * s, 55 * s, 57 * s, { ...o, width: 1.8 });
-    stroke(g, [[44 * s, 62 * s], [46 * s, 70 * s], [54 * s, 70 * s], [56 * s, 62 * s]], { ...o, width: 1.6 });
   },
   eye(g, rng, s) {
     const o = { width: 2.4, wobble: 0.8, rng };
@@ -454,29 +503,6 @@ const PICTURES = {
     stroke(g, quad([66 * s, 20 * s], [60 * s, 10 * s], [70 * s, 4 * s]), { ...o, width: 1.4 });
     inkLine(g, 10 * s, 88 * s, 90 * s, 88 * s, o);
   },
-  zodiac(g, rng, s) {
-    const o = { width: 2.2, wobble: 0.7, rng };
-    const cx = 50 * s, cy = 50 * s;
-    hatch(g, 0, 0, 100 * s, 100 * s, { angle: Math.PI / 4, spacing: 5 * s, width: 1.2, wobble: 0.6, broken: 0.2, rng, alpha: 0.8 });
-    const disc = [];
-    for (let i = 0; i < 40; i++) disc.push([cx + Math.cos((i / 40) * Math.PI * 2) * 42 * s, cy + Math.sin((i / 40) * Math.PI * 2) * 42 * s]);
-    fillPoly(g, disc, LABEL_PAPER);
-    ring(g, cx, cy, 42 * s, { ...o, n: 40 });
-    ring(g, cx, cy, 31 * s, { ...o, n: 36, width: 1.6 });
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
-      inkLine(g, cx + Math.cos(a) * 31 * s, cy + Math.sin(a) * 31 * s, cx + Math.cos(a) * 42 * s, cy + Math.sin(a) * 42 * s, { ...o, width: 1.4 });
-      const gx = cx + Math.cos(a + 0.26) * 36.5 * s, gy = cy + Math.sin(a + 0.26) * 36.5 * s;
-      if (i % 3 === 0) dot(g, gx, gy, 2.4 * s);
-      else if (i % 3 === 1) inkLine(g, gx - 3 * s, gy - 2 * s, gx + 3 * s, gy + 2 * s, { ...o, width: 1.6 });
-      else stroke(g, [[gx - 3 * s, gy + 2.5 * s], [gx, gy - 3 * s], [gx + 3 * s, gy + 2.5 * s]], { ...o, width: 1.6 });
-    }
-    fillPoly(g, starPoly(cx, cy, 9 * s), INK);
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + 0.2;
-      inkLine(g, cx + Math.cos(a) * 12 * s, cy + Math.sin(a) * 12 * s, cx + Math.cos(a) * 29 * s, cy + Math.sin(a) * 29 * s, { ...o, width: 1.2 });
-    }
-  },
   key(g, rng, s) {
     const o = { width: 2.6, wobble: 0.9, rng };
     hatch(g, 0, 0, 100 * s, 100 * s, { angle: Math.PI / 2, spacing: 5 * s, width: 1.2, wobble: 0.6, broken: 0.3, rng, alpha: 0.6 });
@@ -516,7 +542,7 @@ export function pictureTexture(kind, { seed = 1, w = 256, h = 256, round = false
       const k = 3;
       g.translate((W - inner) / 2, (H - inner) / 2);
       g.scale(k, k);
-      (PICTURES[kind] ?? PICTURES.zodiac)(g, rng, inner / 100 / k);
+      (PICTURES[kind] ?? PICTURES.diagram)(g, rng, inner / 100 / k);
       g.restore();
     },
     { seed },
@@ -687,6 +713,61 @@ export function clockTexture(seed = 13) {
         penText(g, nums[k], cx + Math.cos(a) * 72, cy + Math.sin(a) * 72, { size: 30, weight: 4.6, rng, tracking: 0.1 });
       }
       dot(g, cx, cy, 7);
+    },
+    { seed },
+  );
+}
+
+// ---- the operator's position -----------------------------------------------------------------
+// ROUND 6. Two drawn strips on the switchboard that stands where the chest stood.
+//
+// THE JACK FIELD. What survived when the tall multiple over the position was unbolted: a strip
+// 0.98 x 0.12 m of black plate with the jacks left in paper. Sized off the frame it is read in —
+// the plate is 206 px across in `home` and 316 in `pepe`, so a 512-wide sheet puts 2.5 texels
+// under a screen pixel and every hole is drawn as drawn. TWO ranks, not the six a real field has:
+// at 25 px of plate a third rank is 8 px tall and its holes arrive as a grey. Two ranks of
+// eighteen, with the paper mounting rules every sixth jack, is a grid at any size the room is
+// looked at from.
+export function jackFieldTexture({ w = 512, h = 64, cols = 18, rows = 2, seed = 61 } = {}) {
+  return drawTexture(
+    w,
+    h,
+    (g, W, H, rng) => {
+      g.fillStyle = INK;
+      g.fillRect(0, 0, W, H);
+      const px = W / (cols + 1), py = H / (rows + 1);
+      // the plate's own mounting rules, in paper: three verticals and a rule under the top edge
+      inkLine(g, 0, 3.5, W, 3.5, { width: 4, wobble: 0.9, rng, color: LABEL_PAPER });
+      for (let c = 6; c < cols; c += 6) inkLine(g, c * px + px / 2, 6, c * px + px / 2, H - 3, { width: 4, wobble: 0.8, rng, color: LABEL_PAPER });
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = px * (c + 1) + (rng() - 0.5) * 1.2;
+          const y = py * (r + 1) + 3 + (rng() - 0.5) * 1.2;
+          dot(g, x, y, 6.5, LABEL_PAPER);
+          dot(g, x, y, 2.6, INK);
+        }
+      }
+      // two jacks with a cord in them, so the board is a board somebody worked and not a stencil
+      for (const c of [3, 11]) dot(g, px * (c + 1), py + 3, 5.5, INK);
+    },
+    { seed },
+  );
+}
+// THE DESIGNATION STRIP over the keys: paper, a heavy rule top and bottom, one division a key.
+// No numerals — a figure on this strip measures 2 px in `home` and the pen does not draw at 2 px.
+// The divisions do the same job: it is a strip that was filled in, and it is ordered.
+export function keyStripTexture({ w = 512, h = 28, cells = 13, seed = 62 } = {}) {
+  return drawTexture(
+    w,
+    h,
+    (g, W, H, rng) => {
+      paper(g, W, H, LABEL_PAPER, { grain: 0, seed });
+      inkLine(g, 0, 3, W, 3, { width: 5, wobble: 1, rng });
+      inkLine(g, 0, H - 3, W, H - 3, { width: 5, wobble: 1, rng });
+      for (let i = 1; i < cells; i++) {
+        const x = (W * i) / cells;
+        inkLine(g, x, 7, x, H - 7, { width: 3, wobble: 0.8, rng });
+      }
     },
     { seed },
   );

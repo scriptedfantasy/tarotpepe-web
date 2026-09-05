@@ -44,7 +44,7 @@ import { mulberry32 } from '../core/rng.js';
 import { cardGeometry } from './cards-geometry.js';
 import { compose, dealTrack, handFrames, handSide, laidPose } from './reveal-takes.js';
 import { deckStacks } from './reveal-shuffle.js';
-import { SPREAD, tierOf, angleAt, poseAt, indexAt, isKeystone, under, leftHalf, stackOrder } from './reveal-spread.js';
+import { SPREAD, layoutFor, tierOf, angleAt, poseAt, indexAt, isKeystone, under, leftHalf, stackOrder } from './reveal-spread.js';
 
 // kept for the pieces that ask how many are out
 export const FAN = { get n() { return SPREAD.total; } };
@@ -171,9 +171,12 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
         j,
         mesh,
         slug: order[i % order.length].slug,
-        jx: (jit() - 0.5) * 0.003,
-        jz: (jit() - 0.5) * 0.003,
-        ja: (jit() - 0.5) * 0.03,
+        // the millimetre and a half a hand puts in each card, as a fraction of a bow's own step:
+        // the amplitude is applied in restPose, because the step is the window's now (round 10) and
+        // a card jittered by a sixth of the sliver it shows is a card the pointer cannot name
+        jx: jit() - 0.5,
+        jz: jit() - 0.5,
+        ja: jit() - 0.5,
         lift: 0,
         liftTarget: 0,
         push: 0,
@@ -208,7 +211,10 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
   // later.)
   const _r = {};
   function restPose(e, out = _r) {
-    const p = poseAt(e.t, e.j, e.push, e.jx, e.jz, e.ja);
+    // a quarter of the step between bows, either way: 3 mm across a 12 mm sliver at the wide
+    // nesting — round 8's own number — and 2.25 mm across a 9 mm one at the tall
+    const J = SPREAD.step / 4;
+    const p = poseAt(e.t, e.j, e.push, e.jx * J, e.jz * J, e.ja * J * 10);
     out.x = p.x;
     out.z = p.z;
     out.ang = p.ang;
@@ -266,6 +272,7 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
   }
   // the spread gone (the picks stay readable until the next one is dealt)
   function clear() {
+    handOnCloth(true); // whatever the choosing beat asked for, it is over: the hand is free again
     hand?.clear();
     for (const e of entries) group.remove(e.mesh);
     entries.length = 0;
@@ -332,8 +339,22 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
       });
     // which drawing each card leaves his hand on, and from where
     const leave = new Array(N).fill(0);
-    // in from the top of the frame, over the deck; and the whole deck lifted
-    P(dk.x, dk.z - 0.20, -0.10, N, HOLD + 0.055);
+    // HE DRUMS HIS FINGERS ON THE SQUARED DECK, twice, before he takes it up. This is where the
+    // waiting hand's drumming went (round 10): the cloth belongs to the visitor while they choose,
+    // so the business that used to loop over bare cloth for half a minute happens once, here, on
+    // the deck itself — which is the gesture a reader actually makes, dead centre of the plate, and
+    // over in a third of a second. Four drawings, on twos.
+    // The fingertips travel ALONG THE CLOTH as well as up off it: this plate is very nearly a plan
+    // view, and a hand that only rises 25 mm off a deck a metre under the lens changes size by two
+    // and a half per cent — which is no drawing at all. Fourteen millimetres of reach with it is
+    // 13 px on a phone, and the tap reads.
+    const deckH = units(N) * T; // the squared deck's own height: what his fingers land on
+    const DRUM = 4;
+    // …and 12 mm to the left of the deck's axis, because the drawing is posed by its FINGERTIPS and
+    // its palm sits outboard of them: aimed at the deck's centre it hung its little finger off the
+    // right-hand edge (measured on the 16:9 plate, where the deck is 280 px across)
+    for (const [py, dz] of [[deckH + 0.026, 0.066], [deckH + 0.001, 0.052], [deckH + 0.026, 0.066], [deckH + 0.001, 0.052]]) P(dk.x - 0.012, dk.z + dz, -0.10, 0, py);
+    // …and the whole deck lifted out from under them
     P(dk.x, dk.z, -0.10, N, HOLD + 0.012);
     let laid = 0;
     // the bows, innermost first: the one behind goes down before the one in front of it
@@ -382,15 +403,20 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
       {
         offset: 0,
         frames: poses.map((p, k) => () => {
-          if (k < 1) {
+          if (k < DRUM) {
+            // his fingers on the squared deck: it is still a deck, and nothing has left it
             deckReal();
-            for (const e of entries) {
-              e.mesh.visible = false;
-              e.flying = true;
+            if (k === 0) {
+              handOnCloth(true);
+              for (const e of entries) {
+                e.mesh.visible = false;
+                e.flying = true;
+              }
             }
+            if (k === 1 || k === 3) sound('tap');
             return;
           }
-          if (k === 1) {
+          if (k === DRUM) {
             sound('deal');
             pepe()?.deal?.(0, 'R');
           }
@@ -704,11 +730,13 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
       pending = { promise, resolve };
     }
     armed = true;
+    handOnCloth(false); // the cloth is theirs while they choose: see the note above `handOnCloth`
     return pending.promise;
   }
   async function doPick(e) {
     if (!e || e.removed || e.flying || picking || picks.length >= slots.length) return pending?.promise ?? null;
     picking = true;
+    handOnCloth(true); // his hand comes back for it: it is what carries the card to its slot
     const slot = picks.length;
     const ordinal = remaining().indexOf(e) + 1;
     const keep = e;
@@ -742,20 +770,43 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
     if (!entries.length) return;
     armed = false;
     setHover(null);
+    handOnCloth(true); // his hand sweeps the rest up
     await player.play(gatherFrames());
     clear();
   }
-  // While the spread is out and the visitor is choosing — half a minute in a locked frame — his
-  // hand waits on the bare cloth at his right, past the right end of the bows and outboard of the
-  // reading row, and drums its fingers once every two and a half seconds. At (0.36, 0.16) the
-  // drawing's far corner comes to 0.43 from the table's centre, and the nearest card of the outer
-  // bow is 9 cm away.
-  const WAIT = { x: 0.36, z: 0.16, yaw: -0.20 };
-  function waiting() {
-    if (!hand) return;
-    const k = ctx.clock.frame % 30;
-    const up = k === 24 || k === 27 ? 0.012 : k === 25 || k === 26 ? 0.024 : 0;
-    hand.at(WAIT.x, 0.004 + up, WAIT.z + up * 0.5, { yaw: WAIT.yaw, pose: 'splay' });
+  // HE TAKES HIS HAND OFF THE TABLE WHILE THE VISITOR CHOOSES (round 10).
+  //
+  // Rounds 8 and 9 had it wait on the bare cloth at his right, at (0.36, 0.16), drumming its
+  // fingers once every two and a half seconds — business to fill a locked frame with half a minute
+  // of nothing happening in it. The camera builder measured what that costs now the plate is cut to
+  // the spread: "the hand's arm takes 9.8 % of a 390x760 frame at every stage, running from the top
+  // edge to 63 % of the frame's height down the right side — 63 % as much ink area as all 78 cards
+  // put together, and the largest single drawn object after the spread", with three green
+  // fingertips standing alone in the top-right corner where the frame's edge cuts the wrist off.
+  //
+  // AND IT CANNOT BE PARKED. The ask was z ≥ 0.30, |x| ≥ 0.40 — outside the plate — but the hand is
+  // the near end of an arm anchored at his own wrist (reveal-hand.js: 0.291, -0.82), so the drawing
+  // that has to leave the picture is not the hand, it is the metre of sleeve behind it, and every
+  // spot on the cloth that is further from the frame's top edge puts MORE of that sleeve in the
+  // shot, not less. There is no parking space; there is only off.
+  //
+  // So he takes it off, which is what a reader does: he deals the spread, presses it flat and sits
+  // back, and the cloth belongs to the visitor until they have chosen. The withdrawal is the hand's
+  // own two drawings back along its arm (hand.hide), the same one it plays when the camera cuts
+  // away, and it comes back the moment a card is taken — his hand is what carries it to its slot.
+  //
+  // THE DRUMMING IS NOT LOST, it is over the DECK instead of over bare cloth, and it happens once
+  // instead of looping: the first four drawings of the fan take are his fingers tapping the squared
+  // pile twice before he takes it up (`fanFrames`, DRUM). The tight plate has no bare cloth left to
+  // drum on — it is cut to the spread, and the spread runs to within 19 mm of the frame's side —
+  // but the deck stands dead centre of it, tapping a deck before you deal it is the gesture a
+  // reader makes, and business that is over in a third of a second does not have to be filled.
+  let handOff = false;
+  function handOnCloth(mine) {
+    if (!hand || handOff === !mine) return;
+    handOff = !mine;
+    if (mine) hand.show();
+    else hand.hide();
   }
 
   // the hover in-betweens, on the stepped clock: two drawings up, two down, and the neighbours
@@ -771,7 +822,6 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
       }
       if (e.lift !== l0 || e.push !== p0 || !e.mesh.visible) applyEntry(e);
     }
-    if (armed && !picking) waiting();
   }
   // where the cards are on screen (CSS px), left to right: for tests and for a caption that points
   // at "the third from the left"
@@ -787,13 +837,38 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
 
   // the outer bow's keystone: the one card of the seventy-eight that the frame's axis runs through
   // and that shows the whole of itself. What a judging still stands up, and what a visitor's finger
-  // lands on first if they simply touch the middle of the spread.
-  const keystoneIndex = (SPREAD.tiers[0].n - 1) / 2;
+  // lands on first if they simply touch the middle of the spread. A getter, because the outer bow
+  // carries a different number of cards under the two nestings (reveal-spread.js → layoutFor).
+  const keystoneIndex = () => (SPREAD.tiers[0].n - 1) / 2;
+
+  // THE WINDOW HAS CHANGED SHAPE. reveal.js calls this at build and on every resize, before the
+  // camera re-solves its plates from `SPREAD.tiers`. If the nesting changed, every card on the
+  // cloth belongs to a different bow now: each keeps its index (and so its slug, and whether it has
+  // been taken) and is re-seated on the new bows and laid again where it lies. Nothing is animated —
+  // a window being dragged is not a beat.
+  function reshape(aspect) {
+    if (!layoutFor(aspect)) return false;
+    if (!entries.length) return true;
+    hover = null;
+    if (canvas) canvas.style.cursor = '';
+    for (const e of entries) {
+      const { tier, j } = tierOf(e.i);
+      e.t = tier;
+      e.j = j;
+      e.lift = e.liftTarget = 0;
+      e.push = e.pushTarget = 0;
+      if (!e.removed && !e.flying) applyEntry(e);
+    }
+    return true;
+  }
 
   return {
     FAN,
     SPREAD,
-    keystoneIndex,
+    reshape,
+    get keystoneIndex() {
+      return keystoneIndex();
+    },
     group,
     entries,
     picks,

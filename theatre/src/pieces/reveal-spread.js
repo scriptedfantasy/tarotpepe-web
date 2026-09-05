@@ -41,6 +41,58 @@
 // (the crescent's depth beyond one card's length is fixed at about 0.11 m), and the picture wants
 // the pitch — the step is only ever seen as the head of the card behind. 12 mm between bows is
 // 7.4 px on a phone at the plate above, which is what 18.5 mm was at round 7's.
+//
+// ROUND 10: THE SPREAD IS LAID DIFFERENTLY ON A PORTRAIT WINDOW, and it has to be, because no lens
+// can do it. Camera round 9 got the 16:9 plate from 33.3 % of the frame to 58.4 % and then proved
+// the phone shut: "the spread is 0.634 m wide and 0.33 m deep — a landscape box. A 390x760 frame
+// that holds its width is 1.36 m deep, against a table 1.24 m across… the subject's depth never
+// binds below aspect ~1.15, so the row costs the plate nothing there and there is nothing to buy.
+// If this frame is to improve, the spread has to be laid less wide and deeper on a portrait
+// window — that is a reveal-side change, not a lens."
+//
+// Measured, live, at 390x760: the plate is 0.696 m of cloth across and 1.356 m deep, the spread is
+// 0.634 x 0.330 in it, and so the cards get 560 px to the metre — a card 74 px wide — while 78 % of
+// the frame's height is bare cloth. The spread uses all of one axis and a fifth of the other.
+//
+// The lever round 8 never pulled is a CAP ON |x| tighter than the reading row's own limit. Round 8
+// took every bow as wide as `reach()` would allow, and `reach()` is governed by that row; capping
+// the bow instead makes every bow shorter, which needs more bows, which is exactly the "narrower
+// and deeper" being asked for. tools/_rv10-fit.mjs sweeps cap × bows × step × inner radius against
+// the plate the camera actually gives (it holds the spread's width with a 1.098 margin), and the
+// answer for a phone is EIGHT bows nine millimetres apart, capped at |x| = 0.196:
+//   · |x| 0.3168 → 0.196, so the plate is 0.430 m across instead of 0.696 and gives 907 px/m;
+//   · the raised card's tap box 74 x 129 px → 121 x 209 (round 8's own probe, tools/_rv7-pick.mjs,
+//     driving a real pointer: 120.8 x 209.1);
+//   · the spread's box 20.5 % → 34.1 % of a 390x760 frame, and its depth 22 % → 37 % of the
+//     frame's height, which is the axis the picture was wasting;
+//   · the furthest corner still 55 mm inside the rim — round 8 had 60 — and the inner bow still
+//     clears the reading row by the same 4 mm;
+//   · the step is 9 mm and not 12, because the sliver each bow shows of the one behind it is a
+//     number of PIXELS, not of millimetres: 9 mm at 907 px/m is 8.2 px, where round 8's 12 mm at
+//     its own plate was 7.4. Every bow is still an odd bow with a keystone on the frame's axis.
+// The pitch along a bow goes 23.8 → 21 mm, which is the one thing this costs.
+//
+// The two nestings are BOTH kept and the window chooses, because the tall one is only right on a
+// tall window: at 16:9 it leaves two fifths of the frame's width bare and the plate falls from
+// 53.8 % of the frame to 33.1 % for a card the same size. Both were measured at four shapes with
+// tools/_rv10-frame.mjs, the spread's box as a share of the frame and the raised card's tap box:
+//   aspect 1.78   wide 53.8 %, 265 px   ·  tall 33.1 %, 264 px      → wide
+//   aspect 1.40   wide 58.7 %, 273 px   ·  tall 42.1 %, 294 px      → wide
+//   aspect 1.20   wide 49.2 %, 231 px   ·  tall 49.1 %, 294 px      → tall (same frame, +27 % card)
+//   aspect 1.09   wide 44.0 %, 229 px   ·  tall 54.0 %, 323 px      → tall
+// so the line is drawn at 1.25, between the shape where they fill the frame equally and the one
+// where the wide nesting pulls ahead. Nothing else in the piece knows which is out — every bow,
+// keystone, pointer, pose and take is derived from `SPREAD.tiers`.
+//
+// ONE THING THIS HANDS THE CAMERA, and it is not ours to solve. camera.js says "a phone never sees
+// [the reframe] — there the frame is bound by the spread's width and the row costs it nothing".
+// That was true of a spread 0.634 m wide; it is not true of one 0.392 m wide. The reading row is
+// 0.602 m across its cards (reveal-takes.js → ROW_X = 0.225, a number solved for the 16:9 card
+// insert and not ours to move), so the first card landing in slot 0 now opens the phone's plate
+// from x ±0.215 to ±0.331 — measured, tools/_rv10-frame.mjs with PICKS=1 — where before it opened
+// from ±0.348 to ±0.348 and did nothing. The card itself does not shrink (74 px before at every
+// stage; 122 px while choosing from 78, 87 px after) and the destination frame is the one the
+// camera already composes, but that beat is now a 0.34 s move on a phone where it used to be none.
 
 const CARD = { w: 0.13, h: 0.2275 };
 
@@ -50,9 +102,16 @@ const ROW_CLEAR = 0.004; // …plus four millimetres, for the jitter a hand puts
 
 // r: the radius of the bow's card centres, from the TABLE's centre. phi: its half-angle, derived.
 // n: how many cards it carries. Tier 0 is the outermost — nearest the visitor, laid last, on top.
-const BOWS = 6;
-const R0 = 0.442; // outer bow: its furthest corner reaches 0.5595, which is 60 mm inside the rim
-const STEP = 0.012; // between bows: what each of the five inner bows shows of itself
+// `x` is the cap on how wide a bow may run; `r0` the outer bow, `step` the gap in to the next.
+const NESTS = {
+  // round 8, and unchanged: as wide as the reading row allows, six bows, 19/17/15/13/9/5
+  wide: { bows: 6, r0: 0.442, step: 0.012, x: 0.425 },
+  // round 10, for a window taller than about 1.15:1 — eight bows, capped, 9/11/11/11/11/11/9/5
+  tall: { bows: 8, r0: 0.448, step: 0.009, x: 0.196 },
+};
+// which nesting a window shape gets: the shape at which the two fill the frame equally, measured
+// (see the table above). Under it the tall nesting is the better picture, over it the wide one.
+const TALL_BELOW = 1.25;
 const TOTAL = 78;
 
 // the corner of a card at angle `a` on radius `r` that comes nearest the slot row, and whether it
@@ -71,15 +130,16 @@ function clearsRow(r, a) {
   }
   return true;
 }
-// how far a bow may run: the row on the inside, the frame on the outside (|x| ≤ 0.425 keeps every
-// corner inside a phone's 0.438), and the rim (every corner inside r = 0.60)
-function reach(r) {
+// how far a bow may run: the row on the inside, the nesting's own cap on the outside (`x` — 0.425
+// keeps every corner inside a phone's frame at the wide nesting; 0.196 is the tall one's whole
+// point), and the rim (every corner inside r = 0.60)
+function reach(r, X = 0.425) {
   let lo = 0, hi = 1.35;
   for (let i = 0; i < 44; i++) {
     const m = (lo + hi) / 2;
     const p = { x: r * Math.sin(m), z: r * Math.cos(m), ang: m };
     const cs = cardCorners(p);
-    const ok = clearsRow(r, m) && cs.every((c) => Math.abs(c[0]) <= 0.425 && Math.hypot(c[0], c[1]) <= 0.60);
+    const ok = clearsRow(r, m) && cs.every((c) => Math.abs(c[0]) <= X && Math.hypot(c[0], c[1]) <= 0.60);
     if (ok) lo = m;
     else hi = m;
   }
@@ -114,9 +174,23 @@ function share(arcs) {
   return n;
 }
 
+// one nesting solved: the bows, in and outwards from `r0`, each as long as `reach` allows under
+// the cap, the 78 shared between them in proportion to how much bow there is
+function solve(cfg) {
+  const rs = Array.from({ length: cfg.bows }, (_, k) => cfg.r0 - k * cfg.step);
+  const phis = rs.map((r) => reach(r, cfg.x));
+  const ns = share(rs.map((r, k) => 2 * phis[k] * r));
+  return rs.map((r, k) => ({ k, r, phi: phis[k], n: ns[k], pitch: ns[k] > 1 ? (2 * phis[k] * r) / (ns[k] - 1) : 0 }));
+}
+const SOLVED = {};
+const nestFor = (name) => (SOLVED[name] ??= solve(NESTS[name]));
+
 export const SPREAD = {
   card: CARD,
-  step: STEP,
+  // which nesting is out and what it is made of. Both are set by `layoutFor` below; they start on
+  // the wide one so anything that reads the spread before a window has been measured gets round 8's.
+  nest: 'wide',
+  step: NESTS.wide.step,
   // HOW THE SHINGLE STACKS, in half-thicknesses of card — the one number both the drawing
   // (reveal-fan.js → restPose) and the pointer (stackOrder below) are built from, so what stands up
   // under a finger can never drift from what is drawn there. A bow rides three half-thicknesses
@@ -124,20 +198,29 @@ export const SPREAD = {
   tierLift: 3,
   // the hover: the card under the pointer slides UP THE FRAME (the user's rule — never down) and
   // rides a hair over its neighbours so the whole of it is drawn. The whole card it uncovers is the
-  // tap target: measured with a real pointer at both sizes (tools/_rv7-pick.mjs) it is never smaller than
-  // 202 x 353 px at 1600 or 93 x 145 px on a 390 px phone — round 7.s was 58 x 101 there.
+  // tap target: measured with a real pointer at both sizes (tools/_rv7-pick.mjs) it is never smaller
+  // than 315 x 487 px at 1600x900 or 121 x 209 on a 390 px phone — round 7's was 58 x 101 there, and
+  // the phone's was 74 x 129 before the tall nesting came in (round 10).
   lift: { z: 0.030, y: 0.0055 },
   // and the two cards either side of it step apart along their bow, so a gap opens where it was.
   // Conservative: the push dies away by the sixth neighbour, so no bow ever grows at its ends.
   open: { amp: 0.015, fall: [0, 1, 0.6, 0.33, 0.15, 0.05] },
-  tiers: (() => {
-    const rs = Array.from({ length: BOWS }, (_, k) => R0 - k * STEP);
-    const phis = rs.map(reach);
-    const ns = share(rs.map((r, k) => 2 * phis[k] * r));
-    return rs.map((r, k) => ({ k, r, phi: phis[k], n: ns[k], pitch: ns[k] > 1 ? (2 * phis[k] * r) / (ns[k] - 1) : 0 }));
-  })(),
+  tiers: nestFor('wide'),
   total: TOTAL,
 };
+
+// THE WINDOW CHOOSES THE NESTING (round 10). Called by reveal.js at build and again whenever the
+// window changes shape, BEFORE the camera re-solves its plates off `SPREAD.tiers` — the reveal
+// piece is built first, so its resize listener runs first. Returns true when the spread actually
+// changed and the cards on the cloth have to be laid again.
+export function layoutFor(aspect) {
+  const want = aspect < TALL_BELOW ? 'tall' : 'wide';
+  if (want === SPREAD.nest) return false;
+  SPREAD.nest = want;
+  SPREAD.step = NESTS[want].step;
+  SPREAD.tiers = nestFor(want);
+  return true;
+}
 
 // THE KEYSTONE: the middle card of a bow, the one the frame's axis runs through. It is laid last,
 // it lies flat (no roll — both its neighbours are under it, symmetrically), and it is the only

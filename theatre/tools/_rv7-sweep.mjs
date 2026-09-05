@@ -3,7 +3,7 @@
 // distance from every card on the table to every prop standing on it. Nothing is judged by eye:
 // a card's box is sampled at its corners, edge middles and face centres, and each sample is
 // measured against each prop's world box. Negative = the card is inside the prop.
-//   node tools/_rv7-sweep.mjs <state> [seconds]
+//   node tools/_rv7-sweep.mjs <state> [seconds] [w] [h]   — the window shape chooses the nesting (round 10)
 import { chromium } from 'playwright';
 
 const state = process.argv[2] ?? 'shuffle';
@@ -13,7 +13,7 @@ const browser = await chromium.launch({
   headless: true,
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', '--disable-gpu-sandbox'],
 });
-const page = await browser.newPage({ viewport: { width: 900, height: 600 }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width: +(process.argv[4] ?? 900), height: +(process.argv[5] ?? 600) }, deviceScaleFactor: 1 });
 page.on('pageerror', (e) => console.log('ERR', String(e)));
 await page.route('**/@vite/client', (r) => r.fulfill({ contentType: 'application/javascript', body: 'export const createHotContext=()=>({on(){},send(){},accept(){},dispose(){},prune(){},invalidate(){},decline(){}});export const updateStyle=()=>{};export const removeStyle=()=>{};export const injectQuery=(u)=>u;' }));
 await page.goto(`http://127.0.0.1:5173/?view=reveal&state=${state}`, { waitUntil: 'load', timeout: 180000 });

@@ -1,11 +1,17 @@
 // PIECE: props — set dressing. A crowded, ordered parlour, but one that BREATHES: the film's rooms
 // are dense along a low band and bare above it, and always keep one big empty area. So the back wall
-// carries a low run of furniture — bookcase | chest | bookcase, none of it above waist height — with
-// bare plaster over it and either side of Pepe's head, and ONE row of pictures round the clock under
-// the rail. A cabinet of bottles beside the door (four boards, three bottles a board, one bay left to
-// a single demijohn), a bar cart under the window with the radio and four big bottles, curtains, a
-// floor lamp, a hat stand with a black overcoat, a potted palm, hand-lettered signs, a rug, a doormat,
-// a cat on the right bookcase, the three-petal pendant of the kitchen frame.
+// carries a low run of furniture — bookcase | the operator's position | bookcase, none of it above
+// waist height — with bare plaster over it and either side of Pepe's head, and ONE row of pictures
+// round the clock under the rail. The PTT's spares press beside the door (four boards, three vessels
+// a board, one bay left to a single carboy), the test table under the window with the radio, a
+// headset and three bottles, curtains, a floor lamp, a hat stand with a black overcoat, a potted
+// palm, hand-lettered signs, a rug, a doormat, a cat on the right bookcase, the three-petal pendant
+// of the kitchen frame.
+// ROUND 6 — THE ROOM IS THE TOWN'S OLD MANUAL TELEPHONE EXCHANGE (PROPS.md). It reads in three
+// layers: the flat that was here (the paper, the cornice, the doily), the exchange (the position,
+// the press, the jack field, the diagram), and his own nine or ten things (the rug, the table, the
+// deck, the globe, the vase, the cat). Layer 3 is the smallest and it is scattered through the
+// other two, which is the joke the set is built on: a vase of dried flowers on a dead switchboard.
 // Every prop is paper-white geometry or a solid-ink mass with its pattern left in paper; the ink pass
 // draws the lines. The rule the round-1 critic set: from across the room every prop must show ONE
 // solid black area and ONE bare white area — a black plinth under a white case, a black grille beside
@@ -60,19 +66,25 @@ export async function build(ctx) {
   rug.position.set(0, 0, (RUG.near + RUG.far) / 2);
   g.add(rug);
 
-  // ---- the back wall's furniture row: a LOW band — bookcase | chest | bookcase --------------------
+  // ---- the back wall's furniture row: a LOW band — bookcase | position | bookcase -----------------
   // Round 3: the cases came down from 1.45 m to 1.02 m and moved outboard, so the wall beside
   // Pepe's shoulders and either side of his head is bare plaster, the way the film always keeps one
   // big empty area. Half as many books, twice the spine, black and pale alternating; and the lining
   // board hardly takes tone, so the spines read as silhouettes instead of strokes lost in hatch.
+  // Round 6: what stands between them is no longer a chest. This room is the town's old manual
+  // telephone exchange and that is the operator's position, cut down to the chest's own volume —
+  // 1.04 x 0.82 x 0.38, same place, same footprint, same top at 0.82. Not one thing standing on it
+  // moved: the doily and the lamp at −0.44, the two flat books at −0.20, the candlestick at 0.20,
+  // the vase at 0.45. That is the point of the move and not a saving: he uses a dead switchboard
+  // as a sideboard, and `lamps.table` is published from the same numbers it always was.
   const chestW = 1.04, caseW = 0.34, caseH = 1.02;
   const CASE_BOARDS = [0.15, 0.57];
-  const chest = O.console_({ w: chestW, h: 0.82, d: 0.38 });
+  const chest = O.operatorPosition({ w: chestW, h: 0.82, d: 0.38 });
   chest.position.set(0, 0, FLUSH + 0.19);
   g.add(chest);
   {
     const top = 0.82;
-    // the lamp and the vase sit at the ENDS of the chest, clear of Pepe's head
+    // the lamp and the vase sit at the ENDS of the position, clear of Pepe's head
     const d = O.doily(0.13);
     d.position.set(-0.44, top + 0.002, chest.position.z + 0.02);
     g.add(d);
@@ -114,7 +126,7 @@ export async function build(ctx) {
     }
   }
 
-  // ---- the window (stage left): curtains inside the architrave, the bar cart under it, the palm -----
+  // ---- the window (stage left): curtains inside the architrave, the test table under it, the palm ---
   // narrower panels than round 2, and half the vertical hatch in the cloth: the curtains were a
   // wall of rain-strokes beside a window that is already all shutter-louvres
   g.add(O.curtainSet({ x0: win.x0 - 0.03, x1: win.x1 + 0.03, rodY: win.y1 + 0.05, panelW: 0.19, dropTo: win.y0 + 0.02, z: WALL + 0.06 }));
@@ -137,12 +149,16 @@ export async function build(ctx) {
         rng,
         gap: 0.01,
         // one filled bottle in four, at the left where the row starts; the rest paper with a
-        // black capsule, four different heights, four different shoulders
+        // black capsule, four different heights, four different shoulders.
+        // Round 6: the cart is the test table now, so two of the four go. GIN is the headset,
+        // standing on its earpieces with its cord running off the front edge of the board; RHUM is
+        // a square battery jar. VIN (the solid one, which carries the row's black) and MARC stay,
+        // because he does drink. Same four slots, same widths, same arithmetic.
         items: [
           { kind: 'tall', name: 'VIN', dark: true, scale: 1.2, seed: 201, bodyH: 0.19, neckH: 0.1 },
-          { kind: 'carafe', name: 'GIN', dark: false, scale: 1.15, seed: 202, bodyH: 0.13, neckH: 0.1 },
+          { kind: 'headset' },
           { kind: 'corked', name: 'MARC', dark: false, scale: 1.2, seed: 203, bodyH: 0.15, neckH: 0.06 },
-          { kind: 'squat', name: 'RHUM', dark: false, scale: 1.2, seed: 204, bodyH: 0.12, neckH: 0.05 },
+          { kind: 'square', name: 'PILE', dark: false, scale: 1.1, seed: 204, bodyH: 0.13, neckH: 0.035 },
         ],
       }),
     );
@@ -175,7 +191,7 @@ export async function build(ctx) {
     g.add(p);
   }
 
-  // ---- the door (stage right): a lettered board in the transom light, the tall bottle cabinet beside it
+  // ---- the door (stage right): the doormat, and the PTT's tall spares press beside it -------------
   {
     const cx = (door.x0 + door.x1) / 2;
     const ty = ((door.top ?? 2.12) + 0.05 + door.y1) / 2;
@@ -223,20 +239,26 @@ export async function build(ctx) {
     // fd-anim-kitchen-table-cards-hires. Round 3 had two thirds of them black and at 13 px a
     // bottle that read as a picket of blots; the rest of them are paper now, each with a solid
     // capsule over its neck for its black area, and the one filled bottle in the row carries the
-    // big label. Names kept: GIN · MARC · POIRE · PRUNE · VIN · FINE · PORTO.
+    // big label.
+    // ROUND 6: NOT ONE BOTTLE IS CUT — they are re-lettered. Sixteen named liquor bottles said
+    // "provincial café" and said nothing about him, but the shelves need those silhouettes and
+    // bottles are the film's own furniture. So the cabinet is the PTT's spares press and its
+    // contents are the exchange's: a battery jar, jack springs, battery acid, cord tips, fuses.
+    // Same carcase, same three bays, same arithmetic, same silhouette at 13 px, completely
+    // different room. MARC and FINE stay, because he keeps his drink in the stores cupboard.
     const bays = [
       [
-        { kind: 'tall', name: 'MARC', dark: false, bodyH: 0.19, neckH: 0.1 },
-        { kind: 'square', name: 'GIN', dark: true, bodyH: 0.15 },
-        { kind: 'flask', lines: ['POIRE'], dark: false, neck: 0.075 },
+        { kind: 'tall', name: 'PILE', dark: false, bodyH: 0.19, neckH: 0.1 },
+        { kind: 'square', name: 'MARC', dark: true, bodyH: 0.15 },
+        { kind: 'flask', lines: ['RESSORTS'], dark: false, neck: 0.075 },
       ],
       [],
       [
         // short-wide, block, tall-round: the top bay's three read apart at a glance, which the
         // two tall bottles it had before did not
-        { kind: 'squat', name: 'PORTO', dark: false, bodyH: 0.14, neckH: 0.06 },
+        { kind: 'squat', name: 'FICHES', dark: false, bodyH: 0.14, neckH: 0.06 },
         { kind: 'tin', name: 'FINE', h: 0.13 },
-        { kind: 'carafe', name: 'VIN', dark: false, bodyH: 0.12, neckH: 0.09 },
+        { kind: 'carafe', name: 'FUSIBLES', dark: false, bodyH: 0.12, neckH: 0.09 },
       ],
     ];
     CAB.forEach((y, i) => {
@@ -244,7 +266,8 @@ export async function build(ctx) {
       // packed run of objects one place where the eye is allowed to stop. It is glass now, with a
       // black capsule and an oval label — a shape to rest on rather than the frame's biggest blot.
       if (i === 1) {
-        const dj = O.shelfItem({ kind: 'carafe', name: 'PRUNE', dark: false, bodyH: 0.14, neckH: 0.075, scale: 1.4, seed: 391, shape: 'oval' }, rng);
+        // the demijohn is a carboy of battery acid now — same capsule, same oval label
+        const dj = O.shelfItem({ kind: 'carafe', name: 'ACIDE', dark: false, bodyH: 0.14, neckH: 0.075, scale: 1.4, seed: 391, shape: 'oval' }, rng);
         dj.position.set(x0 + 0.16, y, z0 + 0.14);
         unit.add(dj);
         // one small thing at the far end so the bay is a resting place and not a hole: a tumbler,
@@ -296,9 +319,15 @@ export async function build(ctx) {
     // patch on the wall; between them they were most of the 35-45% the room measured here. What is
     // left is three larger, better-drawn things — a portrait, the clock, a hand — hung in a row
     // under the rail, with bare plaster above the furniture and either side of Pepe's head.
+    // Round 6, the two plates. LEFT, where the generic portrait hung: a woman seated side-on at
+    // this board, in a headband, photographed. He did not hang it and he has not taken it down.
+    // RIGHT, where the palmistry hand hung: a framed circuit diagram — eight heavy verticals,
+    // eight heavy horizontals, a dot at every crossing. It is a jack field on paper, it rhymes
+    // with the position under it, and it reads at 78 px, which the hand never did. The persona
+    // bans mysticism in his mouth; the set does not carry it either.
     const rowA = [
-      [-0.46, 0.4, 0.46, 'portrait', true],
-      [0.46, 0.4, 0.46, 'hand', true],
+      [-0.46, 0.4, 0.46, 'operator', true],
+      [0.46, 0.4, 0.46, 'diagram', true],
     ];
     let seed = 100;
     const hang = (list, y) => {
@@ -321,7 +350,10 @@ export async function build(ctx) {
   {
     const x = -W / 2 + 0.02;
     const rot = Math.PI / 2;
-    const rf = O.roundFrame({ r: 0.17, kind: 'zodiac', seed: 7 });
+    // the zodiac disc that hung here is a barometer: same frame, same r, same place. An
+    // instrument that claims to tell you what is coming and is wrong about twice a month, on the
+    // wall of a room where a man is paid to do the same thing.
+    const rf = O.roundFrame({ r: 0.17, kind: 'barometer', seed: 7 });
     rf.position.set(x, 1.95, -1.75);
     rf.rotation.y = rot;
     g.add(rf);

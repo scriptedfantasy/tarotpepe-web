@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 import { Parts, subtractRect, makeWarp } from './room-build.js';
-import { wallpaperTexture, wainscotTexture, floorTexture, grainTexture, plainTexture } from './room-textures.js';
+import { wallpaperTexture, wainscotTexture, floorTexture, grainTexture, plainTexture, ghostTexture, enamelTexture, cardTexture } from './room-textures.js';
 
 export const meta = {
   name: 'room',
@@ -26,6 +26,33 @@ const BAND = {
   frieze: [2.64, 2.98],
   cornice: [2.98, 3.1],
 };
+
+// THE GHOST. The rectangle of wallpaper the tall multiple stood against until the automatic
+// exchange came in and it was unbolted for scrap. Measured, not guessed: the picture row hangs at
+// y 2.04 with 0.46 m frames, so its bottom edge is 1.81 and the ghost's head has to stay under it
+// — at 1.78 they clear each other by 30 mm, which is 6 px in the home frame and reads as two
+// separate things. His head sits at 1.24, well inside, which is the whole point of the rectangle:
+// the room frames him with the shape of what is not there any more.
+// Its width is 0.96, not the 1.24 that was proposed, and that is a measurement too: the window's
+// downstage shutter leaf folds flat onto this same wall and its outer edge stands at x −0.50, so a
+// rectangle to ±0.62 has its left-hand edge behind a shutter and only one of its two sides to show
+// for itself. ±0.48 clears the leaf by 20 mm, is the width of the position standing under it, and
+// is symmetrical, which the other one could not be.
+const GHOST = { x0: -0.48, x1: 0.48, y0: 0.97, y1: 1.78 };
+
+// The cable duct: a wooden trough along both side walls with an iron cleat every 0.9 m. 2.30 is
+// its UNDERSIDE, which is the line the camera sees — it is always below it — and it is also what
+// makes the run fit: the side doors' architrave caps top out at 2.261 and the picture rail starts
+// at 2.6, so a 90 mm trough hung at 2.30 clears both without touching either.
+const DUCT = { y: 2.3, h: 0.09, d: 0.06, cleat: 0.9 };
+
+// The enamel plate on the door's middle rail, and his visiting card pinned to the fielded panel
+// under it. Both are one-off sheets stretched over a named rectangle of the door (see
+// `worldRectUV`), which is why their coordinates live up here: the material has to know where the
+// part is going to stand before the part is made. The rail runs 1.156–1.256 and the panel's raised
+// centre 0.851–1.071, so neither of them lands on a moulding.
+const PLATE = { x0: 1.35, x1: 1.65, y0: 1.167, y1: 1.245 };
+const CARD = { x0: 1.435, x1: 1.565, y0: 0.989, y1: 1.067 };
 
 // Moulding profiles: stacked boxes [y0, y1, depth]. Kept to one or two steps each: every step
 // is a pair of parallel lines in the drawing, and the film draws a cornice with two, not six.
@@ -85,6 +112,21 @@ export async function build(ctx) {
     iron: mat('iron', plainTexture(), { hatch: 0.42, lineWeight: 1.1 }),
     dark: mat('dark', plainTexture(), { hatch: 1, lineWeight: 1 }), // a hole: cross-hatched to black
   };
+  // The unfaded rectangle of paper. Same hatch and the same line weight as the paper round it, so
+  // the ink pass has no reason to draw a contour where one wall segment stops and the other starts:
+  // the only thing that changes across that edge is how much print is left on the paper.
+  // `lineWeight: 0` is the whole trick and it is not decoration. The ink pass draws a contour
+  // wherever two OBJECTS meet, and the ghost is a second object let into the wall — so round 3's
+  // first cut came out as a rectangle ruled round in pen, which is a stain or a panel and the exact
+  // opposite of what a ghost is. 0 tells the pass to draw no line round this thing at all; the
+  // sheet's own marks still come through the map, and the boundary is then a change of tone with
+  // nothing drawn on it. The rectangle is stated by four bolt holes and by the paper, or not at all.
+  M.ghost = mat('ghost', ghostTexture(GHOST), { hatch: 0.3, lineWeight: 0 });
+  M.ghost.userData.uvRect = { u0: GHOST.x0, u1: GHOST.x1, v0: GHOST.y0, v1: GHOST.y1 };
+  M.plate = mat('plate', enamelTexture({ w: PLATE.x1 - PLATE.x0, h: PLATE.y1 - PLATE.y0 }), { hatch: 0.35, lineWeight: 1 });
+  M.plate.userData.uvRect = { u0: PLATE.x0, u1: PLATE.x1, v0: PLATE.y0, v1: PLATE.y1 };
+  M.card = mat('card', cardTexture({ w: CARD.x1 - CARD.x0, h: CARD.y1 - CARD.y0 }), { hatch: 0.18, lineWeight: 1 });
+  M.card.userData.uvRect = { u0: CARD.x0, u1: CARD.x1, v0: CARD.y0, v1: CARD.y1 };
 
   // every vertex goes through the hand's warp: no edge in the set is ruler-straight
   const P = new Parts({ warp: makeWarp({ amp: 0.02, hx, zb, H, seed: 3 }) });
@@ -144,7 +186,7 @@ export async function build(ctx) {
   const uEnd = zb + D + overrun;
   const walls = [
     // back wall: u = x, plane at z = zb facing +z
-    { u0: -hx, u1: hx, holes: [win, door], bands: backBands, place: (u, y, w, h, m) => P.plane(w, h, u, y, zb, m, { receive: true }) },
+    { u0: -hx, u1: hx, holes: [win, door], bands: backBands, ghost: GHOST, place: (u, y, w, h, m, out = 0) => P.plane(w, h, u, y, zb + out, m, { receive: true }) },
     // stage-left wall: u = z, plane at x = -hx facing +x
     { u0: zb, u1: uEnd, holes: [sideDoorL], bands: sideBands, place: (u, y, w, h, m) => P.plane(w, h, -hx, y, u, m, { ry: Math.PI / 2, receive: true }) },
     // stage-right wall: u = z, plane at x = +hx facing -x
@@ -155,7 +197,17 @@ export async function build(ctx) {
       const [y0, y1] = BANDS[band];
       let rects = [{ x0: wall.u0, x1: wall.u1, y0, y1 }];
       for (const h of wall.holes) rects = subtractRect(rects, h);
+      // the ghost is cut out of the papered field and laid back in with its own sheet: same plane,
+      // same normal, same depth, so nothing about the geometry says a rectangle is there
+      if (wall.ghost && band === 'field') rects = subtractRect(rects, wall.ghost);
       for (const r of rects) wall.place((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2, r.x1 - r.x0, r.y1 - r.y0, m);
+    }
+    if (wall.ghost) {
+      const { x0, x1, y0, y1 } = wall.ghost;
+      // 0.6 mm proud of the paper it is let into — not enough to be a step (the pen's depth test
+      // needs 1.5 mm before it calls anything a silhouette) but enough that the pass, deciding
+      // which of two touching surfaces owns the boundary, always picks the one that says "no line".
+      wall.place((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0, M.ghost, 0.0006);
     }
   }
 
@@ -185,8 +237,12 @@ export async function build(ctx) {
     sideRun(prof, 1, low ? [sideDoorR.x0 - a0, sideDoorR.x1 + a0] : null);
   }
 
+  // ---- what the PTT left on the side walls ----
+  buildDuct(P, M, { hx, zb, uEnd, sideWin });
+  buildTerminalBox(P, M, hx, 0.12);
+
   // ---- the openings ----
-  buildWindow(P, M, win, zb, jit);
+  buildWindow(P, M, win, zb, jit, { leadIn: true });
   buildRadiator(P, M, win, zb);
   buildDoor(P, M, door, zb);
   buildSwitch(P, M, door.x0 - 0.1 - 0.16, 1.22, zb);
@@ -211,7 +267,7 @@ export async function build(ctx) {
 
 // A tall casement window in a reveal, an architrave, a sill, and two louvred shutters folded
 // back flat against the wall on either side (their slats are real: thin angled boxes).
-function buildWindow(P, M, w, zb, jit = Math.random) {
+function buildWindow(P, M, w, zb, jit = Math.random, { leadIn = false } = {}) {
   const { x0, x1, y0, y1, depth } = w;
   const zr = zb - depth; // the back of the reveal
   // reveal faces (jambs, head, sill-bed): they carry tone, like the door reveal in the film
@@ -300,6 +356,34 @@ function buildWindow(P, M, w, zb, jit = Math.random) {
     const sx = lx1 - s / 2, sy = (y0 + y1) / 2 - 0.12;
     P.cylinder(0.011, 0.011, 0.005, sx, sy, zl1 + 0.004, M.metal, { rx: Math.PI / 2, segments: 10 });
     P.box(0.012, 0.16, 0.006, sx - 0.01, sy - 0.08, zl1 + 0.008, M.metal, { rz: 0.12, cast: true });
+  }
+
+  // THE LEAD-IN. A porcelain tube driven through the window head, and the pair outside the glass
+  // dropping past it out of the picture. It is two lines and it is the only thing in the room that
+  // says the room was connected to somewhere else — the duct and the terminal box are the inside
+  // of that sentence and this is where it comes from. The pair is drawn BEHIND the casements and
+  // in front of the daylight, so the glazing bar crosses it: that is what puts it outside.
+  if (leadIn) {
+    // WHERE IT CAN BE DRAWN AT ALL. The daylight at the back of the reveal and the panes themselves
+    // are opaque white sheets — that is how the set draws a window, and it is right — so nothing
+    // behind the glass exists to be looked at. The only depth in which a thing can be OUTSIDE and
+    // still be seen is the 17 mm between the pane and the front of the casement: draw a cable
+    // there and the meeting stiles and the glazing bar pass in front of it, which is exactly what
+    // puts it on the far side of the window. So the tube comes through under the head, over the
+    // top light of the left leaf, and the pair drops from it across both panes to the sill.
+    // (x0 + 0.25 and not less: the props piece hangs a 0.19 m curtain panel from x0 − 0.03, and the
+    // first cut of this was drawn behind cloth.)
+    const lx = x0 + 0.25, ly = y1 - 0.12;
+    const cz = zr + 0.062;
+    P.cylinder(0.017, 0.017, 0.026, lx, ly, cz, M.trim, { rx: Math.PI / 2, segments: 12 });
+    P.cylinder(0.028, 0.028, 0.009, lx, ly, cz + 0.006, M.trim, { rx: Math.PI / 2, segments: 16 });
+    const drop = ly - (y0 + 0.03);
+    for (const [dx, r, lean] of [
+      [0, 0.0085, 0.02],
+      [0.05, 0.0055, 0.038],
+    ]) {
+      P.cylinder(r, r, drop, lx + dx - (drop / 2) * Math.sin(lean), ly - (drop / 2) * Math.cos(lean), cz, M.dark, { rz: -lean, segments: 8 });
+    }
   }
 
   // shutters: two leaves folded flat against the wall outside the architrave
@@ -394,6 +478,87 @@ function buildRadiator(P, M, w, zb) {
   const px = cx + width / 2 + 0.03;
   P.cylinder(0.011, 0.011, vy, px, vy / 2, z0 + depth / 2, M.iron, { segments: 10 });
   P.cylinder(0.014, 0.014, 0.06, px - 0.02, vy, z0 + depth / 2, M.iron, { rz: Math.PI / 2, segments: 10 });
+}
+
+// THE CABLE DUCT. The one thing the PTT screwed to the walls that was not worth taking away: a
+// 90 × 60 mm wooden trough with a planted lid, run at 2.30 the length of both side walls, held by
+// a flat iron cleat every 0.9 m. It is here because the side walls are the only surfaces in the
+// set that admit they carry too few lines, and because a duct is the one drawing a raking wall
+// actually wants: a horizontal that converges, with a rhythm of short verticals hung off it.
+//
+// The stage-right run stops at the side window. Those shutters fold back flat against the wall
+// over two metres of it and stand 56 mm proud, and a duct does not pass through a shutter — so the
+// trough is stopped and capped, which is what happens to a duct in a building that had windows in
+// it before it had cables.
+function buildDuct(P, M, { hx, zb, uEnd, sideWin }) {
+  const { y: yb, h, d, cleat } = DUCT;
+  const yt = yb + h;
+  const shutter = sideWin.x1 + 0.09 + 0.46 + 0.02; // the downstage edge of the folded leaf
+  for (const side of [-1, 1]) {
+    const x0 = side < 0 ? -hx : hx - d; // the wall face
+    const x1 = side < 0 ? -hx + d : hx; // ...and the front of the trough
+    const front = side < 0 ? x1 : x0; // the face that looks into the room
+    const out = side < 0 ? 1 : -1; // which way is "proud"
+    const runs = side < 0 ? [[zb, uEnd]] : [[shutter, uEnd]];
+    for (const [z0, z1] of runs) {
+      if (z1 - z0 < 0.05) continue;
+      // no cast: it is a nine-metre bar a hand's breadth off the wall, and the practicals would
+      // throw its shadow the length of the room, which is the one thing the mouldings are careful
+      // not to do either
+      P.boxFrom(x0, x1, yb, yt, z0, z1, M.trim, { receive: true });
+      // the lid: a board planted over the upper half of the face, so the pen sees three lines down
+      // the run — the trough's top, the lid's bottom edge, the trough's underside — and not one bar
+      const l0 = Math.min(front, front + out * 0.01), l1 = Math.max(front, front + out * 0.01);
+      P.boxFrom(l0, l1, yt - 0.05, yt, z0, z1, M.trim, {});
+      // a capped end where the run is stopped short of the corner: a plate across the section,
+      // standing a little proud of it, so the stop reads as a stop and not as a sawn-off box
+      const at = [];
+      if (z0 > zb + 0.02) {
+        const c0 = Math.min(x0, x1 + out * 0.012), c1 = Math.max(x1, x0 + out * 0.012);
+        P.boxFrom(c0, c1, yb - 0.008, yt + 0.008, z0, z0 + 0.014, M.trim, { cast: true });
+        at.push(z0 + 0.06);
+      }
+      // the cleats: a flat iron strap over the trough with a screw above and below it. The centres
+      // are counted from the back wall rather than from the start of each run, so the cleats on the
+      // two side walls line up across the room — which is the sort of thing this room is made of.
+      for (let z = Math.ceil((z0 - zb) / cleat) * cleat + zb + 0.06; z < z1 - 0.06; z += cleat) at.push(z);
+      const s0 = Math.min(x0, front + out * 0.014), s1 = Math.max(x1, front + out * 0.014);
+      for (const z of at) {
+        P.boxFrom(s0, s1, yb - 0.022, yt + 0.022, z - 0.011, z + 0.011, M.iron, { cast: true });
+        for (const cy of [yb - 0.014, yt + 0.014]) P.cylinder(0.006, 0.006, 0.006, front + out * 0.017, cy, z, M.iron, { rz: Math.PI / 2, segments: 8 });
+      }
+    }
+  }
+}
+
+// THE TERMINAL BOX. Where the duct goes: a japanned cast box beside the way-in door with the wall
+// conduit dropping into the top of it and a tail leaving the bottom for the floor. It is the one
+// black mass on the stage-right wall, and it is the object that says the room was WIRED — a duct
+// on its own could be carrying anything.
+//
+// It stands upstage of the door, and how far upstage was measured in the frame rather than chosen:
+// the light switch is at z 0.63 and the home plate's right edge falls at z 0.5, so at z 0.29 the
+// box came within nine pixels of being cut by the frame, which is the one thing round 4's camera
+// work went and fixed. At 0.12 it is clear of both, and it still reads as the fitting beside the
+// way in — which is what it is, because that is where the line came into the room.
+function buildTerminalBox(P, M, hx, z) {
+  const { y: dy, d } = DUCT;
+  const bz = 0.17, by0 = 1.22, by1 = 1.58; // 0.34 × 0.36, centred on 1.40
+  const x0 = hx - 0.11;
+  // the conduit down from the duct, on saddles. 26 mm, not 34: on the raking wall of the door shot
+  // it runs the whole height of the frame, and at the wider gauge it stopped being a cable and
+  // became a downpipe drawn across a third of the picture.
+  P.cylinder(0.013, 0.013, dy - by1 + 0.02, hx - 0.028, (by1 + dy) / 2, z, M.dark, { cast: true, segments: 10 });
+  for (const sy of [by1 + 0.13, dy - 0.16]) P.box(0.012, 0.028, 0.05, hx - 0.028, sy, z, M.iron, { cast: true });
+  // the box: a carcase, a proud lid with a rim, four corner bosses
+  P.boxFrom(x0, hx, by0, by1, z - bz, z + bz, M.dark, { cast: true, receive: true });
+  P.boxFrom(x0 - 0.014, x0, by0 + 0.02, by1 - 0.02, z - bz + 0.02, z + bz - 0.02, M.dark, { cast: true });
+  for (const cy of [by0 + 0.035, by1 - 0.035])
+    for (const cz of [z - bz + 0.035, z + bz - 0.035]) P.cylinder(0.011, 0.011, 0.01, x0 - 0.016, cy, cz, M.iron, { rz: Math.PI / 2, segments: 8 });
+  // the tail out of the bottom, down into the floor, on three saddles: a line with a rhythm in it
+  // reads as a run of conduit, an unbroken one reads as a bar of ink
+  P.cylinder(0.01, 0.01, by0, hx - 0.028, by0 / 2, z, M.dark, { cast: true, segments: 10 });
+  for (const sy of [0.28, 0.62, 0.96]) P.box(0.012, 0.026, 0.046, hx - 0.028, sy, z, M.iron, { cast: true });
 }
 
 // A round bakelite light switch beside the door.
@@ -507,6 +672,17 @@ function buildDoor(P, M, d, zb) {
     P.box(0.014, 0.014, 0.008, dx1 - 0.16, y, dz1 + 0.009, M.metal);
     P.box(0.014, 0.014, 0.008, dx1 - 0.08, y, dz1 + 0.009, M.metal);
   }
+  // THE PLATE, AND THE CARD UNDER IT. A vitreous enamel notice screwed to the middle rail — the
+  // PTT's, left where the PTT screwed it — and, pinned to the panel below, the visiting card of
+  // the man who now rents the room, whose own board over his head says WALK-INS TOLERATED. Nobody
+  // in the room remarks on this. The plate is the only object in the set drawn white-on-black,
+  // which is what an enamel plate is and what makes it read as a plate from across the room.
+  P.boxFrom(PLATE.x0, PLATE.x1, PLATE.y0, PLATE.y1, dz1, dz1 + 0.005, M.metal, { cast: true });
+  P.plane(PLATE.x1 - PLATE.x0, PLATE.y1 - PLATE.y0, (PLATE.x0 + PLATE.x1) / 2, (PLATE.y0 + PLATE.y1) / 2, dz1 + 0.0056, M.plate);
+  const cz = dz1 - 0.022 + 0.009; // the face of the panel's raised centre
+  P.plane(CARD.x1 - CARD.x0, CARD.y1 - CARD.y0, (CARD.x0 + CARD.x1) / 2, (CARD.y0 + CARD.y1) / 2, cz + 0.0016, M.card);
+  P.cylinder(0.005, 0.005, 0.006, (CARD.x0 + CARD.x1) / 2, CARD.y1 - 0.008, cz + 0.005, M.metal, { rx: Math.PI / 2, segments: 8, cast: true });
+
   // threshold
   P.boxFrom(x0 - 0.01, x1 + 0.01, y0, y0 + 0.018, zr, zb + 0.01, M.trim, { receive: true });
 }

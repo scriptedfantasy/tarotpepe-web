@@ -372,6 +372,8 @@ export function shelfItem(spec, rng) {
       return tumbler(0.085 * s, 0.03 * s);
     case 'siphon':
       return siphon();
+    case 'headset':
+      return headset();
     default:
       return bottle({ kind: 'squat', lines, dark: !!spec.dark, seed });
   }
@@ -1100,44 +1102,160 @@ export function cat() {
   return g;
 }
 
-// ---- console / chest ----------------------------------------------------------------------------------------
-export function console_({ w = 1.16, h = 0.82, d = 0.38 }) {
+// ---- the operator's position -----------------------------------------------------------------
+// ROUND 6, THE SET REBUILD. What stood here was `console_`, a turned-leg console table with a
+// black apron — generic, and the object directly behind his head in every frontal shot. The room
+// is the town's old manual telephone exchange, so this is the switchboard position, cut down to
+// the SAME VOLUME: 1.04 x 0.82 x 0.38, same footprint, same silhouette, top still at 0.82. The
+// doily, the mushroom lamp, the two flat books, the candlestick and the vase stand on exactly the
+// coordinates they stood on. He uses a dead switchboard as a sideboard, and a vase of dried
+// flowers on a keyshelf is the whole film in one object.
+//
+// WHAT IS DRAWN, AND WHY IT IS DRAWN WHERE IT IS. The band anyone ever sees is short and it was
+// measured, not guessed: the cloth is a square laid corner-forward, so where it crosses this wall
+// depends on x. On the room's axis it hides everything under y 0.58 in `home` and 0.54 in `pepe`;
+// at the ENDS of the position, which is the only part the camera sees past him at all, it hides
+// under 0.51 and 0.44. Round 6's first cut put the key ranks at 0.62–0.76 and the table ate the
+// front rank whole. Everything that has to READ therefore lives in 0.64–0.94, and the cord well —
+// which is what a switchboard has under the shelf, and would be a lie to leave out — sits below,
+// where the table covers it. Top down:
+//   0.82–0.94  the jack strip, at the rear of the top and set back 0.32 m so it clears the doily.
+//              The tall multiple that stood above it was unbolted for scrap; this survived.
+//              Tops out at 0.94: the `pepe` shot frames his head against this wall and nothing
+//              may stand above 1.05 on it.
+//   0.79–0.82  the top slab, proud all round, as the console's was
+//   0.68–0.79  the key bay: a black recess with two staggered ranks of paper key handles,
+//              thirteen in front and twelve stepped up behind, three of them thrown
+//   0.64–0.68  the designation strip, in front of the keys where an operator reads it
+//   0.60–0.64  the keyshelf's edge, blacked in and proud: the position's one big black area
+//   0.09–0.50  the cord well, four weights hanging on their pulleys at four heights
+//   0–0.075    the plinth, blacked in, the foot every case in the folios stands on
+export function operatorPosition({ w = 1.04, h = 0.82, d = 0.38 }) {
   const M = materials();
   const g = new THREE.Group();
-  const legH = 0.12;
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    const leg = lathe([[0, 0], [0.028, 0], [0.028, 0.02], [0.02, 0.03], [0.034, 0.06], [0.034, 0.09], [0.026, 0.1], [0.026, legH], [0, legH]], M.wood, 12);
-    leg.position.set(sx * (w / 2 - 0.06), 0, sz * (d / 2 - 0.06));
-    g.add(leg);
-  }
-  const body = box(w, h - legH - 0.03, d, M.wood);
-  body.position.y = legH + (h - legH - 0.03) / 2;
+  const F = d / 2; // the front face
+  const FRONT = 0.09; // the thickness of the front layer: what the cord well is recessed into
+  const iron = M.metal; // enamelled iron, no grain, a heavier line than the wood cases beside it
+  const inner = w - 0.15; // between the two end stiles
+  // the carcase, less the front layer, so the well can be a real recess and not a drawn one
+  const body = box(w, h - 0.03, d - FRONT, iron);
+  body.position.set(0, (h - 0.03) / 2, -FRONT / 2);
   g.add(body);
-  const top = box(w + 0.04, 0.03, d + 0.04, M.wood);
+  const plinth = box(w + 0.006, 0.075, d + 0.006, M.solid);
+  plinth.position.y = 0.0375;
+  g.add(plinth);
+  const toe = box(w + 0.022, 0.012, d + 0.022, M.solid);
+  toe.position.y = 0.081;
+  g.add(toe);
+  const top = box(w + 0.04, 0.03, d + 0.04, iron);
   top.position.y = h - 0.015;
   g.add(top);
-  // a solid apron under the carcase: the chest's one black note, so it is not a white slab of
-  // drawer lines behind Pepe
-  const apron = box(w + 0.005, 0.055, d + 0.005, M.solid);
-  apron.position.y = legH + 0.026;
-  g.add(apron);
-  const dw = w / 2 - 0.06, dh = (h - legH - 0.03) / 2 - 0.04;
-  for (const sx of [-1, 1]) for (let r = 0; r < 2; r++) {
-    const f = box(dw, dh, 0.014, M.wood);
-    const y = legH + 0.03 + dh / 2 + r * (dh + 0.03);
-    f.position.set(sx * (dw / 2 + 0.02), y, d / 2 + 0.007);
-    g.add(f);
-    for (const kx of [-0.14, 0.14]) {
-      const k = sphere(0.014, M.solid, 8, 6);
-      k.position.set(f.position.x + kx, y, d / 2 + 0.024);
-      g.add(k);
-      const back = cyl(0.022, 0.022, 0.006, M.solid, 10);
-      back.rotation.x = Math.PI / 2;
-      back.position.set(f.position.x + kx, y, d / 2 + 0.016);
-      g.add(back);
-    }
+  // the front layer: two end stiles full height, a sill under the well, a band over it
+  const face = (bw, bh, y, mat = iron, z = F - FRONT / 2, bd = FRONT) => {
+    const b = box(bw, bh, bd, mat);
+    b.position.set(0, y, z);
+    g.add(b);
+    return b;
+  };
+  for (const sx of [-1, 1]) {
+    const st = box(0.075, h - 0.03, FRONT, iron);
+    st.position.set(sx * (w / 2 - 0.0375), (h - 0.03) / 2, F - FRONT / 2);
+    g.add(st);
   }
+  face(inner, 0.09, 0.045); // the sill under the cord well
+  face(inner, 0.1, 0.55); // the cord shelf's face — the bare white band the rule asks for
+  // the keyshelf's edge: solid, and proud of the face, so it throws its own line across the room
+  const edge = box(inner + 0.02, 0.04, FRONT + 0.04, M.solid);
+  edge.position.set(0, 0.62, F - FRONT / 2 + 0.02);
+  g.add(edge);
+  // the designation strip, in front of the keys
+  const strip = new THREE.Mesh(new THREE.BoxGeometry(inner, 0.04, FRONT), [iron, iron, iron, iron, inkMaterial({ map: T.keyStripTexture({ cells: 13 }), hatch: 0.15 }), iron]);
+  strip.castShadow = true;
+  strip.position.set(0, 0.66, F - FRONT / 2);
+  g.add(strip);
+  // the key bay: black at the back, black under, black on the step. Everything paper in it is a key.
+  const bayBack = box(inner, 0.11, 0.04, M.solid);
+  bayBack.position.set(0, 0.735, F - FRONT + 0.02);
+  g.add(bayBack);
+  const bayFloor = box(inner, 0.02, 0.06, M.solid);
+  bayFloor.position.set(0, 0.675, F - 0.03);
+  g.add(bayFloor);
+  const step = box(inner, 0.055, 0.03, M.solid);
+  step.position.set(0, 0.7045, F - 0.0425);
+  g.add(step);
+  // two ranks of key handles, staggered by half a pitch so the back rank shows between the front
+  // rank's shoulders. 36 mm handles on a 66 mm pitch: 7.5 px of key and 6 px of black between
+  // them in `home`, 12 and 10 in `pepe` — the spacing a row of bottles reads at, which is the
+  // smallest thing this pen draws separately. The front rank tops out 4 mm under the back rank's
+  // floor, so the two are two ranks and not a thicket; the camera looks down on this wall by 5.3°
+  // and that is what closes the gap.
+  const rank = (n, baseY, z, tilt) => {
+    const pitch = inner / (n + 0.4);
+    for (let i = 0; i < n; i++) {
+      const k = box(0.036, 0.048, 0.016, M.paper);
+      k.position.set((i - (n - 1) / 2) * pitch, baseY + 0.024, z);
+      if (tilt.includes(i)) {
+        k.rotation.x = -0.42;
+        k.position.y -= 0.004;
+      }
+      g.add(k);
+    }
+  };
+  rank(13, 0.682, F - 0.012, [4, 9]); // the front rank, two of them thrown
+  rank(12, 0.734, F - 0.043, [7]); // the back rank, on its step, one thrown
+  // the jack strip. At the BACK of the top: the flat book at x −0.20 reaches z −0.125 in the
+  // chest's own frame, so a plate any further forward would stand in it.
+  const jackTex = inkMaterial({ map: T.jackFieldTexture({}), hatch: 0.15 });
+  const jack = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.12, 0.06), [M.solid, M.solid, M.solid, M.solid, jackTex, M.solid]);
+  jack.castShadow = true;
+  jack.position.set(0, 0.88, -d / 2 + 0.03);
+  g.add(jack);
+  // the cord well: four weights on their pulleys, at four heights, behind the shelf
+  const wellZ = F - FRONT + 0.03;
+  [0.2, 0.28, 0.16, 0.245].forEach((wy, i) => {
+    const x = -0.3 + i * 0.2;
+    const pul = cyl(0.024, 0.024, 0.012, M.paper, 16);
+    pul.rotation.x = Math.PI / 2;
+    pul.position.set(x, 0.455, wellZ);
+    g.add(pul);
+    const hub = cyl(0.008, 0.008, 0.018, M.solid, 8);
+    hub.rotation.x = Math.PI / 2;
+    hub.position.set(x, 0.455, wellZ);
+    g.add(hub);
+    g.add(rod([x, 0.455, wellZ], [x, wy + 0.085, wellZ], 0.0026, M.cord, 5));
+    const wt = cyl(0.02, 0.02, 0.085, M.solid, 12);
+    wt.position.set(x, wy + 0.0425, wellZ);
+    g.add(wt);
+  });
   g.userData.top = h;
+  return g;
+}
+// A black bakelite operator's headset, standing on its earpieces with the band arching over and
+// the cord running off the front of the board. One solid black mass, one paper hub in each ear.
+export function headset() {
+  const M = materials();
+  const g = new THREE.Group();
+  const R = 0.058, er = 0.03;
+  const band = new THREE.Mesh(new THREE.TorusGeometry(R, 0.007, 6, 22, Math.PI), M.solid);
+  band.castShadow = true;
+  band.position.y = er;
+  g.add(band);
+  for (const sx of [-1, 1]) {
+    const cup = cyl(er, er * 0.9, 0.022, M.solid, 18);
+    cup.rotation.z = Math.PI / 2;
+    cup.position.set(sx * R, er, 0);
+    g.add(cup);
+    const hub = cyl(er * 0.4, er * 0.4, 0.026, M.paper, 12);
+    hub.rotation.z = Math.PI / 2;
+    hub.position.set(sx * R, er, 0);
+    g.add(hub);
+  }
+  // the cord, in solid ink and thick enough to survive: at 0.007 m it is 1.5 px in `home` and a
+  // white rod that thin is two coincident outlines and then nothing
+  const P = [[-R, 0.012, 0.012], [-R + 0.03, 0.008, 0.09], [0.005, 0.007, 0.17], [0.04, 0.006, 0.25], [0.055, -0.055, 0.28], [0.038, -0.135, 0.272]];
+  for (let i = 0; i < P.length - 1; i++) g.add(rod(P[i], P[i + 1], 0.005, M.solid, 6));
+  g.userData.height = er + R + 0.007;
+  g.userData.width = R * 2 + 0.022;
   return g;
 }
 
