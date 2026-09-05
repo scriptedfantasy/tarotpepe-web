@@ -333,7 +333,16 @@ async function callOpenRouter(cfg, messages, signal, send) {
       stream: true,
       max_tokens: MAX_TOKENS.openrouter,
       temperature: 0.8,
-      messages: [{ role: 'system', content: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }] }, ...messages],
+      // The persona is byte-identical on every request, so it is worth caching where caching exists.
+      // cache_control is Anthropic's, and OpenRouter forwards it verbatim: on anthropic/* it buys the
+      // cached prefix, on openai/* or google/* it is a system message shaped like nothing they know.
+      // So only Anthropic gets the block; everyone else gets a plain string.
+      messages: [
+        /^anthropic\//.test(cfg.model)
+          ? { role: 'system', content: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }] }
+          : { role: 'system', content: SYSTEM },
+        ...messages,
+      ],
     }),
   });
   if (!res.ok) {
