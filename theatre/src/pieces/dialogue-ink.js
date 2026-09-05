@@ -3,15 +3,19 @@
 //   drawPlacard  the card every line arrives on — a hand-cut sheet with a deckled edge, four
 //                strokes that cross at every corner, and the ink rules across it
 //   drawName     a name LETTERED in the sign hand (titles-sign.js) rather than set in a font
-//   drawDash     the speaker's dash that opens a line — HIS in his own green, the visitor's in ink
-//   drawCaret    the visitor's caret: a short ink dash on the baseline
+//   drawCaret    the visitor's caret: an upright pen stroke standing on the baseline
 //   drawMic      the carbon microphone that stands on the table beside the ashtray
 //
-// The caret, the dash and the microphone are drawn twice — once wide in paper, so the hatching
-// behind them is knocked out the way an inker leaves a gap around a drawn object, and once in ink
-// at the pen's own weight. Nothing here is a box, a band or a background. Everything is a stroke.
+// ROUND 7 took the speaker's dashes out. Round 6 opened each register with one — his laid in his
+// green and contoured in ink, the visitor's a single stroke — because green TYPE at #69b964 could
+// not be read. The user's answer was to make the type readable rather than to mark it: "just make
+// pepes font green - and users font black, lines not needed". So the colour moved into the words
+// (a darker shade of his own green; see PEPE_GREEN in dialogue.js) and drawDash is gone.
+//
+// The caret and the microphone are drawn twice — once wide in paper, so the hatching behind them
+// is knocked out the way an inker leaves a gap around a drawn object, and once in ink at the pen's
+// own weight. Nothing here is a box, a band or a background. Everything is a stroke.
 import { INK, PAPER } from '../core/strokes.js';
-import { SKIN } from './pepe.js';
 import { mulberry32 } from '../core/rng.js';
 import { signCaps, signGlyphs, SIGN_ASCENT, SIGN_DESCENT, SIGN_HAS } from './titles-sign.js';
 
@@ -106,42 +110,12 @@ function twice(groups, lw) {
   return `<g class="under">${under}</g><g class="over">${over}</g>`;
 }
 
-// THE SPEAKER'S DASH — the one mark on the card that says whose line this is.
-//
-// A film subtitle that carries two voices opens each of them with a dash. Ours are the same mark
-// drawn by two different hands: HIS is laid in his own green and struck through with the room's
-// pen, exactly as every coloured thing in this world is made (BRIEF.md, selective colour: a flat
-// fill with the line drawn over it; and the ink pass's `colorInk` restates the achromatic marks
-// inside a coloured surface at the pen's own value). The visitor's is bare paper and one ink
-// stroke, because the visitor is the only person in this room who is not drawn.
-//
-// The legibility is carried by the ink core, never by the colour: SKIN #69b964 on PAPER #f8f9f4
-// is 2.28:1, which is nowhere near enough to set a sentence in. So the colour is a mark and the
-// words are ink. viewBox 0 0 22 14 — cut close around the dash, so the mark fills the box it is
-// given at every size instead of being letterboxed inside it.
-// HIS is a drawn object and the visitor's is a pen stroke, which is the difference between them:
-// his is laid down in green and CONTOURED in ink, exactly as the puppet is (a flat fill with the
-// line round it), so it is a coloured thing in the drawing rather than a coloured line; theirs is
-// one stroke of the same pen and nothing else.
-export function drawDash(svg, { green = false, seed = 9 } = {}) {
-  const rng = mulberry32(seed);
-  svg.setAttribute('viewBox', '0 0 22 14');
-  const d = pathD(stroke(2.2, 7.1, 19.8, 7.1, rng, { wobble: 0.5, overshoot: 0.6 }));
-  svg.innerHTML =
-    `<path d="${d}" fill="none" stroke="${PAPER}" stroke-width="${green ? 10.5 : 7.5}" stroke-linecap="round"/>` +
-    (green
-      ? `<path d="${d}" fill="none" stroke="${INK}" stroke-width="7.6" stroke-linecap="round"/>` +
-        `<path d="${d}" fill="none" stroke="${SKIN}" stroke-width="4.8" stroke-linecap="round"/>`
-      : `<path d="${d}" fill="none" stroke="${INK}" stroke-width="3.4" stroke-linecap="round"/>`);
-}
-
 // THE CARET: the nib standing on the line where the visitor's next letter will go — an upright pen
 // stroke from the baseline to a little over the cap height, with the hand's own wobble in it.
 //
-// It was a short dash on the baseline until round 6 put a dash at the head of each speaker's line
-// (drawDash, above). Two horizontal dashes at the two ends of the same sentence read as a pair of
-// rules, not as a cursor: at 390 px the caret has to be unmistakably a caret, so it stands up.
-// viewBox 0 0 12 26; the stroke runs from y = 25.6, which is where the baseline falls, to y = 7.
+// It was a short dash on the baseline until round 6 stood it up, and it stays standing now that the
+// dashes are gone: it is the one mark left on the card, so it has to be unmistakably a caret at
+// 390 px and not a rule. viewBox 0 0 12 26; the stroke runs from y = 25.6, the baseline, to y = 7.
 export function drawCaret(svg, seed = 5) {
   const rng = mulberry32(seed);
   svg.setAttribute('viewBox', '0 0 12 26');

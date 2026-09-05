@@ -26,19 +26,24 @@
 // the rest, which the user saw at once — "sometimes it says tarotpepe … it should say tarotpepe at
 // all" — and then decided the other way: "we dont need tarotpepes name over every line - i prefer
 // it actually without - we only need a distinction between what tarotpepe said and what the user
-// says. maybe with a color?" So the name is off the card, and the DRAWING carries the distinction:
+// says. maybe with a color?"
 //
-//   · each register opens with a SPEAKER'S DASH, the mark a film subtitle uses for a voice;
-//   · HIS is laid in his own green — SKIN #69b964 from pepe.js, the one colour in this film that
-//     already means him — with the room's pen struck through it, the way every coloured thing here
-//     is made (BRIEF.md: a flat fill with the line drawn over it);
-//   · the VISITOR'S is bare paper and one ink stroke, because the visitor is the only person in
-//     this room who is not drawn;
-//   · and the words of both are INK. Green type would not hold: #69b964 on #f8f9f4 measures
-//     2.28:1, well under the 4.5:1 a 13 px caption needs on a phone. The colour is a mark; the
-//     sentence is ink. See drawDash in dialogue-ink.js.
+// ROUND 7: THE TYPE ITSELF CARRIES IT. Round 6 answered that with a speaker's dash at the head of
+// each register — his laid in his green, the visitor's a single ink stroke — and kept both
+// sentences in ink, because #69b964 on the paper measures 2.28:1 and a sentence cannot be set in
+// it. The user looked at that and asked for the simpler thing: "rather then having the green and
+// black line in the chatbox - just make pepes font green - and users font black, lines not
+// needed". So the dashes are gone and:
+//
+//   · HIS WORDS ARE GREEN and the VISITOR'S ARE INK, and that is the whole of the distinction;
+//   · the green is HIS green taken down until it can be read — PEPE_GREEN below, the same hue and
+//     saturation as SKIN #69b964 with the lightness walked from 56% to 34%. It measures 5.13:1 on
+//     the paper against #69b964's 2.28:1, so a 13 px capital on a phone is type and not a stain.
+//     It is still the one colour in this film that means him: no third colour is introduced;
+//   · and his line is cut a step heavier than the visitor's (700 against 600), because a coloured
+//     letter at 13 px has less ink in it than a black one and the weight puts it back;
 //   · the blinking caret is in the visitor's register and nowhere else: whoever the caret is with
-//     has the pen.
+//     has the pen. It is a pen stroke, not a dash, and it stayed.
 //
 // ONE VOICE OF TYPE, ONE HAND OF LETTERING, and nothing else on the card:
 //   · the words — his line and the visitor's alike — are the typewriter serif, capitals, tracked,
@@ -48,6 +53,8 @@
 //
 // Placement. `anchors` names a spot per camera shot — {shot: {x, y, w, floor}} — and every shot has
 // the same one: centred at the foot of the frame, where a film puts its subtitles. See ANCHORS.
+// ONE beat is excepted, by the user, and only one: while the spread is out and the visitor is
+// choosing a card, the same card stands at the TOP of the frame instead. See THE DOCK, below.
 //
 // The visitor's answer is drawn, not typed into a form: the same face, in their own two-line
 // register, with an ink dash for a caret that blinks on the 12 fps clock. Past two lines their
@@ -84,7 +91,7 @@ import { SCRIPT, lineFor, linesFor, reply as scriptReply, POSITIONS, positionKey
 import { bySlug } from '../core/deck.js';
 import { INK } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
-import { SVGNS, drawCaret, drawDash, drawMic, drawPlacard, drawName, CAN_LETTER, PLACARD_BLEED } from './dialogue-ink.js';
+import { SVGNS, drawCaret, drawMic, drawPlacard, drawName, CAN_LETTER, PLACARD_BLEED } from './dialogue-ink.js';
 
 export const meta = {
   name: 'dialogue',
@@ -121,6 +128,51 @@ const TAKE_HOLD = 0.55; // seconds a take that is not the last of its line is he
 const PHONE = 700; // frames narrower than this are a phone: the card takes nearly the whole width
 // The type floor (BRIEF.md: nothing lettered below 13 px). The caption face is clamped there.
 const FONT_MIN = 13;
+
+// HIS GREEN, AS TYPE. The user: "just make pepes font green - and users font black".
+//
+// Pepe's skin is SKIN #69b964 (pepe.js) — hsl(116 38% 56%) — and on the paper #f8f9f4 it measures
+// 2.28:1. That is not a contrast a sentence can be set at: 4.5:1 is the floor for a 13 px caption
+// and 3:1 the floor for a mark that is not even text. A colour nobody can read is not his colour,
+// it is a stain, so the green is taken DOWN — the same hue, the same saturation, the lightness
+// walked from 56% to 34% — until it holds:
+//
+//     #69b964  hsl(116 38% 56%)  2.28:1   his skin; unreadable as type
+//     #3a7736  hsl(116 38% 34%)  5.13:1   the same green, in the shade. What is shipped.
+//
+// It is a darker shade of the one colour that already means him, not a second colour: BRIEF.md's
+// selective-colour rule is intact (only Pepe and the card faces carry colour) and nothing else on
+// the card is coloured. The visitor's words stay INK #0d0e0d, 18.28:1.
+const PEPE_GREEN = '#3a7736';
+// And a step heavier than the visitor's line. A coloured glyph at 13 px carries less ink than a
+// black one at the same weight; the extra cut puts it back without touching the hue or the size.
+const PEPE_WEIGHT = 700;
+
+// ---- THE DOCK ---------------------------------------------------------------------------------
+// The card is bottom-centred all evening — the user's settled decision — with ONE exception, also
+// the user's: "attach the caption card to the top during the card picking process" (BRIEF.md,
+// 2026-09-05). The reason is measured, not aesthetic: on a 390 px phone the card standing at the
+// foot covered 83 of the 170 px the spread occupies — half the cards the visitor is being asked to
+// choose between — and the camera cannot open a gap for it, because the plate is bound by
+// disc-centring and the rug line and the spread runs to within 5 cm of the table's rim.
+//
+// So while the spread is out and the visitor is choosing, the SAME card — same measure, same two
+// registers, same drawn edge, same type; only its anchor moves — stands at the top of the frame.
+// The moment the third card is taken it is back at the foot.
+//
+// The line it hangs from: the same 5.5% margin the floor keeps at the bottom, and never inside a
+// letterbox bar.
+const HEAD = 0.055;
+// How it moves. It is paper in a stop-motion film: it does not slide and it does not fade. When
+// the camera cuts on the same step it is simply in its new place on the new frame — a cut hides a
+// move, and every entry into and out of the picking frames IS a cut. When nothing else moved the
+// frame (the third card landing in its slot, which is what ends the beat), the card is re-laid in
+// three drawings on the twos, the way a hand would shift a card under a rostrum camera.
+const DOCK_STEPS = 3;
+// The frames the spread is actually in. `pepe` and `home` are cut to inside the picking stretch
+// (the reaction beat between two picks) and the card belongs at the foot in those, because there
+// is no spread in them to cover — the exception is for the shot, not for the stopwatch.
+const SPREAD_SHOTS = ['fan', 'spread'];
 
 // WHERE THE CARD STANDS. Centred at the foot of the frame, in every shot, the way a film puts its
 // subtitles — the user's own decision, and the whole of it:
@@ -221,13 +273,6 @@ function buildStyle() {
     #dialogue .cap .title {
       height: 100%; display: flex; flex-direction: column; justify-content: center;
     }
-    /* THE SPEAKER'S DASH: the mark that opens a line and says whose it is. His is drawn in his
-       green with the pen struck through it; the visitor's is bare paper and one ink stroke. */
-    #dialogue .cap .dash {
-      display: inline-block; width: 1.34em; height: 1.05em; vertical-align: -0.16em;
-      margin-right: 0.42em;
-    }
-    #dialogue .cap .dash > svg { display: block; width: 100%; height: 100%; overflow: visible; }
     /* the measuring block: the same card, the same measure, the same face, off the paper */
     #dialogue .cap.ruler {
       left: -30000px; top: 0; bottom: auto; transform: none;
@@ -247,12 +292,15 @@ function buildStyle() {
     #dialogue .cap .name { display: block; line-height: 0; margin: 0 auto; }
     #dialogue .cap .name > canvas { display: block; margin: 0 auto; }
     #dialogue .cap .pos { font-size: 0.72em; letter-spacing: 0.32em; text-indent: 0.32em; font-weight: 600; line-height: 1.5; }
-    /* the line he is saying now */
-    #dialogue .cap .line { margin: 0; }
-    /* the visitor's own words: the same face, the same size, the same case, on the same line grid */
+    /* HIS LINE — the one green thing on the card, and the only thing that says the words are his.
+       The colour is on the .line itself, which is also what the ruler measures, so the heavier cut
+       is counted before a take is set into the well and a green line never overruns its register. */
+    #dialogue .cap .line { margin: 0; color: ${PEPE_GREEN}; font-weight: ${PEPE_WEIGHT}; }
+    /* the visitor's own words: the same face, the same size, the same case, on the same line grid —
+       and INK, because they are the one person in this room who is not drawn and not coloured */
     #dialogue .cap .answer {
       font-size: 1em; font-weight: 600; letter-spacing: 0.085em; text-indent: 0.085em;
-      line-height: 1.5; word-break: break-word; margin: 0;
+      line-height: 1.5; word-break: break-word; margin: 0; color: ${INK};
     }
     /* the caret stands on the line; its box keeps drawCaret's own proportion so the nib lands
        exactly on the baseline whatever size the card is set at */
@@ -516,6 +564,16 @@ export async function build(ctx) {
       cap.style.bottom = '';
       return;
     }
+    // THE DOCK. The one beat the card does not stand at the foot: the spread is out and the visitor
+    // is choosing, so the same card hangs from the head of the frame instead, by its TOP edge, on
+    // the same margin the floor keeps at the bottom. Nothing else about it changes.
+    if (docked) {
+      anchored = true;
+      lastBar = barFrac();
+      cap.style.bottom = '';
+      cap.style.top = `${(headFrac() * 100).toFixed(3)}%`;
+      return;
+    }
     const floor = Math.min(a?.floor ?? 0.945, 1 - barFrac() - 0.028);
     lastBar = barFrac();
     if (!a || a.y > floor) {
@@ -532,7 +590,7 @@ export async function build(ctx) {
   // The only case left for fitting: an anchor that hangs the card by its TOP edge and would push
   // it past the floor. The bottom-hung anchor every shot uses cannot, so this is a no-op there.
   function fit() {
-    if (!anchored || cap.hidden) return;
+    if (!anchored || cap.hidden || docked) return; // docked: place() put it on the head line
     const h = ctx.size.h || window.innerHeight;
     const a = ANCHORS[shotName()];
     const lo = h * 0.035;
@@ -542,6 +600,82 @@ export async function build(ctx) {
     if (r.bottom > hi) top = Math.max(lo, top - (r.bottom - hi));
     if (top < lo) top = lo;
     if (Math.abs(top - r.top) > 0.5) cap.style.top = `${(top / h) * 100}%`;
+  }
+
+  // ---- the dock: the one beat the card does not stand at the foot -------------------------------
+  //
+  // WHICH BEAT, exactly. The camera is in a frame the spread is IN — `fan`, which is the shot every
+  // one of reveal's spread states resolves to (reveal.js SHOT: fan · fanning · pick · gather ·
+  // deal), or `spread` — and fewer than three cards have been taken. That is the whole of flow's
+  // `pickThree`, which is the stretch that awaits `reveal.awaitPick()`: the fan coming out, each
+  // pick prompt, a re-ask after an answer that named no card, and Pepe choosing for a visitor who
+  // will not choose.
+  //
+  // HOW THE END IS DETECTED: `reveal.picks.length` reaching three. That is the frame the third card
+  // lands in its slot — before the gather, before the cut to `turn` — and from it the card is back
+  // at the foot for the readings and everything after them. The other way out is the camera leaving
+  // the spread: flow cuts to `pepe` for a held reaction between two picks, and the card goes to the
+  // foot for that, because a frame with no spread in it has nothing for the card to cover. (The
+  // caption is cut and re-stood across that reaction anyway, so nothing is seen to move.)
+  //
+  // The picks are reset by reveal's own `fan.clear()` at the head of every shuffle, so a second
+  // reading docks again exactly as the first did.
+  let docked = false;
+  let travel = 0; // drawings left in a re-lay; 0 while the card is standing still
+  let travelFrom = 0, travelTo = 0;
+  let lastShot = null;
+  const headFrac = () => Math.max(HEAD, barFrac() + 0.028);
+  function picking() {
+    if (!SPREAD_SHOTS.includes(shotName())) return false;
+    const R = ctx.pieces.reveal;
+    return !!R && (R.picks?.length ?? 0) < 3;
+  }
+  // A card that is being stood up fresh simply arrives where it belongs — there is no move to see,
+  // because there was nothing on the paper a moment ago. show() and intertitle() call this before
+  // they place, so a still is never caught at the foot on a frame the spread is out in.
+  function syncDock() {
+    docked = picking();
+    travel = 0;
+    lastShot = shotName();
+  }
+  // Re-lay a card that is ALREADY standing. It is paper in a stop-motion film, so it neither slides
+  // nor fades: if the camera cut on this same step it is simply in its new place on the new frame
+  // (a cut hides a move, and every entry into and out of the picking frames is a cut), and
+  // otherwise it walks there in DOCK_STEPS drawings on the twos — a quarter of a second, three
+  // positions, the way a hand shifts a card under a rostrum camera.
+  function relay(next, onCut) {
+    const before = cap.hidden ? null : cap.getBoundingClientRect().top;
+    docked = next;
+    travel = 0;
+    place();
+    if (cap.hidden || before == null || onCut) return; // nothing on the paper, or a cut over it
+    const after = cap.getBoundingClientRect().top;
+    if (Math.abs(after - before) < 2) return;
+    travelFrom = before;
+    travelTo = after;
+    travel = DOCK_STEPS;
+    stepTravel();
+  }
+  function stepTravel() {
+    if (!travel) return;
+    const H = ctx.size.h || window.innerHeight || 900;
+    const k = (DOCK_STEPS - travel + 1) / DOCK_STEPS;
+    travel -= 1;
+    if (!travel) {
+      place(); // the last drawing IS the anchor: no rounding is left behind
+      return;
+    }
+    cap.style.bottom = 'auto';
+    cap.style.top = `${(((travelFrom + (travelTo - travelFrom) * k) / H) * 100).toFixed(3)}%`;
+  }
+  // Called on every stepped frame: has the beat changed under a card that is already up?
+  function tickDock() {
+    const shot = shotName();
+    const cutNow = shot !== lastShot;
+    lastShot = shot;
+    const want = picking();
+    if (want !== docked) relay(want, cutNow);
+    else if (travel) stepTravel();
   }
 
   // ---- the caption itself ------------------------------------------------------------------------
@@ -607,21 +741,10 @@ export async function build(ctx) {
     const h = rulerWell.offsetHeight;
     return Math.max(1, Math.round(h / Math.max(1, lineHeightPx())));
   }
-  // The speaker's dash that opens a line. It is a real inline box of the card's own measure, so the
-  // ruler counts the room it takes and a take is cut to the width that is actually left.
-  const dashHTML = (green) => `<span class="dash" data-g="${green ? 1 : 0}"></span>`;
-  // Draw every dash on the card that has not been drawn yet. Called after anything writes into a
-  // register, exactly as letterNames is.
-  function inkMarks() {
-    for (const holder of cap.querySelectorAll('.dash')) {
-      if (holder.firstChild) continue;
-      const s = document.createElementNS(SVGNS, 'svg');
-      s.setAttribute('aria-hidden', 'true');
-      drawDash(s, { green: holder.dataset.g === '1', seed: 9 + (placardSeed % 11) });
-      holder.appendChild(s);
-    }
-  }
-  const lineHTML = (t) => `<div class="line">${dashHTML(true)}${wordMarkup(t)}</div>`;
+  // His line. Nothing opens it: round 6's green dash is gone and the colour of the type says whose
+  // words these are (the user: "lines not needed"). `.line` carries the green and the heavier cut,
+  // and the ruler sets the same class, so what is measured is what is set.
+  const lineHTML = (t) => `<div class="line">${wordMarkup(t)}</div>`;
   // Cut a line into takes, each of which fits the well. The most words that fit is found by
   // bisection (a dozen measurements for a long sentence rather than one per word) — and then the
   // cut is walked BACK to the last clause that ends inside it, the way a subtitler breaks a line:
@@ -708,7 +831,6 @@ export async function build(ctx) {
     const well = cap.querySelector('.well');
     if (!well) return [];
     well.innerHTML = lineHTML(text);
-    inkMarks();
     const els = [...well.querySelectorAll('.line .w')];
     const words = [];
     let count = 0;
@@ -718,23 +840,23 @@ export async function build(ctx) {
     });
     return words;
   }
-  // What stands in the visitor's register while it is not their turn: the last thing they said,
-  // opened by their own ink dash. Their dash is there from the first frame of the evening, before
-  // they have typed a character — so the card visibly holds two lines of speech, one his and one
-  // theirs, and the place their words will go is never something the visitor has to look for. When
-  // it becomes their turn the caret starts blinking on that same line and nothing else moves.
-  const visitorLine = () => `<div class="answer">${dashHTML(false)}${lastAnswer ? stableGlyphs(lastAnswer) : ''}</div>`;
+  // What stands in the visitor's register while it is not their turn: the last thing they said, in
+  // ink. The register itself is reserved whether or not there is a word in it, so the card holds
+  // two lines of speech — one green, one black — and the place their words will go is a fixed
+  // compartment of the card rather than something they have to look for. When it becomes their turn
+  // the caret starts blinking on that same line and nothing else moves.
+  const visitorLine = () => `<div class="answer">${lastAnswer ? stableGlyphs(lastAnswer) : ''}</div>`;
   // Stand a fresh card up and cut the line into takes that fit his register. Returns the takes and
   // the word spans of the first of them.
   function show(text) {
     cut();
+    syncDock();
     place();
     placardSeed = 7 + (String(text).length % 23) * 3;
     render('', visitorLine());
     cap.hidden = false;
     const takes = splitTakes(text);
     const words = setTake(takes[0]);
-    inkMarks();
     fit();
     drawCard();
     return { takes, words };
@@ -792,12 +914,11 @@ export async function build(ctx) {
     let words = field.input.value.split(' ');
     // roll: drop whole words off the head until what is left sets inside their register
     for (;;) {
-      el.innerHTML = dashHTML(false) + stableGlyphs(words.join(' '));
+      el.innerHTML = stableGlyphs(words.join(' '));
       el.appendChild(field.caret[0]);
       if (words.length <= 1 || linesOf(`<div class="answer">${el.innerHTML}</div>`) <= REPLY_LINES) break;
       words = words.slice(1);
     }
-    inkMarks();
     fit();
   }
   function openBlock(value = '') {
@@ -842,21 +963,27 @@ export async function build(ctx) {
     const sx = (pA.x * 0.5 + 0.5) * W, sy = (-pA.y * 0.5 + 0.5) * H;
     const tall = Math.abs((-pB.y * 0.5 + 0.5) * H - sy);
     const inFrame = pA.z < 1 && sx > W * 0.04 && sx < W * 0.96 && sy > H * 0.1 && sy < H * 0.99;
-    // the card is an opaque object standing in the front of the picture: a prop that would fall
-    // behind it is not on the table any more, so it goes to the corner of the frame instead
+    // The card is an opaque object standing in the front of the picture: a prop that would fall
+    // behind it is not on the table any more, so it goes to the corner of the frame instead. Both
+    // tests below are proper rectangle tests against the card WHEREVER IT IS STANDING — round 7
+    // gave the card a second place to stand (the head of the frame, through the picking beat) and
+    // an "is it below the card's top edge" test sent the prop off the top of the picture there.
     const box = cap.hidden ? null : cap.getBoundingClientRect();
     let h, left, top;
-    if (!overhead && inFrame && tall > 12 && !(box && sx > box.left - 34 && sx < box.right + 34 && sy > box.top - 8)) {
-      h = Math.max(26, Math.min(58, tall * (66 / 54))); // 54 of the 66 drawn units are the prop's body
+    const tallH = Math.max(26, Math.min(58, tall * (66 / 54)));
+    const behindCard = !!box && sx > box.left - 34 && sx < box.right + 34 && sy > box.top - 8 && sy - tallH < box.bottom + 8;
+    if (!overhead && inFrame && tall > 12 && !behindCard) {
+      h = tallH; // 54 of the 66 drawn units are the prop's body
       left = sx - (h * 56) / 66 / 2;
       top = sy - h * (56.5 / 66);
     } else {
       // no table under it in this shot, or the card is over the table: it stands at the near right
-      // corner of the picture, and never lower than the top edge of the card
+      // corner of the picture — and steps up over the card only if the card is standing there too
       h = Math.max(34, Math.min(56, H * 0.062));
       left = W * 0.93 - (h * 56) / 66 / 2;
       top = H * (1 - barFrac()) - h - H * 0.035;
-      if (box) top = Math.min(top, box.top - h - 6);
+      if (box && top + h > box.top - 6 && top < box.bottom + 6) top = box.top - h - 6;
+      top = Math.max(H * (barFrac() + 0.02), top);
     }
     mic.style.width = `${((h * 56) / 66).toFixed(1)}px`;
     mic.style.height = `${h.toFixed(1)}px`;
@@ -918,6 +1045,7 @@ export async function build(ctx) {
       finish();
       const [n, name, label] = interLines(slug, position);
       cut();
+      syncDock();
       place();
       const rng = mulberry32(101 + name.length * 5);
       placardSeed = 13 + (name.length % 19) * 5;
@@ -1097,10 +1225,12 @@ export async function build(ctx) {
     update(ctx) {
       if (!ctx.clock.stepped) return;
       const t = ctx.clock.t;
-      // the card is one size and one place — the only thing that can move it is the letterbox bar
-      // opening or closing under it, so watch for that and nothing else
+      // The card is one size and one place. Two things can move it: the letterbox bar opening or
+      // closing against the edge it hangs from, and the picking beat starting or ending, which
+      // takes it to the head of the frame and back (see THE DOCK). Nothing else.
+      tickDock();
       if (!cap.hidden) {
-        if (Math.abs(barFrac() - lastBar) > 0.001) place();
+        if (!travel && Math.abs(barFrac() - lastBar) > 0.001) place();
         drawCard();
       }
       // the caret: an ink dash, on and off on the 12fps clock; quicker while the ear is open
@@ -1130,6 +1260,7 @@ export async function build(ctx) {
   ctx.on('resize', () => {
     setAnchors(ctx.size?.w || window.innerWidth || 1600);
     if (cap.hidden) return;
+    travel = 0; // a window changing shape ends any re-lay in progress: place() is the truth
     place();
     letterNames(); // the lettering is cut at the display's resolution: re-cut it
     fit();
