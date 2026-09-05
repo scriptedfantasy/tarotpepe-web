@@ -73,7 +73,8 @@ uniform float uHasMap;
 uniform vec3 uColor;
 uniform float uAlphaTest;
 uniform float uLodBias;  // how much sharper than the hardware would the pen looks at a drawing
-uniform float uPacked;   // colorful*128 + hatchIdx*8 + lineIdx, already /255
+uniform float uPacked;   // colorful*128 + hatchIdx*8, already /255
+uniform float uLineW;    // the material's own lineWeight, 0..2 — see gMisc.a below
 uniform float uId;       // 0..65535
 uniform float uDist;     // object distance to camera, metres
 in vec2 vUv;
@@ -110,7 +111,12 @@ void main() {
     vec2 duv = fwidth(vUv) * vec2(textureSize(uMap, 0));
     texels = max(max(duv.x, duv.y), 0.25);
   }
-  gMisc = vec4(dHi / 255.0, dLo / 255.0, clamp(log2(texels) / 8.0 + 0.25, 0.0, 1.0), 1.0);
+  // …and the material's own lineWeight, at the full eight bits of this channel. It used to be
+  // packed into the bottom THREE bits of gAlbedo.a as round(lineWeight * 4) — quarter steps,
+  // clamped at 1.75 — which quietly rounded Pepe's 1.15 UP to 1.25, a quarter of a pixel wider than
+  // every surface in the room at 1.1. A silent quarter-pixel is exactly the thick-and-thin STYLE
+  // §1.2 forbids, and nobody asked for it: this channel was sitting here writing a constant 1.0.
+  gMisc = vec4(dHi / 255.0, dLo / 255.0, clamp(log2(texels) / 8.0 + 0.25, 0.0, 1.0), clamp(uLineW * 0.5, 0.0, 1.0));
 }
 `;
 
@@ -142,10 +148,8 @@ float linD(vec2 uv) {
   float z = texture(tDepth, uv).x * 2.0 - 1.0;
   return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear));
 }
-float lwAt(vec2 uv) {
-  int pk = int(texture(tAlbedo, uv).a * 255.0 + 0.5);
-  return float(pk & 7) * 0.25;
-}
+// the material's own lineWeight, no longer quantised — see GBUF_FRAG's gMisc.a
+float lwAt(vec2 uv) { return texture(tMisc, uv).a * 2.0; }
 struct S { float d; vec3 n; float id; float m; };
 S tap(vec2 uv) {
   S s;
@@ -217,7 +221,7 @@ export const EXTEND_FRAG = /* glsl */ `
 precision highp float;
 uniform sampler2D tEdge;
 uniform vec2 uRes;
-uniform float uDpr, uSeed, uOvershoot, uMerge, uThin, uStub;
+uniform float uDpr, uSeed, uOvershoot, uMerge, uThin, uStub, uStub2;
 in vec2 vUv;
 layout(location = 0) out vec4 outColor;
 ${NOISE}
@@ -246,7 +250,16 @@ void main() {
                           texture(tEdge, vUv + d - nn * 0.9 * px1).r));
       run += step(0.5, hit);
     }
-    if (run < 0.5) { outColor = vec4(0.0); return; }
+    // …in BOTH directions, not one, once uStub2 is on. ROUND 7: a one-sided test cannot tell a
+    // stroke's END from a BARB — a lone seed sticking sideways out of a contour, which the edge
+    // detector drops every few pixels along any near-vertical silhouette. Looking one way from a
+    // barb's tip lands on the parent line, so it passed, and round 6's distance field simply
+    // absorbed it into the parent's width. The line fit does not: an off-tangent seed becomes a
+    // stroke of its own and gets inked as a 2 px tick standing out of the contour. At 3x beside
+    // the door those ticks are the room's remaining tell. Two-sided, a barb keeps at most its base
+    // pixel; a real line loses uStub px at each end and the overshoot below hands them back, which
+    // is what a pen does at the end of a stroke anyway.
+    if (run < (uStub2 > 0.5 ? 1.5 : 0.5)) { outColor = vec4(0.0); return; }
   }
   // Two lines a nib's width apart are a black bar, not two strokes. The set is full of pairs that
   // describe one thing twice: an object's silhouette against the edge of its own drawn texture, a
@@ -299,33 +312,77 @@ void main() {
       }
     }
   }
-  if (e.r > 0.5 || uOvershoot < 0.5) { outColor = e; return; }
-  vec2 dirs[8];
-  dirs[0] = vec2(1, 0); dirs[1] = vec2(0, 1); dirs[2] = vec2(-1, 0); dirs[3] = vec2(0, -1);
-  dirs[4] = vec2(0.7071, 0.7071); dirs[5] = vec2(-0.7071, 0.7071); dirs[6] = vec2(-0.7071, -0.7071); dirs[7] = vec2(0.7071, -0.7071);
-  vec4 best = vec4(0.0);
-  vec2 stepPx = 1.4 * uDpr / uRes;
-  for (int k = 0; k < 8; k++) {
-    vec2 d = dirs[k];
-    for (int s = 1; s <= 4; s++) {
-      vec2 p = vUv - d * stepPx * float(s);
-      vec4 q = texture(tEdge, p);
-      if (q.r > 0.5) {
-        float th = q.b * 3.14159265;
-        vec2 tg = vec2(cos(th), sin(th));
-        if (abs(dot(tg, d)) > 0.975) {
-          vec2 pp = vec2(-d.y, d.x);
-          // a pixel beside a line is not past its end; the line must run on behind the hit
-          bool beside = texture(tEdge, vUv + pp * stepPx).r > 0.5 || texture(tEdge, vUv - pp * stepPx).r > 0.5;
-          bool runs = texture(tEdge, p - d * stepPx).r > 0.5 && texture(tEdge, p - d * stepPx * 2.0).r > 0.5;
-          float run = 1.0 + floor(hash21(floor(p * uRes / (6.0 * uDpr)) + uSeed * 0.37) * 4.0);
-          if (!beside && runs && float(s) <= run) { best = q; best.r = 0.9; }
-        }
-        break;
-      }
-    }
+  if (e.r > 0.5 || uOvershoot < 0.05) { outColor = e; return; }
+  // A CORNER IS FOUR STROKES THAT MISS EACH OTHER, not a mitred vertex. The door draws every quad
+  // as four independent lines, each run a hair past the one it meets — sometimes crossing it,
+  // sometimes stopping short of it by the width of the wobble — and that overshoot is the single
+  // cheapest tell that a hand drew the thing. A shader contour ends exactly where the geometry
+  // ends, so every rectangle in the room (and this set is nothing but rectangles: panels, picture
+  // frames, shelf boards, the sideboard, the window) arrived with four ruled, perfectly closed
+  // corners. Nothing else in the frame says "drawn by a machine" so plainly.
+  //
+  // ROUND 7 rewrote how the end of a line is found. The old pass marched back along one of eight
+  // fixed directions and demanded the stroke's tangent lie within 13° of it, so only lines within
+  // 13° of an axis or a diagonal ever ran on at all — which in a frontal set is the horizontals
+  // and verticals and nothing else, and it is the OBLIQUE lines (a table's ellipse, a lampshade,
+  // the rug's border in perspective) whose ruled ends give the game away first. Now: find the
+  // nearest seed in a 7x7 disc, take ITS tangent, and ask whether this pixel lies off the END of
+  // that stroke rather than beside it. Every angle, one rule.
+  // The seed that is nearest AND POINTING AT US. Nearest alone is not enough, and this is why the
+  // first cut of this pass put no ink at a single corner: the pixel a hair outside the corner of a
+  // rectangle is nearest to the corner seed itself, whose tangent — the gradient of a feature that
+  // turns ninety degrees there — comes out diagonal and belongs to neither arm. Skip it and take
+  // the first seed one further along whose tangent actually runs through this pixel, and the
+  // horizontal arm's end is found where the corner's own ambiguity is not.
+  float bd = 99.0; vec2 bo = vec2(0.0); vec4 bq = vec4(0.0); vec2 btg = vec2(1.0, 0.0);
+  for (int j = -3; j <= 3; j++) for (int i = -3; i <= 3; i++) {
+    vec2 off = vec2(float(i), float(j));
+    float dd = dot(off, off);
+    if (dd > 10.5 || dd < 0.5 || dd >= bd) continue;
+    vec4 q = texture(tEdge, vUv + off * uDpr / uRes);
+    if (q.r < 0.5) continue;
+    float qth = q.b * 3.14159265;
+    vec2 qtg = vec2(cos(qth), sin(qth));
+    // ON THE STROKE'S OWN AXIS, off its end — not beside it. A pixel a pixel to the SIDE of a long
+    // line is not a place a pen ran on to, and the first cut of this test measured the angle
+    // rather than the offset, which let everything within a pixel and a half of every contour in
+    // the room count as an overshoot: 57% of the drawing's ink, and strokes 279 px long doubled.
+    if (abs(dot(off, vec2(-qtg.y, qtg.x))) > 0.9) continue;
+    // …and the seed AT a corner is skipped, which is the whole point of searching rather than
+    // taking the nearest. Its tangent is the gradient of a feature that turns ninety degrees
+    // there, so it comes out diagonal and belongs to neither arm; a pixel off the end of the
+    // horizontal arm would find it, follow its diagonal into the middle of the rectangle, see no
+    // line running on and give up — which is exactly why the room's rectangles had four ruled
+    // corners. Skipping it lets the search reach the first seed with a tangent worth having.
+    if (abs(dot(off, qtg)) < 0.86 * sqrt(dd)) continue;
+    bd = dd; bo = off; bq = q; btg = qtg;
   }
-  outColor = best;
+  if (bd > 10.0) { outColor = vec4(0.0); return; }
+  vec2 tg = btg;
+  vec2 tgs = tg * (dot(tg, bo) < 0.0 ? -1.0 : 1.0);   // on along the stroke, away from us
+  vec2 pxs = uDpr / uRes;
+  // …and the stroke must really RUN on behind that seed, or this is a speck's halo, not a line end
+  float on = min(texture(tEdge, vUv + (bo + tgs * 2.0) * pxs).r,
+                 texture(tEdge, vUv + (bo + tgs * 4.0) * pxs).r);
+  if (on < 0.5) { outColor = vec4(0.0); return; }
+  // Where the stroke really ENDS. The seed found above is often one past it, because the seed AT a
+  // corner was skipped for having no tangent of its own; walk back down the tangent to the last
+  // mark there actually is, and measure the run-on from there. If the line carries on past that,
+  // this pixel is not off the end at all and nothing is drawn.
+  vec2 endOff = bo;
+  if (texture(tEdge, vUv + (bo - tgs) * pxs).r > 0.5) {
+    endOff = bo - tgs;
+    if (texture(tEdge, vUv + (bo - tgs * 2.0) * pxs).r > 0.5) endOff = bo - tgs * 2.0;
+  }
+  if (texture(tEdge, vUv + (endOff - tgs) * pxs).r > 0.5) { outColor = vec4(0.0); return; }
+  float d0 = length(endOff);
+  // How far THIS stroke runs past its end, in px. Keyed to where the stroke stands (so the four
+  // sides of one rectangle overshoot by four different amounts) and re-rolled on twos with the
+  // rest of the pen, so a held corner is never the same corner twice.
+  float side = dot(vUv * uRes / uDpr, vec2(-tg.y, tg.x));
+  float run = uOvershoot * (0.3 + 0.7 * hash21(vec2(floor(side / 7.0) + bq.b * 51.0, uSeed * 0.37)));
+  if (d0 > run) { outColor = vec4(0.0); return; }
+  outColor = vec4(0.9, bq.g, bq.b, 1.0);
 }
 `;
 
@@ -335,6 +392,9 @@ precision highp int;
 uniform sampler2D tAlbedo, tNorm, tMisc, tDepth, tLit, tEdge, tWall, tFloor, tPaper;
 uniform vec2 uRes;
 uniform float uDpr, uSeed, uNear, uFar, uHatchK, uLref, uLineBase, uLineSoft, uBreak, uPaperAmt, uHatchBoil;
+uniform float uPenWob;      // px the pen wanders ACROSS its own stroke, at ~8 px of wavelength
+uniform float uPenJit;      // ± fraction of the nib's radius, per stroke — no two the same weight
+uniform float uPlaced;      // the number the MARKS were placed with: fixed, so tone does not crawl
 uniform float uPocket;      // how much a fold in the set darkens: under a ledge, into a corner
 uniform float uColorInk;    // 1 = the drawn marks inside a coloured surface get the room's own pen
 uniform vec4 uTex;          // the wash a drawn pattern must reach for tone 1/2/3, then for a fill
@@ -505,7 +565,14 @@ void main() {
     // draw them larger to compensate, snapped to the same octaves so nothing slides
     float fore = clamp(facing, 0.5, 1.0);
     huv = wuv * exp2(floor(log2(uHatchK / (dObj * fore)) + 0.5));
-    huv += (vec2(hash21(vec2(uSeed, 1.0)), hash21(vec2(2.0, uSeed))) - 0.5) * uHatchBoil;
+    // …on the number the MARKS were placed with, not on the strike. THE LINE BOILS AND THE TONE
+    // DOES NOT (the door does exactly this: its pen re-rolls six times a second while its
+    // rain-strokes and its bristles stay where they were put). Everything downstream of huv
+    // decides WHERE a mark goes — which run of a receding pattern survives, where a patch of
+    // hatch ends raggedly — and moving any of it on the clock is not a boil, it is crawling
+    // noise. Measured on a static crop of the shutters before this changed: 18.6% of the pixels
+    // moved by more than 24 greys between one strike and the next, four fifths of it hatching.
+    huv += (vec2(hash21(vec2(uPlaced, 1.0)), hash21(vec2(2.0, uPlaced))) - 0.5) * uHatchBoil;
   }
   vec4 hTile = bg ? vec4(0.0) : (up ? texture(tFloor, huv) : texture(tWall, huv));
 
@@ -541,9 +608,20 @@ void main() {
   // its seeds fell, with a soft pixel at each shoulder and nothing quantised anywhere.
   float line = 0.0, halo = 0.0;
   if (drawMode != 2) {
+    // ROUND 7 cut this from 1.15 px to a third of that. It was round 5's answer to a mark whose
+    // boundary could only land on the pixel lattice: shift the nib about inside the pixel and the
+    // boundary lands at a different fraction of a pixel along the line's length, which is a real
+    // anti-aliased edge. Step 2 below now gives the line a genuine sub-pixel position of its own,
+    // so that job is done properly and what is left of this is a POSITION ERROR — half a pixel of
+    // wander at a 31 px wavelength that the hand did not ask for. Measured against the door, whose
+    // line stands 0.43 px off straight, ours stood 1.0 px off with the pen's own wander switched
+    // off entirely; this was most of the difference. A whisper of it stays, because the nib really
+    // does sit somewhere inside the pixel.
     vec2 sub = (vec2(vnoise(cssPx / 31.0 + uSeed * 2.7),
-                     vnoise(cssPx / 31.0 + vec2(37.0, 11.0) + uSeed * 2.7)) - 0.5) * 1.15;
-    float nearest = 9.0;
+                     vnoise(cssPx / 31.0 + vec2(37.0, 11.0) + uSeed * 2.7)) - 0.5) * 0.38;
+    // 1. WHICH STROKE IS THIS PIXEL NEAREST TO, and what does the edge pass know about it.
+    float nearest = 9.0, bestTh = 0.0, bestW = 1.0;
+    vec2 bestOff = vec2(0.0);
     for (int j = -3; j <= 3; j++) for (int i = -3; i <= 3; i++) {
       vec2 off = vec2(float(i), float(j));
       if (dot(off, off) > 9.5) continue;
@@ -551,33 +629,95 @@ void main() {
       if (e.r < 0.05) continue;
       // e.g carries the line's own weight (type × the material's lineWeight): a cut-out that asks
       // for a quarter-weight outline gets a quarter of the radius, and nothing else varies.
-      nearest = min(nearest, length(off - sub) / max(e.g, 0.12));
+      float d = length(off - sub);
+      if (d < nearest) { nearest = d; bestOff = off; bestTh = e.b; bestW = max(e.g, 0.12); }
     }
-    // the hand's pressure: ±8% over a slow drift, not the ±40% a real threshold noise gives
-    float R = uLineBase * (0.93 + 0.14 * vnoise(cssPx / 120.0 + uSeed * 3.3));
+    if (nearest < 3.4) {
+    // 2. AND WHERE DOES IT ACTUALLY RUN, to a fraction of a pixel.
+    //
+    // ROUND 7, and this is the round. The seed map is BINARY AND ON THE PIXEL LATTICE: an edge at
+    // y = 100.3 lights the pixels at y = 100 and the mark comes out centred at 100.0, and an edge
+    // at a shallow angle lights a staircase of runs — twelve pixels at y = 100, then twelve at
+    // y = 101. The distance to that set is itself a staircase, so every near-horizontal and
+    // near-vertical contour in the room arrived with 1 px jogs in it every few pixels. Cropped at
+    // 3x beside the entrance door — which is drawn with real polylines and has none — that jog is
+    // the single loudest difference between the two hands, louder than the width. It is what
+    // "the room looks like a raster of a vector and the door looks drawn" actually means.
+    //
+    // A pen does not sit on the lattice, so stop asking the lattice where the line is. Every seed
+    // within reach that belongs to THIS stroke — same tangent, same standing-off — votes on where
+    // its line lies, weighted by how far along the stroke it sits, and the mark is laid about the
+    // average. Seven or eight votes from a staircase of runs average their ±0.5 px lattice errors
+    // down to about ±0.12 px, and — this is the point — the answer moves CONTINUOUSLY as the pixel
+    // moves. The jog does not shrink; it stops existing.
+    float th = bestTh * 3.14159265;
+    vec2 tg = vec2(cos(th), sin(th));
+    vec2 nrm = vec2(-tg.y, tg.x);
+    float p0 = dot(sub - bestOff, nrm);
+    float psum = 0.0, wsum = 0.0;
+    for (int j = -3; j <= 3; j++) for (int i = -3; i <= 3; i++) {
+      vec2 off = vec2(float(i), float(j));
+      if (dot(off, off) > 9.5) continue;
+      vec4 e = texture(tEdge, vUv + off * uDpr / uRes);
+      if (e.r < 0.05) continue;
+      float dth = abs(e.b - bestTh);
+      dth = min(dth, 1.0 - dth);
+      if (dth > 0.13) continue;            // a line CROSSING this one does not vote on where it is
+      vec2 v = sub - off;
+      float p = dot(v, nrm);
+      if (abs(p - p0) > 1.4) continue;     // nor does a parallel neighbour: that is another stroke
+      float a = dot(v, tg);
+      float g = exp(-a * a * 0.16);
+      psum += p * g; wsum += g;
+    }
+    float perp = wsum > 0.0001 ? psum / wsum : p0;
+    // THE FOOT OF THE STROKE: the point on the fitted line that this pixel stands square to. It is
+    // the same point for every pixel across the stroke, it slides along the stroke as the pixel
+    // does, and — this is the part that matters — it does not care which way round the tangent came
+    // out. A contour's tangent is a DIRECTION WITHOUT A SIGN: the edge pass hands back an angle in
+    // [0, PI), so tg and nrm turn over freely from one pixel to the next along a single line, and
+    // anything keyed to them directly turns over with them. The first cut of the wander below was
+    // keyed to the angle and to a signed standing-off, and it left a nub on every contour at every
+    // pixel where the sign flipped. Keyed to the foot, there is nothing to flip.
+    vec2 foot = cssPx - perp * nrm;
+    // 3. THE HAND'S WANDER. The door's pen wanders ±0.6 line-widths at mid-span with a control
+    // point every ~4 line-widths — a slow, long-wavelength wander, not high-frequency noise
+    // (anything with a period near the line's own width reads as fur). What this pass had instead
+    // was a wobble applied to the LOOKUP in the edge pass, at an 88 px scale: it slid whole regions
+    // of the drawing about and left every contour exactly as straight — and exactly as staircased —
+    // as it found it. Here the whole stroke drifts a little in the plane of the paper, and only the
+    // part of that drift across its own line can be seen, which is what a hand's wander IS.
+    vec2 wv = (vec2(vnoise(foot / 8.0 + uSeed * 4.3),
+                    vnoise(foot / 8.0 + vec2(19.0, 7.0) + uSeed * 4.3)) - 0.5) * 2.0 * uPenWob;
+    float wob = -dot(wv, nrm);
+    // 4. AND NO TWO STROKES THE SAME WEIGHT. The door jitters each stroke's width by ×0.85–1.15
+    // and that is most of why a drawing of it looks handmade: the three parallel lines of a
+    // moulding are three different lines. This pass had ±7% over a SCREEN-SPACE drift, which is a
+    // different thing entirely — it varies along a single stroke and gives two neighbours the same
+    // weight, the opposite arrangement to a pen's. On the foot it varies where the door's varies:
+    // a fresh weight every 14 px of stroke, and two contours 4 px apart never the same.
+    float R = uLineBase * bestW * (1.0 - uPenJit + 2.0 * uPenJit
+            * vnoise(foot / 14.0 + uSeed * 1.9 + 31.0));
     // …and the width of the shoulder, in pixels. A nib is not a cookie cutter: ink runs into the
     // paper's fibre and the scan of it softens further, so the folio's contour is a narrow core
     // with a full pixel of shoulder either side. Measured on the kitchen folio at 1600 px: 8.1% of
     // the frame below grey 32 and 4.0% between 32 and 63 — a THIRD of its ink is in the shoulder.
     // The ramp is symmetric about R, so widening it moves ink from the core into the shoulder and
     // leaves the stroke's total mass (2R px per unit length) exactly where it was.
-    float w = max(uLineSoft, 0.2);
-    // …and the SHAPE of that shoulder, which round 6 had to fix to get the tone back after
-    // narrowing the pen. A straight ramp spends equal distance at every value, so a stroke goes
-    // from solid to paper through one grey pixel and nothing else: measured, our contour put 5.5%
-    // of the frame below grey 32 and only 1.5% between 32 and 63, where the folio puts 8.1% and
-    // 4.0% — its stroke is nearly solid for a good way out and only then lets go. That is what ink
-    // does in paper: it wicks along the fibre, so the deposit stays heavy well past the nib's own
-    // edge and then thins away quickly. 1 - (1-u)^1.9 is that curve, and it is the tone the film
-    // gets from its line for free. The radius above is cut by 0.155 × w to pay for it, so the
-    // stroke carries the same total ink per unit length as a straight ramp of the same width would
-    // — the mark is not fatter, its middle is blacker and its rim is softer.
-    line = clamp((R + w * 0.5 - nearest) / w, 0.0, 1.0);
+    float w = max(uLineSoft, 0.2) * bestW;
+    // The mark is bounded ALONG the stroke as well as across it. A fitted line is infinite and the
+    // thing it describes is not: without this the pen would run on past the end of a table leg for
+    // as long as the tangent held. 0.8 px past the last seed and no further — what a pen genuinely
+    // does at the end of a stroke is the overshoot pass's business, and it says so in seeds.
+    float aEnd = max(abs(dot(sub - bestOff, tg)) - 0.8, 0.0);
+    float dist = length(vec2(aEnd, perp + wob));
+    line = clamp((R + w * 0.5 - dist) / w, 0.0, 1.0);
     // a hair of bare paper either side of every contour: the tone strokes stop short of the line
-    halo = 1.0 - smoothstep(R + 0.7, R + 2.2, nearest);
+    halo = 1.0 - smoothstep(R + 0.7, R + 2.2, dist);
     // a pen that skips now and then
     float brk = vnoise(cssPx / 19.0 + uSeed * 5.1 + 40.0);
     line *= 1.0 - step(brk, uBreak) * 0.85;
+    }
   }
 
   // ── ONE tone scale, four levels, and the darkest claim on a pixel wins ──────────────────────
@@ -641,7 +781,7 @@ void main() {
     float d = ((shade * uTone.z + pocket) * edgeOn + pow(1.0 - facing, 3.0) * uTone.w) * soak;
     // a hand does not follow a shadow's edge: break the boundary between levels on the stroke
     // grid so a patch of hatch ends raggedly, the way strokes of unequal length do
-    float rag = vnoise(huv * 2.0 + uSeed * 0.13) * 0.78 + vnoise(huv * 5.0 + 11.0) * 0.22;
+    float rag = vnoise(huv * 2.0 + uPlaced * 0.13) * 0.78 + vnoise(huv * 5.0 + 11.0) * 0.22;
     d += (rag - 0.5) * uLevels.w;
     lightLevel = step(uLevels.x, d) + step(uLevels.y, d) + step(uLevels.z, d);
   }

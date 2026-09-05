@@ -1,20 +1,23 @@
 // PIECE: reveal — the card choreography, drawn on twos: the shuffle (the deck cut, the halves
-// riffled together in six drawings, the pile tapped square), the fan (a packet cut off the top and
-// dealt face down in an arc across the near half of the cloth), the visitor's pick (a hover lifts
-// a card in two drawings; a click carries it to its slot in four, the apex held), the gather (the
-// rest swept back onto the deck), the deal (three cards flicked from the deck to their slots, for
-// the flow that has no visitor), and the turn (the card lifted by the edge nearest the visitor,
-// stood on edge for one held frame with its face to the visitor, dropped with a one-frame bounce).
+// riffled together, the pile tapped square), the SPREAD (the WHOLE DECK — all 78, the user's rule
+// — laid face down in four nested bows across the near half of the cloth, in gathered handfuls;
+// see reveal-spread.js for where they lie and why), the visitor's pick (the card under the
+// pointer stands UP the frame in two drawings and is taken by a tap on it; it is carried to its
+// slot in four, the apex held), the gather (the rest swept back onto the deck), the deal (three
+// cards flicked from the deck to their slots, for the flow that has no visitor), and the turn (the
+// card lifted by the edge nearest the visitor, stood on edge for one held frame with its face to
+// the visitor, dropped with a one-frame bounce).
 // The other cards never move. Everything is a list of drawings indexed by the 12 fps frame, so a
 // judging state with `?t=` shows a deterministic frame and a live take is the same list played.
 //
 // API (all Promises resolve when the motion has settled):
 //   shuffle() → Promise
-//   fan() → Promise<count>                 the packet dealt out; then the visitor may pick
-//   awaitPick() → Promise<pick|null>       arms the pointer (hover lifts, click picks); resolves with
+//   fan() → Promise<count>                 all 78 laid out; then the visitor may pick
+//   awaitPick() → Promise<pick|null>       arms the pointer (it stands a card up; a tap on the
+//                                          standing card takes it — 58 x 101 px on a phone); resolves with
 //                                          { index, ordinal, slug, slot, mesh } when a card has landed
 //   pick(i) / pickByOrdinal(n) / pickRandom() → Promise<pick>   i 0-based, n 1-based, from the left
-//   gather() → Promise                     the rest of the fan back onto the deck
+//   gather() → Promise                     the rest of the spread back onto the deck
 //   turn(i) → Promise                      slot i turned face up; the others never move
 //   deal(slugs) → Promise<meshes>          three cards from the deck to the slots, face down
 //   picks (the picks so far), stop(), setState(name)
@@ -29,7 +32,7 @@ import { buildGround } from './reveal-ground.js';
 export const meta = {
   name: 'reveal',
   judge: { shot: 'table', states: ['dealt', 'turning', 'revealed', 'fan', 'shuffle', 'fanning', 'pick', 'gather', 'deal', 'turn'], motion: true },
-  files: ['src/pieces/reveal.js', 'src/pieces/reveal-takes.js', 'src/pieces/reveal-shuffle.js', 'src/pieces/reveal-fan.js', 'src/pieces/reveal-hand.js', 'src/pieces/reveal-ground.js'],
+  files: ['src/pieces/reveal.js', 'src/pieces/reveal-takes.js', 'src/pieces/reveal-shuffle.js', 'src/pieces/reveal-fan.js', 'src/pieces/reveal-spread.js', 'src/pieces/reveal-hand.js', 'src/pieces/reveal-ground.js'],
 };
 
 // Where each judging state is shot from. His hand is a flat cut-out lying IN the cloth
@@ -102,6 +105,47 @@ export async function build(ctx) {
   // ---- where things are -------------------------------------------------------------------------
   const deck = cards?.deck;
   const deckTop = deck?.getObjectByName?.('deck-top') ?? null;
+
+  // THE DECK COMES OFF THE STILL LIFE. The user: "when the cards are mixed they collide with the
+  // wine bottle". Measured (tools/_rv7-probe.mjs): the layout stands the deck at (0.38, −0.25) and
+  // the candle-in-a-bottle at (0.44, −0.34) with a body 37 mm across — so the deck's own upstage
+  // corner sits 22.8 mm from the bottle's axis, fourteen millimetres INSIDE it, before anything
+  // moves; and the riffle parts its halves 95 mm either side, straight through it. The far band of
+  // the cloth is a still life (bottle, glass, letter, watch, four coins) with no clear patch of
+  // 0.33 x 0.25 anywhere in it, so there is no shuffle that can be staged there.
+  //
+  // So the prop that moves is OURS. The deck stands on the bare working cloth in front of him,
+  // dead centre, where table.js says it belongs ("the whole near half is clear for the three card
+  // slots and the deck") and where a reader's deck actually sits. At (0, 0.44) it is 0.50 m from
+  // the bottle, 66 mm downstage of the reading row, 10 mm clear of the card inserts' frames and
+  // wholly inside the fan plate at both window shapes.
+  //
+  // TEMPORARY, and it wants `ctx.layout.deck.pos` to say this instead — see the contract note in
+  // the return value. Until it does, the camera's two deck plates are slid onto it the way the
+  // card inserts already are (aimInserts): their solved distance, rake and lens are left exactly
+  // as the camera made them and only the aim is moved, and both stand aside the moment the camera
+  // aims them anywhere but at the layout's idea of where the deck is.
+  const DECK_HOME = [0, ctx.layout.spread.y, 0.44];
+  // where each plate is aimed. `riffle` is a hand's breadth upstage of the deck itself because the
+  // frame is 0.35 m deep and, centred any further downstage, its two bottom corners leave the
+  // 0.62 m rim: at 0.386 they come to 0.616.
+  const DECK_AIM = { riffle: 0.386, deck: 0.42 };
+  if (deck) deck.position.set(...DECK_HOME);
+  const deckPos = () => (deck ? [deck.position.x, deck.position.y, deck.position.z] : ctx.layout.deck.pos);
+  function aimDeckShots() {
+    const shots = ctx.pieces.camera?.shots;
+    if (!shots || !deck) return;
+    for (const name in DECK_AIM) {
+      const s = shots[name];
+      if (!s?.look || !s?.pos) continue;
+      if (Math.abs(s.look[2] - ctx.layout.deck.pos[2]) > 0.12) continue; // the camera has taken it over
+      const dx = -s.look[0], dz = DECK_AIM[name] - s.look[2];
+      s.look[0] += dx;
+      s.look[2] += dz;
+      s.pos[0] += dx;
+      s.pos[2] += dz;
+    }
+  }
   const poseOf = (m) => ({ p: m.position.clone(), ry: m.rotation.y });
   // where a card ends up after a hand has turned it: a millimetre or two off where it lay, and one
   // card-thickness proud of the two beside it — it was picked up and put back down, so it goes down
@@ -158,7 +202,7 @@ export async function build(ctx) {
   function dealFrames(meshes) {
     const n = meshes.length;
     const HOLD = 0.006; // the underside of the packet, above the cloth
-    const d = ctx.layout.deck.pos;
+    const d = deckPos();
     // one pose per drawing: his fingertips, the packet under them, and how many cards it still has
     const poses = [];
     const P = (x, z, yaw, held, py) =>
@@ -392,6 +436,7 @@ export async function build(ctx) {
     async setState(name) {
       // the beats over the cloth are judged from above, the rest from the frontal 'table'
       aimInserts();
+      aimDeckShots();
       const s = SHOT[name] ?? 'table';
       ctx.pieces.camera?.cut?.(s);
       if (name === 'dealt' || name === 'default') await lay(SLUGS, false);
@@ -417,7 +462,7 @@ export async function build(ctx) {
         // here: three picks and the rest is gathered
         await lay([], false);
         fan.lay();
-        fan.liftIndex(13);
+        fan.liftIndex(40);
         (async () => {
           for (let k = 0; k < slots.length; k++) if (!(await api.awaitPick())) return;
           await api.gather();
@@ -429,11 +474,11 @@ export async function build(ctx) {
         // one card carried from the fan to slot 0, its neighbours closing the gap
         await lay([], false);
         fan.lay();
-        loopPlay(fan.pickFrames(fan.entries[8], 0), 12);
+        loopPlay(fan.pickFrames(fan.entries[13], 0), 12);
       } else if (name === 'gather') {
         await lay([], false);
         fan.lay();
-        fan.fakePicks([5, 10, 16]);
+        fan.fakePicks([5, 34, 60]);
         loopPlay(fan.gatherFrames(), 5);
       } else await lay(SLUGS, false);
       // draw the first frame at once so a frozen clock shows the right drawing: the hand answers
@@ -447,6 +492,7 @@ export async function build(ctx) {
     update(ctx) {
       if (!ctx.clock.stepped) return;
       aimInserts(); // the camera rebuilds every shot when the window changes shape
+      aimDeckShots();
       if (playing.length) tick(ctx.clock.t);
       fan.step();
       hand.step(); // the withdrawal, one drawing a frame, when the camera is not overhead

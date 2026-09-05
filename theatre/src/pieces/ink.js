@@ -11,10 +11,23 @@
 //   2. Lit       scene with a white MeshStandardMaterial override, real lights + shadows → tone.
 //   3. Edge      seeds from depth (silhouettes), normals (creases), id/distance (boundaries),
 //                sampled through a low-frequency wobble re-seeded on twos. Also a tangent.
-//   4. Extend    the pen overshoots a little past line ends (corners cross).
-//   5. Composite lines (a nib's coverage of the pixel, occasional skips), tone quantised to 4
-//                stroke levels drawn with world-anchored hatch tiles, selective colour, paper grain.
+//   4. Extend    the pen runs past the end of a line, at any angle, so corners cross and miss.
+//   5. Composite each contour's line is FITTED through its seeds to a fraction of a pixel, given a
+//                weight and a wander of its own, and laid down as a nib's coverage of the pixel;
+//                tone quantised to 4 stroke levels drawn with world-anchored hatch tiles;
+//                selective colour; paper grain.
 //   6. Despeckle a dark pixel with paper on all four sides is not a mark a pen could make.
+//
+// THE BENCHMARK IS THE ENTRANCE DOOR, not a folio (BRIEF.md, the world's rules — the user's own
+// words: "the ink lines that make up the front door at the first shot, are really good. we should
+// have that aestetic in the room aswell"). src/pieces/entrance-door.js draws with real polylines
+// through inkLine/hatch at pen = max(1.4, h/560); the room is judged beside it in the same frame
+// at 1:1, with tools/_ink-r7-side.mjs. Round 7 was spent on the four things that separated them:
+//   the STAIRCASE  the seed map is binary and on the pixel lattice, so a shallow contour arrived
+//                  as runs with 1 px jogs. The composite now fits a line through the seeds.
+//   the CORNER     a shader contour ended exactly where the geometry ended. It runs on now.
+//   the WEIGHT     ±7% over a screen-space drift became ±15% keyed to the stroke itself.
+//   the BOIL       the pen re-rolls on twos and the placement of marks does not (see render()).
 //
 // HOW TO MEASURE THIS PASS AGAINST THE FOLIO, because round 6 spent a cycle being misled by it.
 // tools/_ink-r5.mjs resizes both images to 1600 px wide before it counts, and the folio is a
@@ -85,6 +98,22 @@ export async function build(ctx) {
     // neighbour, two balusters of the sideboard's panel) has clean paper between them, which at
     // round 5's reach it did not: there the two shoulders met at a third of full ink and the pair
     // arrived as one bar with a smear down it.
+    // ROUND 7 trimmed it again, this time against the entrance door rather than against a folio,
+    // which is now the world's rule: the door is drawn with real polylines at pen = max(1.4, h/560)
+    // — 1.6 px on a 900 px frame — and the room is judged beside it at 1:1.
+    //
+    // Two rulers disagree here and it is worth saying which one is being followed. The door's
+    // NOMINAL width is 1.6 px, which on the room's materials (lineWeight 1.1) would put this at
+    // 0.73. But the door's line MEASURES 2.18 px at half coverage on its own frame, because most
+    // of its strokes are cut obliquely by the scanline and because a canvas stroke carries a
+    // pixel of anti-aliasing on each side. Ours is measured exactly the same way on the same size
+    // of frame, so measured-against-measured is the honest comparison and nominal-against-nominal
+    // is not: at 1.00 a contour measures 2.00 px at half coverage against the door's 2.18 and
+    // 0.76 px of solid core against its 0.66, with the SHAPE of the stroke set by lineSoft below.
+    // 1.05 matched the door's 2.18 exactly and was thrown away after looking at the shelf beside
+    // it: the balusters thickened, the frame's ink went from 11.7% to 12.1% and the paper pinched
+    // into slivers went back up. The door's measured 2.18 is a mixture of oblique cuts; sitting a
+    // tenth of a pixel under it and keeping the frame open is the better trade.
     lineBase: 1.00,
     // THE SHOULDER, in css px: how wide the ramp from full ink to bare paper is at the edge of
     // every mark. Round 4 had no ramp worth the name — the mark's boundary could only land on the
@@ -112,10 +141,28 @@ export async function build(ctx) {
     // typical stroke falls to 0.77. 1.1 with 0.95 went the other way and gave 11.7% solid black — a
     // photocopy. 1.3 about 1.00 puts the peak back at 0.88, and it is the peak, not the width, that
     // decides whether a line reads as drawn or as smudged.
-    lineSoft: 1.3,
-    wobble: 0.9, // css px of hand drift
+    lineSoft: 1.55,
+    // TWO WOBBLES, and round 7 moved the weight from the first to the second.
+    // `wobble` slides the whole SEED MAP about, in css px, on a slow 88 px noise: it is the sheet
+    // shifting under the hand, and at 0.9 px it was doing all the work while leaving every contour
+    // exactly as straight — and exactly as staircased — as it found it.
+    wobble: 0.25,
+    // `penWob` is the wander of the pen ACROSS its own stroke, applied where the stroke's direction
+    // is known (see COMPOSITE_FRAG step 3). The door's is ±0.6 line-widths at mid-span with a
+    // control point every ~4 line-widths; on a 1.6 px pen that is ±0.95 px at about 6–12 px of
+    // wavelength, which is what this is set to. Longer than this and the line reads ruled; shorter
+    // — anything with a period near the line's own width — and it reads as fur.
+    penWob: 0.6,
+    // …and the per-stroke weight jitter, ± this fraction. The door's pen is ×0.85–1.15 per stroke
+    // and never draws two strokes the same width; this pass used to vary ±7% over a SCREEN-SPACE
+    // drift, which varies along one stroke and gives two neighbours the same weight — the opposite
+    // arrangement. Keyed to the stroke now (COMPOSITE_FRAG step 4).
+    penJit: 0.15,
     breakAmt: 0.03, // how often the pen skips (0 = never)
-    overshoot: 1, // 0/1 line ends run past corners
+    // px the pen runs past the end of a line. NOT a flag any more: a corner is four strokes that
+    // cross and miss each other by up to the wobble, and how far each runs on is what says a hand
+    // drew it. The door's own overshoot is 0–2 px on a 1.6 px pen (strokes.js inkRect).
+    overshoot: 2.6,
     // px within which two PARALLEL contours are one contour and only the stronger is drawn.
     // 0 turns the merge off. See the note in EXTEND_FRAG: this is the doubled-line rule.
     merge: 4,
@@ -148,6 +195,11 @@ export async function build(ctx) {
     // put a closed outline round every one of them, which at a nib width lands as a black speck.
     // The film does not outline what it cannot draw; it leaves the paper.
     stub: 3,
+    // …and it must run BOTH WAYS, not one. 1 = a seed needs the line to carry on `stub` px in
+    // each direction along its own tangent. This is what tells a stroke's end from a BARB: a lone
+    // seed poking sideways out of a contour, which a one-sided test always passed because looking
+    // one way from it lands back on the parent line. See EXTEND_FRAG.
+    stubBoth: 1,
     depthThr: 0.012, // silhouette sensitivity (relative to depth)
     // cos of the fold angle that gets a line. A draughtsman inks a corner, not a soft bend: only
     // folds sharper than ≈53° are drawn, so lathed curves and cloth do not fill up with creases.
@@ -289,6 +341,7 @@ export async function build(ctx) {
       uAlphaTest: { value: 0 },
       uLodBias: { value: params.texSharp },
       uPacked: { value: 0 },
+      uLineW: { value: 1 },
       uId: { value: 0 },
       uDist: { value: 1 },
       uUvTransform: { value: new THREE.Matrix3() },
@@ -308,9 +361,12 @@ export async function build(ctx) {
     const ink = (m && m.userData && m.userData.ink) || {};
     const colorful = ink.colorful ? 1 : 0;
     const hatchIdx = Math.round(clamp(ink.hatch ?? 0.5, 0, 1) * 14);
-    // lineWeight in quarter steps 0..1.75 (0 = no line of its own; a cut-out with a drawn outline wants ~0.25)
-    const lineIdx = clamp(Math.round((ink.lineWeight ?? 1) * 4), 0, 7);
-    u.uPacked.value = (colorful * 128 + hatchIdx * 8 + lineIdx) / 255;
+    u.uPacked.value = (colorful * 128 + hatchIdx * 8) / 255;
+    // lineWeight rides in gMisc.a at the full eight bits, 0..2 (0 = no line of its own; a cut-out
+    // whose outline is already in its own drawing asks for ~0.25 and gets a whisper). It used to be
+    // three bits of quarter-steps in gAlbedo.a, which rounded Pepe's 1.15 up to 1.25 without saying
+    // so — a quarter-pixel of thick-and-thin nobody asked for. There is no quantisation now.
+    u.uLineW.value = clamp(ink.lineWeight ?? 1, 0, 2);
     const map = m && m.map && m.map.isTexture ? m.map : null;
     u.uHasMap.value = map ? 1 : 0;
     u.uMap.value = map || white1x1;
@@ -380,6 +436,7 @@ export async function build(ctx) {
       uMerge: { value: params.merge },
       uThin: { value: params.thin },
       uStub: { value: params.stub },
+      uStub2: { value: params.stubBoth },
     },
     depthTest: false,
     depthWrite: false,
@@ -407,6 +464,9 @@ export async function build(ctx) {
       uLref: { value: params.lref },
       uLineBase: { value: params.lineBase },
       uLineSoft: { value: params.lineSoft },
+      uPenWob: { value: params.penWob },
+      uPenJit: { value: params.penJit },
+      uPlaced: { value: 0 },
       uBreak: { value: params.breakAmt },
       uPaperAmt: { value: params.paper },
       uHatchBoil: { value: params.hatchBoil },
@@ -454,7 +514,18 @@ export async function build(ctx) {
     renderer.getDrawingBufferSize(_size);
     if (!rt || _size.x !== size.x || _size.y !== size.y) makeTargets(_size.x, _size.y);
     const dpr = renderer.getPixelRatio();
+    // TWO HANDS, ONE DRAWING — the same split the entrance door draws with.
+    // `seed` is the PEN: which strike of the drawing this is. It steps six times a second (the
+    // 12 fps clock, on twos), and everything that shapes a MARK rides on it — how far a contour
+    // wanders off its ideal line, how heavily it is laid down, where the nib stands inside the
+    // pixel, how far it runs past a corner, when it skips. That is the boil: the same drawing
+    // struck again, so a held line is never the same line twice.
+    // `placed` is where the MARKS WERE PUT: which run of a receding pattern survives, where a
+    // patch of hatch ends raggedly. It depends on the drawing's number and on nothing else — not
+    // on the clock — so the tone does not crawl. A boil that moves tone is a fizz, and it reads
+    // worse than no boil at all.
     const seed = Math.floor(ctx.clock.frame / 2) + ctx.seed * 101;
+    const placed = 17 + ctx.seed * 101;
 
     const prevRT = renderer.getRenderTarget();
     renderer.getClearColor(_clear);
@@ -512,6 +583,7 @@ export async function build(ctx) {
     xu.uMerge.value = params.merge;
     xu.uThin.value = params.thin;
     xu.uStub.value = params.stub;
+    xu.uStub2.value = params.stubBoth;
     fullscreen(extMat, rt.ext);
 
     // 5. composite to the canvas
@@ -532,6 +604,9 @@ export async function build(ctx) {
     cu.uLref.value = params.lref;
     cu.uLineBase.value = params.lineBase;
     cu.uLineSoft.value = params.lineSoft;
+    cu.uPenWob.value = params.penWob;
+    cu.uPenJit.value = params.penJit;
+    cu.uPlaced.value = placed;
     cu.uBreak.value = params.breakAmt;
     cu.uPaperAmt.value = params.paper;
     cu.uHatchBoil.value = params.hatchBoil;

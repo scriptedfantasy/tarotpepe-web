@@ -1,58 +1,69 @@
-// reveal-fan.js — the fan and the visitor's pick, drawn on twos.
+// reveal-fan.js — THE WHOLE DECK ON THE TABLE, and the visitor's pick. Drawn on twos.
 //
-// After the shuffle Pepe cuts a packet off the top of the deck and deals it face down in an arc
-// across the near half of the cloth: twenty-one cards overlapping like a ribbon spread, each one
-// resting on the one before it, the right end on top. The visitor points at a card and it lifts a
-// finger's height in two drawings and holds; they click and it is carried to the next empty slot
-// in four drawings of flight with the apex held, a landing a millimetre proud, a settle; the cards
-// either side close the gap a little. Three picks, and the rest is swept together in five
-// drawings and dropped back on the deck.
+// ROUND 7, and all three of its rules come from the user.
 //
-// The fan cards are placeholders: the deck's own back and stock materials on a near-flat card
+//  1. "tarot is pulled from all 78 cards, not a sub section". So he no longer cuts a packet of
+//     twenty-one off the top: the whole deck goes down. Where the seventy-eight lie is worked out
+//     in reveal-spread.js and measured by tools/_rv7-geom.mjs — four nested bows concentric with
+//     the round table (27 · 23 · 17 · 11), each bow shorter than the one outside it because the
+//     row of three reading slots blocks the inside of the crescent. He lays them innermost bow
+//     first, in gathered handfuls, so the outer bow comes down on top and shows whole cards while
+//     the three behind it show 18 mm of their heads.
+//  2. "they should however pop up on hover". The card under the pointer slides UP THE FRAME — in
+//     these plan-view plates that is −z, away from the visitor — and rides a hair proud, so the
+//     whole of it is drawn over its neighbours. Its two neighbours step apart along their bow and
+//     a gap opens where it stood.
+//  3. Nothing passes through anything. The old hover slid a card DOWNSTAGE and took its corner
+//     0.668 m from the table's centre — 4.8 cm off the edge of a 0.62 m table. Sliding up the
+//     frame moves every card further INTO the cloth instead, and the spread's furthest corner now
+//     sits at 0.5695, five centimetres inside the rim.
+//
+// AND A PHONE CANNOT TAP ONE OF SEVENTY-EIGHT. At 390 px the spread is 303 px wide, so a card's
+// own strip is 8.1 px and no lens fixes that. So the pick is in TWO MOVEMENTS and neither of them
+// asks a thumb to hit a card:
+//   · the pointer is mapped to a card by WHERE IT IS ON THE CLOTH (reveal-spread.js → indexAt),
+//     not by hitting one — a nearest-cell lookup on the closed spread, so the mapping is a fixed
+//     function of the finger and cannot chase the animation it causes;
+//   · that card stands up out of the spread, whole and on top: 58 x 101 px on a phone, 207 x 362
+//     at 1600. THAT is what is tapped to take it. On a mouse the hover has already stood it up, so
+//     one click still takes a card; on a thumb the first touch stands one up and the second takes
+//     it, and sliding the thumb walks the standing card along the bow.
+// Speaking still works untouched: `remaining()` is ordered left to right across the picture, so
+// "the third from the left" is the third card from the left of all seventy-eight.
+//
+// The spread's cards are placeholders: the deck's own back and stock materials on a near-flat card
 // with no front art. Each position is dealt a card from a shuffled deck (the visitor cannot know
-// which); the real card, with its front, is made only when a placeholder is picked and takes the
-// placeholder's place in the slot.
+// which); the real card, with its front, is made only when a placeholder is picked.
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import { cardGeometry } from './cards-geometry.js';
 import { compose, dealTrack, handFrames, handSide, laidPose } from './reveal-takes.js';
 import { deckStacks } from './reveal-shuffle.js';
+import { SPREAD, tierOf, angleAt, poseAt, indexAt } from './reveal-spread.js';
 
-// The arc: pivot at (0, zMid - R), radius R, half-angle A. Every corner stays on the cloth and
-// clear of the slot cards' near edge (searched in tools/_fan-geom2.mjs).
-//
-// `rake` is how much harder each card is turned than the path it sits on. The two used to be the
-// same number, which is why the ribbon read as a slightly bent ROW: at half-angle 0.32 the end
-// cards were only 18° off square, and a fan is a fan because its cards splay. Raking them 2.1×
-// the path angle puts the end cards 30° over while the path itself stays a shallow bow, so the
-// ribbon splays without getting any deeper — and depth is the whole problem here, the cloth
-// between the slot row (which ends at z = 0.254) and the table's rim (0.62) being barely wider
-// than one card is long. The arc now runs z 0.265 … 0.571, which leaves 5 cm of cloth in front of
-// it instead of running off the near edge of the table and out of the bottom of the frame.
-//
-// lift/slide: the hover pose. A card in a ribbon lies under the cards to its right, so a hover
-// does not lift it through them: it slides it out of the fan toward the visitor, a finger's
-// length, the way a card is offered from a fan; the pinch that lifts it is the pick's first drawing.
-// under: how many cards lie under a card's left edge once the ribbon is established.
-export const FAN = { n: 21, zMid: 0.425, R: 0.94, A: 0.25, rake: 2.1, lift: 0.0, slide: 0.026, under: 5 };
+// kept for the pieces that ask how many are out
+export const FAN = { get n() { return SPREAD.total; } };
 
 const PI = Math.PI;
 const lerp = (a, b, u) => a + (b - a) * u;
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
-const _r = {};
+
+// How thick the shingle is. Each bow comes down on the one behind it, so it rides two card
+// thicknesses proud of it; along a bow a card rides on the five to its left. Small numbers — the
+// whole spread is 5.4 mm thick — but they are what stop 78 coplanar quads fighting for the pixel.
+const BASE = 0.0018;
+const UNDER = 5;
 
 // player: { play(frames, opts) → Promise } — the piece's take player (reveal.js)
-// hand: the reveal-hand api, or null. His hand does the laying, the taking and the sweeping: it
-// enters from the top of the overhead frame, and every card in this file moves because it moved.
-// slots: the row reveal.js lays its cards in (reveal-takes.js → stagedRow). Not the layout's —
-// a card picked out of the fan has to land in the same row a dealt one does.
+// hand: the reveal-hand api, or null. His hand does the laying, the taking and the sweeping.
+// slots: the row reveal.js lays its cards in (reveal-takes.js → stagedRow).
 export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spread.slots) {
   const { card, y: Y } = ctx.layout.spread;
   const W = card.w, H = card.h, T = card.t;
   const deck = cards?.deck ?? null;
   const sound = (name) => ctx.pieces.sound?.play?.(name);
   const pepe = () => ctx.pieces.pepeAnim;
-  const zp = FAN.zMid - FAN.R;
+  const N = SPREAD.total;
 
   const group = new THREE.Group();
   group.name = 'fan';
@@ -66,8 +77,8 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
     : block && Array.isArray(block.material)
       ? [block.material[1], block.material[0], block.material[1]]
       : new THREE.MeshLambertMaterial({ color: '#efe8d7' });
-  // three sheets, each bent a hair its own way; near flat so the ribbon stacks without the
-  // cards passing through one another
+  // three sheets, each bent a hair its own way; near flat so the bows stack without the cards
+  // passing through one another
   const geos = [];
   function geoFor(k) {
     const j = k % 3;
@@ -82,7 +93,11 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
     geos.length = 0;
   }
 
-  // ---- the deck while the fan is out: the rest of the deck squared, the cut packet on top -------
+  // ---- the deck while the spread is out ----------------------------------------------------------
+  // The deck object is built as forty-four cards (cards.js), and seventy-eight leave it, so every
+  // count here is carried in the DECK'S OWN UNITS: `units(n)` is how thick n of the spread's cards
+  // are in the drawing of the deck. Seventy-eight of them are exactly the deck, and none of them
+  // are none of it.
   let S = null, REST = null, PACKET = null;
   function stacks() {
     if (!S && deck) {
@@ -94,19 +109,17 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
     }
     return S;
   }
-  const nRest = () => (S ? Math.max(1, S.nTotal - FAN.n) : 57);
-  // the packet sits crooked on the rest, the way a cut is set down
-  const PK = { x: 0.011, z: -0.007, ry: 0.12 };
-  function deckDrawing(packet) {
+  const units = (n) => (S ? (n * S.nTotal) / N : n);
+  function deckDrawing(left) {
     const s = stacks();
     if (!s) return;
     s.showReal(false);
-    s.cards(REST, nRest(), 0);
-    s.flat(REST, 0, 0, 0);
-    if (packet > 0) {
-      s.cards(PACKET, packet, nRest());
-      s.flat(PACKET, PK.x, PK.z, PK.ry, nRest() * T);
-    } else PACKET.visible = false;
+    const u = Math.round(units(left));
+    if (u > 0) {
+      s.cards(REST, u, 0);
+      s.flat(REST, 0, 0, 0);
+    } else REST.visible = false;
+    PACKET.visible = false;
   }
   function deckReal() {
     if (!S) return;
@@ -124,9 +137,10 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
   }
   const deckYaw = () => (deck ? deck.rotation.y : ctx.layout.deck.rotY);
 
-  // ---- the cards in the fan --------------------------------------------------------------------
-  // entry: { i (position, 0 = left), mesh, slug, u (-1..1 along the arc), j* (a hand's jitter),
-  //          lift 0|0.5|1 (the hover), liftTarget, flying (a take owns the mesh), removed }
+  // ---- the cards in the spread -------------------------------------------------------------------
+  // entry: { i (0 = the left end of the outer bow), t (its bow), j (along it), mesh, slug,
+  //          j* (a hand's jitter), lift 0|0.5|1 (the hover), push (the neighbours stepping apart),
+  //          flying (a take owns the mesh), removed }
   const entries = [];
   const picks = [];
   const jit = mulberry32(5000 + ctx.seed);
@@ -137,7 +151,8 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
     picks.length = 0;
     const list = cards?.DECK?.length ? cards.DECK : [{ slug: 'the-fool' }];
     const order = liveRng().shuffle(list);
-    for (let i = 0; i < FAN.n; i++) {
+    for (let i = 0; i < N; i++) {
+      const { tier, j } = tierOf(i);
       const mesh = new THREE.Mesh(geoFor(i), mats);
       mesh.name = `fan-card-${i}`;
       mesh.castShadow = true;
@@ -148,46 +163,63 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
       group.add(mesh);
       entries.push({
         i,
+        t: tier,
+        j,
         mesh,
         slug: order[i % order.length].slug,
-        u: -1 + (2 * i) / (FAN.n - 1),
         jx: (jit() - 0.5) * 0.003,
         jz: (jit() - 0.5) * 0.003,
-        jr: (jit() - 0.5) * 0.02,
+        ja: (jit() - 0.5) * 0.03,
         lift: 0,
         liftTarget: 0,
+        push: 0,
+        pushTarget: 0,
         flying: false,
         removed: false,
       });
     }
   }
-  // where a card lies in the ribbon: on the arc, its left edge up on the cards under it (so it
-  // tilts a degree or two about its length), a hair off where a hand would put it
-  function restPose(e, out = {}) {
-    const th = FAN.A * e.u;
-    const h = Math.min(e.i, FAN.under) * T;
-    out.th = th;
-    out.x = FAN.R * Math.sin(th) + e.jx;
-    out.z = zp + FAN.R * Math.cos(th) + e.jz;
-    out.y = Y + T / 2 + h / 2;
-    out.ry = -th * FAN.rake + e.jr; // raked harder than the path it sits on: see FAN above
-    out.roll = Math.asin(Math.min(1, h / W));
+  // Where a card lies in the spread: on its bow, its covered edge up on the cards under it.
+  //
+  // THE OVERLAP RUNS INWARDS FROM BOTH ENDS. A ribbon spread laid in one sweep has its last card
+  // on top, which puts a whole card at one end of the picture and slivers everywhere else — the
+  // one thing this film never does with a frame. Laid from each end towards the middle, the bow's
+  // MIDDLE card is the one on top: a whole card on the frame's own axis, the slivers tapering away
+  // from it either side, and the four bows' keystones stacked one behind the other up the middle.
+  // `under(e)` is how many cards a card rides on, which is how far it is from its end.
+  const _r = {};
+  const under = (e) => Math.min(e.j, e.t.n - 1 - e.j);
+  const leftHalf = (e) => e.j * 2 < e.t.n - 1;
+  function restPose(e, out = _r) {
+    const p = poseAt(e.t, e.j, e.push, e.jx, e.jz, e.ja);
+    const h = under(e) * T;
+    out.x = p.x;
+    out.z = p.z;
+    out.ang = p.ang;
+    out.y = Y + T / 2 + (SPREAD.tiers.length - 1 - e.t.k) * BASE + h / 2;
+    // a card lying face DOWN is yawed the other way by the flip
+    out.ry = -p.ang;
+    out.roll = (leftHalf(e) ? 1 : -1) * Math.asin(Math.min(1, (Math.min(under(e), UNDER) * T) / W));
     return out;
   }
-  // the drawn pose: the rest pose, or lifted a finger's height and slid a centimetre out of the
-  // fan toward the visitor when hovered (lift 0.5 is the in-between drawing)
+  // the drawn pose: the rest pose, or — under the pointer — slid UP THE FRAME and riding proud, so
+  // the whole card is drawn over the ones it was lying under (lift 0.5 is the in-between drawing)
   function applyEntry(e) {
     if (e.flying || e.removed) return;
-    const r = restPose(e, _r);
+    const r = restPose(e);
     const k = e.lift;
     e.mesh.visible = true;
-    e.mesh.position.set(r.x + k * FAN.slide * Math.sin(r.th), r.y + k * FAN.lift, r.z + k * FAN.slide * Math.cos(r.th));
-    // the roll stays: the card is still lying on the cards to its left, under those to its right
-    e.mesh.rotation.set(PI, r.ry, r.roll);
+    e.mesh.position.set(r.x, r.y + k * SPREAD.lift.y, r.z - k * SPREAD.lift.z);
+    e.mesh.rotation.set(PI, r.ry, r.roll * (1 - k));
   }
-  const remaining = () => entries.filter((e) => !e.removed && !e.flying).sort((a, b) => a.u - b.u);
+  // left to right across the picture: what "the third from the left" counts, and what pick(i) takes
+  const remaining = () => entries.filter((e) => !e.removed && !e.flying).sort((a, b) => a.mesh.position.x - b.mesh.position.x || b.t.r - a.t.r);
+  const alive = (i) => {
+    const e = entries[i];
+    return !!e && !e.removed && !e.flying;
+  };
 
-  // the fan laid out at once (a judging still)
+  // the spread laid out at once (a judging still)
   function lay() {
     makeEntries();
     stacks();
@@ -197,8 +229,12 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
   function liftIndex(i) {
     const e = entries[i];
     if (!e) return;
-    e.lift = e.liftTarget = 1;
-    applyEntry(e);
+    setHover(e);
+    for (const o of entries) o.lift = o.liftTarget;
+    for (const o of entries) {
+      o.push = o.pushTarget;
+      applyEntry(o);
+    }
   }
   // for a judging still: these cards were already picked and sit face down in the slots
   function fakePicks(indices) {
@@ -212,7 +248,7 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
       e.mesh.rotation.set(PI, s.ry, 0);
     });
   }
-  // the fan gone (the picks stay readable until the next fan is dealt)
+  // the spread gone (the picks stay readable until the next one is dealt)
   function clear() {
     hand?.clear();
     for (const e of entries) group.remove(e.mesh);
@@ -226,111 +262,111 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
   }
 
   // ---- the takes -------------------------------------------------------------------------------
-  // the ribbon's arc at any point along it (u = -1 … 1, left to right)
-  const arcAt = (u) => {
-    const th = FAN.A * u;
-    return { th, x: FAN.R * Math.sin(th), z: zp + FAN.R * Math.cos(th), ry: -th * FAN.rake };
-  };
   // A card lies face DOWN — Euler x = π — so its Euler y is the negative of the way it points on
-  // the cloth, while his hand is posed by the yaw itself. Anything that has to lie along a card
-  // converts here. The fan's hand used to be handed the card's Euler y raw, which raked it the
-  // wrong way: at the ends of the ribbon the hand lay 60° across the card it was laying.
+  // the cloth, while his hand is posed by the direction itself.
   const handYawFor = (ry) => -ry;
 
   // The packet in his hand: `held` cards squared to his own yaw, their underside `y` above the
-  // cloth, centred on his palm. The stack is a child of the deck group, so it is placed in the
-  // deck's own frame however far from the deck his hand has carried it.
-  // Twenty-one cards are 17 mm thick and his hand, a flat cut-out hinged at the wrist, is 16 mm
-  // above the cloth at the knuckles: at true thickness the packet stands taller than the hand
-  // holding it and draws over it. The packet in his hand is therefore drawn at two fifths of its
-  // thickness — from overhead that is a rim of hairlines either way, and it still thins card by
-  // card as the ribbon goes down.
+  // cloth. The whole deck is 62 mm of card and his hand, a flat cut-out hinged at the wrist, is
+  // 16 mm above the cloth at the knuckles: at true thickness the packet stands taller than the
+  // hand holding it and draws over it. So it is drawn at two fifths, and still thins card by card.
   const DRAWN = 0.4;
   const _pw = new THREE.Vector3();
   function packetInHand(x, z, yaw, held, y) {
     const s = stacks();
-    if (!s) return;
-    if (held <= 0) {
-      PACKET.visible = false;
+    if (!s || held <= 0) {
+      if (PACKET) PACKET.visible = false;
       return;
     }
-    s.cards(PACKET, held, nRest());
+    const u = Math.max(1, Math.round(units(held)));
+    s.cards(PACKET, u, 0);
     PACKET.scale.y *= DRAWN;
-    _pw.set(x, Y + y + (held * T * DRAWN) / 2, z);
+    _pw.set(x, Y + y + (u * T * DRAWN) / 2, z);
     deck.updateMatrixWorld(true);
     deck.worldToLocal(_pw);
     PACKET.position.copy(_pw);
     PACKET.rotation.set(0, yaw - deckYaw(), 0);
   }
 
-  // THE FAN DEALT — and the cards come out of HIS HAND, not out of the deck. The deck stands
-  // upstage-right of this frame since the layout moved it (round 5), so a card flown from it
-  // crosses the top edge and is cut by it for half its flight, twenty-one times over; the old take
-  // had a card sliced by the frame's edge in most of its drawings. So: his hand comes in over the
-  // deck, cuts a packet off the top and lifts it, carries it across to the left end of the arc,
-  // and sweeps right — a card sliding out from under the packet every second drawing into its
-  // place in the ribbon, the packet thinning over it. Nothing but his own hand crosses an edge,
-  // and it crosses once.
+  // THE SPREAD LAID — and the cards come out of HIS HAND, in handfuls.
+  //
+  // Seventy-eight cards flown out one at a time is fifteen seconds of nothing happening, which is
+  // unwatchable; a film lays a ribbon spread the way a hand does, in gathered runs of five or six
+  // that cascade out from under the palm as it sweeps. So: his hand comes in over the squared
+  // deck, takes the whole of it, carries it to the left end of the INNERMOST bow, and sweeps —
+  // a handful spilling out under him every second drawing, bow by bow, working outwards, so each
+  // bow comes down on top of the one behind it. Fifty drawings, four seconds, on twos.
+  const GROUP = 5; // cards per handful
   function fanFrames() {
     makeEntries();
     stacks();
-    const n = FAN.n;
-    const IN = 1, CUT = 1, CARRY = 3;
-    const start = IN + CUT + CARRY; // the drawing on which the first card is laid
-    const every = 2;
-    const dk = deckToWorld(PK.x, 0, PK.z);
-    const du = 2 / (n - 1);
-    const lead = 1.7 * du; // how far along the arc his hand runs ahead of the card it lays
-    const uAt = (i) => -1 + i * du;
     const HOLD = 0.006; // the underside of the packet, above the cloth
+    const dk = deckToWorld(0, 0, 0);
 
-    // one pose per drawing: where his fingertips are, where the packet under them is, how many
-    // cards are still in it. `py` is the packet's underside — during the sweep it is one card up,
-    // because the card leaving is the one at the bottom of the packet.
     const poses = [];
     const P = (x, z, yaw, held, py) =>
       poses.push({
-        x,
-        z,
-        yaw,
-        held,
-        py,
-        // the hand lies flat ON the packet: `floor` is the packet's top, `y` the fingertips over it
-        floor: py + Math.max(0, held) * T * DRAWN,
+        x, z, yaw, held, py,
+        floor: py + Math.max(0, units(held)) * T * DRAWN,
         y: 0.003,
-        // Where the packet sits under the drawing: 45 mm back along the hand's own axis from the
-        // fingertips — under the knuckles, not under the middle of the palm, so its far end does
-        // not run out behind his wrist and over the cuff.
+        // the packet sits 45 mm back along the hand's own axis from the fingertips — under the
+        // knuckles, so its far end does not run out behind his wrist and over the cuff
         px: x - 0.045 * Math.sin(yaw),
         pz: z - 0.045 * Math.cos(yaw),
       });
-    // in from the top of the frame, over the deck; the cut: a packet off the top, and lifted
-    P(dk.x, dk.z - 0.20, -0.16, n, HOLD + 0.055);
-    P(dk.x, dk.z, -0.16, n, HOLD + 0.012);
-    // carried across to the left end of the arc, over the cloth
-    const a0 = arcAt(uAt(0) + lead);
-    for (let j = 1; j <= CARRY; j++) {
-      const u = j / CARRY;
-      P(lerp(dk.x, a0.x, u), lerp(dk.z, a0.z + 0.03, u), lerp(-0.16, handYawFor(a0.ry), u), n, HOLD + 0.05 * Math.sin(PI * u));
+    // which drawing each card leaves his hand on, and from where
+    const leave = new Array(N).fill(0);
+    // in from the top of the frame, over the deck; and the whole deck lifted
+    P(dk.x, dk.z - 0.20, -0.10, N, HOLD + 0.055);
+    P(dk.x, dk.z, -0.10, N, HOLD + 0.012);
+    let laid = 0;
+    // the bows, innermost first: the one behind goes down before the one in front of it
+    const order = SPREAD.tiers.slice().reverse();
+    let base = 0;
+    const firstOf = new Map();
+    for (const t of SPREAD.tiers) {
+      firstOf.set(t.k, base);
+      base += t.n;
     }
-    // the sweep: a card every second drawing, the packet thinning under his hand
-    for (let i = 0; i < n; i++) {
-      const a = arcAt(Math.min(1, uAt(i) + lead));
-      for (let j = 0; j < every; j++) P(a.x, a.z + 0.03, handYawFor(a.ry), n - i - 1, HOLD + T);
+    let last = null;
+    for (const t of order) {
+      const i0 = firstOf.get(t.k);
+      const at = (j) => {
+        const a = angleAt(t, Math.max(-2, Math.min(t.n + 1, j)));
+        return { x: t.r * Math.sin(a), z: t.r * Math.cos(a), yaw: handYawFor(-a) };
+      };
+      const mid = Math.ceil(t.n / 2);
+      // two passes, each running from an end of the bow to its middle, so the middle card is the
+      // one that lands last and lies on top
+      for (const pass of [{ j0: 0, j1: mid, d: 1 }, { j0: t.n - 1, j1: mid - 1, d: -1 }]) {
+        if (pass.d > 0 ? pass.j0 >= pass.j1 : pass.j0 <= pass.j1) continue;
+        const a0 = at(pass.j0 - 1.4 * pass.d);
+        P(a0.x, a0.z - 0.035, a0.yaw, N - laid, HOLD + 0.038);
+        for (let j = pass.j0; pass.d > 0 ? j < pass.j1 : j > pass.j1; ) {
+          const run = [];
+          for (let k = 0; k < GROUP && (pass.d > 0 ? j < pass.j1 : j > pass.j1); k++, j += pass.d) run.push(j);
+          const a = at(j - 0.4 * pass.d);
+          last = a;
+          for (let d = 0; d < 2; d++) P(a.x, a.z - 0.035, a.yaw, N - laid - (d ? run.length : 0), HOLD + T);
+          for (const jj of run) leave[i0 + jj] = poses.length - 2;
+          laid += run.length;
+        }
+      }
     }
-    // the ribbon complete: the empty hand presses its right end flat, then off the top of the frame
-    const aE = arcAt(1);
-    P(aE.x, aE.z + 0.02, handYawFor(aE.ry), 0, 0.002);
-    P(aE.x, aE.z + 0.02, handYawFor(aE.ry), 0, 0.002);
-    P(aE.x, aE.z - 0.12, handYawFor(aE.ry), 0, 0.046);
-    P(aE.x, aE.z - 0.30, handYawFor(aE.ry), 0, 0.096);
+    // pressed flat where the last handful went down — the middle of the outer bow — then off the
+    // top of the frame
+    const aE = last ?? { x: 0, z: SPREAD.tiers[0].r, yaw: 0 };
+    P(aE.x, aE.z - 0.03, aE.yaw, 0, 0.002);
+    P(aE.x, aE.z - 0.03, aE.yaw, 0, 0.002);
+    P(aE.x, aE.z - 0.16, aE.yaw, 0, 0.052);
+    P(aE.x, aE.z - 0.34, aE.yaw, 0, 0.10);
 
     // the deck and the packet, one drawing per pose
     const tracks = [
       {
         offset: 0,
         frames: poses.map((p, k) => () => {
-          if (k < IN) {
+          if (k < 1) {
             deckReal();
             for (const e of entries) {
               e.mesh.visible = false;
@@ -338,9 +374,9 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
             }
             return;
           }
-          if (k === IN) {
+          if (k === 1) {
             sound('deal');
-            pepe()?.deal?.(0, 'R'); // the packet is cut by the hand beside the deck
+            pepe()?.deal?.(0, 'R');
           }
           deckDrawing(0);
           packetInHand(p.px, p.pz, p.yaw, p.held, p.py);
@@ -348,9 +384,10 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
       },
     ];
 
-    // each card slides out from under the packet into its place: hidden, then three drawings
+    // each card spills out from under his hand: hidden, half out, home. Three drawings, and the
+    // whole handful moves together — which is what a handful does.
     entries.forEach((e, i) => {
-      const k = start + every * i;
+      const k = leave[i];
       const p = poses[Math.min(k, poses.length - 1)];
       const from = { x: p.px, y: Y + HOLD + T / 2, z: p.pz, ry: -p.yaw };
       const r = restPose(e, {});
@@ -360,21 +397,22 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
           e.mesh.visible = false;
         },
       ];
-      [0.34, 0.74, 1].forEach((u, j) => {
+      [0.45, 1].forEach((u, j) => {
         fr.push(() => {
           e.flying = true;
           e.mesh.visible = true;
-          e.mesh.position.set(lerp(from.x, r.x, u), lerp(from.y, r.y, u) + 0.003 * Math.sin(PI * u), lerp(from.z, r.z, u));
+          e.mesh.position.set(lerp(from.x, r.x, u), lerp(from.y, r.y, u) + 0.004 * Math.sin(PI * u), lerp(from.z, r.z, u));
           e.mesh.rotation.set(PI, lerp(from.ry, r.ry, u), r.roll * u);
-          if (j === 0) sound('deal');
+          if (j === 0 && e.j % GROUP === 0) sound('deal');
         });
       });
       fr.push(() => {
         e.flying = false;
         e.lift = e.liftTarget = 0;
+        e.push = e.pushTarget = 0;
         applyEntry(e);
       });
-      tracks.push({ offset: k - 1, frames: fr });
+      tracks.push({ offset: Math.max(0, k - 1), frames: fr });
     });
     if (hand)
       tracks.push({
@@ -388,15 +426,13 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
   }
 
   // where a picked card lies in slot k: a millimetre off, a few degrees off, as a hand puts it.
-  // The same function reveal.js lays a dealt row with, so the two ways a card reaches the cloth
-  // put it in exactly the same place.
   function slotPose(k) {
     const p = laidPose(slots, k, ctx.seed);
     return { p: new THREE.Vector3(p.x, p.y, p.z), ry: -p.ry }; // the card arrives face down
   }
 
-  // The pick: the card carried from where it lies (lifted, if the pointer had it) to slot k, low
-  // and calm, while its neighbours close the gap a little in two drawings.
+  // The pick: the card carried from where it stands (up out of the spread, if the pointer had it)
+  // to slot k, low and calm, while the gap it leaves closes behind it.
   function pickFrames(e, slot) {
     const from = { p: e.mesh.position.clone(), ry: e.mesh.rotation.y };
     const to = slotPose(slot);
@@ -409,7 +445,7 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
       cues: {
         lift: () => {
           sound('pick');
-          pepe()?.deal?.(slot, side); // the shoulder that agrees with the drawn hand doing it
+          pepe()?.deal?.(slot, side);
         },
         land: () => sound('settle'),
       },
@@ -423,16 +459,19 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
       last();
       e.removed = true;
     };
-    const du = 2 / (FAN.n - 1);
+    // the bow closes over the gap in three drawings
     const shifts = [];
     for (const o of entries) {
-      if (o === e || o.removed || o.flying) continue;
-      const d = Math.abs(o.i - e.i);
+      if (o === e || o.removed || o.flying || o.t.k !== e.t.k) continue;
+      const d = Math.abs(o.j - e.j);
       if (d > 3) continue;
-      shifts.push({ o, u0: o.u, u1: o.u + [0, 0.4, 0.2, 0.1][d] * du * (o.u < e.u ? 1 : -1) });
+      shifts.push({ o, p0: o.push, p1: [0, 0.45, 0.24, 0.1][d] * o.t.pitch * (o.j < e.j ? 1 : -1) });
     }
     const shiftFrames = [0, 0.5, 1].map((f) => () => {
-      for (const s of shifts) s.o.u = s.u0 + (s.u1 - s.u0) * f;
+      for (const s of shifts) {
+        s.o.push = s.o.pushTarget = s.p0 + (s.p1 - s.p0) * f;
+        applyEntry(s.o);
+      }
     });
     if (!hand)
       return compose([
@@ -440,12 +479,9 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
         { offset: 2, frames: shiftFrames },
       ]);
     // His hand takes the card the visitor chose: in from the top of the frame, thumb and
-    // forefinger down on the card, a two-frame hold, and only then does the card travel — under
-    // his fingers the whole way — to its slot, where he presses it flat and lets go.
-    const D = 4; // the card waits while the hand comes in and holds
+    // forefinger down on the card, a two-frame hold, and only then does the card travel.
+    const D = 4;
     const pinch = (p, ry, y) => ({ x: p.x, y: y ?? 0.006, z: p.z + 0.03, yaw: sgn * -ry * 0.6 - 0.12, side, pose: 'pinch' });
-    // his fingers stay on the card for every drawing of the flight; `compose` holds a track's last
-    // drawing for ever, so each of the three hand tracks ends by letting the hand go
     const ride = [];
     for (let k = 0; k < fr.length; k++)
       ride.push(() => {
@@ -457,26 +493,32 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
       { offset: D, frames: fr },
       { offset: D + 2, frames: shiftFrames },
       {
-        offset: 0, // in from the top of the frame, down on the card, and a two-frame hold
+        offset: 0,
         frames: handFrames(hand, [{ ...pinch(from.p, from.ry, 0.07), z: from.p.z - 0.24 }, { ...pinch(from.p, from.ry, 0.03), z: from.p.z - 0.08 }, pinch(from.p, from.ry), pinch(from.p, from.ry), { off: true }]),
       },
       { offset: D, frames: ride },
       {
-        offset: D + fr.length - 1, // pressed flat in its slot, then away
+        offset: D + fr.length - 1,
         frames: handFrames(hand, [{ off: true }, pinch(to.p, to.ry), { ...pinch(to.p, to.ry, 0.04), z: to.p.z - 0.14 }, { ...pinch(to.p, to.ry, 0.08), z: to.p.z - 0.32 }, { off: true }]),
       },
     ]);
   }
 
-  // The gather: the ribbon swept together from the left in five drawings into a packet at the
-  // right end, a hold, the packet lifted and tipped toward the deck, dropped on it; the real deck.
+  // The gather: the bows swept up from the outside in — the top layer first, the way a hand picks
+  // a spread up — into a pile on the deck's own square, and then the real deck again.
   function gatherFrames() {
-    const rem = entries.filter((e) => !e.removed).sort((a, b) => a.u - b.u);
-    const R = rem.length;
-    const rests = rem.map((e) => restPose(e, {}));
-    const closed = (r) => ({ x: FAN.R * Math.sin(FAN.A) + 0.004, y: Y + T / 2 + r * T, z: zp + FAN.R * Math.cos(FAN.A), ry: -FAN.A * FAN.rake });
+    const rem = entries.filter((e) => !e.removed);
+    // the order they are swept in: the top layer first — the outermost bow — and along each bow in
+    // the opposite direction to the one before it, so his hand runs a single serpentine over the
+    // whole spread instead of jumping back to the left four times
+    const dir = (e) => (e.t.k % 2 ? -1 : 1);
+    const seq = rem.slice().sort((a, b) => b.t.r - a.t.r || dir(a) * (a.j - b.j));
+    const rests = new Map(rem.map((e) => [e, restPose(e, {})]));
+    // the pile they land in is the deck's own drawing: seventy-eight cards are the deck's
+    // forty-four blocks thick, so the gathered pile ends exactly the height the real deck comes
+    // back at instead of jumping 27 mm when it does
     const onDeck = (r) => {
-      const p = deckToWorld(0.003, nRest() * T + r * T + T / 2, 0.002);
+      const p = deckToWorld(0.002, units(r) * T + T / 2, 0.002);
       return { x: p.x, y: p.y, z: p.z, ry: -(deckYaw() + 0.04) };
     };
     const set = (e, a, b, f, roll = 0) => {
@@ -488,73 +530,55 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
     const F = (fn) => frames.push(fn);
     F(() => {
       deckDrawing(0);
-      rem.forEach((e, r) => {
+      for (const e of rem) {
         e.flying = true;
         e.lift = e.liftTarget = 0;
-        set(e, rests[r], rests[r], 0, rests[r].roll);
-      });
+        e.push = e.pushTarget = 0;
+        const r = restPose(e, {});
+        rests.set(e, r);
+        set(e, r, r, 0, r.roll);
+      }
     });
-    // eight drawings, each card closing three frames after his hand has passed over it, so the
-    // ribbon collapses behind the sweep instead of all at once
-    const SWEEP = 8;
+    // twelve drawings: each card starts moving when the sweep reaches it and takes three to arrive,
+    // so the spread collapses behind his hand instead of all at once
+    const SWEEP = 12, RUN = 3;
+    const start = new Map(seq.map((e, k) => [e, ((SWEEP - RUN) * k) / Math.max(1, seq.length - 1)]));
     for (let k = 1; k <= SWEEP; k++) {
       F(() => {
         if (k === 1) sound('riffle');
-        rem.forEach((e, r) => {
-          const f = clamp01((k - (r * 5) / Math.max(1, R - 1)) / 3);
-          set(e, rests[r], closed(r), f, rests[r].roll * (1 - f));
+        if (k === 5 || k === 9) sound('deal');
+        seq.forEach((e, r) => {
+          const a = rests.get(e);
+          const f = clamp01((k - start.get(e)) / RUN);
+          set(e, a, onDeck(seq.length - 1 - r), f, a.roll * (1 - f));
+          e.mesh.position.y += 0.03 * Math.sin(PI * f);
         });
       });
     }
-    F(() => rem.forEach((e, r) => set(e, closed(r), closed(r), 1)));
-    // The carry. It used to be two drawings, which was a jump and not a carry the moment the deck
-    // moved upstage-right in round 5 and the packet had a metre to travel; it is four now, lifted
-    // in the middle so the packet passes OVER the slot cards it crosses instead of through them.
-    const CARRY = [0.24, 0.52, 0.79, 1];
-    const RISE = [0.048, 0.062, 0.04, 0];
-    CARRY.forEach((f, k) => {
-      F(() => {
-        rem.forEach((e, r) => {
-          set(e, closed(r), onDeck(r), f, -0.3 * (1 - f));
-          e.mesh.position.y += RISE[k];
-        });
-        if (k === 0) {
-          sound('deal');
-          pepe()?.deal?.(3, 'R'); // the packet is carried to the deck by the hand beside it
-        }
-        if (k === CARRY.length - 1) sound('settle');
-      });
+    F(() => {
+      seq.forEach((e, r) => set(e, onDeck(seq.length - 1 - r), onDeck(seq.length - 1 - r), 1));
+      sound('settle');
     });
     F(() => {
       for (const e of rem) e.mesh.visible = false;
       deckReal();
     });
     if (!hand) return frames;
-    // His hand sweeps the ribbon in: it lands at the left end, pushes right along the arc with the
-    // cards closing under it, presses the packet square, carries it to the deck and goes.
-    const dk = deckToWorld(0.003, 0, 0.002);
-    const sweep = (f) => {
-      const th = FAN.A * (2 * f - 1);
-      // handYawFor: a card's Euler y is the negative of the way it lies on the cloth, so the hand
-      // sweeping along the ribbon takes +th·rake, not the cards' own -th·rake — which had it
-      // crossing the ribbon at 60° at the ends instead of running along it
-      return { x: FAN.R * Math.sin(th), y: 0.004 + f * 0.008, z: zp + FAN.R * Math.cos(th), yaw: handYawFor(-th * FAN.rake), pose: 'splay' };
+    // his hand runs the sweep: along each bow in turn, from its right end to its left, and then
+    // presses the pile square on the deck's square
+    const dk = deckToWorld(0, 0, 0);
+    const specs = [];
+    const along = (e) => {
+      const a = rests.get(e) ?? restPose(e, {});
+      return { x: a.x, y: 0.006, z: a.z - 0.02, yaw: handYawFor(a.ry), pose: 'splay' };
     };
-    const packet = { x: closed(0).x, y: R * T + 0.004, z: closed(0).z, yaw: handYawFor(-FAN.A * FAN.rake), pose: 'splay' };
-    const deckYawH = handYawFor(-(deckYaw() + 0.04));
-    const specs = [{ ...sweep(0), y: 0.09, z: sweep(0).z - 0.3 }];
-    for (let k = 0; k < SWEEP; k++) specs.push(sweep(k / (SWEEP - 1)));
-    specs.push(packet);
-    // his fingers stay on the packet for every drawing of the carry, and let go on the deck
-    CARRY.forEach((f, k) => {
-      specs.push({
-        x: lerp(packet.x, dk.x, f),
-        y: lerp(R * T + 0.006, nRest() * T + R * T + 0.006, f) + RISE[k],
-        z: lerp(packet.z, dk.z, f) + 0.03,
-        yaw: lerp(packet.yaw, deckYawH, f),
-        pose: 'pinch',
-      });
-    });
+    specs.push({ ...along(seq[0]), y: 0.09, z: along(seq[0]).z - 0.28 });
+    for (let k = 0; k < SWEEP; k++) {
+      const e = seq[Math.min(seq.length - 1, Math.round((k / (SWEEP - 1)) * (seq.length - 1)))];
+      specs.push(along(e));
+    }
+    specs.push({ x: dk.x, y: 0.014, z: dk.z + 0.02, yaw: handYawFor(-(deckYaw() + 0.04)), pose: 'splay' });
+    specs.push({ x: dk.x, y: 0.05, z: dk.z - 0.16, yaw: handYawFor(-deckYaw()), pose: 'splay' });
     specs.push({ off: true });
     return compose([
       { offset: 0, frames },
@@ -562,38 +586,96 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
     ]);
   }
 
-  // ---- the visitor's hand: hover lifts, click picks ----------------------------------------------
+  // ---- the visitor's hand: the pointer stands a card up, a tap on it takes it ---------------------
   const canvas = ctx.renderer?.domElement ?? null;
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
+  const _p = new THREE.Vector3(), _d = new THREE.Vector3();
   let armed = false, picking = false, hover = null, pending = null;
-  function hit(ev) {
-    if (!canvas || !entries.length) return null;
+  // where the pointer is ON THE CLOTH, in metres
+  function cloth(ev) {
+    if (!canvas) return null;
     const r = canvas.getBoundingClientRect();
     if (!r.width || !r.height) return null;
     ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+    _p.set(ndc.x, ndc.y, 0.5).unproject(ctx.camera);
+    _d.copy(_p).sub(ctx.camera.position).normalize();
+    if (Math.abs(_d.y) < 1e-5) return null;
+    const t = (Y - ctx.camera.position.y) / _d.y;
+    if (!(t > 0)) return null;
+    return { x: ctx.camera.position.x + _d.x * t, z: ctx.camera.position.z + _d.z * t };
+  }
+  // the card the pointer is over: a nearest-cell lookup on the CLOSED spread. A pointer that has
+  // wandered off the cloth altogether (past the rim, or up among the reading slots) chooses nothing.
+  function at(ev) {
+    if (!entries.length) return null;
+    const p = cloth(ev);
+    if (!p) return null;
+    const r = Math.hypot(p.x, p.z);
+    if (r > 0.63 || r < 0.24) return null;
+    const i = indexAt(p.x, p.z, alive);
+    if (i == null) return null;
+    const e = entries[i];
+    // …and only if the finger is somewhere near the spread: a bow's own band, plus a card's width
+    const near = Math.abs(r - e.t.r) < H / 2 + 0.04 && Math.abs(Math.atan2(p.x, p.z)) < e.t.phi + 0.22;
+    return near ? e : null;
+  }
+  // the standing card itself, which is what a thumb aims at: a real raycast, so the whole 58 x 101
+  // px of it counts and not a nearest-cell guess
+  function onRaised(ev) {
+    if (!hover || !canvas || hover.lift <= 0) return false;
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, ctx.camera);
-    const list = [];
-    for (const e of entries) if (!e.removed && !e.flying) list.push(e.mesh);
-    const hits = ray.intersectObjects(list, false);
-    return hits.length ? entries[hits[0].object.userData.fan] : null;
+    return ray.intersectObject(hover.mesh, false).length > 0;
   }
   function setHover(e) {
     if (hover === e) return;
-    if (hover) hover.liftTarget = 0;
+    if (hover) {
+      hover.liftTarget = 0;
+      for (const o of entries) if (o.t.k === hover.t.k) o.pushTarget = 0;
+    }
     hover = e;
-    if (e) e.liftTarget = 1;
+    if (e) {
+      e.liftTarget = 1;
+      const F = SPREAD.open.fall;
+      for (const o of entries) {
+        if (o.t.k !== e.t.k || o === e) continue;
+        const m = o.j - e.j, a = Math.abs(m);
+        o.pushTarget = a < F.length ? Math.sign(m) * F[a] * SPREAD.open.amp : 0;
+      }
+    }
     if (canvas) canvas.style.cursor = e ? 'pointer' : '';
   }
   canvas?.addEventListener('pointermove', (ev) => {
-    if (!armed) return;
-    setHover(hit(ev));
+    if (!armed || picking) return;
+    if (ev.pointerType === 'touch') return; // a thumb has no hover: it drags, below
+    setHover(at(ev));
   });
-  canvas?.addEventListener('pointerleave', () => setHover(null));
+  // a touch pointer fires pointerleave the moment the finger comes off the glass, which would put
+  // the card the visitor just stood up straight back down before they could tap it
+  canvas?.addEventListener('pointerleave', (ev) => {
+    if (ev.pointerType !== 'touch') setHover(null);
+  });
   canvas?.addEventListener('pointerdown', (ev) => {
     if (!armed || picking) return;
-    const e = hit(ev);
-    if (e) doPick(e);
+    // TAKE IT if the tap landed on the card already standing up (a mouse has hovered it there
+    // already, so one click still takes a card); otherwise STAND ONE UP under the finger.
+    if (onRaised(ev)) {
+      doPick(hover);
+      return;
+    }
+    const e = at(ev);
+    if (!e) return;
+    if (e === hover && hover.lift > 0) doPick(e);
+    else setHover(e);
+  });
+  // a thumb dragged along the spread walks the standing card with it
+  canvas?.addEventListener('pointermove', (ev) => {
+    if (!armed || picking || ev.pointerType !== 'touch' || !ev.buttons) return;
+    const e = at(ev);
+    if (e) setHover(e);
   });
 
   // arm the pointer; resolves with the next completed pick ({index, ordinal, slug, slot, mesh}),
@@ -613,7 +695,9 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
     picking = true;
     const slot = picks.length;
     const ordinal = remaining().indexOf(e) + 1;
+    const keep = e;
     setHover(null);
+    keep.lift = keep.liftTarget = 0;
     const real = Promise.resolve()
       .then(() => cards.makeCard(e.slug))
       .catch(() => null);
@@ -645,16 +729,12 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
     await player.play(gatherFrames());
     clear();
   }
-  // While the ribbon is out and the visitor is choosing — half a minute, in a locked frame with
-  // nothing else in it — his hand waits on the deck at the top of the picture with its fingers on
-  // the cloth, and drums them once every two and a half seconds. A held pose, on twos: he is in
-  // the shot the whole time the visitor is deciding.
-  // It waits to the right of the spread and INBOARD of the table's rim. At (0.44, 0.30) his
-  // fingertips were 0.53 m from the table's centre and their outer corner 0.60, which is the rim
-  // itself (the cloth is a disc of 0.608): the drawing sat half off the table with two fingers
-  // over the edge. Here the far corner of the drawing comes to 0.543 — six centimetres of cloth
-  // beyond it — and it is upstage of the slot the third card has not been laid in yet.
-  const WAIT = { x: 0.44, z: 0.17, yaw: -0.18 };
+  // While the spread is out and the visitor is choosing — half a minute in a locked frame — his
+  // hand waits on the bare cloth at his right, past the right end of the bows and outboard of the
+  // reading row, and drums its fingers once every two and a half seconds. At (0.36, 0.16) the
+  // drawing's far corner comes to 0.43 from the table's centre, and the nearest card of the outer
+  // bow is 9 cm away.
+  const WAIT = { x: 0.36, z: 0.16, yaw: -0.20 };
   function waiting() {
     if (!hand) return;
     const k = ctx.clock.frame % 30;
@@ -662,29 +742,36 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
     hand.at(WAIT.x, 0.004 + up, WAIT.z + up * 0.5, { yaw: WAIT.yaw, pose: 'splay' });
   }
 
-  // the hover in-betweens, on the stepped clock
+  // the hover in-betweens, on the stepped clock: two drawings up, two down, and the neighbours
+  // stepping apart with it
   function step() {
     if (!entries.length) return;
     for (const e of entries) {
+      const l0 = e.lift, p0 = e.push;
       if (e.lift !== e.liftTarget) e.lift = e.lift < e.liftTarget ? Math.min(e.liftTarget, e.lift + 0.5) : Math.max(e.liftTarget, e.lift - 0.5);
-      applyEntry(e);
+      if (e.push !== e.pushTarget) {
+        const d = e.pushTarget - e.push;
+        e.push = Math.abs(d) < 0.004 ? e.pushTarget : e.push + Math.sign(d) * 0.006;
+      }
+      if (e.lift !== l0 || e.push !== p0 || !e.mesh.visible) applyEntry(e);
     }
     if (armed && !picking) waiting();
   }
-  // where the cards are on screen (CSS px): the visible strip of each, for tests and for a
-  // caption that points at "the third from the left"
+  // where the cards are on screen (CSS px), left to right: for tests and for a caption that points
+  // at "the third from the left"
   function screenPositions() {
     if (!canvas) return [];
     const r = canvas.getBoundingClientRect();
     return remaining().map((e) => {
       e.mesh.updateMatrixWorld(true);
-      const v = e.mesh.localToWorld(new THREE.Vector3(-0.05, 0, 0)).project(ctx.camera);
+      const v = e.mesh.getWorldPosition(new THREE.Vector3()).project(ctx.camera);
       return { index: e.i, slug: e.slug, x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
     });
   }
 
   return {
     FAN,
+    SPREAD,
     group,
     entries,
     picks,

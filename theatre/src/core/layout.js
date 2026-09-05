@@ -20,7 +20,13 @@ export const LAYOUT = Object.freeze({
   // upstage-right and clear of the card row: in the third card insert its near corner used to enter
   // the frame and overlap that card, and the fan shot had to reach 20 cm further upstage than the
   // ribbon needed purely to hold the deck whole (camera round 4).
-  deck: { pos: [0.38, 0.7625, -0.25], rotY: -0.06 },
+  // The deck stands on the bare working cloth, dead centre and downstage — where table.js always
+  // said it belonged. It used to sit at [0.38, -0.25], which put its corner 14 mm INSIDE the
+  // candle-bottle before anything moved, and the riffle parted its halves straight through the
+  // glass; the user saw it ("when the cards are mixed they collide with the wine bottle"). The far
+  // band is a still life with no clear patch big enough to shuffle in, so the deck came downstage
+  // rather than the bottle going away. 0.50 m from the bottle now, 66 mm clear of the reading row.
+  deck: { pos: [0, 0.7625, 0.44], rotY: -0.06 },
   // Named camera shots. `up` optional. The camera piece may add its own; these are the contract.
   shots: {
     home: { pos: [0, 1.2, 2.55], look: [0, 0.98, -0.45], fov: 30 },
