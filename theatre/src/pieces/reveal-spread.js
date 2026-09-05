@@ -13,23 +13,34 @@
 //     a phone, so |x| ≤ 0.425 and z ≤ 0.568 is what survives both.
 // That leaves a CRESCENT — bounded outside by the rim, inside by the slot row — which is 0.344 m
 // deep on the axis and shallower at the ends. A rectangle of ranks cannot live in it (at z = 0.454
-// the table is only 0.19 m wide), so the spread is CONCENTRIC WITH THE TABLE: four nested bows of
+// the table is only 0.19 m wide), so the spread is CONCENTRIC WITH THE TABLE: six nested bows of
 // cards, each card turned to point out of the table's centre, so the composition curves the way
 // the object it lies on curves.
 //
 // AND THE BOWS GET SHORTER AS THEY GO IN, because the slot row does: a bow may only run to the
 // angle at which its own inner corner still clears that bar, which is solved here as a rectangle
-// against a rectangle. The arithmetic hands us a stepped pediment — 27 · 23 · 17 · 11 — which is
-// also the composition a film would build: a shell of cards opening around the three slots,
-// symmetric about the frame's axis. Measured (tools/_rv7-geom.mjs): the furthest corner of the
-// spread is 0.5695 from the table's centre, 50 mm inside the rim, and the nearest card clears a
-// reading slot by 4.3 mm.
+// against a rectangle. The arithmetic hands us a stepped pediment — 19 · 17 · 15 · 13 · 9 · 5 —
+// which is also the composition a film would build: a shell of cards opening around the three
+// slots, symmetric about the frame's axis.
 //
-// FOUR bows and not two or six: the step between bows and the pitch along them trade against each
-// other (the crescent's depth beyond one card's length is fixed at about 0.11 m), and a pointer
-// wants the SMALLEST of the two to be as big as possible. Solved: 18.3 mm along a bow, 18.5 mm
-// between them — a nearly square cell of cloth per card, 29 px at 1600 and 8 px on a phone. Which
-// is why the pick does not depend on hitting one (see reveal-fan.js).
+// ROUND 8, THE USER, ON A PHONE: "on a very vertical screen format the cards are very much at the
+// edge of the table and we're losing a lot of space on the table. maybe we can make them more
+// central?" Round 7's bows ran to |x| = 0.340 and brought their furthest corner to 0.5695, five
+// centimetres off a rim of 0.62 — and on a 390 px frame that is 8.1 px of each card showing, in a
+// band jammed against the near edge of the cloth. The bow cannot come in and stay as wide: reach()
+// is governed by the reading row, so a smaller radius is always a shorter bow. So the spread was
+// re-nested for WIDTH rather than depth (tools/_rv8-fit4.mjs sweeps every nesting): SIX bows a
+// centimetre and a fifth apart instead of four bows nearly two centimetres apart. Same 78 cards,
+// same crescent, but
+//   · |x| 0.340 → 0.317 and the furthest corner 0.5695 → 0.5595: 60 mm inside the rim, not 51;
+//   · the pitch along a bow 18.3 → 23.8 mm, so each card shows a fifth of itself instead of a
+//     seventh, and the spread reads as cards rather than as a comb;
+//   · a portrait plate cut to the spread + the reading row can now give 616 px/m instead of 445,
+//     which is the other half of the user's note and belongs to the camera.
+// SIX bows and not four: the step between bows and the pitch along them trade against each other
+// (the crescent's depth beyond one card's length is fixed at about 0.11 m), and the picture wants
+// the pitch — the step is only ever seen as the head of the card behind. 12 mm between bows is
+// 7.4 px on a phone at the plate above, which is what 18.5 mm was at round 7's.
 
 const CARD = { w: 0.13, h: 0.2275 };
 
@@ -39,8 +50,9 @@ const ROW_CLEAR = 0.004; // …plus four millimetres, for the jitter a hand puts
 
 // r: the radius of the bow's card centres, from the TABLE's centre. phi: its half-angle, derived.
 // n: how many cards it carries. Tier 0 is the outermost — nearest the visitor, laid last, on top.
-const R0 = 0.452; // outer bow: its outer edge reaches 0.5665, which is 53 mm inside the rim
-const STEP = 0.0185; // between bows: what each of the three inner bows shows of itself
+const BOWS = 6;
+const R0 = 0.442; // outer bow: its furthest corner reaches 0.5595, which is 60 mm inside the rim
+const STEP = 0.012; // between bows: what each of the five inner bows shows of itself
 const TOTAL = 78;
 
 // the corner of a card at angle `a` on radius `r` that comes nearest the slot row, and whether it
@@ -73,39 +85,76 @@ function reach(r) {
   }
   return lo;
 }
-// 78 cards shared between the bows in proportion to how much bow there is
+// 78 cards shared between the bows in proportion to how much bow there is — and EVERY BOW GETS AN
+// ODD COUNT, which is the whole of the user's second note. A bow of an even number of cards has no
+// middle card: the frame's axis falls in the JOIN between two of them and the picture is cut down
+// its own centre line. An odd bow has a keystone, laid last, lying whole and square on the axis
+// with its neighbours tucked under it either side. 19 + 17 + 15 + 13 + 9 + 5 = 78.
 function share(arcs) {
   const sum = arcs.reduce((a, b) => a + b, 0);
-  const raw = arcs.map((L) => (TOTAL * L) / sum);
-  const n = raw.map((v) => Math.max(6, Math.round(v)));
+  const n = arcs.map((L) => Math.max(5, Math.round((TOTAL * L) / sum)));
+  for (let i = 0; i < n.length; i++) if (n[i] % 2 === 0) n[i] += 1;
+  // the remainder goes on and comes off in TWOS, longest bow first, so the parity survives
   let d = TOTAL - n.reduce((a, b) => a + b, 0);
-  for (let i = 0; d !== 0; i = (i + 1) % n.length) {
-    const j = d > 0 ? arcs.indexOf(Math.max(...arcs.map((L, k) => (k === i ? L : -1)))) : i;
-    n[i] += Math.sign(d);
-    d -= Math.sign(d);
+  const byArc = n.map((_, i) => i).sort((a, b) => arcs[b] - arcs[a]);
+  for (let k = 0, guard = 0; d !== 0 && guard < 400; k++, guard++) {
+    const i = byArc[k % byArc.length];
+    if (d >= 2) {
+      n[i] += 2;
+      d -= 2;
+    } else if (d <= -2 && n[i] > 7) {
+      n[i] -= 2;
+      d += 2;
+    } else break;
   }
+  // an odd total cannot be made of odd bows: the shortest bow wears the odd one out. (78 is even
+  // and the sweep is chosen so this never fires; it is here so a future radius cannot silently
+  // hand a bow an even count.)
+  if (d !== 0) n[n.length - 1] += d;
   return n;
 }
 
 export const SPREAD = {
   card: CARD,
   step: STEP,
+  // HOW THE SHINGLE STACKS, in half-thicknesses of card — the one number both the drawing
+  // (reveal-fan.js → restPose) and the pointer (stackOrder below) are built from, so what stands up
+  // under a finger can never drift from what is drawn there. A bow rides three half-thicknesses
+  // over the bow behind it; along a bow, a card rides one per card it was laid over.
+  tierLift: 3,
   // the hover: the card under the pointer slides UP THE FRAME (the user's rule — never down) and
-  // rides a hair over its neighbours so the whole of it is drawn. 30 mm is 24 px at 1600 and 13 px
-  // on a phone, and the whole card it uncovers measures 213 x 367 px there and 60 x 103 on a phone
-  // (tools/_rv7-pick.mjs, which drives a real pointer at both sizes).
+  // rides a hair over its neighbours so the whole of it is drawn. The whole card it uncovers is the
+  // tap target: measured with a real pointer at both sizes (tools/_rv7-pick.mjs) it is never smaller than
+  // 202 x 353 px at 1600 or 93 x 145 px on a 390 px phone — round 7.s was 58 x 101 there.
   lift: { z: 0.030, y: 0.0055 },
   // and the two cards either side of it step apart along their bow, so a gap opens where it was.
   // Conservative: the push dies away by the sixth neighbour, so no bow ever grows at its ends.
-  open: { amp: 0.013, fall: [0, 1, 0.6, 0.33, 0.15, 0.05] },
+  open: { amp: 0.015, fall: [0, 1, 0.6, 0.33, 0.15, 0.05] },
   tiers: (() => {
-    const rs = [0, 1, 2, 3].map((k) => R0 - k * STEP);
+    const rs = Array.from({ length: BOWS }, (_, k) => R0 - k * STEP);
     const phis = rs.map(reach);
     const ns = share(rs.map((r, k) => 2 * phis[k] * r));
     return rs.map((r, k) => ({ k, r, phi: phis[k], n: ns[k], pitch: ns[k] > 1 ? (2 * phis[k] * r) / (ns[k] - 1) : 0 }));
   })(),
   total: TOTAL,
 };
+
+// THE KEYSTONE: the middle card of a bow, the one the frame's axis runs through. It is laid last,
+// it lies flat (no roll — both its neighbours are under it, symmetrically), and it is the only
+// card of its bow that shows the whole of itself.
+export const keystone = (t) => (t.n - 1) / 2;
+export const isKeystone = (t, j) => j * 2 === t.n - 1;
+
+// How many cards a card was laid over — which is how far along its bow it is from the END it was
+// laid from — and which half of the bow it belongs to. The overlap runs inwards from both ends, so
+// this rises to the keystone and falls away again.
+export const under = (t, j) => Math.min(j, t.n - 1 - j);
+export const leftHalf = (t, j) => j * 2 < t.n - 1;
+// Where a card sits in the pile, in half-thicknesses of card. Higher is nearer the lens. The right
+// half of a bow rides half a thickness over the left half so that no two cards are ever coplanar —
+// without it the mirror pair either side of a keystone fight for the pixel the moment the keystone
+// is taken.
+export const stackOrder = (t, j) => (SPREAD.tiers.length - 1 - t.k) * SPREAD.tierLift + under(t, j) + (leftHalf(t, j) ? 0 : 0.5);
 
 // The bow a card belongs to, and where along it. `j` runs left to right.
 export const tierOf = (i) => {
@@ -144,27 +193,57 @@ export function entryPoses() {
   return out;
 }
 
-// The pointer, in cloth metres, to the card under it. The bow is chosen by RADIUS (the outer and
-// inner bows own everything beyond them, so only the two middle bands are narrow) and the card
-// along it by ANGLE. Done on the closed spread, never on the opened one, so the mapping is a fixed
-// function of where the finger is and cannot chase itself.
+// The pointer, in cloth metres, to the card under it. Done on the CLOSED spread, never on the
+// opened one, so the mapping is a fixed function of where the finger is and cannot chase itself.
+//
+// IT IS THE CARD THE EYE SEES THERE, worked out the way the eye works it out: of the cards whose
+// footprint covers the point, the one lying highest in the pile (stackOrder). Nothing is
+// approximated — no nearest bow, no nearest centre, no partition of the angle.
+//
+// Rounds 6 and 7 chose the bow by whose CENTRE LINE was nearest, and that is wrong by more than a
+// hundred millimetres: a bow's centre is at r, but the cloth it SHOWS is the twelve-millimetre
+// strip at r − h/2. Nearest-centre handed the whole lower half of the visible fan to the innermost
+// bow — a finger on the big card in front of you stood up a card sixty ranks behind it — and, along
+// a bow, named a card two or three ranks from the one it was on, because what a card shows is the
+// strip along the edge facing the end it was laid from, not the strip around its own middle.
+// Measured over the whole spread on a 2 mm grid (tools/_rv8-point.mjs): 12.5 % right before,
+// 94.4 % after, and what is left is the millimetre and a half of jitter a hand puts in each card,
+// which this cannot know about — when it is wrong now it is wrong by one rank.
+const _pip = (q, px, pz) => {
+  let s = false;
+  for (let i = 0, k = q.length - 1; i < q.length; k = i++) if (q[i][1] > pz !== q[k][1] > pz && px < ((q[k][0] - q[i][0]) * (pz - q[i][1])) / (q[k][1] - q[i][1]) + q[i][0]) s = !s;
+  return s;
+};
+const REACHES = Math.hypot(CARD.h, CARD.w) / 2; // no card can cover a point further than this away
 export function indexAt(x, z, has = () => true) {
   const r = Math.hypot(x, z), a = Math.atan2(x, z);
-  let best = null, bestD = Infinity;
-  let base = 0;
+  let best = null, bestRank = -Infinity, base = 0;
   for (const t of SPREAD.tiers) {
-    // a bow only owns the angles it covers; past its end the bows outside it do
-    const aa = Math.max(-t.phi, Math.min(t.phi, a));
-    const j = t.n > 1 ? Math.round(((aa + t.phi) / (2 * t.phi)) * (t.n - 1)) : 0;
-    const p = poseAt(t, j);
-    // radius counts double: the bows are 24 mm apart and their cards 23.5 mm, so an even weighting
-    // would let a finger a bow away win on angle alone
-    const d = Math.hypot((r - t.r) * 1.0, (a - angleAt(t, j)) * t.r) + (Math.abs(a) > t.phi ? 0.05 : 0);
-    if (d < bestD) {
-      bestD = d;
+    for (let j = 0; j < t.n; j++) {
+      const rank = stackOrder(t, j);
+      if (rank <= bestRank) continue; // already covered by something higher: nothing to learn
+      const p = poseAt(t, j);
+      if (Math.hypot(p.x - x, p.z - z) > REACHES) continue;
+      if (!_pip(cardCorners(p), x, z)) continue;
+      bestRank = rank;
       best = base + j;
     }
     base += t.n;
+  }
+  if (best == null) {
+    // off the cards altogether (inside the innermost bow, or past every bow's end): the nearest
+    // card of all, so a finger that wanders a centimetre never chooses nothing
+    let bestD = Infinity;
+    base = 0;
+    for (const t of SPREAD.tiers) {
+      const j = t.n > 1 ? Math.round(((Math.max(-t.phi, Math.min(t.phi, a)) + t.phi) / (2 * t.phi)) * (t.n - 1)) : 0;
+      const d = Math.hypot(r - t.r, (a - angleAt(t, j)) * t.r) + (Math.abs(a) > t.phi ? 0.05 : 0);
+      if (d < bestD) {
+        bestD = d;
+        best = base + j;
+      }
+      base += t.n;
+    }
   }
   if (best == null) return null;
   if (has(best)) return best;

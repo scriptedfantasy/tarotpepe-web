@@ -1,14 +1,19 @@
 // reveal-fan.js — THE WHOLE DECK ON THE TABLE, and the visitor's pick. Drawn on twos.
 //
-// ROUND 7, and all three of its rules come from the user.
+// ROUNDS 7 AND 8, and every rule here comes from the user.
 //
 //  1. "tarot is pulled from all 78 cards, not a sub section". So he no longer cuts a packet of
 //     twenty-one off the top: the whole deck goes down. Where the seventy-eight lie is worked out
-//     in reveal-spread.js and measured by tools/_rv7-geom.mjs — four nested bows concentric with
-//     the round table (27 · 23 · 17 · 11), each bow shorter than the one outside it because the
-//     row of three reading slots blocks the inside of the crescent. He lays them innermost bow
-//     first, in gathered handfuls, so the outer bow comes down on top and shows whole cards while
-//     the three behind it show 18 mm of their heads.
+//     in reveal-spread.js and measured by tools/_rv7-geom.mjs — six nested bows concentric with
+//     the round table (19 · 17 · 15 · 13 · 9 · 5), each bow shorter than the one outside it
+//     because the row of three reading slots blocks the inside of the crescent. He lays them
+//     innermost bow first, in gathered handfuls, so the outer bow comes down on top and shows
+//     whole cards while the five behind it show 12 mm of their heads.
+//  1b. "the card overlap on the top card not done nicely. the top card should obviously not have a
+//     cut down the middle." Every bow now carries an ODD number of cards, so every bow has a
+//     KEYSTONE on the frame's own axis; it is laid last, it lies flat (no roll), it rides a card's
+//     thickness over both its neighbours, and it is the one card of the seventy-eight that shows
+//     the whole of itself. See restPose below and reveal-spread.js → share().
 //  2. "they should however pop up on hover". The card under the pointer slides UP THE FRAME — in
 //     these plan-view plates that is −z, away from the visitor — and rides a hair proud, so the
 //     whole of it is drawn over its neighbours. Its two neighbours step apart along their bow and
@@ -16,18 +21,18 @@
 //  3. Nothing passes through anything. The old hover slid a card DOWNSTAGE and took its corner
 //     0.668 m from the table's centre — 4.8 cm off the edge of a 0.62 m table. Sliding up the
 //     frame moves every card further INTO the cloth instead, and the spread's furthest corner now
-//     sits at 0.5695, five centimetres inside the rim.
+//     sits at 0.5595, six centimetres inside the rim.
 //
-// AND A PHONE CANNOT TAP ONE OF SEVENTY-EIGHT. At 390 px the spread is 303 px wide, so a card's
-// own strip is 8.1 px and no lens fixes that. So the pick is in TWO MOVEMENTS and neither of them
-// asks a thumb to hit a card:
-//   · the pointer is mapped to a card by WHERE IT IS ON THE CLOTH (reveal-spread.js → indexAt),
-//     not by hitting one — a nearest-cell lookup on the closed spread, so the mapping is a fixed
+// AND A PHONE CANNOT TAP ONE OF SEVENTY-EIGHT. Even at round 8's wider pitch a card's own strip on
+// a 390 px frame is under fifteen pixels, and no lens fixes that. So the pick is in TWO MOVEMENTS
+// and neither of them asks a thumb to hit a card:
+//   · the pointer is mapped to a card by WHERE IT IS ON THE CLOTH (reveal-spread.js → indexAt) —
+//     the card actually DRAWN there, worked out on the CLOSED spread, so the mapping is a fixed
 //     function of the finger and cannot chase the animation it causes;
-//   · that card stands up out of the spread, whole and on top: 58 x 101 px on a phone, 207 x 362
-//     at 1600. THAT is what is tapped to take it. On a mouse the hover has already stood it up, so
-//     one click still takes a card; on a thumb the first touch stands one up and the second takes
-//     it, and sliding the thumb walks the standing card along the bow.
+//   · that card stands up out of the spread, whole and on top: at least 93 x 145 px on a phone and
+//     202 x 353 at 1600. THAT is what is tapped to take it. On a mouse the hover has already stood
+//     it up, so one click still takes a card; on a thumb the first touch stands one up and the
+//     second takes it, and sliding the thumb walks the standing card along the bow.
 // Speaking still works untouched: `remaining()` is ordered left to right across the picture, so
 // "the third from the left" is the third card from the left of all seventy-eight.
 //
@@ -39,7 +44,7 @@ import { mulberry32 } from '../core/rng.js';
 import { cardGeometry } from './cards-geometry.js';
 import { compose, dealTrack, handFrames, handSide, laidPose } from './reveal-takes.js';
 import { deckStacks } from './reveal-shuffle.js';
-import { SPREAD, tierOf, angleAt, poseAt, indexAt } from './reveal-spread.js';
+import { SPREAD, tierOf, angleAt, poseAt, indexAt, isKeystone, under, leftHalf, stackOrder } from './reveal-spread.js';
 
 // kept for the pieces that ask how many are out
 export const FAN = { get n() { return SPREAD.total; } };
@@ -48,10 +53,9 @@ const PI = Math.PI;
 const lerp = (a, b, u) => a + (b - a) * u;
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
-// How thick the shingle is. Each bow comes down on the one behind it, so it rides two card
-// thicknesses proud of it; along a bow a card rides on the five to its left. Small numbers — the
-// whole spread is 5.4 mm thick — but they are what stop 78 coplanar quads fighting for the pixel.
-const BASE = 0.0018;
+// How steeply a card is RAKED by the ones it lies on: it tips about its own long axis until it has
+// climbed five card thicknesses, and no further. (How high it rides is SPREAD.tierLift, over in
+// reveal-spread.js, because the pointer needs the same number.)
 const UNDER = 5;
 
 // player: { play(frames, opts) → Promise } — the piece's take player (reveal.js)
@@ -185,21 +189,33 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
   // on top, which puts a whole card at one end of the picture and slivers everywhere else — the
   // one thing this film never does with a frame. Laid from each end towards the middle, the bow's
   // MIDDLE card is the one on top: a whole card on the frame's own axis, the slivers tapering away
-  // from it either side, and the four bows' keystones stacked one behind the other up the middle.
+  // from it either side, and the six bows' keystones stacked one behind the other up the middle.
   // `under(e)` is how many cards a card rides on, which is how far it is from its end.
+  //
+  // THE KEYSTONE IS FLAT. Every other card in a bow is rolled a degree or two about its own long
+  // axis, because it is lying with one edge up on its neighbours and the other on the cloth. The
+  // keystone is not: it is lying on BOTH its neighbours, symmetrically, so it lies square. Round 7
+  // gave it the right-hand roll — the parity of `leftHalf` put the exact middle card on the right
+  // half of its own bow — which tipped the one card in the picture that the frame's axis runs
+  // through, and the axis then read as a seam down it. (The user: "the top card should obviously
+  // not have a cut down the middle".)
+  //
+  // The height a card rides at is `stackOrder` from reveal-spread.js, in half-thicknesses — the
+  // same number the pointer uses to work out which card is drawn under a finger, so the two can
+  // never drift. (It also gives the right half of a bow half a thickness over the left, so no two
+  // cards of a bow are coplanar: without that, the mirror pair either side of a keystone close on
+  // the axis the moment the keystone is TAKEN and fight for the pixel — the same seam, one pick
+  // later.)
   const _r = {};
-  const under = (e) => Math.min(e.j, e.t.n - 1 - e.j);
-  const leftHalf = (e) => e.j * 2 < e.t.n - 1;
   function restPose(e, out = _r) {
     const p = poseAt(e.t, e.j, e.push, e.jx, e.jz, e.ja);
-    const h = under(e) * T;
     out.x = p.x;
     out.z = p.z;
     out.ang = p.ang;
-    out.y = Y + T / 2 + (SPREAD.tiers.length - 1 - e.t.k) * BASE + h / 2;
+    out.y = Y + T / 2 + stackOrder(e.t, e.j) * (T / 2);
     // a card lying face DOWN is yawed the other way by the flip
     out.ry = -p.ang;
-    out.roll = (leftHalf(e) ? 1 : -1) * Math.asin(Math.min(1, (Math.min(under(e), UNDER) * T) / W));
+    out.roll = isKeystone(e.t, e.j) ? 0 : (leftHalf(e.t, e.j) ? 1 : -1) * Math.asin(Math.min(1, (Math.min(under(e.t, e.j), UNDER) * T) / W));
     return out;
   }
   // the drawn pose: the rest pose, or — under the pointer — slid UP THE FRAME and riding proud, so
@@ -620,7 +636,7 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
     const near = Math.abs(r - e.t.r) < H / 2 + 0.04 && Math.abs(Math.atan2(p.x, p.z)) < e.t.phi + 0.22;
     return near ? e : null;
   }
-  // the standing card itself, which is what a thumb aims at: a real raycast, so the whole 58 x 101
+  // the standing card itself, which is what a thumb aims at: a real raycast, so the whole ninety-odd by hundred-and-forty
   // px of it counts and not a nearest-cell guess
   function onRaised(ev) {
     if (!hover || !canvas || hover.lift <= 0) return false;
@@ -769,9 +785,15 @@ export function buildFan(ctx, cards, player, hand = null, slots = ctx.layout.spr
     });
   }
 
+  // the outer bow's keystone: the one card of the seventy-eight that the frame's axis runs through
+  // and that shows the whole of itself. What a judging still stands up, and what a visitor's finger
+  // lands on first if they simply touch the middle of the spread.
+  const keystoneIndex = (SPREAD.tiers[0].n - 1) / 2;
+
   return {
     FAN,
     SPREAD,
+    keystoneIndex,
     group,
     entries,
     picks,

@@ -1,6 +1,6 @@
 // PIECE: reveal — the card choreography, drawn on twos: the shuffle (the deck cut, the halves
 // riffled together, the pile tapped square), the SPREAD (the WHOLE DECK — all 78, the user's rule
-// — laid face down in four nested bows across the near half of the cloth, in gathered handfuls;
+// — laid face down in six nested bows across the near half of the cloth, in gathered handfuls;
 // see reveal-spread.js for where they lie and why), the visitor's pick (the card under the
 // pointer stands UP the frame in two drawings and is taken by a tap on it; it is carried to its
 // slot in four, the apex held), the gather (the rest swept back onto the deck), the deal (three
@@ -14,7 +14,7 @@
 //   shuffle() → Promise
 //   fan() → Promise<count>                 all 78 laid out; then the visitor may pick
 //   awaitPick() → Promise<pick|null>       arms the pointer (it stands a card up; a tap on the
-//                                          standing card takes it — 58 x 101 px on a phone); resolves with
+//                                          standing card takes it — at least 93 x 145 px on a phone); resolves with
 //                                          { index, ordinal, slug, slot, mesh } when a card has landed
 //   pick(i) / pickByOrdinal(n) / pickRandom() → Promise<pick>   i 0-based, n 1-based, from the left
 //   gather() → Promise                     the rest of the spread back onto the deck
@@ -462,7 +462,11 @@ export async function build(ctx) {
         // here: three picks and the rest is gathered
         await lay([], false);
         fan.lay();
-        fan.liftIndex(40);
+        // the KEYSTONE stands up, not some card off to one side of it: the still's top card is the
+        // one the frame's axis runs through, whole, over its neighbours on both sides. Round 7
+        // stood up card 40 — two along the second bow — which laid a whole card across the outer
+        // bow's keystone and cut the middle of the picture in two (the user's note).
+        fan.liftIndex(fan.keystoneIndex);
         (async () => {
           for (let k = 0; k < slots.length; k++) if (!(await api.awaitPick())) return;
           await api.gather();
@@ -474,7 +478,7 @@ export async function build(ctx) {
         // one card carried from the fan to slot 0, its neighbours closing the gap
         await lay([], false);
         fan.lay();
-        loopPlay(fan.pickFrames(fan.entries[13], 0), 12);
+        loopPlay(fan.pickFrames(fan.entries[fan.keystoneIndex], 0), 12);
       } else if (name === 'gather') {
         await lay([], false);
         fan.lay();
