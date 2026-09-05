@@ -75,6 +75,20 @@ export async function build(ctx) {
 
   // ── tunables (other pieces may nudge these through ctx.pieces.ink.params) ──
   const params = {
+    // ── THESE NUMBERS ARE THE USER'S. DO NOT REVERT THEM TO A MEASURED VALUE. ──
+    // On 2026-09-05 the user opened the dial panel (?dials=1), pushed the pen about while looking at
+    // the room, and sent the setting back. Two rounds of measuring against the folio had failed to
+    // find it; they found it by eye in minutes, and the frame it produces is the one they want. The
+    // brief's rule holds: the entrance door is the benchmark, and these land within a hair of its
+    // 1.6 px stroke.
+    //
+    // A round that believes one of these is wrong must say so with a RENDERED FRAME and get the
+    // user's answer. It may not restore a number because the number "came from no measurement" —
+    // that is exactly where this one came from, and it is why the room stopped looking blurry.
+    // (Round 7 did revert them mid-round, in good faith, having no way to know whose they were.)
+    // The tuned set: creaseWide .00684 · colorInk 1 · creaseThr .5 · lineBase .52 · overshoot .61 ·
+    // wobble .6 · lineSoft .5 · depthThr .18 · merge 1.55 · pocket .08 · stub .26 · thin 0 ·
+    // hatchBoil .015 · breakAmt .063 · paper .48 · lref .354
     // THE NIB, as a radius in css px. The mark is the COVERAGE of the pixel by a nib of this radius
     // rolled along the seeds, so the stroke carries exactly 2 × lineBase pixels of ink per unit of
     // its length whatever the seeds did, and this is the half-width of every contour in the frame.
@@ -114,7 +128,7 @@ export async function build(ctx) {
     // it: the balusters thickened, the frame's ink went from 11.7% to 12.1% and the paper pinched
     // into slivers went back up. The door's measured 2.18 is a mixture of oblique cuts; sitting a
     // tenth of a pixel under it and keeping the frame open is the better trade.
-    lineBase: 1.00,
+    lineBase: 0.52,
     // THE SHOULDER, in css px: how wide the ramp from full ink to bare paper is at the edge of
     // every mark. Round 4 had no ramp worth the name — the mark's boundary could only land on the
     // pixel lattice, so the contour came out as a 1 px stair-stepped raster of a vector with two
@@ -141,12 +155,12 @@ export async function build(ctx) {
     // typical stroke falls to 0.77. 1.1 with 0.95 went the other way and gave 11.7% solid black — a
     // photocopy. 1.3 about 1.00 puts the peak back at 0.88, and it is the peak, not the width, that
     // decides whether a line reads as drawn or as smudged.
-    lineSoft: 1.55,
+    lineSoft: 0.5,
     // TWO WOBBLES, and round 7 moved the weight from the first to the second.
     // `wobble` slides the whole SEED MAP about, in css px, on a slow 88 px noise: it is the sheet
     // shifting under the hand, and at 0.9 px it was doing all the work while leaving every contour
     // exactly as straight — and exactly as staircased — as it found it.
-    wobble: 0.25,
+    wobble: 0.6,
     // `penWob` is the wander of the pen ACROSS its own stroke, applied where the stroke's direction
     // is known (see COMPOSITE_FRAG step 3). The door's is ±0.6 line-widths at mid-span with a
     // control point every ~4 line-widths; on a 1.6 px pen that is ±0.95 px at about 6–12 px of
@@ -158,14 +172,14 @@ export async function build(ctx) {
     // drift, which varies along one stroke and gives two neighbours the same weight — the opposite
     // arrangement. Keyed to the stroke now (COMPOSITE_FRAG step 4).
     penJit: 0.15,
-    breakAmt: 0.03, // how often the pen skips (0 = never)
+    breakAmt: 0.063, // how often the pen skips (0 = never)
     // px the pen runs past the end of a line. NOT a flag any more: a corner is four strokes that
     // cross and miss each other by up to the wobble, and how far each runs on is what says a hand
     // drew it. The door's own overshoot is 0–2 px on a 1.6 px pen (strokes.js inkRect).
-    overshoot: 2.6,
+    overshoot: 0.61,
     // px within which two PARALLEL contours are one contour and only the stronger is drawn.
     // 0 turns the merge off. See the note in EXTEND_FRAG: this is the doubled-line rule.
-    merge: 4,
+    merge: 1.55,
     // px within which two EQUAL parallel contours are one contour, because the paper between them
     // is thinner than a stroke: the two edges of a moulding, of a glazing bar, of a slat across the
     // room. Above this both are drawn. Bounded by `merge`, which is how far the search looks.
@@ -194,21 +208,21 @@ export async function build(ctx) {
     // across — a baluster, a bottle stopper, a sprig of the wallpaper — and the edge pass dutifully
     // put a closed outline round every one of them, which at a nib width lands as a black speck.
     // The film does not outline what it cannot draw; it leaves the paper.
-    stub: 3,
+    stub: 0.26,
     // …and it must run BOTH WAYS, not one. 1 = a seed needs the line to carry on `stub` px in
     // each direction along its own tangent. This is what tells a stroke's end from a BARB: a lone
     // seed poking sideways out of a contour, which a one-sided test always passed because looking
     // one way from it lands back on the parent line. See EXTEND_FRAG.
     stubBoth: 1,
-    depthThr: 0.012, // silhouette sensitivity (relative to depth)
+    depthThr: 0.18, // silhouette sensitivity (relative to depth)
     // cos of the fold angle that gets a line. A draughtsman inks a corner, not a soft bend: only
     // folds sharper than ≈53° are drawn, so lathed curves and cloth do not fill up with creases.
-    creaseThr: 0.6,
+    creaseThr: 0.5,
     // …and the same fold measured across three pixels instead of one. Only a fold still sharper
     // than ≈60° at the pen's scale is a corner; anything softer is a bead or a rim the frame has
     // shrunk below a stroke, and it is left to the silhouette.
-    creaseWide: 0.5,
-    lref: 0.5, // (unused now; kept for other pieces that may read it)
+    creaseWide: 0.00684,
+    lref: 0.354, // (unused now; kept for other pieces that may read it)
     // lit luminance: fully dark, fully lit; max darkness from light; grazing amount. With the
     // levels below a plain-paper material (hatch 0.5) is BARE above L≈0.10 — most of the room —
     // takes clumped rain to L≈0.055, dense strokes to L≈0.022, cross-hatch below. Nothing turns
@@ -219,7 +233,7 @@ export async function build(ctx) {
     // crowded a pocket sits behind every prop, so at 0.6 the pass put a ring of tone round each of
     // thirty objects and the tone stopped being a decision. Halved: the pen still hatches the
     // corners of the room and the underside of a shelf, and leaves the rest to the contour.
-    pocket: 0.32,
+    pocket: 0.08,
     // 1 = the marks DRAWN INSIDE a coloured surface are inked with the room pen (STYLE 1.4: flat
     // colour under the line, never a coloured line). 0 leaves a coloured cut-out exactly as painted,
     // which is what round 4 did and why the puppet reads as a sticker: his contour arrived as a soft
@@ -267,8 +281,8 @@ export async function build(ctx) {
     // rectangle, and a grey is the one thing the pen cannot draw. -1.25 halves the footprint, so
     // the marks come back as marks and the composite lays them down at full ink.
     texSharp: -1.25,
-    paper: 0.55, // paper grain amount (the grain itself is already a whisper)
-    hatchBoil: 0.003, // tile-units of hatch shiver on twos
+    paper: 0.48, // paper grain amount (the grain itself is already a whisper)
+    hatchBoil: 0.015, // tile-units of hatch shiver on twos
     letterbox: null, // e.g. 1.85 → paper-white bars; null → none
   };
 
