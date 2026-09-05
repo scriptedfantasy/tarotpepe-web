@@ -55,6 +55,12 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   out and the visitor is choosing, the card sits at the top; the moment the three are taken it is
   back at the bottom. It is the SAME card, same size, same registers; only its anchor moves. This is
   an exception the user granted, not a licence to move the caption anywhere else.
+- **There is no chair on the visitor's side, and nobody apologises for it.** 2026-09-05, the user:
+  "no visitor chair, just remove the text reference to a chair. he can say come closer or something
+  like that." His greeting used to seat them — "Please sit. The chair is low; it was made for a
+  frog" — and there was never a chair there to sit on. He now asks them closer and the absence is
+  the joke: "There is nowhere to sit, which keeps the visits honest." The chairs in the card
+  readings stay; those are drawn on the plates, or are figures of speech.
 - **Chat or voice.** The visitor answers by typing (`dialogue.ask`, a drawn input in the picture) or by voice
   (a mic button: the browser's SpeechRecognition; when voice is on, Pepe is also spoken by speechSynthesis).
   Chat is the default, voice a toggle; both must work in Chrome.
