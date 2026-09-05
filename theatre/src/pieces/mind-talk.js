@@ -28,6 +28,7 @@
 // that has to work with the electricity off.
 import { SCRIPT, reply as scriptReply } from './script.js';
 import { stanceOf, followupScript, questionShape, fill, isQuestion, aboutHim, cardRef, aboutTheSpread } from './mind-voice.js';
+import { objectAsk, objectScript, noteTold } from './mind-room.js';
 
 const norm = (s) =>
   String(s ?? '')
@@ -80,9 +81,17 @@ const DECLINE =
   /\b(not yet|not now|not tonight|no thanks|no thank you|maybe later|later maybe|another time|just talk|just talking|only talking|no cards|not ready|rather not|(don'?t|do not) want (a |any |the )?(reading|cards|spread)|no reading)\b/;
 const DECLINE_START = /^(hold on|in a minute|in a moment|wait)\b/;
 
+// Struck out before any of the draw patterns are consulted. A verb pointed at the deck is not an
+// order when it is REPORTED ("my grandmother used to read the cards"), HEDGED ("i am not sure i want
+// a reading"), or the subject of a QUESTION rather than its object ("what do the cards say about my
+// brother", which contains the literal string "do the cards"). All three dealt a reading at a
+// visitor who had not asked for one; measured by tools/_draw-probe.mjs.
+const DRAW_NOT =
+  /\b(used to|never (had|have|been)|have never|had never|not sure|unsure|(don'?t|do not|didn'?t|did not) (know|think|want)|thinking about|wondering (if|whether)|what (do|does|did|would|will) (the |my |these |those )?(cards?|reading|tarot)|how much|do you read|do you do)\b/;
+
 // Asking HIM to do it: a verb, pointed at the deck. This is what puts cards on the table.
 const DRAW_ASK =
-  /\b(read (my|the|me|us|our) (cards?|fortune|future|palm)|read for me|read me the cards|do (a|the|my|one|another|a second|a new) reading|give me (a|the|another|a second) reading|i (want|need|would like|'?d like) ((a|another|one more|a second|a new) (reading|spread)|the cards|three cards|my cards read)|can i (have|get) ((a|another|one more|a second|a new) (reading|spread|card)|the cards|three cards)|may i have (a reading|the cards)|do a spread|do the cards|do your thing|deal( me| the| out)?( the| three| 3)? ?cards?|deal me (in|three|3)|draw (me )?(a|the|some|three|3)? ?cards?|pull (a|some|three|3)? ?cards?|turn (them|the cards|three cards) over|lay (them|the cards|three cards) out|(draw|deal|pull) (me |us )?(another|one more|a fourth|three more|more)|shuffle|let'?s (do|see) (it|this|them)|go on then|tell my fortune|what about (a reading|the cards|three cards)|why (don'?t|do not) you (read|deal|draw|shuffle)|(can|could|will|would) you read (my|the|me|us|our)|(can|could|will|would) you (deal|draw|shuffle)|(can|could|will|would) you do (a|the|my|one|another|a second|a new) reading|do you (have|do) (a reading|readings|the cards|three cards))\b/;
+  /\b(read (my|the|me|us|our) (cards?|fortune|future|palm)|read for me|read me the cards|do (a|the|my|one|another|a second|a new) reading|give me (a|the|another|a second) reading|i (want|need|would like|'?d like) ((a|another|one more|a second|a new) (reading|spread)|the cards|three cards|my cards read)|can i (have|get) ((a|another|one more|a second|a new) (reading|spread|card)|the cards|three cards)|may i have (a reading|the cards)|do a spread|do the cards|do your thing|deal( me| the| out)?( the| three| 3)? ?cards?|deal me (in|three|3)|draw (me )?(a|the|some|three|3)? ?cards?|pull (a|some|three|3)? ?cards?|turn (them|the cards|three cards)( over)?|lay (them|the cards|three cards)( out)?|do (the|some) tarot|read me$|ready for (a reading|the cards|my cards|them)|(draw|deal|pull) (me |us )?(another|one more|a fourth|three more|more)|shuffle|let'?s (do|see) (it|this|them)|go on then|tell my fortune|what about (a reading|the cards|three cards)|why (don'?t|do not) you (read|deal|draw|shuffle)|(can|could|will|would) you read (my|the|me|us|our)|(can|could|will|would) you (deal|draw|shuffle)|(can|could|will|would) you do (a|the|my|one|another|a second|a new) reading|do you (have|do) (a reading|readings|the cards|three cards))\b/;
 
 // The bare noun. A request only when they are not wondering aloud about the idea of one:
 // "three cards, please" asks; "what would a reading even tell me" does not.
@@ -90,7 +99,7 @@ const DRAW_ASK =
 // SECOND reading, and a second reading is the thing the recall must never be mistaken for: they
 // are struck out of the recall by RECALL_NOT and land here instead.
 const DRAW_NOUN =
-  /\b(a reading|my reading|reading please|the cards? please|cards? please|a spread|three cards|3 cards|the three cards|(another|one more|a second|a new|a further) (reading|spread|card)|three more cards?|more cards)\b/;
+  /\b(a reading|my reading|reading please|the cards? please|cards? please|a spread|three cards|3 cards|the three cards|(another|one more|a second|a new|a further) (reading|spread|card)|three more cards?|more cards|the tarot|tarot please|please,? (the|my) cards?)\b/;
 const MUSING = /^(?:(?:so|and|but|well|ok|okay|hmm+|oh|honestly)\b[,\s]+)*(what|whats|why|how|hows|when|whether|who|which|is|are|does|do|did|would|will|can|could|should)\b/;
 
 const YES = /^(yes|yeah|yep|yup|sure|ok|okay|k|alright|all right|fine|go on|go ahead|please|please do|do it|why not|very well|i suppose|if you like|mhm|uh huh|absolutely|definitely|lets|let's)\b/;
@@ -113,6 +122,8 @@ export function intentOf(text, { offered = false, spread = [] } = {}) {
     if (drawn.length && (RECALL_SHOW.test(t) || RECALL_AGAIN.test(t))) return 'recall';
     if (drawn.length && RECALL_NAMED.test(t) && cardRef(text, drawn)) return 'recall';
   }
+  // A verb at the deck that is reported, hedged, or the subject of a question is not an order.
+  if (DRAW_NOT.test(t)) return 'talk';
   if (DRAW_ASK.test(t)) return 'draw';
   if (DRAW_SHOW.test(t)) return 'draw'; // and there is nothing to show, or the recall took it above
   // a short yes to an offer he has just made — not a question that happens to begin with one
@@ -583,6 +594,19 @@ export function talkScript(raw, state) {
     // he does not linger on himself: back to them, and at the door he simply opens the floor
     parts.push(state.turns > 1 ? unused(RETURN, used, t + 'r') : unused(OPENER, used, t + 'o'));
     return { text: parts.filter(Boolean).join(' '), offered: false, asked: state.turns <= 1 };
+  }
+
+  // They asked about a thing in the room. Ten of the things in here have something behind them and
+  // sixty-one do not; either way he says what it is and stops. Checked AFTER the canned answers,
+  // so "what is this" keeps the answer it already had, and BEFORE the questions about him, because
+  // "why do you keep a barometer" is a question about a barometer.
+  // (mind.js normally catches this a step earlier and speaks it as its own beat; this branch is
+  // what makes talkScript answer the same way on its own.)
+  const object = objectAsk(said, { spread, cardRef });
+  if (object) {
+    const line = objectScript(said, object, state);
+    noteTold(object, state);
+    if (line) return { text: line, offered: false, asked: false };
   }
 
   // asked about himself, and no canned answer fits: he answers briefly and hands it back
