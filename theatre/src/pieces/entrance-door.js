@@ -82,6 +82,36 @@ export function placement(w, h, { span = 0.815, top = 0.082, zoom = 1 } = {}) {
   return { s, s0, zoom, ox: fx - (D.opening / 2) * s, oy: fy + ((D.leafY0 + D.leafY1) / 2) * s, w, h };
 }
 
+// ---- when the sheet stops covering the picture -------------------------------------------------------
+// Two numbers the walk-in needs, and both are geometry rather than taste.
+//
+//   `hole` — the zoom at which the punched doorway is bigger than the frame, so everything outside
+//            the swung leaf is parlour and no paper is left at any edge.
+//   `leaf` — the zoom at which the leaf's own free edge has passed the frame's left edge, so
+//            nothing drawn is left at all and the sheet can be taken away without anything popping.
+//
+// The leaf's edge is not where its geometry puts it: the face goes through the same one-point
+// projection `L` uses, which pulls the free edge (u = 1) back towards the doorway's middle, so it
+// hugs the centre of the truck and is the LAST thing off the frame — a good deal after the doorway
+// itself has swallowed it. Both numbers fall out of `placement`, so they are right at any window
+// shape: a phone stands a great deal closer to the door than a 16:9 window does and needs a third
+// of the truck to get past it.
+export function coverZooms(w, h, theta = 0) {
+  const P = placement(w, h);
+  const s0 = P.s0;
+  const mid = (D.leafY0 + D.leafY1) / 2;
+  const cy = P.oy - mid * s0; // the doorway's middle on the sheet; its x is w / 2 by construction
+  const hole = Math.max(
+    w / 2 / ((D.opening / 2 - D.lining) * s0),
+    (h - cy) / ((mid - D.leafY0) * s0),
+    cy / ((D.leafTop - 0.004 - mid) * s0),
+  );
+  const k = 1 / (1 + Math.sin(theta) / EYE);
+  const edge = D.opening / 2 + (D.leafX0 + D.leafW * Math.cos(theta) - D.opening / 2) * k;
+  const leaf = w / 2 / Math.max(1e-6, (D.opening / 2 - edge) * s0);
+  return { hole, leaf, s0 };
+}
+
 // ---- the name, cut once and kept --------------------------------------------------------------------
 // The masthead's hand-cut slab caps, TAROT over PEPE, fitted to the board. Baked into its own canvas
 // at pen resolution so the swing can warp it without re-cutting the letters.
@@ -417,7 +447,11 @@ export function drawEntrance(g, w, h, { theta = 0, jolt = 0, seed = 1, boil = 0,
     // where the trade word used to be, so the visitor reads it once, above the handle.
     // The sorts are re-cut with the pen, not re-set: `boil` moves each letter's width by 3% and its
     // stand by two degrees and nothing else, so the word is the same word on every strike.
-    signCaps(g, 'TAROT PEPE', mx(D.opening / 2), my((ty0 + ty1) / 2), { size: px(0.086), rng, boil, tracking: 0.18, weight: 700 });
+    // Not cut at all once the truck has carried the fanlight off the top of the sheet: by then the
+    // sorts are half a frame tall and every one of them is drawn outside the paper.
+    const ny = my((ty0 + ty1) / 2);
+    if (ny > -px(0.09) && ny < h + px(0.09))
+      signCaps(g, 'TAROT PEPE', mx(D.opening / 2), ny, { size: px(0.086), rng, boil, tracking: 0.18, weight: 700 });
   }
   // architrave, plinth blocks, the cap over the head
   const archL = rect(-D.arch, D.plinth, 0, D.head + D.archHead, pen, { fill: PAPER });

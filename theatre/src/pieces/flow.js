@@ -540,7 +540,12 @@ export async function build(ctx) {
     // 2. the parlour, whole, and three seconds of nobody saying anything. The film has to show the
     // room it is set in before it shows a man talking in it: the ceiling, the pendant, both walls,
     // the coat stand, the tiles. Every frame of round 3's conversation was a crop of this.
-    cut('wide');
+    //
+    // There is no cut here any more. This used to `cut('wide')` — a 23% wider lens and a 10 cm lift
+    // — 0.9 s after the walk-in had come to rest on `home`, which is the pull-back the user called
+    // yanky: "we get into the room, then we get a cut with a zoom out". The arrival now ENDS on
+    // `wide`, so the room is already whole when the camera stops and the only thing left to do here
+    // is hold still and let it be looked at.
     await wait(LANDING_S, { skippable: true });
     if (!alive(token)) return;
 
