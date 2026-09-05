@@ -50,23 +50,76 @@ export const HAND = {
   l: 0.182, // wrist to fingertip
   reach: 0.155, // nominal wrist-to-fingertip; the real contact per pose is GRIP, below
   y: 0.0042, // how far the paper floats over the cloth
-  sleeveW: 0.110, // the sleeve of his robe; drawn 0.056 at the cuff, swelling to 0.088 at the elbow
-  cuffW: 0.078, // the turned-back cuff, wider than the wrist under it
-  cuffL: 0.05,
-  // The sleeve runs back to the exact spot where the puppet's own right hand sits — the one that
-  // steps out while this one is on the cloth — and lifts as it goes, so the forearm passes over
-  // the clutter instead of through it and meets his body where his hand was. From over the cloth
-  // it simply runs off the top of the frame.
+  // The arm runs back to the exact spot where the puppet's own right hand sits — the one that
+  // steps out while this one is on the cloth — so the drawing meets his body where his hand was
+  // and the join is under his own cuff.
   anchor: [0.291, 0.828, -0.82],
-  // How much of the forearm is DRAWN. It used to run the whole way to his wrist — up to 1.05 m
-  // from the far end of the ribbon — and the drawing is a single quad with its folds and its
-  // rain-strokes at fixed places on the canvas, so stretched over a metre it came out as a white
-  // plank with seven chevrons in it: a broom handle, not an arm. Every frame the hand is drawn in
-  // (fan, turn, riffle) has its top edge at least 40 cm upstage of where the hand works, so 0.68 m
-  // still runs off the top of the picture from anywhere on the cloth, and the marks stay the size
-  // of marks.
-  sleeveMax: 0.68,
 };
+
+// ── THE ARM (round 9) ──────────────────────────────────────────────────────────────────────────
+// What was here was ONE QUAD, 0.11 m wide, run from the cuff to a point 0.68 m upstage with a
+// fixed canvas stretched over it. At 16:9 the frame's top edge cut it at a tenth of the picture and
+// nobody looked; in a portrait window — where this same shot rakes to 78° and the frame is three
+// times deeper than the row — it ran 348 px straight down the middle, 46% of the frame's height,
+// parallel-sided, and then STOPPED IN MID-AIR seventy pixels short of his own wrist, because
+// 0.68 m does not reach him from the near half of the cloth. A white pipe laid across the drawing.
+// (Filed twice by the camera builder; tools/_rv9-sleeve.mjs is the measurement.)
+//
+// It is drawn as an arm now, and three things make it one:
+//   · IT IS A RIBBON, not a quad. The spine is a curve from the wrist to his own wrist with an
+//     ELBOW in it, pushed OUTBOARD of the straight line, so the silhouette bends where an arm
+//     bends and neither half of it is a long parallel tube. The strip is rebuilt along that curve
+//     on every drawing (28 segments, 58 vertices — nothing).
+//   · ITS CANVAS IS MEASURED IN METRES. The drawing is `texM` metres of arm at `px` pixels to the
+//     metre, and v is the arc length so far divided by texM — so the cuff, the folds, the elbow's
+//     creases and the rain-strokes are the size they were drawn WHATEVER the reach is. The old
+//     quad's marks grew with the arm, which is the only reason round 4 capped it at 0.68 m, and
+//     that cap is what left it hanging in the air. Both are gone together.
+//   · IT RUNS TO HIM AND PAST HIM. The far end is `past` beyond his body's plane, so it is either
+//     off the top of the frame or behind his own cut-out; the drawing never ends inside the
+//     picture. The ribbon is a constant width and the TAPER is drawn into the canvas — a turned
+//     -back cuff at the wrist, 7 cm of sleeve under it, the swell at the elbow, and 15.6 cm at the
+//     far end, which is the width of his own drawn sleeve where this one arrives.
+const ARM = {
+  w: 0.128, // the ribbon's width. The drawn arm inside it is 0.062–0.116, so the taper is a drawing
+  texM: 1.40, // how much arm the canvas holds (the longest reach on the cloth is 1.31)
+  px: 800, // canvas pixels to the metre, the same across and along: the ribbon is a constant width
+  head: 0.030, // how far the ribbon starts INSIDE the hand, so the cuff covers the cut wrist
+  elbowAt: 0.39, // where the elbow falls along the arm, from the head of the ribbon
+  bow: 0.115, // how far the elbow is pushed outboard of the straight line: the bend, in metres
+  elbowY: 0.155, // and how high it is carried over the cloth — the arm passes OVER the still life
+  rise: 0.34, // how far along the arm is up to that height: early, so it clears the near clutter
+  lane: 0.315, // how far off the room's axis the curve may swing before the bow is taken the other
+  // way. The candle-in-a-bottle's near face is at x = 0.395 and the arm is 0.052 across the half:
+  // 0.315 puts the middle of the arm 28 mm clear of it. The same number on the other side keeps the
+  // left arm inside a portrait frame, whose side edge falls at about 0.40 at that depth.
+  past: 0.06, // how far the far end runs beyond his body's plane, so nothing ends in the picture
+};
+// The drawn half-width, in metres along the arm → metres across it. The two steps at 0.015 and
+// 0.055 are the turned-back cuff's lip: it stands out from the sleeve it is turned over. The
+// widths are the frame's, not anatomy's: at the portrait `turn` the cloth runs about 500 screen
+// pixels to the metre, so a 0.07 m sleeve is 35 px — a tenth of a phone's width, which is a sleeve
+// in the picture. The first cut of this was half as wide again and filled the right-hand quarter.
+const ARM_PROF = [
+  [0.000, 0.031], [0.012, 0.033],
+  [0.015, 0.044], [0.052, 0.045], [0.055, 0.033], // the cuff, and the sleeve out from under it
+  [0.160, 0.037], [0.280, 0.043],
+  [0.390, 0.049], [0.460, 0.049], // the elbow, fullest
+  [0.600, 0.046], [0.850, 0.049], [1.400, 0.052], // …and then level: see the note below
+];
+// Why the upper arm does not go on widening. A sleeve does, but this one is drawn on a ribbon
+// that runs AWAY from a lens raked 68–78° above it, so the far end is the more distant end and
+// perspective is already shrinking it: drawn wider as well, the two cancelled and the arm came out
+// as a parallel tube — the exact reading the round was called to fix. Held level past the elbow it
+// recedes, which is what an arm going away from you does.
+function armHalf(s) {
+  const A = ARM_PROF;
+  if (s <= A[0][0]) return A[0][1];
+  for (let i = 1; i < A.length; i++) {
+    if (s <= A[i][0]) return A[i - 1][1] + ((A[i][1] - A[i - 1][1]) * (s - A[i - 1][0])) / (A[i][0] - A[i - 1][0]);
+  }
+  return A[A.length - 1][1];
+}
 
 // How far the lens must be tilted down before the drawing may lie on the cloth: the y of the
 // camera's own forward vector. The named shots fall either side of it by a mile — spread and the
@@ -293,97 +346,37 @@ function drawHand(g, w, h, pose) {
   g.restore();
 }
 
-// The SLEEVE of his robe, running back from the cuff (canvas top) to his shoulder off the top of
-// the frame (canvas bottom). It was a bare green forearm, on the reasoning that a white sleeve on
-// a white cloth is two papers with a line between them; but that is precisely how the film draws
-// a white sleeve on a white table (fd-anim-kitchen-table-cards-hires: the man's white cuff and
-// shirt against the boards), and a green arm running the length of the cloth with no cuff and no
-// wrist is what made the hand read as a sticker. So: paper, its own contour, folds along its
-// length and rain-strokes down the shaded edge. The green stops at the wrist, where it belongs.
+// THE ARM of his robe, drawn once, from the cuff (canvas top) to his shoulder (canvas bottom).
+// The green stops at the wrist, where it belongs: the rest is a white sleeve on a white cloth,
+// which is precisely how the film draws one (fd-anim-kitchen-table-cards-hires: the man's white
+// cuff and shirt against the boards) — paper, its own contour, a cuff, folds where the cloth
+// gathers, creases at the elbow, and rain-strokes down the shaded edge.
 //
-// The quad is stretched over up to a metre of arm, so the canvas is wildly anisotropic: only
-// LENGTHWISE marks may be drawn here, or a 3 px rule becomes a 3 cm band. The cuff, which is a
-// mark ACROSS the arm, is its own small quad of fixed size (drawCuff).
-function drawSleeve(g, w, h) {
+// The canvas is ISOTROPIC and its y is METRES: `ARM.px` pixels to the metre in both directions,
+// because the ribbon that wears it is a constant `ARM.w` across and every mark's place is an arc
+// length, not a fraction. So a 4 mm pen line is 4 mm of sleeve wherever the arm reaches to, and a
+// fold is a fold rather than the 6 cm chevron the old stretched quad drew.
+function drawArm(g, w, h) {
   const rng = mulberry32(77);
   g.clearRect(0, 0, w, h);
-  const inset = 6;
-  const side = (dir) => {
-    const pts = [];
-    for (let i = 0; i <= 8; i++) {
-      const v = i / 8;
-      // narrow at the cuff, swelling toward the elbow
-      const half = (w / 2 - inset) * (0.56 + 0.42 * v - 0.10 * v * v);
-      pts.push([w / 2 + dir * half + (rng() - 0.5) * 4, v * (h - 6) + dir * v * 5]);
-    }
-    return pts;
-  };
-  const L = side(-1), R = side(1);
-  const outline = () => {
-    g.beginPath();
-    g.moveTo(L[0][0], 0);
-    for (const p of L) g.lineTo(p[0], p[1]);
-    for (let i = R.length - 1; i >= 0; i--) g.lineTo(R[i][0], R[i][1]);
-    g.lineTo(R[0][0], 0);
-    g.closePath();
-  };
-  g.save();
-  g.fillStyle = PAPER;
-  outline();
-  g.fill();
-  g.restore();
-  // its two contour lines, drawn down the length with the pen's wobble
-  const run = (pts, width, alpha = 1) => {
-    for (let i = 1; i < pts.length; i++) inkLine(g, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], { width, wobble: 1.6, rng, alpha });
-  };
-  run(L, 6);
-  run(R, 6);
-  // two folds running along the sleeve, and rain-strokes down its shaded edge. The strokes are
-  // drawn one at a time and kept SHORT in canvas y: this canvas is stretched over most of a metre
-  // of arm, so a hatch region tall enough to look right here would draw 40 cm rain.
-  g.save();
-  outline();
-  g.clip();
-  run(L.map(([x, y]) => [x + 26 + (rng() - 0.5) * 6, y]), 3.5, 0.65);
-  // the cloth's folds: shallow chevrons ACROSS the sleeve. Across is the narrow axis of this
-  // canvas, so a mark drawn here 100 px wide is 6 cm of sleeve — the right size for a fold — while
-  // the same mark drawn down the length would be half a metre.
-  for (const [fy, d] of [[42, 15], [104, -12], [168, 14], [238, -11], [312, 13], [396, -12], [470, 12]]) {
-    const l0 = w / 2 - (w / 2 - inset) * 0.86, r0 = w / 2 + (w / 2 - inset) * 0.86;
-    inkLine(g, l0 + 5, fy, (l0 + r0) / 2, fy + d, { width: 1.8, wobble: 1.4, rng, alpha: 0.8 });
-    inkLine(g, (l0 + r0) / 2, fy + d, r0 - 5, fy + d * 0.2, { width: 1.8, wobble: 1.4, rng, alpha: 0.8 });
-  }
-  // Rain-strokes down BOTH edges, dense on the shaded one. A white sleeve on a white cloth with
-  // nothing but a contour round it is a plank of paper; the tone is what makes it cloth.
-  for (let k = 0; k < 64; k++) {
-    const y0 = 6 + k * 8 + (rng() - 0.5) * 7;
-    const x0 = w / 2 + (w / 2 - inset) * (0.30 + rng() * 0.56);
-    inkLine(g, x0, y0, x0 + (rng() - 0.5) * 3, y0 + 5 + rng() * 4, { width: 2.4, wobble: 0.8, rng, alpha: 0.8 });
-  }
-  for (let k = 0; k < 30; k++) {
-    const y0 = 10 + k * 17 + (rng() - 0.5) * 9;
-    const x0 = w / 2 - (w / 2 - inset) * (0.42 + rng() * 0.42);
-    inkLine(g, x0, y0, x0 + (rng() - 0.5) * 3, y0 + 4 + rng() * 4, { width: 2.2, wobble: 0.8, rng, alpha: 0.55 });
-  }
-  g.restore();
-}
+  const P = ARM.px;
+  const cx = w / 2;
+  const yOf = (s) => s * P; // metres along the arm → canvas y
+  const half = (s) => armHalf(s) * P; // …and the drawn half-width there, in canvas px
 
-// The turned-back cuff of the robe, a fixed-size band across the wrist: this is the mark that
-// says the hand belongs to a body wearing a white robe and not to a sticker. Its own quad, so it
-// keeps its proportions however long the sleeve behind it is drawn.
-function drawCuff(g, w, h) {
-  const rng = mulberry32(79);
-  g.clearRect(0, 0, w, h);
-  const inset = 10;
-  const edge = (dir) => {
-    const pts = [];
-    for (let i = 0; i <= 4; i++) {
-      const v = i / 4;
-      pts.push([w / 2 + dir * (w / 2 - inset) * (1 - 0.1 * v) + (rng() - 0.5) * 4, 4 + v * (h - 10)]);
-    }
-    return pts;
-  };
-  const L = edge(-1), R = edge(1);
+  // The two edges. The samples are a 10 mm grid with the profile's own knots merged in, so the
+  // cuff's lip comes out as a step and not as a ramp.
+  const ss = [];
+  for (let i = 0; i * 0.01 <= ARM.texM; i++) ss.push(i * 0.01);
+  for (const [s] of ARM_PROF) if (s > 0 && s < ARM.texM) ss.push(s);
+  ss.sort((a, b) => a - b);
+  const j = () => (rng() - 0.5) * 1.7;
+  const L = [], R = [];
+  for (const s of ss) {
+    const y = yOf(s), hw = half(s);
+    L.push([cx - hw + j(), y]);
+    R.push([cx + hw + j(), y]);
+  }
   const outline = () => {
     g.beginPath();
     g.moveTo(L[0][0], L[0][1]);
@@ -396,23 +389,85 @@ function drawCuff(g, w, h) {
   outline();
   g.fill();
   g.restore();
-  const run = (pts, width, alpha = 1) => {
-    for (let i = 1; i < pts.length; i++) inkLine(g, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], { width, wobble: 1.4, rng, alpha });
+  const run = (pts, width, alpha = 1, wobble = 1.5) => {
+    for (let i = 1; i < pts.length; i++) inkLine(g, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], { width, wobble, rng, alpha });
   };
-  run(L, 7);
-  run(R, 7);
-  // the two rules of the turned-back cuff, across the arm, and a row of short strokes between them
-  inkLine(g, L[0][0] - 3, L[0][1] + 3, R[0][0] + 3, R[0][1] - 2, { width: 7, wobble: 2, rng });
-  inkLine(g, L[3][0] - 2, L[3][1], R[3][0] + 2, R[3][1] - 3, { width: 6, wobble: 2.2, rng });
+  // the silhouette, at the hand's own pen: OUT is 11 px on a canvas of 2743 to the metre, which is
+  // 4.0 mm of contour, and 3.2 px here is the same 4.0 mm. Hand and arm are one drawing.
+  // (wobble 1.0, the entrance door's own range: at 1.6 the contour came out as a visible zigzag
+  // rather than as a hand's line — see BRIEF.md on the door being the benchmark for the pen)
+  run(L, 3.2, 1, 1.0);
+  run(R, 3.2, 1, 1.0);
+
   g.save();
   outline();
   g.clip();
-  hatch(g, inset, h * 0.16, w - 2 * inset, h * 0.5, { angle: rad(78), spacing: 11, width: 2.6, wobble: 1.2, broken: 0.45, rng, alpha: 0.8 });
+
+  // THE CUFF, turned back over the sleeve: two rules across the arm and a band of hatch between
+  // them. It is the mark that says the hand belongs to a body in a white robe, and — being an arc
+  // length like everything else here — it is the same 3.7 cm of cuff at every reach.
+  const across = (s, k, width, alpha = 1) => {
+    const hw = half(s) * k, y = yOf(s);
+    inkLine(g, cx - hw, y + (rng() - 0.5) * 2, cx + hw, y + (rng() - 0.5) * 2, { width, wobble: 2, rng, alpha });
+  };
+  // …the rules kept OFF the two steps in the profile: struck on the lip they landed on the corner
+  // the contour turns there and the three marks together made a black bracket round the wrist.
+  across(0.0205, 0.99, 2.6);
+  across(0.0475, 0.99, 2.4);
+  hatch(g, cx - half(0.03) * 0.9, yOf(0.021), half(0.03) * 1.8, yOf(0.027), { angle: rad(84), spacing: 10, width: 1.8, wobble: 1.1, broken: 0.42, rng, alpha: 0.72 });
+
+  // The cloth's FOLDS: creases across the sleeve, each a stroke that drops and flattens with a
+  // shorter one answering it a few millimetres on — which is what a fold in cloth is, and what the
+  // folios draw. They are gathered where a sleeve gathers (above the cuff, at the crook, past the
+  // elbow) and never at one pitch down the whole length, which is what turned the old drawing into
+  // a length of bamboo.
+  for (const [s, span, d] of [
+    [0.082, 0.88, 0.011], [0.112, 0.58, -0.008], [0.150, 0.44, 0.006],
+    [0.212, 0.66, 0.010], [0.262, 0.40, -0.006], [0.305, 0.52, -0.008],
+    [0.520, 0.76, 0.012], [0.575, 0.42, -0.006], [0.700, 0.58, -0.010],
+    [0.830, 0.46, 0.008], [0.960, 0.64, 0.011], [1.090, 0.40, -0.006], [1.210, 0.54, -0.009],
+  ]) {
+    if (s > ARM.texM) continue;
+    const hw = half(s) * span, y = yOf(s), dy = d * P;
+    inkLine(g, cx - hw, y, cx - hw * 0.1, y + dy, { width: 2.3, wobble: 1.6, rng, alpha: 0.95 });
+    inkLine(g, cx - hw * 0.1, y + dy, cx + hw, y + dy * 0.25, { width: 2.3, wobble: 1.6, rng, alpha: 0.95 });
+    // the answering tick, a few millimetres along and half as long
+    inkLine(g, cx - hw * 0.55, y + dy * 1.9 + 6, cx + hw * 0.2, y + dy * 1.5 + 7, { width: 1.7, wobble: 1.4, rng, alpha: 0.6 });
+  }
+
+  // THE ELBOW. The ribbon bows toward the canvas' RIGHT edge, so the INSIDE of the bend is the
+  // left one: that is where the cloth is compressed, and a fan of creases off that contour is what
+  // makes the bend read as a joint rather than as a kink in a hose. (When the lane sends the bow
+  // the other way the drawing is flipped with it — see the uv in buildArm.)
+  for (const [s, len, tilt] of [[0.328, 0.030, 0.015], [0.366, 0.062, 0.008], [0.404, 0.070, -0.001], [0.446, 0.044, -0.012]]) {
+    const y = yOf(s), x0 = cx - half(s) * 0.97;
+    inkLine(g, x0, y, x0 + len * P, y + tilt * P, { width: 2.4, wobble: 1.6, rng, alpha: 0.95 });
+  }
+  // and one long fold riding the outside of the bend, where the sleeve is pulled tight
+  run([[cx + half(0.15) * 0.42, yOf(0.15)], [cx + half(0.30) * 0.52, yOf(0.30)], [cx + half(0.44) * 0.62, yOf(0.44)], [cx + half(0.62) * 0.50, yOf(0.62)]], 2.4, 0.62, 1.8);
+  run([[cx - half(0.62) * 0.30, yOf(0.62)], [cx - half(0.86) * 0.40, yOf(0.86)], [cx - half(1.10) * 0.34, yOf(1.10)]], 2.2, 0.5, 1.8);
+
+  // Rain-strokes down the shaded edge — the outside of the bend — and a thinner run down the
+  // inside. They keep OFF the contour: run up against it they thickened the silhouette into a
+  // serrated band instead of leaving it one line. A white sleeve on a white cloth with nothing but
+  // a contour round it is a plank of paper; the tone is the whole of what makes it cloth.
+  const rain = (s0, n, side, dense, alpha, width) => {
+    for (let k = 0; k < n; k++) {
+      const s = s0 + (k / n) * (ARM.texM - s0) + (rng() - 0.5) * 0.006;
+      const hw = half(s);
+      const x0 = cx + side * hw * (dense[0] + rng() * dense[1]);
+      inkLine(g, x0, yOf(s), x0 + (rng() - 0.5) * 3, yOf(s) + 5 + rng() * 5, { width, wobble: 0.8, rng, alpha });
+    }
+  };
+  rain(0.06, 104, 1, [0.42, 0.44], 0.78, 2.0);
+  rain(0.06, 40, -1, [0.46, 0.34], 0.45, 1.7);
+  // …and a denser patch in the crook of the elbow, where the cloth is doubled
+  hatch(g, cx - half(0.40) * 0.95, yOf(0.33), half(0.40) * 0.7, yOf(0.17), { angle: rad(72), spacing: 9, width: 2.0, wobble: 1.2, broken: 0.42, rng, alpha: 0.62 });
   g.restore();
 }
 
-// the three drawings, exposed so tools/_rv-hand-sheet.mjs can look at them on their own
-export const __draw = { hand: drawHand, sleeve: drawSleeve, cuff: drawCuff };
+// the drawings, exposed so tools/_rv-hand-sheet.mjs can look at them on their own
+export const __draw = { hand: drawHand, arm: drawArm, sleeve: drawArm };
 
 // ── the object ─────────────────────────────────────────────────────────────────────────────────
 function quadXZ(w, l, { z0 = 0, z1 = 1, flipV = false } = {}) {
@@ -452,23 +507,32 @@ export function buildHand(ctx) {
     return canvasTexture(c, { anisotropy: 8 });
   };
 
-  // the sleeve: a yaw pivot at the wrist (it points back at his shoulder however the hand turns)
-  // holding a quad that runs toward -z and lifts a little, so the forearm passes over the clutter
-  // on the cloth instead of lying across it. Its length is a z-scale.
-  const sleevePivot = new THREE.Group();
-  sleevePivot.name = 'reveal-hand-sleeve';
-  sleevePivot.position.y = 0.0012; // the cuff sits over the cut end of the hand
-  group.add(sleevePivot);
-  // v = 1 is the wrist, drawn at the top of the canvas; the quad's wrist end is z = +0.010, which
-  // the cuff covers. NOTHING here casts a shadow: an offset dark copy of the hand on the cloth is
-  // a drop shadow, and STYLE.md §1.1 forbids one outright — the tone under the palm is drawn.
-  const sleeve = new THREE.Mesh(quadXZ(HAND.sleeveW, 1, { z0: 0.01, z1: -1, flipV: true }), mat(tex(128, 512, drawSleeve), true));
-  sleevePivot.add(sleeve);
-  // the cuff: a fixed-size band across the wrist, drawn over the join
-  const cuff = new THREE.Mesh(quadXZ(HAND.cuffW, HAND.cuffL, { z0: 0.030, z1: -1, flipV: true }), mat(tex(192, 136, drawCuff), true));
-  cuff.name = 'reveal-hand-cuff';
-  cuff.position.y = 0.0009;
-  sleevePivot.add(cuff);
+  // THE ARM: a ribbon rebuilt every drawing along a curve from the wrist to his own wrist, with
+  // the elbow bowed out of the straight line (see "THE ARM" at the head of this file). The mesh is
+  // a child of the group with no transform of its own — its vertices are written in the group's
+  // local frame, so the group's mirror (scale.x = ±1) turns the right arm into the left, drawing
+  // and all. v = 1 is the wrist, at the top of the canvas.
+  // NOTHING here casts a shadow: an offset dark copy of the hand on the cloth is a drop shadow, and
+  // STYLE.md §1.1 forbids one outright — the tone under the palm is drawn.
+  const armSegs = 28;
+  const armGeo = new THREE.BufferGeometry();
+  const armPos = new Float32Array((armSegs + 1) * 6);
+  const armNrm = new Float32Array((armSegs + 1) * 6);
+  const armUv = new Float32Array((armSegs + 1) * 4);
+  const armIdx = [];
+  for (let i = 0; i < armSegs; i++) {
+    const a = i * 2;
+    armIdx.push(a, a + 1, a + 3, a, a + 3, a + 2);
+  }
+  armGeo.setAttribute('position', new THREE.BufferAttribute(armPos, 3).setUsage(THREE.DynamicDrawUsage));
+  armGeo.setAttribute('normal', new THREE.BufferAttribute(armNrm, 3).setUsage(THREE.DynamicDrawUsage));
+  armGeo.setAttribute('uv', new THREE.BufferAttribute(armUv, 2).setUsage(THREE.DynamicDrawUsage));
+  armGeo.setIndex(armIdx);
+  armGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, -0.7), 1.8); // the arm is rebuilt, never culled
+  const arm = new THREE.Mesh(armGeo, mat(tex(Math.round(ARM.w * ARM.px), Math.round(ARM.texM * ARM.px), drawArm), true));
+  arm.name = 'reveal-hand-sleeve';
+  arm.frustumCulled = false;
+  group.add(arm);
   // where each arm goes: the puppet's own wrists at rest, read off him if he built
   const ANCH = { R: new THREE.Vector3(...HAND.anchor), L: new THREE.Vector3(-HAND.anchor[0], HAND.anchor[1], HAND.anchor[2]) };
   ctx.pieces.pepe?.root?.updateMatrixWorld(true);
@@ -518,6 +582,125 @@ export function buildHand(ctx) {
   // when no track wanted it at all.
   let claimed = false;
 
+  // ── the arm, rebuilt ──────────────────────────────────────────────────────────────────────────
+  // The route is worked out in WORLD metres, because the two things it has to answer to — where he
+  // is sitting and what is standing on the cloth — are world facts; the finished spine is then put
+  // through the group's inverse, so the mirror that turns the right hand into the left turns the
+  // arm and its drawing with it.
+  const _A = new THREE.Vector3();
+  const _p = new THREE.Vector3();
+  const _q = new THREE.Vector3();
+  const _inv = new THREE.Matrix4(); // the group's inverse, taken once a drawing and not 58 times
+  function buildArm(A, wx, wy, wz) {
+    group.updateMatrixWorld(true);
+    _inv.copy(group.matrixWorld).invert();
+    // the far end runs PAST his body's plane, so it ends behind his own cut-out or off the top edge
+    const chord = Math.hypot(A.x - wx, A.z - wz) || 1e-4;
+    const ext = 1 + ARM.past / chord;
+    const Fx = wx + (A.x - wx) * ext, Fz = wz + (A.z - wz) * ext, Fy = A.y;
+    // the head of the ribbon sits INSIDE the hand, so the cuff covers its cut wrist
+    const Hx = wx - ((A.x - wx) / chord) * ARM.head, Hz = wz - ((A.z - wz) / chord) * ARM.head;
+    const dx = Fx - Hx, dz = Fz - Hz;
+    const len = Math.hypot(dx, dz) || 1e-4;
+    const t = Math.min(0.5, Math.max(0.26, ARM.elbowAt / len));
+    // OUTBOARD: the horizontal normal on the same side of the room as the hand doing the reaching.
+    const m = group.scale.x < 0 ? -1 : 1;
+    let px = -dz / len, pz = dx / len;
+    if (px * m < 0) {
+      px = -px;
+      pz = -pz;
+    }
+    // THE LANE — how far off the room's axis the curve may swing. Bowed outboard from either of
+    // the two outer cards the arm leaves the table: on his right it goes through the candle in the
+    // wine bottle, which stands 35 cm high at (0.44, −0.34) with the glass just past it (measured
+    // 36 mm inside it, tools/_rv9-clear.mjs), and on his left it goes clean out of the side of a
+    // portrait frame and leaves the hand on the cloth with no arm at all. So the bow is TRIED
+    // outboard and taken inboard when it would cross the lane — an elbow tucked in at his side,
+    // which a reaching arm does as readily as the other, and which the drawing follows (uIn).
+    const b0 = ARM.bow * Math.min(1, len / 0.72);
+    const cxOf = (b) => 2 * (Hx + dx * t + px * b) - 0.5 * (Hx + Fx);
+    const swing = (b) => {
+      const C = cxOf(b);
+      let mx = 0;
+      for (let i = 0; i <= 8; i++) {
+        const u = i / 8, a = (1 - u) * (1 - u), c = 2 * (1 - u) * u, e = u * u;
+        mx = Math.max(mx, Math.abs(a * Hx + c * C + e * Fx));
+      }
+      return mx;
+    };
+    const b = swing(b0) > ARM.lane && swing(-b0) < swing(b0) ? -b0 : b0;
+    const uIn = b < 0 ? 1 : 0; // which edge of the canvas is the inside of the bend
+    const Ex = Hx + dx * t + px * b, Ez = Hz + dz * t + pz * b;
+    const Ey = wy + Math.max(0.03, ARM.elbowY - (wy - Y - HAND.y));
+    // the quadratic whose midpoint IS that elbow: B(½) = ¼H + ½C + ¼F
+    const Cx = cxOf(b), Cz = 2 * Ez - 0.5 * (Hz + Fz);
+    // …but the HEIGHT is its own curve, and it is not symmetric. The arm has to be up over the
+    // still life within the first hand's breadth — the newspaper and its saucer stand 55 mm proud
+    // of the cloth ten centimetres from where the left hand works — and then it is simply carried
+    // there until it comes down onto his own wrist. Which is also how an arm reaches across a
+    // table: the wrist is down on the cloth, the elbow goes up at once and stays up.
+    const y0 = wy + 0.0012;
+    const yAt = (u) => (u <= ARM.rise ? y0 + (Ey - y0) * Math.pow(u / ARM.rise, 0.62) : Ey + (Fy - Ey) * Math.pow((u - ARM.rise) / (1 - ARM.rise), 1.25));
+    const at = (u, o) => {
+      const a = (1 - u) * (1 - u), c = 2 * (1 - u) * u, e = u * u;
+      o.set(a * Hx + c * Cx + e * Fx, yAt(u), a * Hz + c * Cz + e * Fz).applyMatrix4(_inv);
+    };
+    const half = ARM.w / 2;
+    let s = 0, pnx = 1, pnz = 0;
+    for (let i = 0; i <= armSegs; i++) {
+      const u = i / armSegs;
+      at(u, _p);
+      if (i) s += _p.distanceTo(_q);
+      _q.copy(_p);
+      // the tangent, for the cross-section's normal (the section itself stays horizontal: this is
+      // a flat cut-out laid on a ramp, not a tube)
+      at(Math.min(1, u + 0.01), _A);
+      let tx = _A.x - _p.x, ty = _A.y - _p.y, tz = _A.z - _p.z;
+      if (u >= 1) {
+        at(0.98, _A);
+        tx = _p.x - _A.x;
+        ty = _p.y - _A.y;
+        tz = _p.z - _A.z;
+      }
+      const tl = Math.hypot(tx, tz) || 1e-4;
+      let nx = -tz / tl, nz = tx / tl; // the horizontal normal of the spine, at this station…
+      // …kept on the same side all the way up the arm. In the group's own frame outboard is +x on
+      // both hands (the mirror sees to that), so the first station takes that side and every one
+      // after it agrees with the one before: a section that flipped would turn the ribbon inside out.
+      if ((i === 0 ? nx : nx * pnx + nz * pnz) < 0) {
+        nx = -nx;
+        nz = -nz;
+      }
+      pnx = nx;
+      pnz = nz;
+      const ox = nx * half, oz = nz * half;
+      const k = i * 6, j2 = i * 4;
+      armPos[k] = _p.x - ox;
+      armPos[k + 1] = _p.y;
+      armPos[k + 2] = _p.z - oz;
+      armPos[k + 3] = _p.x + ox;
+      armPos[k + 4] = _p.y;
+      armPos[k + 5] = _p.z + oz;
+      // the face normal — up, tilted with the ramp: the cross of the section and the tangent
+      const T = Math.hypot(tx, ty, tz) || 1e-4, d = tl * T;
+      for (const o of [k, k + 3]) {
+        armNrm[o] = (-tx * ty) / d;
+        armNrm[o + 1] = (tl * tl) / d;
+        armNrm[o + 2] = (-tz * ty) / d;
+      }
+      // …and the drawing turns over with the bow, so the elbow's creases stay on the INSIDE of the
+      // bend whichever way the lane sent it
+      const v = 1 - Math.min(1, s / ARM.texM);
+      armUv[j2] = uIn;
+      armUv[j2 + 1] = v;
+      armUv[j2 + 2] = 1 - uIn;
+      armUv[j2 + 3] = v;
+    }
+    armGeo.attributes.position.needsUpdate = true;
+    armGeo.attributes.normal.needsUpdate = true;
+    armGeo.attributes.uv.needsUpdate = true;
+  }
+
   // The drawing, put where `w` asks and slid back along its own arm by however far the withdrawal
   // has got. Past the last step of the withdrawal it is not drawn at all and his own hand is back.
   function place(w) {
@@ -556,13 +739,9 @@ export function buildHand(ctx) {
     group.rotation.set(0, Yaw, 0);
     group.scale.x = m;
     wrist.rotation.set(-pitch, 0, 0);
-    // the arm keeps to the cloth and points back at that wrist of his, however the hand is turned
-    const A = ANCH[m < 0 ? 'L' : 'R'];
-    const dx = A.x - wx, dz = A.z - wz;
-    const len = Math.min(HAND.sleeveMax, Math.max(0.3, Math.hypot(dx, dz)));
-    sleevePivot.rotation.set(0, m < 0 ? Math.atan2(dx, -dz) + Yaw : Math.atan2(-dx, -dz) - Yaw, 0);
-    sleeve.rotation.x = Math.asin(Math.max(-0.55, Math.min(0.5, (A.y - (Y + HAND.y + floatY + 0.0012)) / len)));
-    sleeve.scale.z = len;
+    // the arm, rebuilt along its curve: it starts inside the hand, bends at an elbow bowed out of
+    // the straight line, and runs to that wrist of his and past it
+    buildArm(ANCH[m < 0 ? 'L' : 'R'], wx, Y + HAND.y + floatY, wz);
   }
 
   const api = {
@@ -644,7 +823,7 @@ export function buildHand(ctx) {
         poses[k].material.map?.dispose();
         poses[k].material.dispose();
       }
-      for (const m of [sleeve, cuff]) {
+      for (const m of [arm]) {
         m.geometry.dispose();
         m.material.map?.dispose();
         m.material.dispose();
