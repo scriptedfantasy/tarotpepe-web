@@ -77,6 +77,27 @@ const edgeZ = (zc, dist, t, ax, sign) => {
 // instead, and the deck comes into the picture whole, which is only more of the tabletop.
 const SLACK = 0.045;
 
+// ---- THE MARGIN (round 8) ------------------------------------------------------------------------
+// The reveal builder, measuring round 7's plate: "At 390x760 the current plate puts the spread's
+// bbox at x 6…384 of 390 — 6 px of margin. Please leave 4–5% of the short axis as cloth outside the
+// box." They are right, and the reason round 7 had six pixels is that `mx` and `my` were written as
+// fractions of the HALF-FRAME in their own direction — so the same numbers meant 6 px at the side of
+// a phone and 40 px at the side of a 16:9 frame, and whichever axis the subject happened to be up
+// against is the one that got no margin at all. A margin is a quantity of PAPER, not a share of a
+// direction: it should be the same width of cloth on every edge of every window shape.
+//
+// So it is quoted here once, as a fraction of the frame's SHORT AXIS per side, and converted into
+// each direction's half-frame units where it is used. 4.5 % — the middle of what was asked — is
+// 17.5 px on a 390 px phone, 40 px on a 900 px 16:9 frame, and 49 px in the user's 1200×1100
+// window: the same hand's breadth of table outside the drawing in all three.
+//
+// What it costs is the whole of what the reveal piece just bought: the spread's box came in from
+// 0.680 x 0.567 m to 0.634 x 0.540, so the lens can be 7 % tighter, and 3 % of the short axis on
+// each side is very nearly that 7 %. The subject goes from 97 % of the short axis to 91 % and the
+// cards on a phone stay the size round 7 made them — with cloth round them instead of the frame's
+// edge cutting the outermost bow.
+const MARGIN = 0.045;
+
 // ---- the solver ----------------------------------------------------------------------------------
 // spec:
 //   y           the cloth's height
@@ -94,7 +115,9 @@ const SLACK = 0.045;
 //               frame's height: the caption's drawn placard stands there. On a plate it is small,
 //               because the cloth between the near edge of the fan and the rim is only 8 cm wide
 //               and every centimetre the frame takes past the rim is floor.
-//   mx, my      margins at the side and the top, as a fraction of the half-frame
+//   mx, my      margins at the side and the top, as a fraction of the half-frame in their own
+//               direction. Left unset they are derived from MARGIN, which is a fraction of the
+//               frame's SHORT AXIS and therefore the same number of pixels on every edge.
 // → { pos, look, up, fov, shift:[0,0], t, dist, zTop, zBottom }
 export function plate(spec, aspect) {
   const {
@@ -102,7 +125,7 @@ export function plate(spec, aspect) {
     subject = [], rise = [], whole = [],
     bottom = null, top = null, axis = null, centre = null, disc = null, floor = null,
     dist = 1.2, distMax = null, fov = 30,
-    pad = 0.03, mx = 0.03, my = 0.05,
+    pad = 0.03, mx = null, my = null,
   } = spec;
   const A = Math.max(0.05, aspect);
   const ax = planAxes(deg);
@@ -114,7 +137,11 @@ export function plate(spec, aspect) {
   // back and closing down is also the right lens over a table — it keystones less, and these are
   // planimetric plates. `fov` is only where the search starts.
   const d = Math.max(0.05, distMax ?? dist);
-  const Mx = A * (1 - mx), My = 1 - my, Mb = 1 - 2 * pad;
+  // the short axis as a fraction of the frame's width and of its height: a margin of MARGIN short
+  // axes per side is 2·MARGIN·(short/W) of the half-width, and 2·MARGIN·(short/H) of the half-height
+  const MX = mx ?? 2 * MARGIN * Math.min(1, 1 / A);
+  const MY = my ?? 2 * MARGIN * Math.min(1, A);
+  const Mx = A * (1 - MX), My = 1 - MY, Mb = 1 - 2 * pad;
 
   let pts = subject.map(([px, pz]) => [px, y, pz]).concat(rise);
   const zOf = (p) => p[2];
@@ -209,7 +236,19 @@ export function plate(spec, aspect) {
       // Where the window is so tall that the frame cannot both clear the rug and stop short of him,
       // the rug wins and the excess goes upstage over his own hands on the cloth: a drawn hand at
       // the top edge of a tabletop plate is the beat; a printed border across the foot is a mistake.
-      if (floor != null) want = Math.min(want, centreFor(floor));
+      //
+      // ROUND 8 — BUT ONLY BY SO MUCH. Giving the rug the whole of that overrun is what the round-8
+      // margin exposed: the `turn` plate on a 390x760 phone went four centimetres over budget, and
+      // because the rug took all four the top edge went from z −0.734 to −0.821 and a raycast down
+      // the top eighth of the frame came back `pepeTorso` and `bench` at every pixel — his lap and
+      // the bench he sits on, laid flat across the top of a plan view, which is the exact thing the
+      // axis rule exists to prevent. What it bought at the other end was 2 cm of cloth. So the rug
+      // still outranks the axis, but by SLACK and no further: four and a half centimetres, the same
+      // hand's breadth the `top` rule is allowed above, after which the axis gives way as before.
+      // At 390x760 that is the whole of the overrun and his drawing leaves the frame; at 360x800,
+      // where the frame is a third deeper than the table, it is a quarter of it and the rest still
+      // goes upstage — but a quarter is what there is.
+      if (floor != null) want = Math.min(want, centreFor(axis != null && want > centreFor(floor) ? floor + SLACK : floor));
       const step = want - zc;
       if (Math.abs(step) < 5e-4) break;
       zc += deg >= 89.9 ? step : step * 0.7;

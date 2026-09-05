@@ -2,6 +2,30 @@
 // for the frontal shots (square to the back wall, framed by a rise of the lens) and camera-plan.js
 // for the tabletop plates (square to the room's own axes, framed by where the camera stands).
 //
+// ROUND 8 — three things, none of which needed a number in this file changed.
+//
+//  · THE SUBJECT SOLVES ITSELF NOW. The reveal piece published a tighter spread this round and
+//    asked whether the camera followed: `tableSubject` derives |x| ≤ 0.3168, z 0.0203..0.5595 —
+//    0.634 x 0.539 m — against the 0.634 x 0.540 they measured, to the millimetre, with no edit.
+//    That is what round 7's move to reading the piece at runtime was for. (One disagreement, and
+//    the camera is the conservative one: their reading row is |x| ≤ 0.290 and this file's is
+//    0.3010, because it lays each card at ±YAW where they measured it square. A card really is
+//    yawed on the cloth, so the wider box is the true one; it is 1.1 cm a side and the whole
+//    subject is set by the spread anyway.)
+//  · THE MARGIN IS THE ROUND'S ONE CHANGE, and it is in camera-plan.js: `mx`/`my` were fractions
+//    of the half-frame in their own direction, which meant 6 px of cloth at the side of a phone
+//    and 40 px at the side of a 16:9 frame. It is now MARGIN — 4.5 % of the SHORT AXIS, per side,
+//    the same hand's breadth of table on every edge of every window.
+//  · AND ?shot=1 DOES NOT DIVERGE. Reported this round as possibly solving a different plate from
+//    the live app; measured with the same named shot at the same size with and without it, the
+//    solved shots are byte-identical and the rendered frames differ by 0.00 % of their pixels at
+//    390x760 and 1600x900, for fan, turn, home and wide. `shot=1` reaches this file through
+//    nothing: the plates are a pure function of the layout, the aspect and the reveal piece, and
+//    main.js's screenshot mode touches none of the three. What it does change is upstream of the
+//    camera — no autoplay flow, so the entrance door never stands up and cuts the camera to its
+//    landing pose, and reveal-fan.js seeds its shuffle from the clock instead of the seed. Two
+//    different-LOOKING pictures on the same plate, which is what was seen.
+//
 // ROUND 7 — the user, on a very tall window: "on a very vertical screen format the cards are very
 // much at the edge of the table and we're losing a lot of space on the table. maybe we can make
 // them more central?" Two things were wrong and they compounded.
