@@ -662,17 +662,6 @@ export async function build(ctx) {
     if (P.entrance?.open) await P.entrance.open();
     else C?.cut?.('home');
     if (!alive(token)) return;
-
-    // He is not at the table when the door opens. He is at the back watering the palm, and he
-    // finishes, looks up at whoever has come in, puts the can down and walks to his bench (the
-    // user's idea, and their ten drawings: "he could be standing in the back watering plants when
-    // the user comes in - and then go to his seat and sit down"). 6.33 s of held drawings, ending
-    // bit-exact on the rest pose the rest of the evening expects, so nothing downstream can tell
-    // the difference. It is opt-in by design: if the piece is not there, the evening plays as it
-    // always did, with him already sitting.
-    if (P.pepeAnim?.arrive) await timeout(P.pepeAnim.arrive(), 9);
-    if (!alive(token)) return;
-
     await wait(0.9); // the parlour, seen from the doorway, before we sit down
     if (!alive(token)) return;
 

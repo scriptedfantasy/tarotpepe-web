@@ -256,25 +256,6 @@ export async function build(ctx) {
   let considerUntil = 0;
   let listenUntil = 0;
   let loopGesture = false;
-  // ── THE ARRIVAL ────────────────────────────────────────────────────────────────────────────
-  // He is at the back watering the palm when the door opens; he notices, sets the can down, walks
-  // over and sits. The drawings and the exposure sheet are pepe-arrive.js; what lives here is the
-  // clock, because everything in this piece is on the same clock and a second one would drift.
-  // `arriving` is { since, base, loop, resolve }: `base` lets a judging state start the sheet part
-  // way in, `loop` sends it back there when it runs out, `resolve` is the promise flow waits on.
-  let arriving = null;
-  const arrival = pepe?.arrival ?? null;
-  // where each beat of it begins, in 12 fps clock steps — used by the judging states and quoted
-  // in the contract request, so camera and flow can lay the move over the top of it
-  const PHASE = arrival
-    ? {
-        water: 0,
-        notice: arrival.beats.find((b) => b.notice)?.at ?? 0,
-        cross: arrival.beats.find((b) => b.foot != null)?.at ?? 0,
-        sit: Math.max(0, (arrival.beats.find((b) => b.square)?.at ?? 0) - 6),
-        arrive: 0,
-      }
-    : { water: 0, notice: 0, cross: 0, sit: 0, arrive: 0 };
   let lineNo = 0; // which line of the evening this is: the postures alternate off it
   let forceMouth = null; // ?animMouth=o|flat|rest — a builder's check of the replacement mouths
 
@@ -478,25 +459,6 @@ export async function build(ctx) {
   }
 
   const api = {
-    // ── the arrival ─────────────────────────────────────────────────────────────────────────
-    // ONE CALL, ONE PROMISE, AND IT ENDS WITH HIM SITTING DOWN. flow says `await
-    // pepeAnim.arrive()` while the camera is still on its way in from the landing; the promise
-    // resolves on the step the seated puppet comes back, in its rest pose, ready for say() and
-    // listen(). Nothing else has to know the beat exists. `arriveSeconds` is how long it takes,
-    // so the camera move can be cut to it (and it is quoted in the round's contract request).
-    arrive() {
-      if (!arrival) return Promise.resolve(0);
-      if (arriving?.resolve) return arriving.promise;
-      pepe.seated?.(false);
-      let resolve;
-      const promise = new Promise((r) => (resolve = r));
-      arriving = { since: ctx.clock.t, base: 0, loop: null, resolve, promise };
-      arrival.show(arrival.at(0), 0);
-      return promise;
-    },
-    arriveSeconds: arrival ? arrival.frames / FPS : 0,
-    arrivePhases: PHASE, // where each beat begins, in 12 fps clock steps from the call
-    arriveBounds: arrival?.bounds ?? null, // the world box the camera has to hold while it plays
     play(name) {
       const m = name === 'default' ? 'idle' : name;
       if (m === mode) return;
@@ -553,39 +515,6 @@ export async function build(ctx) {
     },
     setState(name) {
       const m = name === 'default' ? 'idle' : name;
-      // ── the builder's check that the hand-off is exact ─────────────────────────────────────
-      // `still` is the seated puppet in its rest pose with NOTHING laid on it — no breath, no
-      // blink, no idle sheet — so the frame is bit-deterministic. `sat` is the same thing arrived
-      // at the other way: it runs the arrival's own hand-off (the identical two calls the sheet
-      // makes when it runs out) and then holds. Two frames of ?view=pepe, one of each, through
-      // tools/_same.mjs: if they are not the same picture the walk ends in a jump.
-      if (m === 'still' || m === 'sat') {
-        arriving = null;
-        arrival?.hide();
-        if (m === 'sat') {
-          pepe.setState?.('default', ctx);
-          arrival?.leaveCan();
-        }
-        pepe.seated?.(true);
-        mode = 'still';
-        talk = null;
-        shot = null;
-        return;
-      }
-      // the four beats of the arrival are judged as motion: the sheet starts at that beat and
-      // loops back to it, so `--frames 12 --interval 170` catches the whole of it and repeats
-      if (arrival && PHASE[m] != null && ['water', 'notice', 'cross', 'sit', 'arrive'].includes(m)) {
-        pepe.seated?.(false);
-        arriving = { since: ctx.clock.frozen ? 0 : ctx.clock.t, base: PHASE[m], loop: PHASE[m], resolve: null };
-        arrival.show(arrival.at(PHASE[m]), PHASE[m]);
-        mode = 'idle';
-        return;
-      }
-      if (arriving) {
-        arriving = null;
-        arrival?.hide();
-        pepe.seated?.(true);
-      }
       mode = ['deal', 'shuffle', 'turn', 'react'].includes(m) ? 'idle' : m;
       // a frozen clock (?t=) counts from zero so `?t=1.5` shows frame 18 of the state
       since = ctx.clock.frozen ? 0 : ctx.clock.t;
@@ -611,51 +540,6 @@ export async function build(ctx) {
       const t = ctx.clock.t;
       const Fabs = ctx.clock.frame;
 
-      // ── the arrival owns the figure while it is running ──────────────────────────────────
-      // One drawing at a time, held, snapped. No posture is laid on the seated puppet at all
-      // while this is up, because the seated puppet is not in the picture.
-      if (arriving) {
-        const F = arriving.base + Math.round((t - arriving.since) * FPS);
-        const beat = arrival.at(F);
-        if (beat) {
-          arrival.show(beat, F);
-          // the soundtrack of the beat, and it is two cues. A DRAWING CHANGE is the only thing
-          // either of them hangs on, so a held drawing is silent and a snap is not: a foot landing
-          // on the boards at every contact plate (`footfall` was already in sound-voices' list),
-          // and the bench taking his weight the moment he squares up to it — the same creak the
-          // seated figure makes when he shifts, which is the point: it is the same bench.
-          if (beat.at !== arriving.lastAt) {
-            arriving.lastAt = beat.at;
-            if (beat.step) ctx.pieces.sound?.play?.('footfall');
-            if (beat.square) ctx.pieces.sound?.play?.('creak');
-          }
-          return;
-        }
-        // THE HAND-OFF. The plates go, the can stays where he put it, and the seated puppet comes
-        // back at layout.pepe in its own rest pose — the identical figure the rest of the evening
-        // uses, which is what the pixel diff in the round's report is proving.
-        // (the two fields are read out FIRST: pepe.setState comes back through this piece's own
-        // setState and clears `arriving` on its way past)
-        const done = arriving.resolve;
-        const loopFrom = arriving.loop;
-        arriving = null;
-        if (loopFrom != null) {
-          // a judging state: back to the top of the beat it was asked for, so a contact sheet
-          // catches the whole of it however long the sheet is left running
-          arriving = { since: t, base: loopFrom, loop: loopFrom, resolve: null };
-          pepe.seated?.(false);
-          arrival.show(arrival.at(loopFrom), loopFrom);
-          return;
-        }
-        pepe.setState?.('default', ctx); // the canonical rest pose, and the plates put away
-        arrival.leaveCan(); // …except the can, which is on the floor where he left it
-        mode = 'idle';
-        since = t;
-        talk = null;
-        shot = null;
-        done?.(0);
-      }
-
       // reset to the rest pose, then layer the mode, then the one-shot
       pose.torso.lean = pose.torso.slide = pose.torso.breath = 0;
       pose.head.tilt = pose.head.lift = pose.head.drop = pose.head.turn = 0;
@@ -663,11 +547,6 @@ export async function build(ctx) {
       pose.gaze[0] = pose.gaze[1] = 0;
       pose.lids = 0;
       pose.mouth = 'rest';
-      // the builder's check (see setState): the rest pose and not one thing on top of it
-      if (mode === 'still') {
-        apply();
-        return;
-      }
 
       // BREATH. Two frames in, a second's hold, two frames out — and it is a scale about the hip
       // pin, so what rises is the chest and the shoulders and the head on top of them. Round 5
