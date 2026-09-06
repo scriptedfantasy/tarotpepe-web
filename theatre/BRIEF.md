@@ -68,6 +68,20 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   near-identical standing variants the user chose: "2 is better than 3". Use `pepe-standing-2.png`;
   `-3` stays in the repo but is not the one. Before these existed his only drawing was seated and
   legless, and a walk meant inventing a silhouette he had not drawn — that constraint is gone.
+- **The shuffle is a SMOOSH, and this is what one looks like.** 2026-09-06 the user: "as for the
+  card shuffle, i think we should resort to a smooshing shuffle method", and then, having seen a neat
+  fan: "not the result of a smooshing shuffle - a smooshing shuffle should look something like this on
+  the table", with a photograph. What the photograph shows, as an acceptance test:
+    · the cards lie FLAT on the cloth, face down, none of them raised, no bridge, no cascade;
+    · they are at EVERY angle — not a rotated fan, a genuine scatter, some near-square to the table,
+      some at 40 degrees, no two alike;
+    · they overlap heavily and irregularly. There are stacks of three or four and there are gaps of
+      bare cloth. The outline of the whole mass is ragged, not a disc and not an arc;
+    · it covers a WIDE area — much more table than a squared deck, roughly a mass three or four cards
+      across in each direction;
+    · both hands are IN it, flat, palms down, fingers spread, pushing the cards around each other.
+  Then, and only then, the cards are gathered into a squared pile and the fan comes out of it for the
+  visitor to choose from. The neat arc is correct AFTER the smoosh; it is not the smoosh.
 - **Chat or voice.** The visitor answers by typing (`dialogue.ask`, a drawn input in the picture) or by voice
   (a mic button: the browser's SpeechRecognition; when voice is on, Pepe is also spoken by speechSynthesis).
   Chat is the default, voice a toggle; both must work in Chrome.
