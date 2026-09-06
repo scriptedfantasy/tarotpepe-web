@@ -1,38 +1,51 @@
-// PIECE: reveal — the card choreography, drawn on twos: the shuffle (the deck cut, the halves
-// riffled together, the pile tapped square), the SPREAD (the WHOLE DECK — all 78, the user's rule
-// — laid face down in six nested bows across the near half of the cloth, in gathered handfuls;
-// see reveal-spread.js for where they lie and why), the visitor's pick (the card under the
-// pointer stands UP the frame in two drawings and is taken by a tap on it; it is carried to its
-// slot in four, the apex held), the gather (the rest swept back onto the deck), the deal (three
-// cards flicked from the deck to their slots, for the flow that has no visitor), and the turn (the
-// card lifted by the edge nearest the visitor, stood on edge for one held frame with its face to
-// the visitor, dropped with a one-frame bounce).
+// PIECE: reveal — the card choreography, drawn on twos: the SMOOSH (the deck spilled flat on the
+// cloth and washed round under both palms — reveal-shuffle.js), the PUSH-OUT (that same mass
+// pressed out into a broad ragged band the visitor can pick along — reveal-pick.js, where the
+// seventy-eight lie is reveal-wash.js), the visitor's pick (the card under the pointer stands UP
+// the frame in two drawings and is taken by a tap on it; it is carried to its slot in four, the
+// apex held), the GATHER (both hands raking the mass back into a squared deck — which is where the
+// deck comes back), the deal (three cards laid from his own hand, for the flow that has no
+// visitor), and the turn (the card lifted by the edge nearest the visitor, stood on edge for one
+// held frame with its face to the visitor, dropped with a one-frame bounce).
+//
+// ROUND 12 IS THE USER'S NOTE, and it is what this file is now: "i see you did a swoosh shuffle,
+// then pepe stacks the cards, then the users picks from the cleanly layed out set. what if the
+// users picks directly from the swoosh, with all cards layed out messily?" So THERE IS NO FAN. The
+// deck is not gathered, not squared and not arced; the mass he washes is the mass the visitor takes
+// three cards out of. reveal-fan.js is deleted and reveal-spread.js — six nested bows at 16:9,
+// eight on a phone, a keystone laid last on the frame's axis — is retired to a shim that keeps the
+// round-8 pointer probe running against the new surface.
+//
 // The other cards never move. Everything is a list of drawings indexed by the 12 fps frame, so a
 // judging state with `?t=` shows a deterministic frame and a live take is the same list played.
 //
 // API (all Promises resolve when the motion has settled):
-//   shuffle() → Promise
-//   fan() → Promise<count>                 all 78 laid out; then the visitor may pick
-//   awaitPick() → Promise<pick|null>       arms the pointer (it stands a card up; a tap on the
-//                                          standing card takes it — at least 93 x 145 px on a phone); resolves with
+//   shuffle() → Promise                    the smoosh; it ENDS with the wash lying on the cloth
+//   fan() → Promise<count>                 the push-out: the mass opened into the band. Kept its
+//                                          name because flow calls it and nothing else fits.
+//   awaitPick() → Promise<pick|null>       arms the pointer (it stands a card up out of the mass; a
+//                                          tap on the standing card takes it — 119 x 208 px on a
+//                                          phone, measured, tools/_rv12-pick.mjs); resolves with
 //                                          { index, ordinal, slug, slot, mesh } when a card has landed
 //   pick(i) / pickByOrdinal(n) / pickRandom() → Promise<pick>   i 0-based, n 1-based, from the left
-//   gather() → Promise                     the rest of the spread back onto the deck
+//   gather() → Promise                     the mass raked up and squared: the deck is back
 //   turn(i) → Promise                      slot i turned face up; the others never move
-//   deal(slugs) → Promise<meshes>          three cards from the deck to the slots, face down
+//   deal(slugs) → Promise<meshes>          three cards from his hand to the slots, face down
 //   picks (the picks so far), stop(), setState(name)
+//   slots, tableBounds (what the camera composes the tabletop plates on), smooshBounds
 //   states: dealt · turning · revealed · fan (stills) · shuffle · fanning · pick · gather · deal · turn (motion)
 import { mulberry32 } from '../core/rng.js';
 import { FPS, compose, hold, turnTrack, turnPose, turnEdge, handFrames, handSide, stagedRow, laidPose } from './reveal-takes.js';
 import { buildShuffle } from './reveal-shuffle.js';
-import { buildFan } from './reveal-fan.js';
+import { buildPick } from './reveal-pick.js';
+import { WASH } from './reveal-wash.js';
 import { buildHands } from './reveal-hand.js';
 import { buildGround } from './reveal-ground.js';
 
 export const meta = {
   name: 'reveal',
   judge: { shot: 'table', states: ['dealt', 'turning', 'revealed', 'fan', 'shuffle', 'fanning', 'pick', 'gather', 'deal', 'turn'], motion: true },
-  files: ['src/pieces/reveal.js', 'src/pieces/reveal-takes.js', 'src/pieces/reveal-shuffle.js', 'src/pieces/reveal-fan.js', 'src/pieces/reveal-spread.js', 'src/pieces/reveal-hand.js', 'src/pieces/reveal-ground.js'],
+  files: ['src/pieces/reveal.js', 'src/pieces/reveal-takes.js', 'src/pieces/reveal-shuffle.js', 'src/pieces/reveal-pick.js', 'src/pieces/reveal-wash.js', 'src/pieces/reveal-spread.js', 'src/pieces/reveal-hand.js', 'src/pieces/reveal-ground.js'],
 };
 
 // Where each judging state is shot from. His hand is a flat cut-out lying IN the cloth
@@ -189,14 +202,16 @@ export async function build(ctx) {
   const ground = buildGround(ctx, { w: card.w, h: card.h });
   if (cards?.drawn) ground.follow(cards.drawn, CLOTH_Y); // every card laid in the row wears one
 
-  // ---- the fan and the visitor's pick ------------------------------------------------------------
-  const fan = buildFan(ctx, cards, { play, stop }, hand, slots);
+  // ---- the wash on the table and the visitor's pick -----------------------------------------------
+  // `restMass` is how the two halves of the beat are joined: the pick piece starts its push-out from
+  // exactly the poses the smoosh left on the cloth, so the mass that opens is the mass he washed.
+  const fan = buildPick(ctx, cards, { play, stop }, hand, slots, () => shuffleTake?.rest?.() ?? null);
 
-  // THE WINDOW SHAPE CHOOSES HOW THE 78 ARE LAID (round 10). A portrait plate is bound by the
-  // spread's WIDTH and nothing else (camera round 9), so on a phone the deck goes down narrower and
-  // in more bows — see reveal-spread.js → layoutFor, which is the whole of that argument. This piece
-  // is built before the camera, so its resize listener runs before the camera re-solves its plates
-  // off `SPREAD.tiers`, and the frame it solves is the frame the cards are actually lying in.
+  // THE WINDOW SHAPE CHOOSES HOW THE 78 ARE LAID (round 10, and the argument outlived the fan). A
+  // portrait plate is bound by the mass's WIDTH and nothing else (camera round 9), so on a phone the
+  // wash is pushed out narrower and deeper — see reveal-wash.js → BANDS. This piece is built before
+  // the camera, so its resize listener runs before the camera re-solves its plates off
+  // `reveal.tableBounds`, and the frame it solves is the frame the cards are actually lying in.
   const aspect = () => {
     const w = ctx.size?.w || window.innerWidth || 1600, h = ctx.size?.h || window.innerHeight || 900;
     return w / h;
@@ -206,7 +221,7 @@ export async function build(ctx) {
   ctx.on?.('resize', () => {
     if (!fan.reshape(aspect())) return;
     dropShuffle(); // the raft is solved against the frame too: it is re-laid on the new one
-    if (shown === 'fan') fan.liftIndex(fan.keystoneIndex); // the still's raised keystone, again
+    if (shown === 'fan') fan.liftIndex(fan.middleIndex); // the still's raised card, again
     ground.step();
   });
 
@@ -227,8 +242,8 @@ export async function build(ctx) {
             sound('wash', 'riffle');
           },
           smoosh: () => sound('smoosh', 'deal'),
-          rake: () => sound('rake', 'riffle'),
-          square: () => sound('square', 'tap'),
+          // the rake and the squaring are the GATHER's now, at the far end of the reading
+          // (reveal-pick.js → gatherFrames): the deck does not come back until then
           done: () => sound('settle'),
         },
       });
@@ -423,13 +438,19 @@ export async function build(ctx) {
       frames[0]();
       return play(frames);
     },
-    // a packet cut off the deck and dealt face down in an arc; resolves with the number of cards
+    // THE PUSH-OUT: the churned mass pressed out into a band the visitor can pick along. It keeps
+    // the name `fan` because flow calls it and there is nothing else it could be called; there is
+    // no fan. Resolves with the number of cards on the cloth.
     async fan() {
       stop();
       fan.clear();
       clearDrawn();
       ground.step(); // the cards those patches belonged to have just been disposed
-      await play(fan.fanFrames());
+      // the smoosh's own seventy-eight are taken off the cloth in the drawing the pick piece's
+      // seventy-eight take over it, at the same poses, so the swap cannot be seen
+      const frames = fan.pushFrames(() => shuffleTake?.hideCards?.());
+      frames[0]();
+      await play(frames);
       return fan.remaining().length;
     },
     // the visitor's pointer: hover lifts a fan card, click carries it to the next slot
@@ -485,11 +506,20 @@ export async function build(ctx) {
     // row pulled in to 19 cm (reveal-takes.js → stagedRow); the camera's three inserts should be
     // aimed at these, not at ctx.layout.spread.slots, or they will centre on empty cloth.
     slots,
-    // THE SMOOSH'S FOOTPRINT, in world metres on the cloth: the corners of the raft of washed
-    // cards, for a camera that wants to compose a plate on the shuffle instead of on the spread.
-    // It is deliberately NOT published as `tableBounds` — the camera reads that one for the fan
-    // plate, and the picking frame must stay composed on the seventy-eight the visitor is being
-    // asked to click, not opened up to hold a raft that is gone by then.
+    // THE PICK SURFACE'S FOOTPRINT, in world metres on the cloth: the four corners of the box the
+    // seventy-eight washed cards occupy once he has pushed them out, with the hover's 32 mm of
+    // up-frame travel already in it. `tableBounds` is the name camera-shots.js → tableSubject reads
+    // first, before it falls back to anything else, so the tabletop plates are composed on the mass
+    // the visitor is being asked to pick from without the camera piece having to change a line.
+    // It is a fixed box, not a measurement of the cards that happen to be down: the band is solved
+    // at build from the window's shape and the seed (reveal-wash.js → bandFor), so the plate the
+    // camera solves at build is the plate the cards are actually lying in.
+    get tableBounds() {
+      return WASH.bounds.pts;
+    },
+    // THE SMOOSH'S OWN FOOTPRINT — the churn, before it is pushed out. Deliberately NOT the one the
+    // plates are composed on: it is a different, tighter picture for one beat, and the camera has
+    // been asked for a plate of its own for it (see the contract note in this round's return).
     get smooshBounds() {
       const R = shuffleTake?.raft ?? null;
       if (!R) return null;
@@ -534,27 +564,28 @@ export async function build(ctx) {
         const tracks = meshes.map((m, i) => ({ offset: 2 + i * 15, frames: turnFrames(m, i) }));
         loopPlay(compose(tracks), 14);
       } else if (name === 'fan') {
-        // the fan laid out, one card lifted as if under the pointer; live, the visitor may pick
-        // here: three picks and the rest is gathered
+        // the mass pushed out, one card lifted as if under the pointer; live, the visitor may pick
+        // here: three picks and the rest is raked up
         await lay([], false);
         fan.lay();
-        // the KEYSTONE stands up, not some card off to one side of it: the still's top card is the
-        // one the frame's axis runs through, whole, over its neighbours on both sides. Round 7
-        // stood up card 40 — two along the second bow — which laid a whole card across the outer
-        // bow's keystone and cut the middle of the picture in two (the user's note).
-        fan.liftIndex(fan.keystoneIndex);
+        // the card on the frame's own AXIS stands up — the one lying on top where the middle of the
+        // picture crosses the band, which is what a finger touching the middle of the mass would
+        // take. (The fan had a keystone laid last on the axis for this; a wash has whatever the
+        // wash left, and the pointer finds it the same way the eye does.)
+        fan.liftIndex(fan.middleIndex);
         (async () => {
           for (let k = 0; k < slots.length; k++) if (!(await api.awaitPick())) return;
           await api.gather();
         })();
       } else if (name === 'fanning') {
+        // the push-out itself, looping: the churn opening into the band under both palms
         await lay([], false);
-        loopPlay(fan.fanFrames(), 14);
+        loopPlay(fan.pushFrames(() => shuffleTake?.hideCards?.()), 14);
       } else if (name === 'pick') {
-        // one card carried from the fan to slot 0, its neighbours closing the gap
+        // one card carried out of the mass to slot 0
         await lay([], false);
         fan.lay();
-        loopPlay(fan.pickFrames(fan.entries[fan.keystoneIndex], 0), 12);
+        loopPlay(fan.pickFrames(fan.entries[fan.middleIndex], 0), 12);
       } else if (name === 'gather') {
         await lay([], false);
         fan.lay();

@@ -25,7 +25,11 @@ const res = await page.evaluate(async () => {
   // every card's footprint on the cloth and how high it rides — straight off the live meshes
   const cards = f.entries
     .filter((e) => !e.removed && !e.flying)
-    .map((e) => ({ i: e.i, tier: e.t.k, y: e.mesh.position.y, quad: sp.cardCorners({ x: e.mesh.position.x, z: e.mesh.position.z, ang: -e.mesh.rotation.y }) }));
+    // round 12: the bows are gone (the visitor picks out of a wash), so every card is on the same
+    // "bow 0" and the per-bow breakdown below has one line. Everything else is unchanged, and
+    // reveal-spread.js now re-exports the wash's own geometry, so this measures the surface that is
+    // actually out.
+    .map((e) => ({ i: e.i, tier: e.t?.k ?? 0, y: e.mesh.position.y, quad: sp.cardCorners({ x: e.mesh.position.x, z: e.mesh.position.z, ang: -e.mesh.rotation.y }) }));
   const inside = (q, px, pz) => {
     let s = false;
     for (let i = 0, k = q.length - 1; i < q.length; k = i++) if ((q[i][1] > pz) !== (q[k][1] > pz) && px < ((q[k][0] - q[i][0]) * (pz - q[i][1])) / (q[k][1] - q[i][1]) + q[i][0]) s = !s;

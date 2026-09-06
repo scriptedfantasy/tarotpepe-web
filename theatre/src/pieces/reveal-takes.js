@@ -155,7 +155,9 @@ export function turnPose(phi, H) {
 export function handFrames(hand, specs) {
   const out = [];
   for (const s of specs) {
-    const draw = !s || s.off ? () => hand.off() : () => hand.at(s.x, s.y ?? 0, s.z, { yaw: s.yaw ?? 0, pose: s.pose ?? 'splay', side: s.side ?? 'R', floor: s.floor ?? 0 });
+    // `by` — which point of the drawing lands on (x, z), the fingertip or the middle of the palm —
+    // is passed through: the smoosh poses both hands by their palms (reveal-hand.js → CONTACT).
+    const draw = !s || s.off ? () => hand.off() : () => hand.at(s.x, s.y ?? 0, s.z, { yaw: s.yaw ?? 0, pose: s.pose ?? 'splay', side: s.side ?? 'R', floor: s.floor ?? 0, by: s.by ?? 'tip' });
     for (let i = 0; i < (s?.n ?? 1); i++) out.push(draw);
   }
   return out;

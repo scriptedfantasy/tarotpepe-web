@@ -3,8 +3,10 @@
 // ROUND 11, AND IT IS THE USER'S NOTE: "as for the card shuffle, i think we should resort to a
 // smooshing shuffle method". A smoosh — a wash — is what a reader actually does: the deck is spread
 // face down over the cloth and BOTH hands swirl the cards round each other in slow circles until
-// they are thoroughly mixed, then the cards are raked back into a squared pile. What was here was a
-// RIFFLE, which is a card-player's move: a cut, a bridge, a cascade, a snap.
+// they are thoroughly mixed. What was here was a RIFFLE, which is a card-player's move: a cut, a
+// bridge, a cascade, a snap. (Round 11 raked the wash back into a squared pile at the end of this
+// file and dealt a fan out of it. Round 12 deleted that: the visitor picks out of the wash itself,
+// so the beat now ENDS with the mass lying on the cloth — see the last block.)
 //
 // It fixes three things that were already on the list, and it is not a taste:
 //   · THE BRIDGE'S SHADOW. The camera builder measured that the riffle's raised halves "cast a
@@ -14,7 +16,7 @@
 //   · THE PLATE. The tabletop shots are true plan views now. A riffle is the worst possible subject
 //     for one: its whole shape is vertical, which is why it needed `riffle`, a 62° rake on a
 //     0.34 m insert. A smoosh is ENTIRELY horizontal and is the best possible subject for a plan
-//     view, so the beat is staged in the plan the fan already uses (reveal.js → SHOT.shuffle).
+//     view, so the beat is staged in the plan the whole tabletop uses (reveal.js → SHOT.shuffle).
 //   · THE DECK. Seventy-eight cards are on the cloth, being mixed, in front of the visitor, which
 //     is the point of shuffling in a reading. The riffle mixed a drawing of a deck; this mixes the
 //     deck. It is measured, not asserted — tools/_rv11-mix.mjs.
@@ -29,18 +31,17 @@
 //      with it, and the two counter-rotations shear the raft between them. Cards under a palm ride
 //      up over their neighbours, so the top layer — which is all a plan view sees — is a different
 //      set of cards every drawing.
-//  10  THE RAKE: both hands sweep the raft in from the outside, the cards landing in a pile at the
-//      deck's own square in the order they are reached
-//   5  SQUARED: the pile pressed between the two palms, twice, and the real deck back
-//   3  his hands off, up-frame, and out
-// Fifty-six drawings + a two-frame hold: 4.83 s at 12 fps. Long enough that it reads as thorough —
-// three whole revolutions of both hands — and short enough that nobody is waiting for the fan.
+//   4  his hands off the heap, up the frame, and out — AND THE WASH STAYS WHERE IT IS (round 12).
+//      There is no rake here and no squared pile: the visitor picks out of this mass, so the deck
+//      does not come back until the gather at the end of the reading (reveal-pick.js).
+// Forty-two drawings + a two-frame hold: 3.67 s at 12 fps. Long enough that it reads as thorough —
+// three whole revolutions of both hands — and short enough that nobody is waiting to choose.
 // The hands are the user's own drawings, cut by tools/hand-cutout.mjs (reveal-hand.js → PLATES),
 // and they are posed by the MIDDLE OF THE PALM here, not by the fingertips: `by: 'palm'`.
 //
 // The deck piece builds the deck as a few rigid blocks with a hairline per card on their cut
 // sides. A wash needs the squared pile to thin as cards leave it and to grow again as they come
-// back, and the fan needs a packet cut off the top that thins as cards are laid, so `deckStacks`
+// back, and the gather needs a pile that grows as they are raked in again, so `deckStacks`
 // borrows the deck's own block geometry and materials (the ink flags come with them) to make
 // temporary stacks whose thickness is a y-scale and whose side texture window follows the number
 // of cards in them. The real deck is hidden while they play and comes back, squared, at the end.
@@ -52,7 +53,7 @@ import { hold, compose, handFrames } from './reveal-takes.js';
 const _v = new THREE.Vector3();
 
 // The deck's blocks as a set of temporary stacks. Temp meshes are named 'tmp:*' so a later call
-// (the fan's, the shuffle's) never mistakes one for a real block.
+// (the pick's, the shuffle's) never mistakes one for a real block.
 export function deckStacks(deck, T) {
   const real = deck.children.filter((c) => c.isMesh && !c.name.startsWith('tmp:'));
   const blocks = real.filter((c) => c.geometry && Array.isArray(c.material) && c.material.length >= 3);
@@ -151,8 +152,8 @@ export function deckStacks(deck, T) {
 //     both. (It did not even hold the footprint: measured, the raft went from 0.191 m² to 0.059 —
 //     it collapsed to a third and the top layer fell from 61 cards to 49.)
 //
-// It is solved against the frame it is played in, exactly the way the spread is (reveal-spread.js
-// → layoutFor). The plan view over the cloth measures 0.798 x 0.449 m at 16:9 and 0.430 x 0.839 m
+// It is solved against the frame it is played in, exactly the way the band the mass is pushed out
+// into is (reveal-wash.js → BANDS). The plan view over the cloth measures 0.798 x 0.449 m at 16:9 and 0.430 x 0.839 m
 // on a 390x760 phone (tools/_rv10-frame.mjs, on the `fan` plate), two different pictures wanting
 // two different rafts. A washed card lies ANY WAY UP — that is what makes a wash a wash and not a
 // spread — so it reaches 0.131 m from its own centre in the worst direction, and the nominal
@@ -187,14 +188,13 @@ const N = 78; // the deck, the user's rule
 const PER = 10;
 const TURNS = 3;
 const WASH = 6; // drawings the squared deck takes to open out into the raft
-const RAKE = 10; // …and to be swept back into a pile
-const RUN = 3; // how long one card takes to travel, in drawings, in the wash and the rake
+const RUN = 3; // how long one card takes to travel, in drawings, in the wash
 // how hard a hand carries the cards under it, and how far it turns them with it
 const DRAG = 0.92, SPIN = 0.85;
 // where each arm is anchored, for pointing a hand away from its own shoulder (reveal-hand.js HAND)
 const SHOULDER = [0.291, -0.82];
 
-// THE WHOLE SHUFFLE — the smoosh. Forty-nine drawings and a two-frame hold: 4.25 s at 12 fps.
+// THE WHOLE SHUFFLE — the smoosh. Forty-two drawings and a two-frame hold: 3.67 s at 12 fps.
 // See the head of this file for what is in them. Both of his hands are on the cloth for every one
 // of the forty-nine (reveal-hand.js → buildHands), which is what makes it a smoosh and not a wipe.
 //
@@ -220,7 +220,7 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
 
   // ── the seventy-eight, as placeholders ────────────────────────────────────────────────────────
   // The deck's own back and stock on a near-flat sheet, exactly as the spread's cards are made
-  // (reveal-fan.js): no front art, because nothing in a shuffle is ever face up. Three sheets, each
+  // (reveal-pick.js): no front art, because nothing in a shuffle is ever face up. Three sheets, each
   // bent a hair its own way, so a heap of them stacks without the cards passing through each other.
   const group = new THREE.Group();
   group.name = 'smoosh';
@@ -540,82 +540,32 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
   }
   const swirled = snaps.length - 1;
 
-  // ---- 10 drawings: THE RAKE. Both hands sweep the raft in from the outside ---------------------
-  // A two-handed gather rakes the far edge of the heap toward the middle, so the cards furthest
-  // from the square go first and end up at the BOTTOM of the new deck. Which is exactly why the
-  // swirl has to be real: spread a deck and rake it back without mixing it and you have not
-  // shuffled it, you have turned it over.
-  const far = Array.from({ length: N }, (_, i) => i).sort((a, b) => Math.hypot(px[b] - DX, pz[b] - DZ) - Math.hypot(px[a] - DX, pz[a] - DZ));
-  const order = far.slice(); // THE NEW DECK, bottom to top: the order they land in
-  const startAt = new Float64Array(N);
-  far.forEach((i, r) => {
-    startAt[i] = ((RAKE - RUN) * r) / Math.max(1, N - 1);
-  });
-  const from = far.map(() => null);
-  for (let i = 0; i < N; i++) from[i] = { x: px[i], z: pz[i], a: pa[i] };
-  const landed = new Int32Array(N); // where in the new pile each card comes to rest
-  far.forEach((i, r) => {
-    landed[i] = r;
-  });
-  for (let k = 1; k <= RAKE; k++) {
-    let done = 0;
-    for (let i = 0; i < N; i++) {
-      const u = Math.min(1, Math.max(0, (k - startAt[i]) / RUN));
-      if (u >= 1) done++;
-      const tx = DX + (rng() - 0.5) * 0.004, tz = DZ + (rng() - 0.5) * 0.004;
-      px[i] = from[i].x + (tx - from[i].x) * u;
-      pz[i] = from[i].z + (tz - from[i].z) * u;
-      pa[i] = from[i].a + (-DA - from[i].a) * u;
-    }
-    // …and they come down on the square in the order they were reached, so the pile ends exactly
-    // the height the real deck comes back at instead of jumping when it does
-    ord = far.slice();
-    const p = new Float32Array(N * ST);
-    heights();
-    for (let i = 0; i < N; i++) {
-      const u = Math.min(1, Math.max(0, (k - startAt[i]) / RUN));
-      p[i * ST] = px[i];
-      p[i * ST + 1] = pz[i];
-      p[i * ST + 2] = pa[i];
-      p[i * ST + 3] = u >= 1 ? Y + units(landed[i]) * T + T / 2 : Y + T / 2 + (rank[i] / N) * DEEP + 0.010 * Math.sin(Math.PI * u);
-      p[i * ST + 4] = 1;
-    }
-    const s = { p, pile: 0, hl: null, hr: null, cue: k === 1 ? cues.rake : null };
-    // his palms follow the sweep in: from the two ends of the raft to the two sides of the square
-    const u = k / RAKE;
-    const sx = R.ax * 0.86 * (1 - u) + 0.062 * u, sz = (R.cz - R.az * 0.5) * (1 - u) + DZ * u;
-    s.hl = HL(-sx, sz, 0.004, DEEP * (1 - u));
-    s.hr = HR(sx, sz, 0.004, DEEP * (1 - u));
-    snaps.push(s);
-  }
-
-  // ---- 5 drawings: SQUARED, between the two palms -----------------------------------------------
-  // The plan view's answer to standing a packet on its edge and tapping it, which from straight
-  // above is a hairline: the pile is pressed between two hands turned to face each other across it.
-  const press = (dx, cue) => {
-    const p = new Float32Array(N * ST);
-    for (let i = 0; i < N; i++) p[i * ST + 4] = 0; // the placeholders are gone: this is the real deck
-    const q = { x: 0.045 + dx, z: DZ + 0.004 };
-    snaps.push({ p, pile: N, hl: { x: -q.x, y: 0.006, z: q.z, yaw: 1.12, pose: 'splay', side: 'L', floor: 0 }, hr: { x: q.x, y: 0.006, z: q.z, yaw: -1.12, pose: 'splay', side: 'R', floor: 0 }, cue });
-  };
-  press(0.020, cues.done);
-  press(0.000, cues.square);
-  press(0.016, null);
-  press(0.000, cues.square);
-  press(0.014, null);
-
-  // ---- 3 drawings: his hands off, up-frame and out ----------------------------------------------
-  const away = (x, z, y) => {
-    const p = new Float32Array(N * ST);
-    snaps.push({ p, pile: N, hl: HL(-x, z, y, deckH), hr: HR(x, z, y, deckH), cue: null });
-  };
-  away(0.075, DZ - 0.10, 0.042);
-  away(0.105, DZ - 0.24, 0.090);
-  snaps.push({ p: new Float32Array(N * ST), pile: N, hl: null, hr: null, cue: null });
+  // ---- 4 drawings: his hands come off the heap, AND THE WASH STAYS WHERE IT IS -------------------
+  //
+  // ROUND 12, AND IT IS THE USER'S NOTE: "what if the users picks directly from the swoosh, with all
+  // cards layed out messily?" Round 11 raked the seventy-eight back into a squared pile here, and a
+  // neat fan came out of that pile for the visitor to choose from. There is no fan. The mass IS the
+  // pick surface: he presses it out into a band (reveal-pick.js → pushFrames) and the visitor takes
+  // three straight out of it, so the rake belongs at the END of the reading now — it is what the
+  // gather does (reveal-pick.js → gatherFrames), and the deck does not come back until then.
+  // His hands simply lift off the heap, up the frame, and out of the picture.
+  const off = (x, z, y, floor, cue = null) => snap(0, ALL, HL(-x, z, y, floor), HR(x, z, y, floor), cue);
+  off(R.hx, R.cz - 0.03, 0.010, DEEP);
+  off(R.hx + 0.02, R.cz - 0.16, 0.062, DEEP);
+  off(R.hx + 0.04, R.cz - 0.30, 0.108, 0, cues.done);
+  snap(0, ALL, null, null, null);
+  // THE DECK'S NEW ORDER, bottom to top, as the gather will find it: the cards furthest from the
+  // deck's square are raked first and end up at the bottom of the pile. Nothing here draws it — the
+  // rake is reveal-pick's now — but the mixing probe (tools/_rv11-mix.mjs) measures the shuffle by
+  // it, and a wash that is not measured is a wash nobody can defend.
+  const order = Array.from({ length: N }, (_, i) => i).sort((a, b) => Math.hypot(px[b] - DX, pz[b] - DZ) - Math.hypot(px[a] - DX, pz[a] - DZ));
 
   // ── the drawings ───────────────────────────────────────────────────────────────────────────────
   const frames = snaps.map((s, k) => () => {
-    const real = k <= 1 || k >= snaps.length - 8; // the deck itself at either end; a stack between
+    // The real deck is only ever drawn before the wash. Once it has been spilled it does not exist:
+    // every card of it is on the cloth, and it comes back at the far end of the reading, when the
+    // gather rakes the mass up (reveal-pick.js → gatherFrames).
+    const real = k <= 1;
     showReal(real);
     if (real) hideTemps();
     else {
@@ -649,8 +599,22 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
     raft: R,
     // what the mixing probe needs: the drawing the raft is complete on, the drawing the swirl ends
     // on, and the deck's new order bottom-to-top in terms of where each card started
-    marks: { washed, swirled, raked: snaps.length - 9 },
+    marks: { washed, swirled, raked: snaps.length - 1 },
     order: () => order.slice(),
+    // WHERE THE WASH LIES WHEN HIS HANDS COME OFF IT — the seventy-eight, in world metres on the
+    // cloth, bottom of the heap first. This is the beat's whole output now: reveal-pick.js starts
+    // its push-out from exactly these poses, so the mass the visitor sees opening is the mass he
+    // just washed and not a second drawing of one.
+    rest: () => {
+      const s = snaps[snaps.length - 1].p;
+      return Array.from({ length: N }, (_, i) => ({ x: s[i * ST], z: s[i * ST + 1], ang: s[i * ST + 2], rank: (s[i * ST + 3] - Y - T / 2) / DEEP }));
+    },
+    // the wash taken off the cloth in one drawing: the pick piece's own seventy-eight take over from
+    // these at the same poses, so the swap is invisible
+    hideCards() {
+      for (const m of meshes) m.visible = false;
+      PILE.visible = false;
+    },
     dispose() {
       for (const m of meshes) group.remove(m);
       for (const g of geos) g?.dispose?.();
