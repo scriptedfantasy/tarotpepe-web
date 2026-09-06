@@ -16,7 +16,7 @@ import { mulberry32 } from '../core/rng.js';
 import { cardGeometry } from './cards-geometry.js';
 import { drawBack, drawFront, drawDeckSide, BAND, FRONT, frogGlyph, starGlyph, moonGlyph, lozenge, qbez, ellArc, hatchPoly, inkPath } from './cards-art.js';
 import { bakedTexture, BAKING } from '../core/bake.js';
-import { inkFilter } from './cards-mips.js';
+import { inkFilter, colorFilter } from './cards-mips.js';
 
 export const meta = {
   name: 'cards',
@@ -67,11 +67,56 @@ export async function build(ctx) {
   //     ten-per-cent grey. Our own chain keeps a stroke a stroke at every level, and takes all the
   //     anisotropy the machine has. This is what stopped the lattice thinning out in the deck
   //     close-up, where the back is seen almost edge-on.
-  const backMat = inkMaterial({ colorful: false, hatch: 0.2, lineWeight: 1 });
+  //
+  // WHOSE BACK, AND WHY IT IS THE ONE THING ON THE TABLE THAT IS BOTH. The pen drawing above was
+  // the only back until the user drew their own — a room in one-point perspective with Pepe sitting
+  // in the middle of it, `public/tarotpepe_backside.png`, the same 1024 x 1792 plate as every face —
+  // and asked for it "colored to match our animation". In this film that is a rule and not a
+  // preference (BRIEF.md, selective colour): the room, the border, the ornaments, the windows and
+  // the boards are ink on paper, and the only colour allowed on it is Pepe's own. So the plate is
+  // converted at build time by `tools/back-plate.mjs` into `tarotpepe-back-ink.png` — the user's
+  // file is read and never written — and it arrives here already in the world's two colours plus
+  // his two.
+  //
+  // Which forces the material. Everything else on this card is `colorful:false`, and that flag is
+  // what makes the ink pass read a texture as STROKES and lay them at one pressure; it is also what
+  // throws every colour away. A `colorful:true` material is composited exactly as its texture
+  // stands, which is the only way a green frog survives the pass at all — and the pass still draws
+  // the marks INSIDE it, at the room's own pen, through `colorInk` (ink-shaders.js): a mark must be
+  // achromatic and must stand clear of its field, so the black lines of the room are re-struck and
+  // the flat green of his face is left exactly as printed. One plate, room in ink, figure in
+  // colour.
+  //
+  // WHAT IT COSTS, stated plainly. A colorful surface does not get the two things the pass does for
+  // a paper-white one: it is never FILLED as a black mass, and where the drawing has closed up
+  // below the nib the pass does not state its tone as hatching — it shows the texture's own
+  // average. So how this card reads at twenty pixels is decided by the mip chain and by nothing
+  // else, which is why the chain for it is built by hand (colorFilter, cards-mips.js) and why the
+  // plate is a fifth ink: a drawing this dense reduces to a tone honestly instead of vanishing.
+  // It also no longer takes tone from the room's light through its own drawing — only the hatch
+  // laid over it — so a back in shadow is a hatched back, not a darker one.
+  //
+  // `?back=pen` puts the drawn one back, `?back=panel` swaps the title treatment, `?back=orig`
+  // shows the user's untouched file on the card. All four go through a chain of ours.
+  const backMat = inkMaterial({ color: '#ffffff', colorful: true, hatch: 0.2, lineWeight: 1 });
+  const which = ctx.params?.get?.('back') || 'ink';
+  const load = (url) =>
+    new Promise((res, rej) => {
+      new THREE.TextureLoader().load(url, (t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; res(t); }, undefined, rej);
+    });
+  const backTexture =
+    which === 'pen'
+      ? bakedTexture('card-back', 1024, 1792, (g, w, h) => drawBack(g, w, h, mulberry32(21)), { anisotropy: 16, deps: [drawBack, frogGlyph, starGlyph, moonGlyph, lozenge, qbez, ellArc, hatchPoly, inkPath, JSON.stringify(BAND)] })
+      : load(which === 'panel' ? '/tarotpepe-back-panel.png' : which === 'orig' ? '/tarotpepe_backside.png' : '/tarotpepe-back-ink.png');
+  // The pen back is a sparse lattice on bare paper and wants the darkest-two chain; the converted
+  // plate carries colour and wants the pigment/coverage one, which can only read a plate printed in
+  // the palette it knows. `?back=orig` is the user's untreated file and is left on the GPU's own
+  // averaged chain — it is there to be compared against, not to be flattered.
   const backReady = attach(
-    bakedTexture('card-back', 1024, 1792, (g, w, h) => drawBack(g, w, h, mulberry32(21)), { anisotropy: 16, deps: [drawBack, frogGlyph, starGlyph, moonGlyph, lozenge, qbez, ellArc, hatchPoly, inkPath, JSON.stringify(BAND)] }).then((t) => inkFilter(t, ctx.renderer)),
+    backTexture.then((t) => (which === 'pen' ? inkFilter(t, ctx.renderer) : which === 'orig' ? t : colorFilter(t, ctx.renderer))),
     backMat,
   );
+  if (which === 'pen') backMat.userData.ink.colorful = false;
 
   // paper, all of it: the cut edge of a card is paper with one ink contour, never a grey slab
   const edgeMat = inkMaterial({ hatch: 0.25, lineWeight: 0.7 });
