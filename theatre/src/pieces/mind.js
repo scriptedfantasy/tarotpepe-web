@@ -6,10 +6,19 @@
 // THE VISITOR TALKS TO HIM. There is no march of beats any more: the evening is a conversation, and
 // the cards only come out when the visitor asks for them.
 //
-//   const t = mind.turn(text);              // text is whatever they typed or said, possibly ''
-//   t.intent                                 // 'talk' | 'draw' | 'recall' | 'farewell' — at once
+//   const t = await mind.turn(text);        // text is whatever they typed or said, possibly ''
+//   t.intent                                 // 'talk' | 'draw' | 'recall' | 'farewell'
 //   t.focus                                  // for a recall: which card they meant, or null
+//   t.tool                                   // the lever he pulled, if he pulled one
 //   for await (const s of t.sentences) …     // his reply, one placard-sized sentence at a time
+//
+// HE DECIDES TO DEAL (round 5). The intent used to be a regex over the visitor's sentence, run
+// before the model had seen the line — which dealt at people who had only mentioned cards and
+// missed the ones who asked sideways. Now the model is handed two levers, `deal_cards` and
+// `show_cards`, they are the only hands it has, and the room moves when one fires. So `turn` is a
+// PROMISE: the intent is known when he has finished his two or three sentences, not before them.
+// The regex (intentOf, mind-talk.js) is still the whole brain when there is no provider, and still
+// the fallback when a live call dies before he has said a word.
 //
 //   'talk'      keep the conversation going: ask him again when he has finished speaking.
 //   'draw'      the visitor asked for a reading, in their own words, or said yes to his offer.
@@ -27,8 +36,8 @@
 // on offer (so that a bare "yes" means yes); mind.hasSpread whether cards are down.
 //
 // API (ctx.pieces.mind):
-//   turn(text)           → {intent, focus, sentences, text}   the conversation loop (above)
-//   intentOf(text)       → 'talk' | 'draw' | 'recall' | 'farewell' without speaking (peek at the fan)
+//   turn(text)           → Promise<{intent, focus, sentences, text, tool}>  the conversation loop
+//   intentOf(text)       → 'talk' | 'draw' | 'recall' | 'farewell' without speaking (the regex)
 //   offered, hasSpread   bool
 //   available            bool, true once health() has answered with a provider
 //   provider, model      'anthropic' | 'openrouter' | 'none', and the model id
@@ -137,7 +146,7 @@ export async function build(ctx) {
   // spent (so he never recites), whether a reading is on offer, and what he has made of them.
   // `told` counts how many times each object in the room has been asked about tonight, so the
   // second telling of a story is not the first one again — in the script and in the live voice.
-  const talk = { turns: 0, used: new Set(), offered: false, stance: null, spread, told: Object.create(null) };
+  const talk = { turns: 0, used: new Set(), offered: false, stance: null, spread, told: Object.create(null), about: null };
   let controller = null;
   let retriedHealth = false;
   let latchedAt = 0; // when the live voice last failed fatally (0 = not latched)
@@ -151,7 +160,9 @@ export async function build(ctx) {
   };
 
   // POST /api/pepe → async generator of text deltas. Throws on any failure before or during.
-  async function* stream(body, signal) {
+  // `onTool` is called at most once, with {name, args}, when he pulls one of the levers the body
+  // offered him: a `data: {"tool":…}` event of its own, never text with a shape to it.
+  async function* stream(body, signal, onTool = null) {
     const res = await fetch('/api/pepe', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -185,6 +196,7 @@ export async function build(ctx) {
             continue;
           }
           if (ev.t) yield ev.t;
+          if (ev.tool?.name) onTool?.(ev.tool);
           if (ev.done) return;
           if (ev.error) {
             const err = new Error(ev.error);
@@ -235,8 +247,21 @@ export async function build(ctx) {
     },
 
     // One turn of Pepe's, as sentences. Records the visitor's line and his reply in history.
-    async *reply({ beat = 'greeting', user = '', slug = null, position = 0, question = '', intent = null, focus = null, object = null } = {}) {
+    //
+    // `tools`, `fallback` and `report` are turn()'s, and nothing else passes them:
+    //   tools     the levers offered to the live voice this turn (server/pepe.mjs decides which of
+    //             them the table actually allows). No tools = no tools on the call.
+    //   fallback  the args the SCRIPT is to answer with if the live voice says nothing at all —
+    //             which is how the written brain keeps the beat the regex chose for it when the
+    //             electricity goes off mid-turn, without the visitor's line being recorded twice.
+    //   report    filled in for the caller: {live, tool}. `live` is true when these sentences came
+    //             from the model; `tool` is the lever he pulled, if he pulled one.
+    async *reply({ beat = 'greeting', user = '', slug = null, position = 0, question = '', intent = null, focus = null, object = null, tools = null, fallback = null, report = null } = {}) {
       const said = String(user || question || '').trim();
+      if (report) {
+        report.live = false;
+        report.tool = null;
+      }
       // Did they ask about something in the room? turn() has usually decided this already; a
       // caller that asks for the 'talk' beat straight out gets the same reading, so the answer to
       // "why do you keep a barometer" is the barometer whichever door the line came in by.
@@ -272,7 +297,12 @@ export async function build(ctx) {
         dealt: spread.filter(Boolean).length,
         turns: talk.turns,
         spread: spread.map((c) => ({ position: c.position, label: c.label, name: c.name, numeral: c.numeral })),
+        // the levers, proposed. The server keeps the ones this table allows and no others.
+        tools: Array.isArray(tools) && tools.length ? tools : undefined,
+        // what he said the reading was for when he pulled deal_cards, spent on the shuffle line
+        about: beat === 'shuffle' && talk.about ? talk.about : undefined,
       };
+      if (beat === 'shuffle') talk.about = null;
       // counted once, whether the answer comes from the model or from the script
       if (obj) noteTold(obj, talk);
       if (beat === 'reading' && slug && card) {
@@ -298,6 +328,13 @@ export async function build(ctx) {
       const yielded = [];
       const finish = () => {
         entry.text = yielded.join(' ');
+        // A turn that was nothing but a lever — he pulled deal_cards and said not one word, which
+        // is the commonest shape of all — leaves no line in the transcript to remember him by, and
+        // an empty turn in the history reads to him next time as a silence he kept.
+        if (!entry.text) {
+          const i = history.indexOf(entry);
+          if (i >= 0) history.splice(i, 1);
+        }
         if (beat === 'talk' || beat === 'greeting' || beat === 'question') {
           talk.offered = offeredOut ?? looksLikeOffer(entry.text);
           api.offered = talk.offered;
@@ -308,8 +345,11 @@ export async function build(ctx) {
         api.abort();
         const ac = (controller = new AbortController());
         let buf = '';
+        const onTool = (t) => {
+          if (report) report.tool = t;
+        };
         try {
-          for await (const delta of stream(body, ac.signal)) {
+          for await (const delta of stream(body, ac.signal, onTool)) {
             buf += delta;
             // emit every complete sentence, keep the tail
             for (;;) {
@@ -349,18 +389,24 @@ export async function build(ctx) {
         } finally {
           if (controller === ac) controller = null;
         }
-        if (yielded.length) {
+        // He answered — in words, or by putting his hand on the deck, or both. Either way this
+        // turn is his and the script does not speak over it.
+        if (yielded.length || report?.tool) {
+          if (report) report.live = true;
           finish();
           return;
         }
         if (ac.signal.aborted && ac.signal.reason === 'abort') {
-          history.pop();
+          const i = history.indexOf(entry);
+          if (i >= 0) history.splice(i, 1);
           return;
         }
       }
 
-      // the script
-      const written = scripted({ ...args, spread }, talk);
+      // the script. `fallback` is turn()'s way of saying which beat the written brain should
+      // answer with when the live voice has failed: the live call was made for the beat he TALKS
+      // in, and the script may need to answer the beat the regex read instead.
+      const written = scripted({ ...args, ...(fallback ?? {}), user: said, question: said, spread }, talk);
       offeredOut = !!written.offered;
       for (const s of splitSentences(written.text)) {
         yielded.push(s);
@@ -370,48 +416,108 @@ export async function build(ctx) {
     },
 
     // ---- the conversation ------------------------------------------------------------------------
-    // Whatever the visitor said, and what he does with it. `intent` is known before he opens his
-    // mouth, so the caller can arm the shuffle while he is still speaking.
-    turn(text = '') {
+    // Whatever the visitor said, and what he does with it. A PROMISE now, and that is the round:
+    //
+    //   HE decides to deal, by calling deal_cards, and the room deals when the lever fires. It was
+    //   a regex on the visitor's sentence, read before the model had seen the line at all, and a
+    //   pattern cannot tell "read my cards" from "my grandmother used to read the cards" without
+    //   somebody thinking of that sentence first. So the intent is no longer known before he opens
+    //   his mouth: it is known when he has finished, which is what `await` is for. The reply is
+    //   two or three sentences, so the wait is the length of two or three sentences.
+    //
+    // What the regex still decides, and it is the honest division: the beats that change what he
+    // SAYS (a question about the room, a question about a card already on the cloth, the visitor
+    // taking their leave) stay with the pattern, because a wrong guess there costs a paragraph.
+    // The beats that change what the ROOM DOES are his, because a wrong guess there costs the
+    // visitor their reading.
+    //
+    // With no live voice, none of this happens: the written brain reads the line exactly as it did
+    // before, and so does a live turn whose call fails before he has said a word.
+    async turn(text = '') {
       const said = String(text ?? '').trim();
       const dealt = spread.filter(Boolean);
-      const intent = intentOf(said, { offered: talk.offered, spread: dealt });
-      // 'draw' means they have just asked for cards, so his answer is the deck coming off the
-      // cloth: play these sentences over the shuffle rather than before it.
-      // With cards face up, a line that points at one of them is a follow-up and not table talk:
-      // the written brain answers with that card, and the live voice gets the follow-up direction
-      // (answer with what is on the table, name the one you mean) instead of the talk direction.
+      // The written brain's reading of the line — the fallback, and the whole decision when there
+      // is no model to ask.
+      const guess = intentOf(said, { offered: talk.offered, spread: dealt });
       // A question about a thing in the room is a 'talk' turn: nothing is dealt, nothing is
-      // shuffled and the camera does not move. It is read here, before aboutTheSpread, because
-      // with cards on the cloth "what is the barometer" has the shape of a question about a card
-      // and is not one. Anything that DOES point at a card wins: objectAsk stands down on it.
-      const object = intent === 'talk' && said ? objectAsk(said, { spread: dealt, cardRef }) : null;
-      const beat =
-        intent === 'farewell'
-          ? 'farewell'
-          : intent === 'draw'
-            ? 'shuffle'
-            : intent === 'recall'
-              ? 'recall'
-              : object
-                ? 'object'
-                : dealt.length && aboutTheSpread(said, dealt)
-                  ? 'followup'
-                  : 'talk';
-      if (intent === 'draw') talk.offered = false;
+      // shuffled and the camera does not move. It is read before aboutTheSpread, because with
+      // cards on the cloth "what is the barometer" has the shape of a question about a card and is
+      // not one. Anything that DOES point at a card wins: objectAsk stands down on it.
+      const object = guess === 'talk' && said ? objectAsk(said, { spread: dealt, cardRef }) : null;
       // Which card they meant, when they meant one: an index into the cards on the table, or null
       // for all of them. cardRef reads a name, an alias, a place ("the middle one"), a suit or a
       // pointing word, so "the tower" and "the second one" arrive here as the same number, and the
       // caller can put the camera on that card without parsing the sentence a second time.
-      const ref = intent === 'recall' && dealt.length ? cardRef(said, dealt) : null;
-      const focus = ref && ref.index >= 0 ? ref.index : null;
-      const card = focus == null ? null : dealt[focus];
-      return {
-        intent,
-        text: said,
-        focus,
-        sentences: api.reply({ beat, user: said, intent, focus, object, slug: card?.slug ?? null, position: card ? card.position : 0 }),
+      const ref = guess === 'recall' && dealt.length ? cardRef(said, dealt) : null;
+      const at = (i) => {
+        const card = i == null ? null : dealt[i];
+        return { slug: card?.slug ?? null, position: card ? card.position : 0 };
       };
+      // the beat the SCRIPT would answer this line with, and the intent that goes with it
+      const guessFocus = ref && ref.index >= 0 ? ref.index : null;
+      const written = {
+        beat:
+          guess === 'farewell' ? 'farewell' : guess === 'draw' ? 'shuffle' : guess === 'recall' ? 'recall' : object ? 'object' : dealt.length && aboutTheSpread(said, dealt) ? 'followup' : 'talk',
+        focus: guessFocus,
+        ...at(guessFocus),
+      };
+
+      if (api.ready) await api.ready;
+
+      if (!api.available) {
+        if (guess === 'draw') talk.offered = false;
+        return { intent: guess, text: said, focus: guessFocus, sentences: api.reply({ ...written, user: said, intent: guess, object }) };
+      }
+
+      // The live turn. He is asked for a beat he can only TALK in, and given the levers instead:
+      // deal_cards always, show_cards only with something on the cloth to show (the server drops
+      // it otherwise, whatever this asks for).
+      //
+      // The object beat keeps them, so "the globe is lovely, now read my cards" is not a miss —
+      // but server/pepe.mjs deliberately does NOT restate them in that direction, because a turn
+      // whose whole job is a barometer does not need a paragraph nudging him toward the deck.
+      const beat = guess === 'farewell' ? 'farewell' : object ? 'object' : dealt.length && aboutTheSpread(said, dealt) ? 'followup' : 'talk';
+      const tools = guess === 'farewell' ? null : dealt.length ? ['deal_cards', 'show_cards'] : ['deal_cards'];
+      const report = {};
+      const lines = [];
+      try {
+        for await (const s of api.reply({ beat, user: said, intent: null, object, tools, report, fallback: guess === 'talk' ? null : { ...written, object } })) lines.push(s);
+      } catch (e) {
+        console.warn('[mind] the turn failed:', e?.message ?? e);
+      }
+
+      // He said nothing at all and pulled nothing: the call died before the script could be
+      // reached, so the written reading of the line stands, exactly as it did before this round.
+      if (!report.live) {
+        if (guess === 'draw') talk.offered = false;
+        return { intent: guess, text: said, focus: guessFocus, sentences: lines };
+      }
+
+      const tool = report.tool;
+      if (tool?.name === 'deal_cards') {
+        talk.offered = false;
+        // what he heard them ask for, in their words. It rides into the shuffle direction and is
+        // spent there, so the line over his working hands is about this visitor's shed and not
+        // about shuffling in general.
+        talk.about = String(tool.args?.about ?? '').trim().slice(0, 80) || null;
+        // his line, if he wrote one, is the shuffle line; if he wrote none, flow asks for the
+        // shuffle beat itself and he speaks over his own hands, which is the better line anyway
+        return { intent: 'draw', text: said, focus: null, sentences: lines, tool };
+      }
+      if (tool?.name === 'show_cards') {
+        const n = Number(tool.args?.card); // a model may write it as a string; the room does not mind
+        const focus = Number.isFinite(n) && n >= 1 && n <= dealt.length ? Math.round(n) - 1 : null;
+        return { intent: 'recall', text: said, focus, sentences: lines, tool };
+      }
+      // He talked, and did not put his hand on the deck. That is the answer, whatever the regex
+      // thought of the sentence — with ONE exception, and the exception is the asymmetry this
+      // whole round turns on. Showing the cards that are already lying there costs nothing and
+      // reverses nothing: if he misses "show me my cards again", the visitor asked to look at
+      // something and was answered in words. So the anchored recall patterns still get the camera
+      // moved when there is something on the cloth to move it to. Dealing gets no such net and
+      // never will: a deal the visitor did not ask for takes their reading away from them.
+      if (guess === 'recall' && dealt.length) return { intent: 'recall', text: said, focus: guessFocus, sentences: lines };
+      return { intent: guess === 'farewell' ? 'farewell' : 'talk', text: said, focus: null, sentences: lines };
     },
 
     // the same reading of their words, without speaking: for a caller that wants to peek.
@@ -440,6 +546,7 @@ export async function build(ctx) {
       talk.offered = false;
       talk.stance = null;
       talk.told = Object.create(null);
+      talk.about = null;
       api.offered = false;
       // a new visitor deserves a fresh look at the endpoint: a key may have arrived meanwhile
       latchedAt = 0;
@@ -542,10 +649,13 @@ async function speak(mind, block, args) {
 // The visitor's half of the canned visit: whatever they say, and the intent it carries. The block
 // prints the intent beside each line so the critic can see where the cards were asked for.
 async function visitorSays(mind, block, text) {
-  const t = mind.turn(text);
   addLine(block, 'VISITOR', text === '' ? '(says nothing)' : text);
+  const t = await mind.turn(text);
   const line = addLine(block, 'TAROT PEPE');
   for await (const s of t.sentences) line.add(s);
+  // The lever, if he pulled one, said in the transcript as the stage direction it is — a critic
+  // reading this has to be able to see WHERE he decided, and that it was him and not a pattern.
+  if (t.tool) addLine(block, '', `[ he puts his hand on the deck: ${t.tool.name}${t.tool.args?.about ? ` — "${t.tool.args.about}"` : ''} ]`);
   return t.intent;
 }
 

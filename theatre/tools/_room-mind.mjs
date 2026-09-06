@@ -28,7 +28,7 @@ const fail = (m) => {
 };
 
 async function say(text, wantIntent) {
-  const t = mind.turn(text);
+  const t = await mind.turn(text); // a promise since round 5: the model decides by calling a tool
   const out = [];
   for await (const s of t.sentences) out.push(s);
   const line = out.join(' ');

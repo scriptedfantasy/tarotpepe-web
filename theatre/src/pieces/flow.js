@@ -57,7 +57,12 @@ const NEXT_SENTENCE_S = 9; // ... each further sentence
 // between them and the field is a sentence the mind has not finished writing: three seconds of a
 // still frame is the most that is worth waiting to hear it.
 const IMPATIENT_S = 3;
-const TURN_S = 22; // mind.turn(), when it answers with a finished object rather than a stream
+// mind.turn(). Since mind's round 5 this covers his WHOLE turn and not just its first token: he
+// decides whether to deal by calling a tool, so the turn is read to the end before the intent is
+// known. The server gives the provider 25 s (UPSTREAM_MS) and then hands back an error of its own,
+// which is a better thing for the flow to receive than a race with it — so this waits a second
+// longer than the server does, and never takes the decision away from it.
+const TURN_S = 26;
 const IDLE_S = 90; // the visitor's silence at the field: he says a line and opens it again
 const PICK_S = 75; // ... at the fan: Pepe chooses
 const CHAPTER_S = 4.0; // the story card, held long enough to read its four lines (round 3: 1.7 → 2.3s on screen)
@@ -258,13 +263,20 @@ export async function build(ctx) {
   }
 
   // ---- one turn of the conversation -----------------------------------------------------------------
-  // THE CONTRACT WITH mind: `mind.turn(text)` → { intent, sentences }. The intent — talk · draw ·
-  // farewell — is known AT ONCE, before a word of the reply is spoken, so the flow can decide what
-  // the reply is played over: talk, and it is played to the visitor with the field opening under
-  // the last sentence; draw, and it is played over the shuffle, because those sentences are his
-  // shuffle line; farewell, and it is the good night. `sentences` is a stream (an async generator)
-  // or an array; either is played the same way. A mind without turn() — or one whose call fails —
-  // is asked for a beat instead, and the flow reads the intent off the visitor's own words: a
+  // THE CONTRACT WITH mind: `mind.turn(text)` → a promise of { intent, focus, sentences }. The
+  // intent — talk · draw · recall · farewell — decides what the reply is played over: talk, and it
+  // is played to the visitor with the field opening under the last sentence; draw, and it is
+  // played over the shuffle, because those sentences are his shuffle line; recall, and the camera
+  // goes to the cards already down; farewell, and it is the good night. `sentences` is a stream
+  // (an async generator) or an array; either is played the same way, and an EMPTY one is the
+  // ordinary case for a draw — he pulled the lever and said nothing, so `drawing` asks him for the
+  // shuffle beat and he speaks over his own hands.
+  //
+  // It is a promise since mind's round 5, and that is the only change here: he decides to deal by
+  // calling a tool, so the intent is known when he has finished his turn rather than before it has
+  // begun. Nothing in this file waited on it any differently — `listen` already awaited the turn —
+  // and the wait is the length of two or three sentences. A mind without turn(), or one whose call
+  // dies, is asked for a beat instead and the flow reads the intent off the visitor's own words: a
   // backstop, not the design.
   const sentencesOf = (t) => {
     if (!t || t === TIMEOUT) return null;

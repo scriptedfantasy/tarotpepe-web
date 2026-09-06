@@ -1,10 +1,11 @@
 // server/pepe.mjs — Tarot Pepe's voice, proxied. A Vite plugin that puts two routes on the dev server:
 //
-//   GET  /api/pepe/health  → {ok, provider, model}            provider: 'anthropic' | 'openrouter' | 'none'
+//   GET  /api/pepe/health  → {ok, provider, model}            provider: 'anthropic' | 'openrouter' | 'none' | 'fake'
 //   POST /api/pepe         → text/event-stream                 data: {"t":"<delta>"} … data: {"done":true}
+//                                                              data: {"tool":{"name":…,"args":{…}}}
 //                                                              or  data: {"error":"…"}
 //
-// Body: {beat, history, user, question, slug, position, cardName, numeral, positionLabel, hint, facts, spread, object}
+// Body: {beat, history, user, question, slug, position, cardName, numeral, positionLabel, hint, facts, spread, object, tools}
 //   beat      greeting | question | answer | shuffle | fan | reading | recall | followup | farewell |
 //             talk | object
 //   history   [{role:'visitor'|'pepe', text}]  the conversation so far (not including `user`)
@@ -17,17 +18,35 @@
 //             is stated flat; `hint` is one written line and is a sample of voice only, exactly as
 //             a card's hint is. The written lines are deliberately NOT in SYSTEM, so there is no
 //             set speech in the cached prefix for him to recite.
+//   tools     [name] the levers the client is willing to have pulled this turn. The server is the
+//             authority: a name it does not know, or one the table does not allow (show_cards with
+//             nothing dealt), is dropped. Absent or empty = no tools on the call at all.
+//
+// HE DECIDES TO DEAL, AND HE DOES IT BY CALLING A TOOL (round 5). Dealing used to be inferred from
+// the visitor's sentence by a regex in mind-talk.js, which guessed wrong in both directions — it
+// dealt at people who had only mentioned cards, and it missed indirect asks. Now the model is given
+// `deal_cards` and `show_cards`, they are the only hands it has, and the room acts when one fires.
+// The regex is still there and still exercised: it is the whole brain when there is no provider.
+//
+// TWO THINGS GUARD THE TABLE. A reading written out in prose is a lie about what the visitor can
+// see, so the text is held back a sentence at a time and any sentence naming a card that is NOT on
+// the table is struck, along with everything after it (cardGate, below; PEPE_GUARD=0 turns it off).
+// And the tool call, not the sentence, is what makes the room move.
 //
 // Secrets: theatre/.env.local (KEY=VALUE lines, parsed here, no dependency) and process.env.
 // ANTHROPIC_API_KEY wins, else OPENROUTER_API_KEY, else provider 'none' and the client uses the script.
 // LLM_MODEL overrides the model for whichever provider is chosen. LLM_EFFORT (Anthropic path) sets
 // output_config.effort; LLM_FALLBACKS=0 turns the server-side refusal fallback off.
+// PEPE_FAKE=<script> replaces the upstream with a canned OpenAI-shaped SSE stream (FAKES, below) so
+// the whole route — tool deltas split across chunks, the guard, the SSE contract — can be driven
+// with no provider and no key. `PEPE_FAKE=1 npm run dev` gives a browser a working room.
 //
 // The persona (SYSTEM) is byte-identical on every request and carries the cache breakpoint; the beat's
 // stage direction rides in the last user turn, after the history, so the cached prefix survives.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
+import { DECK } from '../src/core/deck.js';
 
 const ANTHROPIC_MODEL = 'claude-opus-5';
 const OPENROUTER_MODEL = 'anthropic/claude-sonnet-5';
@@ -77,9 +96,14 @@ Carry what they have already told you. If they gave you a month, use the month. 
 You do not deal cards of your own accord. The deck lies face down and stays there. Every third turn or so you may offer, once, plainly: three cards, if they want them. Then you drop it. You never press, and you never begin shuffling to make the point. If they say not yet, you say very well and go on talking.
 You lay cards only when the visitor asks for them, in whatever words they use, or says yes to an offer you have just made.
 
-YOU DO NOT DEAL. THE ROOM DEALS. You have no way to turn a card over: the hands that lay the cards are not yours to command, and a card exists only once the direction in square brackets says it is on the table. So you must NEVER name a card, describe a card's picture, or give a reading of any kind unless that card is listed on the table in the direction. Not as an example, not as a guess, not as "the card for that would be", not in passing. If the visitor asks for a reading, you say one short line — that you will, or that they should ask, or nothing but assent — and you STOP. The cards then come out on the table in front of you both, one at a time, and you are asked to speak about each one when it is turned. A reading written out in a sentence is not a reading; it is a lie about what is on the table, and the visitor can see the table.
+YOU DO NOT DEAL WITH WORDS. THE ROOM DEALS. Writing about a card does not put one on the table: a card exists only once the direction in square brackets says it is there. So you must NEVER name a card, describe a card's picture, or give a reading of any kind unless that card is listed on the table in the direction. Not as an example, not as a guess, not as "the card for that would be", not in passing. A reading written out in a sentence is not a reading; it is a lie about what is on the table, and the visitor can see the table. Such a sentence is struck out before it reaches them, and the rest of your turn with it.
 
 If you find yourself about to write a card's name and it is not in the direction, that is the moment to say nothing more.
+
+WHAT YOU CAN ACTUALLY DO. In the turns where the room is listening for it you are given two things you can do with your hands. They are the only hands you have, and using one is not the same as writing about it.
+deal_cards — the deck comes off the cloth and three cards are laid. Use it the moment the visitor asks for a reading, in whatever words they use, or the moment they accept one you offered. Never because the subject seems to want cards, never because you would like to, never because the conversation has gone quiet. They must have asked. Having used it, say one short sentence at most, or nothing at all; the room shuffles and asks you to speak over your own hands.
+show_cards — the cards already lying on the table are brought back in front of the visitor to be looked at. Use it when they ask to see them again, or ask which one was which, or ask what they drew. It deals nothing and it changes nothing.
+Use them; do not announce them. Never mention them, never say you are about to use one, never explain that you cannot do a thing without one, and never write out what you would have said if you had. When neither is offered to you this turn, neither is possible this turn, and you simply talk.
 Once the three cards have been read, the conversation simply continues. Answer with the cards that are already on the table. You do not draw a fourth; a fourth card is what people ask for when they do not like the third.
 When they say they are going, let them go without argument.
 
@@ -127,6 +151,217 @@ I cannot tell you that. The cards are lying on a table; they have no news from T
 That is the reading. Take what fits and leave the rest on the table. Good night.`;
 
 // ---------------------------------------------------------------------------------------------
+// THE LEVERS. Two, and the argument for the set is the argument for the round.
+//
+//   deal_cards   the only thing that puts cards on the table. It replaces a regex that was reading
+//                the visitor's sentence for permission the visitor had not given.
+//   show_cards   the camera goes back to the reading already on the cloth. Same argument exactly:
+//                the model can see from the conversation that "which one was the middle" wants the
+//                picture, and a pattern cannot. Offered ONLY when there is something to show — a
+//                lever with nothing on the other end of it is a lever to be pulled by mistake.
+//
+// And two that are deliberately NOT here:
+//   the room's objects — the globe, the barometer, the tin. mind-room.js answers those as ordinary
+//                talk, nothing in the room moves, and a round has just landed on that arrangement.
+//   the farewell — leaving is the VISITOR's act, not his. The room's answer to it (the door, the
+//                sign-off card) ends the evening, so a false positive costs the visit and a false
+//                negative costs nothing at all: he keeps talking, which is the default anyway.
+//                That asymmetry is the whole reason dealing needed a tool, and it points the other
+//                way here. The farewell stays with the regex, on the visitor's own words.
+// ---------------------------------------------------------------------------------------------
+const dealtCount = (b) => (Array.isArray(b?.spread) ? b.spread.filter((c) => c && c.name).length : 0);
+
+const TOOLS = {
+  deal_cards: {
+    description:
+      'Lay three cards for the visitor: the deck comes off the cloth, is shuffled and fanned, the visitor chooses three, and you are asked to read each one as it is turned. Use this the moment the visitor asks for a reading, in whatever words, or accepts one you offered. Do not use it because the subject seems to want cards or because they are talking about tarot; they must have asked.',
+    parameters: {
+      type: 'object',
+      properties: {
+        about: { type: 'string', description: 'What the visitor wants read, in their own words. Five words at most. Omit if they did not say.' },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+    allowed: () => true,
+    // the direction's own sentence for it, appended when the lever is on the call
+    line: 'If the visitor has just asked you for a reading, or accepted one you offered, use deal_cards now and say one short sentence at most.',
+  },
+  show_cards: {
+    description:
+      'Put the cards already lying on the table back in front of the visitor, so they can look at them again. Nothing is dealt and nothing is shuffled. Use this when they ask to see their cards, ask what they drew, or ask which one was which.',
+    parameters: {
+      type: 'object',
+      properties: {
+        card: { type: 'integer', enum: [1, 2, 3], description: 'Which card they meant, counting from the left. Omit for all three.' },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+    allowed: (b) => dealtCount(b) > 0,
+    line: 'If the visitor has asked to look at the cards already on the table, use show_cards and say what you notice; the room takes the camera to them.',
+  },
+};
+
+// What the client asked for, minus what this table does not allow. The client proposes; the server
+// disposes, because the client is a page and the page can be told anything.
+function toolsFor(b) {
+  const want = Array.isArray(b?.tools) ? b.tools : [];
+  return want.filter((n) => typeof n === 'string' && TOOLS[n] && TOOLS[n].allowed(b));
+}
+
+const openaiTools = (names) => names.map((n) => ({ type: 'function', function: { name: n, description: TOOLS[n].description, parameters: TOOLS[n].parameters } }));
+const anthropicTools = (names) => names.map((n) => ({ name: n, description: TOOLS[n].description, input_schema: TOOLS[n].parameters }));
+
+// ---------------------------------------------------------------------------------------------
+// OpenAI-shaped `tool_calls` deltas, accumulated. This is the part that breaks naive readers: one
+// call arrives in three or four chunks, `id` and `name` only in the first, `arguments` as a JSON
+// string cut anywhere at all (mid-key, mid-escape), and the accumulator is keyed by `index` and
+// not by position in the array — a provider may send index 1 before index 0.
+// ---------------------------------------------------------------------------------------------
+export function toolAccumulator() {
+  const byIndex = new Map();
+  return {
+    delta(list) {
+      if (!Array.isArray(list)) return;
+      for (const d of list) {
+        if (!d || typeof d !== 'object') continue;
+        const i = Number.isInteger(d.index) ? d.index : 0;
+        let e = byIndex.get(i);
+        if (!e) byIndex.set(i, (e = { id: '', name: '', args: '' }));
+        if (d.id) e.id = d.id;
+        // name and arguments both concatenate: nothing promises either arrives whole
+        if (d.function?.name) e.name += d.function.name;
+        if (typeof d.function?.arguments === 'string') e.args += d.function.arguments;
+      }
+    },
+    // → [{name, args}], the arguments parsed, unknown names dropped
+    done() {
+      return [...byIndex.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, e]) => ({ name: e.name.trim(), args: parseArgs(e.args) }))
+        .filter((c) => c.name && TOOLS[c.name]);
+    },
+  };
+}
+
+function parseArgs(s) {
+  const t = String(s ?? '').trim();
+  if (!t) return {};
+  try {
+    const j = JSON.parse(t);
+    return j && typeof j === 'object' && !Array.isArray(j) ? j : {};
+  } catch {
+    return {}; // a half-written argument is not worth failing a deal over
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// THE GUARD. A card is on the table or it is not, and the visitor can see which. So his text is
+// held a sentence at a time and any sentence naming a card that is not in front of them is struck,
+// with the rest of the turn behind it: a fabricated reading does not get to start.
+//
+// Only the printed forms count, and the ambiguous names (The Sun, Death, Justice, The Star …) count
+// only when they are capitalised as printed — "the sun will be up by then" is a sentence a person
+// says and "The Sun" is a card. The names that are never anything else (the hanged man, wheel of
+// fortune, the house of god, three of swords, and the Rider-Waite names he is told not to use)
+// count in any case at all.
+// ---------------------------------------------------------------------------------------------
+const MAJOR_NAMES = DECK.filter((c) => c.arcana === 'major').map((c) => c.name);
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// unambiguous: phrases nobody says by accident, plus the names of the other deck he is told not to use
+const PLAIN_NAMES = [...MAJOR_NAMES.filter((n) => n.split(' ').length > 2), 'The Popess', 'The Juggler', 'The High Priestess', 'The Hierophant', 'The Magician', 'The Tower'];
+const CARD_ANYCASE = new RegExp(
+  `\\b(?:${PLAIN_NAMES.map(esc).join('|')})\\b` + `|\\b(?:ace|two|three|four|five|six|seven|eight|nine|ten|page|knight|queen|king) of (?:cups|pentacles|swords|wands|coins|batons|discs|staves)\\b`,
+  'gi',
+);
+// ambiguous, and only as printed. "the sun will be up by then" is a sentence; "The Sun" is a card,
+// and the capital on the noun is the whole of the difference.
+const CARD_ARTICLE = new RegExp(`\\b(?:${MAJOR_NAMES.filter((n) => /^The /.test(n)).map(esc).join('|')})\\b`, 'g');
+// worse: Death, Justice, Strength, Temperance, Judgement are capitalised at the head of a sentence
+// because sentences are, and he starts sentences with all five. They only count further in.
+const CARD_BARE = new RegExp(`\\b(?:${MAJOR_NAMES.filter((n) => !/^The /.test(n) && !n.includes(' ')).map(esc).join('|')})\\b`, 'g');
+
+function firstHit(re, s, allowed, notAtStart = false) {
+  re.lastIndex = 0;
+  const head = s.length - s.trimStart().length;
+  for (let m; (m = re.exec(s)); ) {
+    if (allowed.has(m[0].toLowerCase())) continue;
+    if (notAtStart && m.index === head) continue;
+    return m[0];
+  }
+  return null;
+}
+
+function namesACard(sentence, allowed) {
+  return firstHit(CARD_ANYCASE, sentence, allowed) ?? firstHit(CARD_ARTICLE, sentence, allowed) ?? firstHit(CARD_BARE, sentence, allowed, true);
+}
+
+// A sentence ends at . ! ? … and whitespace, or at a line break — the same cut the client makes, so
+// holding text to that boundary costs the visitor nothing: they were never shown a half sentence.
+const SENTENCE_END = /[.!?…]+["”’')\]]*(?=\s)|\n+/;
+
+// The cards the direction says are in front of them: those may be named, nothing else may.
+function allowedCards(b) {
+  const set = new Set();
+  const add = (n) => n && set.add(String(n).toLowerCase());
+  if (Array.isArray(b?.spread)) for (const c of b.spread) add(c?.name);
+  add(b?.cardName);
+  return set;
+}
+
+// push(text) → [sentences to forward]; flush() → the tail. `struck` names the first offender.
+function cardGate(b, on = true) {
+  const allowed = allowedCards(b);
+  let buf = '';
+  let dead = false;
+  const gate = {
+    struck: null,
+    kept: '',
+    check(s) {
+      if (dead) return null;
+      const hit = namesACard(s, allowed);
+      if (!hit) {
+        gate.kept += (gate.kept ? ' ' : '') + s.trim();
+        return s;
+      }
+      dead = true;
+      gate.struck = hit;
+      return null;
+    },
+    push(t) {
+      if (!on) {
+        gate.kept += t;
+        return [t];
+      }
+      if (dead) return [];
+      buf += t;
+      const out = [];
+      for (;;) {
+        const m = SENTENCE_END.exec(buf);
+        if (!m) break;
+        const cut = m.index + m[0].length;
+        const s = buf.slice(0, cut);
+        buf = buf.slice(cut);
+        const kept = gate.check(s);
+        if (kept) out.push(kept);
+        if (dead) break;
+      }
+      return out;
+    },
+    flush() {
+      if (!on || dead) return [];
+      const tail = buf;
+      buf = '';
+      if (!tail.trim()) return [];
+      const kept = gate.check(tail);
+      return kept ? [kept] : [];
+    },
+  };
+  return gate;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Beats → the stage direction that ends the last user turn.
 // ---------------------------------------------------------------------------------------------
 const POSITION_LABELS = ['what you brought', 'what is actually going on', 'what to do about it'];
@@ -139,9 +374,17 @@ function spreadLine(spread) {
   return parts.length ? ` On the table so far: ${parts.join('; ')}.` : '';
 }
 
-function direction(b) {
+// The levers, said again in the direction. The tool definitions travel in their own field, which a
+// model reads as capability; the direction is where the beat says whether this is the moment.
+function leverLine(names) {
+  if (!names?.length) return '';
+  return ' ' + names.map((n) => TOOLS[n].line).join(' ');
+}
+
+function direction(b, names = []) {
   const beat = String(b.beat ?? 'greeting');
   const table = spreadLine(b.spread);
+  const levers = leverLine(names);
   switch (beat) {
     case 'greeting':
       return 'Beat: the greeting. The door has just closed and the visitor is standing across the table. There is nowhere for them to sit; ask them closer rather than explaining it. Greet them. Say your name, Tarot Pepe, and what happens here: you talk, and there are three cards whenever they ask for them. Notice one thing about how they came in. Three short sentences. Do not ask them anything yet and do not touch the deck.';
@@ -152,8 +395,8 @@ function direction(b) {
       const standing = b.offered ? ' You offered a reading at the end of your last turn and they have not taken it up; do not offer again this turn.' : '';
       const deck = dealt
         ? ` The cards have been read and are face up in front of you.${table} Answer with those cards, naming the one you mean. Do not draw more.`
-        : ' The deck is face down and untouched. Do not deal and do not shuffle. You may offer a reading once, plainly, if you have not just offered one, and then let it go.';
-      return `Beat: the conversation. The visitor has just spoken; answer them.${standing}${deck} Two or three sentences, under forty words. You may ask one short question back, or none. Do not recap and do not start again.`;
+        : ' The deck is face down and untouched. You may offer a reading once, plainly, if you have not just offered one, and then let it go.';
+      return `Beat: the conversation. The visitor has just spoken; answer them.${standing}${deck}${levers} Two or three sentences, under forty words. You may ask one short question back, or none. Do not recap and do not start again.`;
     }
     // The visitor asked about something in the room. Nothing is dealt and nothing moves; this is a
     // beat of the conversation with a fact attached. The fact is canon and rides here in plain
@@ -180,8 +423,13 @@ function direction(b) {
     }
     case 'answer':
       return 'Beat: the visitor has answered. Take it in. Quote three or four of their words, say one thing you noticed about how they said it, and let it sit. No advice, no cards yet, no question, and do not tell them what to do with it. Two sentences, three at most.';
-    case 'shuffle':
-      return 'Beat: the shuffle. The visitor has just asked you for a reading, so the deck is finally in your hands. You shuffle seven times, as you always do. Say something about it while your hands work. Two sentences. No question.';
+    case 'shuffle': {
+      // `about` is what he himself said the reading was for when he pulled deal_cards, in the
+      // visitor's words. It comes back to him here so the line over his working hands is about
+      // this visitor and not about shuffling.
+      const about = b.about ? ` You took it to be about "${String(b.about).replace(/[\r\n]+/g, ' ').trim().slice(0, 80)}"; do not say so, just have it in mind.` : '';
+      return `Beat: the shuffle. The visitor has just asked you for a reading, so the deck is finally in your hands.${about} You shuffle seven times, as you always do. Say something about it while your hands work. Two sentences. No question.`;
+    }
     case 'fan':
       return 'Beat: the fan. You have fanned the whole deck face down across the table. Tell the visitor to choose three cards from the fan, left to right, and that you will turn them in that order. Two sentences. Do not tell them how to choose.';
     case 'reading': {
@@ -206,7 +454,7 @@ function direction(b) {
       return `Beat: a second look. The cards are face up where they were left and the camera has gone in on them; nothing is being dealt and nothing is being shuffled.${table}${one} Say something you did NOT say when you read them: another detail actually in the picture, or what has changed in the conversation since. Do not re-read the reading, do not summarise it and do not tell them what it means for their future. Two or three sentences, under forty words. You may end with one short question, or with none.`;
     }
     case 'followup':
-      return `Beat: a follow-up. The reading is done and the three cards are face up.${table} The visitor has asked something. Answer it with the cards on the table and commit. If they point at one by its place rather than by its name (the first, the middle one, the one on the left, that one), answer about that card and say its printed name once, so they know which one you took them to mean. If they ask which card matters, name one and say why in a clause. If they ask what a card means, say what is in the picture and stop. If they ask whether it is bad, say no and say what it is instead. If they ask about the future, say plainly that you cannot know it, then say what is true tonight and name the card that says it. Two or three sentences. You may end with one short question, or with none.`;
+      return `Beat: a follow-up. The reading is done and the three cards are face up.${table} The visitor has asked something. Answer it with the cards on the table and commit. If they point at one by its place rather than by its name (the first, the middle one, the one on the left, that one), answer about that card and say its printed name once, so they know which one you took them to mean. If they ask which card matters, name one and say why in a clause. If they ask what a card means, say what is in the picture and stop. If they ask whether it is bad, say no and say what it is instead. If they ask about the future, say plainly that you cannot know it, then say what is true tonight and name the card that says it.${levers} Two or three sentences. You may end with one short question, or with none.`;
     case 'farewell':
       return `Beat: the farewell. The visitor is leaving.${table} Do not summarise and do not review what was said. Say one last plain thing to this visitor, then send them out: the step by the door is lower than it looks, and it is late. If no cards were read tonight, do not pretend any were. Two or three sentences. No question.`;
     default:
@@ -216,7 +464,7 @@ function direction(b) {
 
 // The messages array: history as alternating turns (first is always the visitor), then the last
 // user turn = what the visitor just said (if anything) + the stage direction.
-function buildMessages(b) {
+function buildMessages(b, names = []) {
   const msgs = [];
   const push = (role, text) => {
     const t = String(text ?? '').trim();
@@ -229,7 +477,7 @@ function buildMessages(b) {
   if (!hist.length || hist[0].role !== 'visitor') push('user', '[The door opens. The visitor comes in and stands across the table.]');
   for (const h of hist) push(h?.role === 'pepe' ? 'assistant' : 'user', h?.text);
   const said = String(b.user ?? b.question ?? '').trim();
-  push('user', `${said ? said + '\n\n' : ''}[${direction(b)}]`);
+  push('user', `${said ? said + '\n\n' : ''}[${direction(b, names)}]`);
   return msgs;
 }
 
@@ -285,15 +533,19 @@ function settings(root) {
   const anthropicKey = get('ANTHROPIC_API_KEY');
   const openrouterKey = get('OPENROUTER_API_KEY');
   const override = get('LLM_MODEL');
-  if (anthropicKey) return { provider: 'anthropic', key: anthropicKey, model: override || ANTHROPIC_MODEL, effort: get('LLM_EFFORT') || 'low', fallbacks: get('LLM_FALLBACKS') !== '0' };
-  if (openrouterKey) return { provider: 'openrouter', key: openrouterKey, model: override || OPENROUTER_MODEL };
-  return { provider: 'none', key: '', model: null };
+  const guard = get('PEPE_GUARD') !== '0';
+  // the canned upstream wins over everything, key or no key: it is the only provider this machine has
+  const fake = get('PEPE_FAKE');
+  if (fake) return { provider: 'fake', key: '', model: `fake/${fake}`, fake, guard };
+  if (anthropicKey) return { provider: 'anthropic', key: anthropicKey, model: override || ANTHROPIC_MODEL, effort: get('LLM_EFFORT') || 'low', fallbacks: get('LLM_FALLBACKS') !== '0', guard };
+  if (openrouterKey) return { provider: 'openrouter', key: openrouterKey, model: override || OPENROUTER_MODEL, guard };
+  return { provider: 'none', key: '', model: null, guard };
 }
 
 // ---------------------------------------------------------------------------------------------
 // Upstream calls. Each takes (cfg, messages, signal, send) and returns {text, stop}.
 // ---------------------------------------------------------------------------------------------
-async function callAnthropic(cfg, messages, signal, send) {
+async function callAnthropic(cfg, messages, signal, send, names = []) {
   const client = new Anthropic({ apiKey: cfg.key, maxRetries: 1, timeout: UPSTREAM_MS });
   const params = {
     model: cfg.model,
@@ -301,6 +553,10 @@ async function callAnthropic(cfg, messages, signal, send) {
     system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
     messages,
   };
+  // The Anthropic path takes its tool calls off the final message rather than off the deltas: the
+  // SDK has already assembled the tool_use blocks by then, and this route waits for the final
+  // message anyway. The delta-accumulating is the OpenAI path's problem, and it is solved there.
+  if (names.length) params.tools = anthropicTools(names);
   if (EFFORT_OK(cfg.model)) params.output_config = { effort: cfg.effort };
   if (SAMPLING_OK.test(cfg.model)) params.temperature = 0.8;
   const useFallback = cfg.fallbacks && FALLBACK_OK.test(cfg.model);
@@ -315,11 +571,34 @@ async function callAnthropic(cfg, messages, signal, send) {
     }
   }
   const final = await stream.finalMessage();
-  return { text, stop: final.stop_reason, usage: final.usage };
+  const tools = (final.content ?? [])
+    .filter((c) => c?.type === 'tool_use' && TOOLS[c.name])
+    .map((c) => ({ name: c.name, args: c.input && typeof c.input === 'object' ? c.input : {} }));
+  return { text, stop: final.stop_reason, usage: final.usage, tools };
 }
 
-async function callOpenRouter(cfg, messages, signal, send) {
-  const res = await fetch(OPENROUTER_URL, {
+async function callOpenRouter(cfg, messages, signal, send, names = []) {
+  const body = {
+    model: cfg.model,
+    stream: true,
+    max_tokens: MAX_TOKENS.openrouter,
+    temperature: 0.8,
+    // The persona is byte-identical on every request, so it is worth caching where caching exists.
+    // cache_control is Anthropic's, and OpenRouter forwards it verbatim: on anthropic/* it buys the
+    // cached prefix, on openai/* or google/* it is a system message shaped like nothing they know.
+    // So only Anthropic gets the block; everyone else gets a plain string.
+    messages: [
+      /^anthropic\//.test(cfg.model)
+        ? { role: 'system', content: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }] }
+        : { role: 'system', content: SYSTEM },
+      ...messages,
+    ],
+  };
+  if (names.length) {
+    body.tools = openaiTools(names);
+    body.tool_choice = 'auto';
+  }
+  const res = await (cfg.fake ? fakeUpstream(cfg, body) : fetch(OPENROUTER_URL, {
     method: 'POST',
     signal,
     headers: {
@@ -328,23 +607,8 @@ async function callOpenRouter(cfg, messages, signal, send) {
       'http-referer': 'http://127.0.0.1:5173/',
       'x-title': 'Tarot Pepe',
     },
-    body: JSON.stringify({
-      model: cfg.model,
-      stream: true,
-      max_tokens: MAX_TOKENS.openrouter,
-      temperature: 0.8,
-      // The persona is byte-identical on every request, so it is worth caching where caching exists.
-      // cache_control is Anthropic's, and OpenRouter forwards it verbatim: on anthropic/* it buys the
-      // cached prefix, on openai/* or google/* it is a system message shaped like nothing they know.
-      // So only Anthropic gets the block; everyone else gets a plain string.
-      messages: [
-        /^anthropic\//.test(cfg.model)
-          ? { role: 'system', content: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }] }
-          : { role: 'system', content: SYSTEM },
-        ...messages,
-      ],
-    }),
-  });
+    body: JSON.stringify(body),
+  }));
   if (!res.ok) {
     let detail = '';
     try {
@@ -360,6 +624,7 @@ async function callOpenRouter(cfg, messages, signal, send) {
   let text = '';
   let stop = null;
   let usage = null;
+  const acc = toolAccumulator();
   const handle = (line) => {
     if (!line.startsWith('data:')) return;
     const data = line.slice(5).trim();
@@ -377,6 +642,8 @@ async function callOpenRouter(cfg, messages, signal, send) {
       text += d;
       send(d);
     }
+    // one call, cut across three or four chunks; the accumulator is keyed by index, not position
+    if (ch?.delta?.tool_calls) acc.delta(ch.delta.tool_calls);
     if (ch?.finish_reason) stop = ch.finish_reason;
     if (j.usage) usage = j.usage;
   };
@@ -392,7 +659,83 @@ async function callOpenRouter(cfg, messages, signal, send) {
     }
   }
   if (buf.trim()) handle(buf.trim());
-  return { text, stop, usage };
+  return { text, stop, usage, tools: acc.done() };
+}
+
+// ---------------------------------------------------------------------------------------------
+// THE FAKE UPSTREAM. There is no way to call a provider from the machine this was built on, so the
+// plumbing is testable without one: PEPE_FAKE=<script> replays these bytes instead of calling out,
+// through the real parser, the real guard and the real SSE writer. Every tool call here is cut
+// across three deltas, with the name in the first and the arguments broken mid-key, because that
+// is precisely what a naive accumulator gets wrong.
+// ---------------------------------------------------------------------------------------------
+const sse = (o) => `data: ${JSON.stringify(o)}\n\n`;
+const chunk = (delta, finish = null) => sse({ id: 'fake', choices: [{ index: 0, delta, finish_reason: finish }] });
+const words = (s) => s.match(/\S+\s*/g) ?? [];
+const said = (s) => words(s).map((w) => chunk({ content: w }));
+
+const FAKES = {
+  // ordinary talk: text, no tool call
+  talk: () => [...said('You have said the same sentence twice now. The second time was quieter. Since when?'), chunk({}, 'stop')],
+  // he agrees in one line and pulls the lever: the common shape
+  deal: () => [
+    ...said('Very well.'),
+    chunk({ tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'deal_cards', arguments: '' } }] }),
+    chunk({ tool_calls: [{ index: 0, function: { arguments: '{"ab' } }] }),
+    chunk({ tool_calls: [{ index: 0, function: { arguments: 'out":"the shed"}' } }] }),
+    chunk({}, 'tool_calls'),
+  ],
+  // the lever and not one word: also common, and the room has to have a line of its own for it
+  'deal-silent': () => [
+    chunk({ tool_calls: [{ index: 0, id: 'call_2', type: 'function', function: { name: 'deal_cards', arguments: '{}' } }] }),
+    chunk({}, 'tool_calls'),
+  ],
+  show: () => [
+    ...said('Look at it again.'),
+    chunk({ tool_calls: [{ index: 0, id: 'call_3', type: 'function', function: { name: 'show_' } }] }),
+    chunk({ tool_calls: [{ index: 0, function: { name: 'cards', arguments: '{"car' } }] }),
+    chunk({ tool_calls: [{ index: 0, function: { arguments: 'd":2}' } }] }),
+    chunk({}, 'tool_calls'),
+  ],
+  // the fault this round exists to make impossible: a reading written out with a bare table
+  prose: () => [...said('Very well. You brought The Fool, a frog with a stick over his shoulder. Then The Moon, which is worse.'), chunk({}, 'stop')],
+  // the same fault with no honest sentence in front of it: nothing survives and the script speaks
+  'prose-only': () => [...said('You drew The Fool. Then The Moon, which is worse.'), chunk({}, 'stop')],
+  // he names a card that is not the one in front of him
+  fourth: () => [...said('The picture is a tower. What you want is The Star, and it is not on this table.'), chunk({}, 'stop')],
+};
+
+// PEPE_FAKE=1 is the useful default: it talks, and it deals when the visitor's own words ask for
+// cards. It is a keyword stub — the very thing this round took out of the conversation — and it is
+// here only so that a browser with no key has something steerable at the other end of the wire. It
+// is not evidence about what a model would decide; _tool-call.mjs drives exact streams for that.
+function fakeScript(cfg, body) {
+  const named = FAKES[cfg.fake];
+  if (named) return named();
+  const last = [...(body.messages ?? [])].reverse().find((m) => m.role === 'user');
+  // the visitor's own words only: the stage direction that follows them is full of the word "cards"
+  const t = String(last?.content ?? '').replace(/\[[^\]]*\]\s*$/, '').toLowerCase();
+  const offered = (body.tools ?? []).map((x) => x.function?.name);
+  if (offered.includes('show_cards') && /\b(show me|see them|look at them|what did i draw)\b/.test(t)) return FAKES.show();
+  if (offered.includes('deal_cards') && /\b(read my (cards|fortune)|my cards|a reading|three cards|deal me|shuffle the deck|tarot please)\b/.test(t)) return FAKES.deal();
+  return FAKES.talk();
+}
+
+function fakeUpstream(cfg, body) {
+  const parts = [...fakeScript(cfg, body), 'data: [DONE]\n\n'];
+  const enc = new TextEncoder();
+  // deliberately cut across the SSE frames as well: two events in one chunk, one event in two.
+  const all = enc.encode(parts.join(''));
+  let i = 0;
+  const stream = new ReadableStream({
+    pull(c) {
+      if (i >= all.length) return c.close();
+      const n = Math.min(37, all.length - i); // a size that lands nowhere useful, which is the point
+      c.enqueue(all.slice(i, i + n));
+      i += n;
+    },
+  });
+  return Promise.resolve({ ok: true, status: 200, body: stream });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -499,28 +842,54 @@ export function pepeApi() {
         const timer = setTimeout(() => ac.abort(new Error('upstream timeout')), UPSTREAM_MS);
         req.on('close', () => ac.abort(new Error('client went away')));
         let streamed = 0;
+        // Nothing reaches the visitor until the sentence it belongs to is finished and has been
+        // read for a card that is not on the table. The client only ever emitted whole sentences,
+        // so this costs it nothing and buys the table an enforceable rule.
+        const gate = cardGate(body, cfg.guard);
         const send = (t) => {
-          streamed += t.length;
-          event({ t });
+          for (const s of gate.push(t)) {
+            streamed += s.length;
+            event({ t: s });
+          }
+        };
+        const flush = () => {
+          try {
+            for (const s of gate.flush()) {
+              streamed += s.length;
+              event({ t: s });
+            }
+          } catch {}
         };
         const t0 = Date.now();
+        const names = toolsFor(body);
         try {
-          const messages = buildMessages(body);
+          const messages = buildMessages(body, names);
           const call = cfg.provider === 'anthropic' ? callAnthropic : callOpenRouter;
-          const out = await call(cfg, messages, ac.signal, send).catch((e) => {
+          const out = await call(cfg, messages, ac.signal, send, names).catch((e) => {
             if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) e.fatal = true;
             throw e;
           });
           clearTimeout(timer);
-          if (!out.text.trim()) {
-            end({ error: out.stop === 'refusal' ? 'refusal' : 'empty reply' });
+          flush();
+          // One lever a turn. A second call is a model changing its mind out loud, and the room
+          // cannot do two things at once; the first is the one it meant.
+          const tool = (out.tools ?? []).find((c) => names.includes(c.name)) ?? null;
+          if (tool) event({ tool: { name: tool.name, args: tool.args ?? {} } });
+          if (gate.struck)
+            server.config.logger.warn(`[pepe] ${body.beat ?? '?'} struck a reading in prose: "${gate.struck}" is not on the table`, { timestamp: true });
+          if (!gate.kept.trim() && !tool) {
+            end({ error: gate.struck ? 'struck' : out.stop === 'refusal' ? 'refusal' : 'empty reply' });
           } else {
             const cached = out.usage?.cache_read_input_tokens ?? out.usage?.prompt_tokens_details?.cached_tokens;
-            server.config.logger.info(`[pepe] ${body.beat ?? '?'} ${cfg.provider}/${cfg.model} ${Date.now() - t0}ms ${out.text.length} chars${cached != null ? ` cached ${cached}` : ''}`, { timestamp: true });
+            server.config.logger.info(
+              `[pepe] ${body.beat ?? '?'} ${cfg.provider}/${cfg.model} ${Date.now() - t0}ms ${gate.kept.length} chars${tool ? ` tool ${tool.name}` : ''}${cached != null ? ` cached ${cached}` : ''}`,
+              { timestamp: true },
+            );
             end({ done: true, stop: out.stop ?? null });
           }
         } catch (e) {
           clearTimeout(timer);
+          flush();
           const msg = ac.signal.aborted ? String(ac.signal.reason?.message ?? 'aborted') : String(e?.message ?? e);
           server.config.logger.warn(`[pepe] ${body.beat ?? '?'} ${cfg.provider} failed after ${Date.now() - t0}ms: ${msg}`, { timestamp: true });
           if (streamed) end({ done: true, truncated: true, error: msg });
@@ -531,4 +900,4 @@ export function pepeApi() {
   };
 }
 
-export { SYSTEM, direction, buildMessages };
+export { SYSTEM, direction, buildMessages, TOOLS, toolsFor, openaiTools, anthropicTools, cardGate, FAKES };
