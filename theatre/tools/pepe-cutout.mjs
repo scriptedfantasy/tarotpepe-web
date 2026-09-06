@@ -26,7 +26,7 @@
 //   lidL/R    a closed lid: green over the eye white with a thick dark lower edge
 //   mouthRest the drawing's own lips; mouthO a small open "o"; mouthFlat a thin closed mouth
 import sharp from 'sharp';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 const opt = (k) => {
@@ -36,6 +36,21 @@ const opt = (k) => {
 const PREVIEW = typeof opt('preview') === 'string' ? opt('preview') : null;
 const FILL = opt('fill') ?? 'flat'; // flat | soft
 const TRACE = args.includes('--trace');
+
+// ── THE ARRIVAL PLATES (round 8) ────────────────────────────────────────────────────────────────
+// A second, separate cut, off a second set of drawings. 2026-09-06 the user drew Tarot Pepe with
+// LEGS — standing, watering, one arm out, a four-drawing walk cycle, crouching — on ten identical
+// 1233 x 1275 pages, and those are what the arrival is animated with. They are cut here rather than
+// in a tool of their own because they have to come out of the SAME MILL as the seated figure: the
+// same ink, the same greens, the same re-cut pen, the same coverage silhouette. A plate that misses
+// any of those is a second drawing pasted into the first, which is the fault this file exists to
+// stop. `cutPoses` is at the foot of the file; nothing above this line runs when it is asked for.
+//   node tools/pepe-cutout.mjs --poses                  # writes public/pepe/pose-*.png + poses.json
+//   node tools/pepe-cutout.mjs --poses --preview /tmp/p # …and a contact sheet of every plate
+if (args.includes('--poses')) {
+  await cutPoses();
+  process.exit(0);
+}
 
 const SRC = new URL('../public/pepe/pepe-meditation.webp', import.meta.url).pathname;
 const OUT = new URL('../public/pepe/', import.meta.url).pathname;
@@ -1017,4 +1032,469 @@ if (PREVIEW) {
     console.log('wrote trace preview');
   }
   console.log('previews in', PREVIEW);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// THE ARRIVAL PLATES. Nine whole-body drawings, cut the way the seated figure is cut.
+//
+// WHY WHOLE PLATES AND NOT A RIG. The seated puppet is hinged — a hip pin, a head on the neck, two
+// hands at the wrists — because he holds one pose for a whole evening and every shade of what he
+// does in it has to come out of that one drawing. The arrival is the opposite case: nine DIFFERENT
+// drawings, in the user's own hand, of nine things a body does. A paper-theatre puppeteer does not
+// rig those; he cuts each one out and swaps the whole figure, which is also what a replacement
+// animator does with a head. Rigging them would mean inventing joints the drawings do not have and
+// throwing away the drawing that already says it.
+//
+// WHAT THEY GO THROUGH, and it is the whole point of cutting them here:
+//   · the page is KEYED, not colour-tested. The pages are white and so is his garment (248,248,240
+//     against 248,248,248 — four levels apart), so the silhouette comes from a flood fill inward
+//     from the page's border. Everything the fill cannot reach is him, shirt included.
+//   · the fills are re-printed in the SEATED FIGURE'S PALETTE. The pose pages are a stronger green
+//     (88,176,64) than the meditation drawing (107,187,103); left alone he would change colour the
+//     moment he sat down. Every plate is flattened to the greens, red and paper of cutout.json.
+//   · the pen is RE-CUT about its own centre line, exactly as the seated sheet's is — but these
+//     plates are re-cut THICKER, not thinner, and that is not an inconsistency. The seated drawing
+//     is 474 px across and plays at 346, so its 6 px marker arrived three times heavier than the
+//     room's pen. These pages are 1233 px across for a figure that plays about 300 px tall in
+//     `wide`, so the SAME 6.5 px marker arrives at 1.7 screen px against the room's 2.5–3: too
+//     light. One rule, two directions — his line is cut to the room's, whichever way that is.
+//   · the silhouette is COVERAGE with a margin of bare paper outside the drawn contour, so the one
+//     hard edge left in him (the alpha test's) falls on paper and never through a mark.
+//
+// REGISTRATION, which is the thing that makes nine drawings one puppet. Every plate is resized so
+// the figure stands the same height, and pinned at the sole of its lowest foot — EXCEPT the four
+// walk drawings, which share one scale so the bob the user drew into them survives (the passing
+// pose is 20 px taller than the widest stride: 1.9 cm on him, and that is the walk breathing).
+// The scale itself is set by the HEAD: the seated drawing's widest green run is 172 source px =
+// 0.2725 m of world, and the pose pages' is 197, so a pose page pixel is 0.001383 m and the figure
+// is 1.556 m tall. That number is not chosen, it is measured, and it checks out against the other
+// end: a 1.556 m figure sitting cross-legged on the 0.543 m bench puts his crown at 1.368 m, and
+// the seated cut-out's crown is at 1.360.
+async function cutPoses() {
+  // (declared in here, not at the file's top level: the dispatch that calls this runs before the
+  // seated cut does, and a top-level `const` is not yet initialised at that point)
+  const POSE_PAGES = {
+    water: 'pepe-watering', // holding the can, head to the room. The hold at the plant.
+    stand: 'pepe-standing', // front on, arms down: the beat where he looks at the visitor
+    stand2: 'pepe-standing-2', // three-quarter — the user's chosen standing pose ("2 is better than 3")
+    offer: 'pepe-standing-one-arm-forward', // one arm out, a hand round something
+    crouch: 'pepe-crouching', // half way down: the can to the floor, and the sit
+    walk1: 'pepe-walking-1', // contact, near foot forward
+    walk2: 'pepe-walking-2', // the rear foot lifting and passing under him
+    walk3: 'pepe-walking-3', // contact again, a stride further open
+    walk4: 'pepe-walking-4', // contact, the other leg forward (the far one leads)
+  };
+  // the four that share a scale, so their bob is the user's and not the registration's
+  const WALK_PLATES = ['walk1', 'walk2', 'walk3', 'walk4'];
+  const CROUCH_BY_HEAD = ['crouch']; // a crouch has no stature to register on; its head does
+
+  const WORK_H = 640; // the reference figure, in plate pixels. "Printed at the size it is shown."
+  const STATURE = 1.556; // metres, measured off the head (above)
+  const POSE_CELL = 32;
+  // The drawn pen on these pages, measured: the median run of dark pixels across a row is 6.5 px.
+  const POSE_DRAWN_PEN = 6.5;
+  const POSE_PEN_K = 1.15; // interior lines, as a multiple of the drawn width
+  const POSE_CONTOUR_K = 1.45; // and the outer contour, which carries more weight in every folio
+  const POSE_MISREG = [0.25, 0.28]; // the colour plate under the line, in drawn-pen widths
+
+  const dir = new URL('../public/', import.meta.url).pathname;
+  const out = new URL('../public/pepe/', import.meta.url).pathname;
+  const seated = JSON.parse(readFileSync(out + 'cutout.json', 'utf8'));
+  const PAL = seated.palette; // his colours, and no others
+  const INKC = [13, 14, 13];
+  const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+  // ---- read a page and key it: flood the page's white in from the border, everything else is him
+  async function readPage(file, scale) {
+    let img = sharp(dir + file + '.png').ensureAlpha();
+    if (scale !== 1) {
+      const md = await sharp(dir + file + '.png').metadata();
+      img = img.resize(Math.round(md.width * scale), Math.round(md.height * scale), { kernel: 'lanczos3' });
+    }
+    const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
+    const W = info.width, H = info.height, N = W * H;
+    const lum = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const o = i * 4;
+      lum[i] = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
+    }
+    // the page: bright and grey. His shirt is bright and grey too, but it is not connected to the
+    // border, which is the whole reason this is a fill and not a threshold.
+    const pageish = (i) => {
+      const o = i * 4;
+      const mx = Math.max(data[o], data[o + 1], data[o + 2]), mn = Math.min(data[o], data[o + 1], data[o + 2]);
+      return lum[i] > 226 && mx - mn < 18;
+    };
+    const outside = new Uint8Array(N);
+    const st = [];
+    // THE OUTER RING IS PAGE WHATEVER IT LOOKS LIKE, and if that is not said out loud the whole cut
+    // fails silently. A lanczos resize rings at the image border, so the outermost row and column
+    // of a REDUCED page come back a shade off white — under `pageish` by a hair — and every seed of
+    // the flood is on exactly those pixels. The fill still ran (the second row in is clean) but the
+    // ring itself stayed "figure", and every plate came out with a 2 px opaque frame round the
+    // whole page: a rectangle drawn round him, and a full grid of border cells in his mesh.
+    // Measured on pose-water before the fix: 8,910 border pixels at alpha up to 255, and a cell
+    // list that occupied every column of rows 0–1 and every row of columns 0–1. The figure is
+    // never within 75 px of the page edge, so the ring is forced and the seeds come from inside it.
+    const PAD = 4;
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++)
+        if (x < PAD || y < PAD || x >= W - PAD || y >= H - PAD) outside[y * W + x] = 1;
+    for (let x = PAD; x < W - PAD; x++) { st.push(x, PAD); st.push(x, H - 1 - PAD); }
+    for (let y = PAD; y < H - PAD; y++) { st.push(PAD, y); st.push(W - 1 - PAD, y); }
+    while (st.length) {
+      const y = st.pop(), x = st.pop();
+      const i = y * W + x;
+      if (outside[i] || !pageish(i)) continue;
+      outside[i] = 1;
+      if (x > 0) st.push(x - 1, y);
+      if (x < W - 1) st.push(x + 1, y);
+      if (y > 0) st.push(x, y - 1);
+      if (y < H - 1) st.push(x, y + 1);
+    }
+    const fig = new Uint8Array(N);
+    let x0 = W, x1 = -1, y0 = H, y1 = -1;
+    for (let i = 0; i < N; i++) {
+      if (outside[i]) continue;
+      fig[i] = 1;
+      const x = i % W, y = (i - x) / W;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+    return { data, lum, fig, W, H, N, box: [x0, y0, x1, y1] };
+  }
+
+  // green, and the blobs of it low down (the feet) — the walk's own arithmetic is read off these
+  function greenOf(p) {
+    const g = new Uint8Array(p.N);
+    for (let i = 0; i < p.N; i++) {
+      if (!p.fig[i]) continue;
+      const o = i * 4;
+      if (p.data[o + 1] > p.data[o] + 16 && p.data[o + 1] > p.data[o + 2] + 16 && p.lum[i] > 40) g[i] = 1;
+    }
+    return g;
+  }
+  function blobsBelow(p, g, yFrom, minPx) {
+    const seen = new Uint8Array(p.N), blobs = [];
+    for (let y = yFrom; y <= p.box[3]; y++)
+      for (let x = 0; x < p.W; x++) {
+        const k = y * p.W + x;
+        if (!g[k] || seen[k]) continue;
+        const st = [x, y];
+        seen[k] = 1;
+        let n = 0, sx = 0, by = y;
+        while (st.length) {
+          const cy = st.pop(), cx = st.pop();
+          n++;
+          sx += cx;
+          if (cy > by) by = cy;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || ny < 0 || nx >= p.W || ny >= p.H) continue;
+            const q = ny * p.W + nx;
+            if (g[q] && !seen[q]) { seen[q] = 1; st.push(nx, ny); }
+          }
+        }
+        if (n >= minPx) blobs.push({ cx: Math.round(sx / n), bottom: by, n });
+      }
+    blobs.sort((a, b) => a.cx - b.cx);
+    return blobs;
+  }
+  // The HANDS, by the same arithmetic as the feet and for the same reason: something has to be
+  // held. The user's pages have no watering can in them (the "watering" drawing is a figure
+  // standing with its hands down), so the can is drawn in ink and hung on the fist the
+  // one-arm-forward drawing already closes — which means the fist's position has to be MEASURED,
+  // not guessed. Green blobs in the middle band of the figure, which is where a hand is and where
+  // neither the head nor a foot can be; centroid and all, in the resized page's pixels.
+  function handBlobs(p, g, minPx) {
+    const top = p.box[1], bot = p.box[3], h = bot - top;
+    // the band has to start above the shoulder line — the one-arm-forward drawing holds its fist
+    // at chest height, and a band that clips it makes the blob touch the edge and be thrown away
+    const y0 = Math.round(top + h * 0.26), y1 = Math.round(top + h * 0.86);
+    const seen = new Uint8Array(p.N), blobs = [];
+    for (let y = y0; y <= y1; y++)
+      for (let x = 0; x < p.W; x++) {
+        const k = y * p.W + x;
+        if (!g[k] || seen[k]) continue;
+        const st = [x, y];
+        seen[k] = 1;
+        let n = 0, sx = 0, sy = 0, by = y, bx0 = x, bx1 = x, touched = false;
+        while (st.length) {
+          const cy = st.pop(), cx = st.pop();
+          n++;
+          sx += cx;
+          sy += cy;
+          if (cy > by) by = cy;
+          if (cx < bx0) bx0 = cx;
+          if (cx > bx1) bx1 = cx;
+          if (cy <= y0 || cy >= y1) touched = true; // runs out of the band: a leg or the neck
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || ny < y0 || nx >= p.W || ny > y1) continue;
+            const q = ny * p.W + nx;
+            if (g[q] && !seen[q]) { seen[q] = 1; st.push(nx, ny); }
+          }
+        }
+        if (n >= minPx && !touched) blobs.push({ cx: Math.round(sx / n), cy: Math.round(sy / n), bottom: by, w: bx1 - bx0 + 1, n });
+      }
+    blobs.sort((a, b) => a.cx - b.cx);
+    return blobs;
+  }
+  const headWidth = (p, g) => {
+    let widest = 0, mid = 0;
+    const top = p.box[1], lim = top + Math.round((p.box[3] - top) * 0.28);
+    for (let y = top; y < lim; y++) {
+      let a = p.W, b = -1;
+      for (let x = 0; x < p.W; x++) if (g[y * p.W + x]) { if (x < a) a = x; if (x > b) b = x; }
+      if (b >= 0 && b - a + 1 > widest) { widest = b - a + 1; mid = (a + b) / 2; }
+    }
+    return { widest, mid };
+  };
+
+  // ---- pass 1: measure every page at its own resolution, so the group scales can be worked out
+  const M = {};
+  for (const [name, file] of Object.entries(POSE_PAGES)) {
+    const p = await readPage(file, 1);
+    const g = greenOf(p);
+    const h = p.box[3] - p.box[1] + 1;
+    M[name] = { file, h, head: headWidth(p, g).widest };
+    console.log(`page ${file.padEnd(30)} figure ${p.box[2] - p.box[0] + 1}x${h} head ${M[name].head}`);
+  }
+  const walkH = WALK_PLATES.reduce((a, n) => a + M[n].h, 0) / WALK_PLATES.length;
+  const walkHead = WALK_PLATES.reduce((a, n) => a + M[n].head, 0) / WALK_PLATES.length;
+  const scaleOf = (name) => {
+    if (WALK_PLATES.includes(name)) return WORK_H / walkH; // one scale for the four: the bob is theirs
+    // a crouch has no stature. Its head does: match the head the walk plates are printed at, so
+    // the figure that goes down is the same figure that was standing.
+    if (CROUCH_BY_HEAD.includes(name)) return (WORK_H / walkH) * (walkHead / M[name].head);
+    return WORK_H / M[name].h; // every other standing plate: registered to one stature
+  };
+
+  // ---- distance transforms and a sliding-window maximum, on a plate
+  const distOf = (mask, W, H) => {
+    const N = W * H, d = new Float32Array(N);
+    const at = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : d[x + y * W]);
+    for (let i = 0; i < N; i++) d[i] = mask[i] ? 1e6 : 0;
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const k = x + y * W;
+        if (!d[k]) continue;
+        d[k] = Math.min(d[k], at(x - 1, y) + 1, at(x, y - 1) + 1, at(x - 1, y - 1) + 1.414, at(x + 1, y - 1) + 1.414);
+      }
+    for (let y = H - 1; y >= 0; y--)
+      for (let x = W - 1; x >= 0; x--) {
+        const k = x + y * W;
+        if (!d[k]) continue;
+        d[k] = Math.min(d[k], at(x + 1, y) + 1, at(x, y + 1) + 1, at(x + 1, y + 1) + 1.414, at(x - 1, y + 1) + 1.414);
+      }
+    return d;
+  };
+  const maxOf = (src, r, W, H) => {
+    const N = W * H, tmp = new Float32Array(N), dst = new Float32Array(N);
+    const run = (get, set, n) => {
+      const q = new Int32Array(n);
+      let h = 0, t = 0;
+      for (let i = 0; i < n; i++) {
+        while (t > h && get(q[t - 1]) <= get(i)) t--;
+        q[t++] = i;
+        if (q[h] < i - 2 * r) h++;
+        if (i >= r) set(i - r, get(q[h]));
+      }
+      for (let i = n; i < n + r; i++) {
+        if (q[h] < i - 2 * r) h++;
+        set(i - r, get(q[h]));
+      }
+    };
+    for (let y = 0; y < H; y++) run((i) => src[y * W + i], (i, v) => (tmp[y * W + i] = v), W);
+    for (let x = 0; x < W; x++) run((i) => tmp[i * W + x], (i, v) => (dst[i * W + x] = v), H);
+    return dst;
+  };
+  const blurF = (src, r, W, H) => {
+    const N = W * H, tmp = new Float32Array(N), dst = new Float32Array(N);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        let a = 0, n = 0;
+        for (let k = -r; k <= r; k++) { const xx = x + k; if (xx < 0 || xx >= W) continue; a += src[y * W + xx]; n++; }
+        tmp[y * W + x] = a / n;
+      }
+    for (let x = 0; x < W; x++)
+      for (let y = 0; y < H; y++) {
+        let a = 0, n = 0;
+        for (let k = -r; k <= r; k++) { const yy = y + k; if (yy < 0 || yy >= H) continue; a += tmp[yy * W + x]; n++; }
+        dst[y * W + x] = a / n;
+      }
+    return dst;
+  };
+
+  // ---- pass 2: cut each plate
+  const plates = {};
+  const previewTiles = [];
+  for (const [name, file] of Object.entries(POSE_PAGES)) {
+    const k = scaleOf(name);
+    const p = await readPage(file, k);
+    const W = p.W, H = p.H, N = p.N;
+    const g = greenOf(p);
+    const drawnPen = POSE_DRAWN_PEN * k;
+    const HALF_IN = (drawnPen * POSE_PEN_K) / 2;
+    const HALF_OUT = (drawnPen * POSE_CONTOUR_K) / 2;
+    const OUTER = drawnPen * 1.1; // how far in from the silhouette the contour is allowed to run
+    // the silhouette, as coverage: the shoulder is about a texel after filtering at the shot he is
+    // played at, and it is pushed out far enough that the alpha test's hard edge lands on paper
+    // outside the thickened contour rather than through it.
+    const ALPHA_AA = drawnPen * 0.43;
+    const DILATE = HALF_OUT - drawnPen / 2 + drawnPen * 0.38;
+
+    const CLS = new Uint8Array(N), penMask = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      if (!p.fig[i]) continue;
+      const o = i * 4, r = p.data[o], gg = p.data[o + 1], b = p.data[o + 2];
+      penMask[i] = p.lum[i] < 112 ? 1 : 0;
+      if (gg > r + 16 && gg > b + 16) CLS[i] = 2;
+      else if (r > gg + 34 && r > b + 24 && r > 110) CLS[i] = 3;
+      else CLS[i] = 1;
+    }
+    // the pen, re-cut about its own centre line — in either direction. `t` is a signed distance
+    // into the drawn stroke (+ inside, − outside) and `R` is the stroke's own local half width, so
+    // `R − t` is the distance to the centre line whether the pixel is in the stroke or beside it,
+    // and a target half width larger than the drawing's grows the mark instead of trimming it.
+    const dIn = distOf(penMask, W, H);
+    const notPen = new Uint8Array(N);
+    for (let i = 0; i < N; i++) notPen[i] = 1 - penMask[i];
+    const dOutPen = distOf(notPen, W, H);
+    const R = maxOf(dIn, Math.ceil(drawnPen * 0.85), W, H);
+    const notFig = new Uint8Array(N);
+    for (let i = 0; i < N; i++) notFig[i] = 1 - p.fig[i];
+    const dA = distOf(p.fig, W, H); // depth inside the figure
+    const dOutFig = distOf(notFig, W, H);
+    const sdRaw = new Float32Array(N);
+    for (let i = 0; i < N; i++) sdRaw[i] = p.fig[i] ? dA[i] : -dOutFig[i];
+    const sd = blurF(sdRaw, 1, W, H);
+    const ALPHA = new Float32Array(N), INKA = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      // …and the page's own outer ring is nothing, said twice. The distance transform reads
+      // OUTSIDE THE IMAGE as a zero of whatever mask it is given, so at the border `dOutFig` comes
+      // back as 1 instead of the 300-odd it should be, the signed distance reads −1 instead of
+      // −300, the dilation swallows that, and the outermost row and column come out fully opaque:
+      // a one-pixel frame drawn round the whole page. Forcing the ring is cheaper than teaching
+      // the transform about borders, and the figure is never within 75 px of the edge.
+      {
+        const x = i % W, y = (i - x) / W;
+        if (x < 3 || y < 3 || x >= W - 3 || y >= H - 3) { ALPHA[i] = 0; continue; }
+      }
+      ALPHA[i] = clamp01((sd[i] + DILATE) / ALPHA_AA + 0.5);
+      if (ALPHA[i] <= 0) continue;
+      const t = penMask[i] ? dIn[i] : -dOutPen[i];
+      const Rl = R[i] > 0 ? R[i] : drawnPen / 2; // just outside a stroke, take that stroke's width
+      const c = Rl - t; // distance to its centre line
+      const hw = dA[i] < OUTER ? HALF_OUT : HALF_IN;
+      INKA[i] = clamp01((hw - c) / 1.4 + 0.5);
+    }
+
+    // ---- compose. Flat fill from the SEATED palette, printed a hair out of register under the pen.
+    const MDX = Math.max(1, Math.round(POSE_MISREG[0] * drawnPen)), MDY = Math.max(1, Math.round(POSE_MISREG[1] * drawnPen));
+    const fillAt = (i) => {
+      const x = i % W, y = (i - x) / W;
+      const j = Math.max(0, x - MDX) + Math.max(0, y - MDY) * W;
+      const c = p.fig[j] ? CLS[j] : CLS[i];
+      return c === 2 ? PAL.green[0] : c === 3 ? PAL.red : PAL.paper;
+    };
+    const buf = new Uint8Array(N * 4);
+    let x0 = W, x1 = -1, y0 = H, y1 = -1;
+    for (let i = 0; i < N; i++) {
+      const a = ALPHA[i];
+      if (a <= 0.002) continue;
+      const f = fillAt(i), c = INKA[i], o = i * 4;
+      buf[o] = f[0] + (INKC[0] - f[0]) * c;
+      buf[o + 1] = f[1] + (INKC[1] - f[1]) * c;
+      buf[o + 2] = f[2] + (INKC[2] - f[2]) * c;
+      buf[o + 3] = Math.round(a * 255);
+      const x = i % W, y = (i - x) / W;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+    // crop to content (+2 px), bleed the colour outward so bilinear never pulls a fringe in
+    const cx0 = Math.max(0, x0 - 2), cy0 = Math.max(0, y0 - 2), cw = Math.min(W, x1 + 3) - cx0, ch = Math.min(H, y1 + 3) - cy0;
+    const crop = new Uint8Array(cw * ch * 4);
+    for (let y = 0; y < ch; y++) crop.set(buf.subarray(((y + cy0) * W + cx0) * 4, ((y + cy0) * W + cx0 + cw) * 4), y * cw * 4);
+    bleed(crop, cw, ch);
+    // occupied cells, with a one-cell margin, so the mesh is a silhouette and not a card
+    const cols = Math.ceil(cw / POSE_CELL), rows = Math.ceil(ch / POSE_CELL);
+    const occ = new Uint8Array(cols * rows);
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) if (crop[(y * cw + x) * 4 + 3] > 8) occ[Math.floor(y / POSE_CELL) * cols + Math.floor(x / POSE_CELL)] = 1;
+    const cells = [];
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++) {
+        let any = 0;
+        for (let dr = -1; dr <= 1 && !any; dr++) for (let dc = -1; dc <= 1 && !any; dc++) {
+          const rr = r + dr, cc = c + dc;
+          if (rr >= 0 && cc >= 0 && rr < rows && cc < cols && occ[rr * cols + cc]) any = 1;
+        }
+        if (any) cells.push(c, r);
+      }
+    // the anchors, in the resized page's pixels: the sole he stands on, the feet the walk is
+    // locked to, and the head's own centre line — which is the body's axis, and what a cut between
+    // two plates is registered on.
+    const feet = blobsBelow(p, g, Math.round(p.box[1] + (p.box[3] - p.box[1]) * 0.82), Math.round(900 * k * k));
+    const hands = handBlobs(p, g, Math.round(700 * k * k));
+    const hd = headWidth(p, g);
+    const info = await sharp(Buffer.from(crop.buffer, crop.byteOffset, crop.length), { raw: { width: cw, height: ch, channels: 4 } })
+      .png({ compressionLevel: 9, effort: 8 })
+      .toFile(out + `pose-${name}.png`);
+    let inkPx = 0, figPx = 0;
+    for (let i = 0; i < N; i++) if (ALPHA[i] > 0.8) { figPx++; if (INKA[i] > 0.8) inkPx++; }
+    plates[name] = {
+      file: `pose-${name}.png`,
+      page: file,
+      box: [cx0, cy0, cw, ch],
+      cell: POSE_CELL,
+      cells,
+      base: p.box[3], // the sole of the lowest foot: this row sits on the floor
+      axis: +hd.mid.toFixed(1), // the head's centre line: the body's own axis
+      crown: p.box[1],
+      height: p.box[3] - p.box[1] + 1,
+      feet: feet.map((f) => [f.cx, f.bottom]),
+      hands: hands.map((f) => [f.cx, f.cy, f.bottom]),
+      scale: +k.toFixed(5),
+    };
+    console.log(
+      `plate ${name.padEnd(7)} ${cw}x${ch} at (${cx0},${cy0}) k=${k.toFixed(3)} h=${plates[name].height} base=${plates[name].base} axis=${plates[name].axis} feet=${JSON.stringify(plates[name].feet)} hands=${JSON.stringify(plates[name].hands)} ink ${((100 * inkPx) / figPx).toFixed(1)}% ${(info.size / 1024).toFixed(0)}KB`,
+    );
+    if (PREVIEW) previewTiles.push({ name, crop, cw, ch, base: plates[name].base, cy0 });
+  }
+
+  const manifest = {
+    source: "the user's 1233x1275 pose pages in public/",
+    workH: WORK_H,
+    stature: STATURE,
+    mPerPx: +(STATURE / WORK_H).toFixed(7),
+    pen: { drawn: POSE_DRAWN_PEN, interior: POSE_PEN_K, contour: POSE_CONTOUR_K },
+    plates,
+  };
+  writeFileSync(out + 'poses.json', JSON.stringify(manifest));
+  console.log(`wrote poses.json — ${Object.keys(plates).length} plates, ${(STATURE / WORK_H).toFixed(5)} m per plate pixel`);
+
+  if (PREVIEW) {
+    mkdirSync(PREVIEW, { recursive: true });
+    // every plate on one baseline at one scale: if he grows, shrinks or floats, it shows here
+    // the sheet has to be tall enough for the tallest figure AND for whatever hangs below the
+    // baseline (the crop keeps a couple of px of bleed under the lowest sole, and the crouch's
+    // trailing foot sits below its own `base` row)
+    const HH = Math.max(...previewTiles.map((t) => t.base - t.cy0)) + 30;
+    const BELOW = Math.max(0, ...previewTiles.map((t) => t.ch - (t.base - t.cy0)));
+    const tiles = [];
+    let x = 20;
+    for (const t of previewTiles) {
+      tiles.push({ input: Buffer.from(t.crop.buffer, t.crop.byteOffset, t.crop.length), raw: { width: t.cw, height: t.ch, channels: 4 }, left: Math.round(x), top: Math.round(HH - (t.base - t.cy0)) });
+      x += t.cw + 14;
+    }
+    await sharp({ create: { width: Math.round(x + 20), height: HH + BELOW + 20, channels: 4, background: '#d9d9d4' } })
+      .composite(tiles)
+      .png()
+      .toFile(PREVIEW + '/poses.png');
+    console.log('preview', PREVIEW + '/poses.png');
+  }
 }

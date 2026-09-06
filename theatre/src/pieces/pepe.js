@@ -53,6 +53,7 @@
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { buildBench } from './pepe-bench.js';
+import { buildArrival } from './pepe-arrive.js';
 import { inkFilter } from './pepe-mips.js';
 // The cut-out manifest is imported, not fetched. In the headless judging browser nothing a page
 // requests is served for the first few seconds of its life, so a single await on a file inside
@@ -64,7 +65,7 @@ import MANIFEST from '../../public/pepe/cutout.json';
 export const meta = {
   name: 'pepe',
   judge: { shot: 'pepe', states: ['default'] },
-  files: ['src/pieces/pepe.js', 'src/pieces/pepe-bench.js', 'src/pieces/pepe-mips.js', 'tools/pepe-cutout.mjs', 'public/pepe/cutout.json'],
+  files: ['src/pieces/pepe.js', 'src/pieces/pepe-bench.js', 'src/pieces/pepe-mips.js', 'src/pieces/pepe-arrive.js', 'tools/pepe-cutout.mjs', 'public/pepe/cutout.json', 'public/pepe/poses.json'],
 };
 
 export const SKIN = '#69b964';
@@ -331,6 +332,14 @@ export async function build(ctx) {
 
   ctx.scene.add(root);
 
+  // ── the figure before he is sitting down ────────────────────────────────────────────────────
+  // He is not at the table when the visitor arrives; he is at the back watering the palm, and he
+  // walks over and sits. That is nine more of the user's drawings, cut by the same tool into
+  // public/pepe/pose-*.png, hung as flat cards on the floor and swapped a drawing at a time.
+  // They are built here because they are the same figure in the same pen — see pepe-arrive.js —
+  // and driven from pepeAnim, which owns the clock (`pepeAnim.arrive()`).
+  const arrival = buildArrival(ctx);
+
   const parts = { torso, head, headPivot, headMesh, body, handL: hands.L, handR: hands.R, bench, lids, pupils, eyelines, mouths, eyes, mouth: mouthAnchor };
 
   // ── lending a hand ──────────────────────────────────────────────────────────────────────────
@@ -375,6 +384,13 @@ export async function build(ctx) {
     feetY,
     torso, // the hip pin: pepeAnim leans and breathes on this and on nothing else
     headRest, // the head group's rest position inside the torso (it hangs off the pin now)
+    arrival, // the standing plates and the can (pepe-arrive.js); pepeAnim.arrive() plays them
+    // The seated puppet steps out of the picture while the standing figure is in it, and comes
+    // back at the hand-off. Only the torso group goes: the BENCH stays, because he is walking
+    // towards it and it has been standing there all evening.
+    seated(on = true) {
+      torso.visible = on;
+    },
     textures: Promise.all(textures),
     setMouth(name = 'rest') {
       for (const k in mouths) mouths[k].show(k === name);
@@ -427,8 +443,23 @@ export async function build(ctx) {
       // `ctx.pieces[view].setState()` is called, so pepeAnim never heard about it and the note
       // "across eight frames of one speech only the mouth changes" was written off a frame in
       // which he was not speaking at all. A motion word is handed on to the piece that owns it.
-      const MOTION = ['idle', 'listen', 'talk', 'gesture', 'consider', 'deal', 'shuffle', 'turn', 'react'];
-      for (const w of words) if (MOTION.includes(w)) pieces.pepeAnim?.setState?.(w);
+      // (`still` and `sat` are the builder's check that the arrival hands the figure back exactly
+      // as it found it — see pepeAnim.setState)
+      const MOTION = ['idle', 'listen', 'talk', 'gesture', 'consider', 'deal', 'shuffle', 'turn', 'react', 'still', 'sat'];
+      // …and the four beats of the arrival, which are the standing figure and not the seated one:
+      // ?view=pepe&state=water | notice | cross | sit. The seated puppet steps out for them and
+      // the plates step in; anything else puts him back on his bench.
+      const ARRIVE = ['water', 'notice', 'cross', 'sit', 'arrive'];
+      const arriveWord = words.find((w) => ARRIVE.includes(w));
+      api.seated(!arriveWord);
+      if (!arriveWord) arrival.hide();
+      // the arrival happens across the whole room, so it is judged in the shot the room is judged
+      // in. `?view=pepe` cuts to the tight `pepe` shot, which is a head-and-hands framing of an
+      // empty bench while he is still at the palm. On a frame too narrow for `wide` to hold the
+      // crossing — a phone held upright — it falls back to a shot that does; see arrival.judgeShot,
+      // and the contract request that goes with it.
+      else pieces.camera?.cut?.(arrival.judgeShot((ctx.size?.w ?? window.innerWidth) / (ctx.size?.h ?? window.innerHeight)));
+      for (const w of words) if (MOTION.includes(w) || ARRIVE.includes(w)) pieces.pepeAnim?.setState?.(w);
     },
   };
   return api;
