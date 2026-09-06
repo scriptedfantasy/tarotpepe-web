@@ -11,16 +11,24 @@
 // had a body, (b) he sits upstage so the top edge is geometrically his, and (c) green is the only
 // colour on the cloth, so a green hand entering IS the protagonist arriving.
 //
-// The drawing is made here with the pen, in the language of the supplied Pepe: a heavy ink contour
-// round a flat green silhouette, a few creases, a little hatch. Three replacement drawings, the way
-// the puppet has three mouths:
-//   splay — five fingers apart, the hand that deals and sweeps (STYLE.md §1.6: splayed, separated)
-//   point — index and middle out together, the two fingers that land on a card's near edge
+// THE DRAWING IS THE USER'S (round 11). It was made here with the pen until 2026-09-06, when he
+// drew the two hands the tabletop needs from directly overhead — public/hand-full.png and
+// hand-pinch.png — and tools/hand-cutout.mjs now cuts them through the same mill as his body. Two
+// plates, three poses:
+//   splay — five fingers apart, palm down: the hand that washes, deals and sweeps
+//   point — the same plate, posed on a card's near edge (he drew two hands, so there are two)
 //   pinch — thumb and forefinger closed, the hand that takes one card out of the ribbon
+// See PLATES and CONTACT below; the code that used to draw a hand is retired in place at drawHand.
 //
-// Posing is by the FINGERTIP: `at(x, y, z, {yaw, pose})` puts the contact point of the drawing on
+// ROUND 11 ALSO MAKES IT A PAIR. A smoosh is two-handed by definition, so `buildHands` at the foot
+// of this file rigs both of his wrists and routes `at(..., { side })` to one of them; every take
+// that has only ever asked for one hand gets exactly what it always got.
+//
+// Posing is by a CONTACT POINT: `at(x, y, z, {yaw, pose, by})` puts that point of the drawing on
 // that spot on the cloth and works the wrist and the sleeve back from it, tilting the hand up about
-// the wrist when the fingertip is above the cloth (a card being reared up on its edge). While the
+// the wrist when it is above the cloth (a card being reared up on its edge). `by` is 'tip' — the
+// fingertip, or the nip of the pinch, and the default every take before round 11 meant — or
+// 'palm', the middle of the back of the hand, for a hand pushing a heap of cards about. While the
 // hand is out, the puppet's own hand on that side is LENT to it — asked for through pepe's own api
 // (`pepe.handOff(side)` / `handOn(side)`, see "lending a hand" in pepe.js), so his shoulder holds
 // still and the hand comes back exactly where it left, and he never has three.
@@ -46,9 +54,9 @@ const rad = (d) => (d * PI) / 180;
 // slightly UNDER one card wide and its longest finger is a third of a card — the proportion the
 // film draws (fd-anim-kitchen-table-cards-hires: the woman's hand against the cards she holds).
 export const HAND = {
-  w: 0.140, // the drawing's full width; the hand inside it spans about 0.115 m, just under a card
-  l: 0.182, // wrist to fingertip
-  reach: 0.155, // nominal wrist-to-fingertip; the real contact per pose is GRIP, below
+  w: 0.14, // THE SCALE THE PLATES ARE PRINTED AT: the drawn hand is this wide across the knuckles
+  l: 0.182, // nominal wrist to fingertip; each plate's own height is what the quad is actually built to
+  reach: 0.155, // nominal wrist-to-fingertip, for a take sizing a lift; the contacts are CONTACT, below
   y: 0.0042, // how far the paper floats over the cloth
   // The arm runs back to the exact spot where the puppet's own right hand sits — the one that
   // steps out while this one is on the cloth — so the drawing meets his body where his hand was
@@ -243,13 +251,39 @@ const FINGERS = {
   ],
 };
 
-// Where the drawing TOUCHES, in canvas pixels: the fingertips of the two hands that lay and press
-// cards, the nip of the thumb and forefinger of the one that takes a card out of the ribbon. The
-// pinch's contact is nowhere near the middle of the drawing, so `at()` cannot simply put the
-// centre line of the hand on the spot — place() works the wrist back from THIS point instead.
-const GRIP = { splay: [175, 78], point: [152, 50], pinch: [64, 174] };
-// the same, in metres from the wrist (x across the hand, z toward the fingertips)
-const GRIP_M = Object.fromEntries(Object.entries(GRIP).map(([k, [x, y]]) => [k, { x: (x / TEX.w - 0.5) * HAND.w, z: (1 - y / TEX.h) * HAND.l }]));
+// ── THE PLATES (round 11) ──────────────────────────────────────────────────────────────────────
+// THE HANDS ARE THE USER'S DRAWINGS NOW. Everything below this line to `drawHand` used to be the
+// film's hand: a silhouette assembled here out of five finger polygons and a palm, and the only
+// figure in the picture that he had not drawn himself. 2026-09-06 he drew the two the tabletop
+// needs, from directly overhead, on the same sheets as the body poses — public/hand-full.png (palm
+// down, fingers spread) and public/hand-pinch.png (thumb and forefinger closed on a corner) — and
+// tools/hand-cutout.mjs cuts them through the SAME MILL as his body: keyed off the page, the pen
+// re-cut about its own centre line to the room's weight, the fills re-flattened to his own palette,
+// the silhouette taken as coverage. These numbers are that tool's output, pasted (it prints them);
+// re-run it and paste again if a drawing changes.
+const M_PER_PX = HAND.w / 384; // the splay hand is 384 plate px across the knuckles, and HAND.w on the cloth
+const PLATES = {
+  splay: { file: '/pepe/hand-splay.png', w: 398, h: 509, tip: [206, 40], palm: [217, 336] },
+  pinch: { file: '/pepe/hand-pinch.png', w: 265, h: 459, tip: [54, 36], palm: [135, 164] },
+};
+// `point` — two fingers laid on a card's near edge — is the flat hand as well; he drew two hands,
+// and a third invented here would be the exact fault this change exists to fix.
+const POSE_PLATE = { splay: 'splay', point: 'splay', pinch: 'pinch' };
+
+// Where the drawing TOUCHES, in metres from the wrist (x across the hand, z toward the fingertips).
+// TWO POINTS, because two different things are done with a hand on a table and they are not posed
+// alike. `tip` is the fingertip of the flat hand and the nip of the pinch: the point that lays a
+// card, presses one down, takes one out of the ribbon. `palm` is the middle of the back of the
+// hand — the deepest point inside the silhouette, which on a splayed hand is squarely between the
+// knuckles and the wrist — and it is what a hand PUSHING CARDS ABOUT is posed by: a smoosh posed
+// by its fingertips puts both palms off the near edge of the raft, with the hands trailing out of
+// the mass they are supposed to be in.
+const CONTACT = Object.fromEntries(
+  Object.entries(PLATES).map(([k, p]) => [
+    k,
+    { tip: { x: (p.tip[0] - p.w / 2) * M_PER_PX, z: (p.h - p.tip[1]) * M_PER_PX }, palm: { x: (p.palm[0] - p.w / 2) * M_PER_PX, z: (p.h - p.palm[1]) * M_PER_PX } },
+  ]),
+);
 
 // The palm: a slab that narrows to a real wrist at the bottom edge of the drawing, where the
 // cuff of his robe comes over it. Palm and fingers are near enough the same length, which is what
@@ -289,6 +323,10 @@ function nailLines(g, f, rng) {
   draw(len - wdt * 0.95, wdt * 0.22, 2.2);
 }
 
+// RETIRED (round 11). This drew the film's hand until the user drew his own; the film now prints
+// the cut plates in `PLATES` and never calls this. It is left standing because `__draw` is what
+// tools/_rv-hand-sheet.mjs lays the old drawing beside the new one with — which is how the two
+// were compared — and because deleting a drawing is not the same as replacing it.
 function drawHand(g, w, h, pose) {
   const rng = mulberry32(pose === 'splay' ? 91 : pose === 'point' ? 92 : 93);
   g.clearRect(0, 0, w, h);
@@ -483,10 +521,14 @@ function quadXZ(w, l, { z0 = 0, z1 = 1, flipV = false } = {}) {
   return g;
 }
 
-export function buildHand(ctx) {
+// `onShown(v, side)` — who tells the puppet to lend a hand. One rig on its own does it itself
+// (the behaviour every take had before round 11); a PAIR cannot, because each rig would switch the
+// other one's puppet hand back on every drawing, so buildHands hands both rigs one reconciliation.
+// `name` names the group, and `lockSide` fixes a rig to one of his hands whatever a take asks for.
+export function buildHand(ctx, { onShown = null, name = 'reveal-hand', lockSide = null } = {}) {
   const Y = ctx.layout.spread.y;
   const group = new THREE.Group();
-  group.name = 'reveal-hand';
+  group.name = name;
   group.visible = false;
   ctx.scene.add(group);
 
@@ -545,9 +587,27 @@ export function buildHand(ctx) {
   const wrist = new THREE.Group();
   wrist.name = 'reveal-hand-wrist';
   group.add(wrist);
+  // …and the drawing it carries is one of the user's two cut plates, at the plate's own size in
+  // metres. A pose whose plate has not arrived yet simply is not drawn: a map-less alphaTest
+  // material would put a white rectangle on the cloth, and every screenshot in this repo waits on
+  // ctx.assets.settle() anyway, so the only frames that can miss it are frames nobody is looking at.
   const poses = {};
+  const plateMat = {};
+  for (const key of Object.keys(PLATES)) {
+    const p = PLATES[key];
+    plateMat[key] = mat(null, true);
+    ctx.assets
+      ?.texture(p.file)
+      ?.then((t) => {
+        plateMat[key].map = t;
+        plateMat[key].needsUpdate = true;
+      })
+      .catch(() => {});
+  }
   for (const name of ['splay', 'point', 'pinch']) {
-    const m = new THREE.Mesh(quadXZ(HAND.w, HAND.l), mat(tex(TEX.w, TEX.h, (g, w, h) => drawHand(g, w, h, name)), true));
+    const key = POSE_PLATE[name];
+    const p = PLATES[key];
+    const m = new THREE.Mesh(quadXZ(p.w * M_PER_PX, p.h * M_PER_PX), plateMat[key]);
     m.name = 'reveal-hand-' + name;
     m.visible = false;
     wrist.add(m);
@@ -562,7 +622,8 @@ export function buildHand(ctx) {
     group.visible = v;
     // his own cut-out hand on that side steps out of the drawing while this one is on the cloth,
     // and comes back the moment it leaves: his business, so it is asked for, never reached into
-    for (const s of ['L', 'R']) ctx.pieces.pepe?.[v && s === side ? 'handOff' : 'handOn']?.(s);
+    if (onShown) onShown(v, side);
+    else for (const s of ['L', 'R']) ctx.pieces.pepe?.[v && s === side ? 'handOff' : 'handOn']?.(s);
   }
 
   // ── the camera watch ──────────────────────────────────────────────────────────────────────────
@@ -712,8 +773,8 @@ export function buildHand(ctx) {
     const Yaw = m * w.yaw;
     setShown(true, m < 0 ? 'L' : 'R');
     const pose = poses[w.pose] ? w.pose : 'splay';
-    for (const k in poses) poses[k].visible = k === pose;
-    const G = GRIP_M[pose];
+    for (const k in poses) poses[k].visible = k === pose && !!poses[k].material.map;
+    const G = CONTACT[POSE_PLATE[pose]][w.by === 'palm' ? 'palm' : 'tip'];
     const lift = Math.max(0, w.y) + LIFT[out];
     // the tilt is capped (PITCH_SIN): past that the flat cut-out turns edge-on to an overhead
     // lens and lies in the picture as a green blade. The PLAN position of the fingers is what an
@@ -764,9 +825,11 @@ export function buildHand(ctx) {
     // `floor` raises the whole drawing: the height of the thing it is lying on (a packet of cards
     // in his hand), so the hand is drawn over it instead of under it. `y` stays the fingertip's
     // height above that floor.
-    at(x, y, z, { yaw = 0, pose = 'splay', side = 'R', floor = 0 } = {}) {
+    // `by` is which point of the drawing lands on (x, z): 'tip' — the default and what every take
+    // before round 11 meant — or 'palm', for a hand pushing cards about rather than touching one.
+    at(x, y, z, { yaw = 0, pose = 'splay', side = 'R', floor = 0, by = 'tip' } = {}) {
       claimed = true;
-      want = { x, y, z, yaw, pose, side, floor };
+      want = { x, y, z, yaw, pose, side: lockSide ?? side, floor, by };
       wantFrame = ctx.clock.frame;
       place(want);
     },
@@ -831,4 +894,93 @@ export function buildHand(ctx) {
     },
   };
   return api;
+}
+
+// ── BOTH HANDS (round 11) ──────────────────────────────────────────────────────────────────────
+// A smoosh is two-handed by definition: the deck is spread face down over the cloth and both palms
+// swirl it about until it is mixed. Until now this file rigged ONE hand and every take asked it to
+// be whichever of his it needed — a card on the left of the spread is turned by the left hand, one
+// on the right by the right — so a beat that wants both at once had no way to say so.
+//
+// So there are two rigs now, each locked to one of his wrists, and this is the api every take
+// already talks to: `at(x, y, z, { side })` routes to that side's rig, and a take that has only
+// ever asked for one hand gets exactly what it always got, because the other rig is never claimed
+// in that drawing and `end()` takes an unclaimed rig off the cloth.
+//
+// THE ONE THING THAT CANNOT BE TWO. Each rig asks the puppet to lend it the hand on its own side
+// (pepe.handOff / handOn), and the single-rig version did that by switching BOTH of his hands on
+// every drawing — which, with two rigs, means the left one turns the right one's puppet hand back
+// on. So the lending is reconciled here, once, from what the two rigs are actually showing.
+export function buildHands(ctx) {
+  let rigs = null, lentL = null, lentR = null;
+  const lend = () => {
+    if (!rigs) return; // a rig cannot be shown before both are built
+    const l = !!rigs.L?.shown, r = !!rigs.R?.shown;
+    if (l !== lentL) {
+      lentL = l;
+      ctx.pieces.pepe?.[l ? 'handOff' : 'handOn']?.('L');
+    }
+    if (r !== lentR) {
+      lentR = r;
+      ctx.pieces.pepe?.[r ? 'handOff' : 'handOn']?.('R');
+    }
+  };
+  const onShown = () => lend();
+  rigs = {
+    R: buildHand(ctx, { onShown, name: 'reveal-hand', lockSide: 'R' }),
+    L: buildHand(ctx, { onShown, name: 'reveal-hand-L', lockSide: 'L' }),
+  };
+  const both = (fn) => {
+    fn(rigs.L);
+    fn(rigs.R);
+    lend();
+  };
+  return {
+    // `group` is the right hand's, because that is the one every earlier tool reaches for
+    // (tools/_rv10-hand.mjs, _rv9-sleeve.mjs); `groups` is the pair.
+    group: rigs.R.group,
+    groups: [rigs.L.group, rigs.R.group],
+    rigs,
+    HAND,
+    begin() {
+      both((r) => r.begin());
+    },
+    end() {
+      both((r) => r.end());
+    },
+    at(x, y, z, opts = {}) {
+      rigs[opts.side === 'L' ? 'L' : 'R'].at(x, y, z, opts);
+      lend();
+    },
+    off() {},
+    step() {
+      both((r) => r.step());
+    },
+    hide() {
+      both((r) => r.hide());
+    },
+    show() {
+      both((r) => r.show());
+    },
+    clear() {
+      both((r) => r.clear());
+    },
+    get shown() {
+      return rigs.L.shown || rigs.R.shown;
+    },
+    // which of his hands are on the cloth in this drawing (the frame-share probe, and tests)
+    get sides() {
+      return ['L', 'R'].filter((s) => rigs[s].shown);
+    },
+    get overhead() {
+      return rigs.R.overhead;
+    },
+    get out() {
+      return rigs.R.out;
+    },
+    dispose() {
+      rigs.L.dispose();
+      rigs.R.dispose();
+    },
+  };
 }

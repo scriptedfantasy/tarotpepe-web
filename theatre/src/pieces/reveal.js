@@ -26,7 +26,7 @@ import { mulberry32 } from '../core/rng.js';
 import { FPS, compose, hold, turnTrack, turnPose, turnEdge, handFrames, handSide, stagedRow, laidPose } from './reveal-takes.js';
 import { buildShuffle } from './reveal-shuffle.js';
 import { buildFan } from './reveal-fan.js';
-import { buildHand } from './reveal-hand.js';
+import { buildHands } from './reveal-hand.js';
 import { buildGround } from './reveal-ground.js';
 
 export const meta = {
@@ -43,11 +43,17 @@ export const meta = {
 // All four are the camera piece's own NAMED shots now, so the judging views and the film are cut
 // to the same frames (round 5). `fan` for everything that happens flat on the cloth; `turn` — the
 // rake 46° above the cloth — for the turn, because a card stood on its edge at 78° is a hairline
-// from straight down and that is the money drawing of the whole evening; `riffle` — 58° over the
-// deck at 0.6 m — for the shuffle, because the deck in profile is the only place an interleave can
-// be read from. The stills in which nothing touches anything (dealt, revealed) keep the piece's
-// frontal 'table' frame.
-const SHOT = { fan: 'fan', fanning: 'fan', pick: 'fan', gather: 'fan', deal: 'fan', turn: 'turn', turning: 'turn', shuffle: 'riffle' };
+// from straight down and that is the money drawing of the whole evening. The stills in which
+// nothing touches anything (dealt, revealed) keep the piece's frontal 'table' frame.
+//
+// THE SHUFFLE LEAVES `riffle` (round 11). That plate is a 62° rake on a 0.34 m insert and it
+// exists for one reason: to read a riffle's raised bridge in profile. The shuffle is a SMOOSH now
+// — the deck washed flat about the cloth under both palms — which has nothing vertical in it at
+// all and is the best possible subject for a plan view. So it is played in `fan`, the dead
+// overhead the rest of the tabletop already uses, and the raft is staged inside that plate's own
+// window at both nestings (reveal-shuffle.js → RAFT). It also means the shuffle and the fan are
+// the SAME frame: the deck is washed, squared and dealt without a cut.
+const SHOT = { fan: 'fan', fanning: 'fan', pick: 'fan', gather: 'fan', deal: 'fan', turn: 'turn', turning: 'turn', shuffle: 'fan' };
 
 const SLUGS = ['the-fool', 'the-star', 'the-house-of-god'];
 
@@ -58,7 +64,14 @@ export async function build(ctx) {
   // insert of everything but one card (reveal-takes.js → stagedRow). Published as `api.slots`.
   const slots = stagedRow(ctx.layout);
   const T = card.t, H = card.h;
-  const sound = (name) => ctx.pieces.sound?.play?.(name);
+  // `fallback` is for a cue this piece has asked sound for and not been given yet: the take names
+  // the voice the beat actually wants, and plays the nearest one that exists until it arrives.
+  const sound = (name, fallback = null) => {
+    const s = ctx.pieces.sound;
+    if (!s?.play) return;
+    if (!fallback || (Array.isArray(s.cues) ? s.cues.includes(name) : true)) s.play(name);
+    else s.play(fallback);
+  };
   const pepe = () => ctx.pieces.pepeAnim;
 
   // ---- the player: takes are lists of drawings; one drawing per stepped frame -------------------
@@ -165,8 +178,11 @@ export async function build(ctx) {
     cards.drawn.clear();
   };
 
-  // ---- his hand, for the beats shot over the cloth ------------------------------------------------
-  const hand = buildHand(ctx);
+  // ---- his hands, for the beats shot over the cloth -----------------------------------------------
+  // BOTH of them since round 11: a smoosh is two-handed by definition. Every take still asks for
+  // one at a time by side and gets exactly what it always got; the shuffle asks for both in the
+  // same drawing, which is the only thing that changed. See reveal-hand.js → buildHands.
+  const hand = buildHands(ctx);
 
   // ---- the tone a card puts on the cloth (reveal-ground.js): a drawn patch, never a soft shadow --
   const CLOTH_Y = ctx.layout.table.top + 0.0004; // a hair over the cloth's own disc
@@ -189,6 +205,7 @@ export async function build(ctx) {
   fan.reshape(aspect());
   ctx.on?.('resize', () => {
     if (!fan.reshape(aspect())) return;
+    dropShuffle(); // the raft is solved against the frame too: it is re-laid on the new one
     if (shown === 'fan') fan.liftIndex(fan.keystoneIndex); // the still's raised keystone, again
     ground.step();
   });
@@ -199,14 +216,30 @@ export async function build(ctx) {
     if (!shuffleTake && deck) {
       shuffleTake = buildShuffle(ctx, deck, T, {
         hand,
+        aspect: aspect(),
         cues: {
-          cut: () => pepe()?.shuffle?.(),
-          riffle: () => sound('riffle'),
-          tap: () => sound('tap'),
+          // A SMOOSH SOUNDS NOTHING LIKE A RIFFLE — a long dry slither rather than a snap — and
+          // sound.js has the riffle's cues, not these. So each beat asks for the voice it wants
+          // and falls back to the nearest one that exists, and upgrades itself the day sound adds
+          // them. See the contractRequest in this round's return value.
+          wash: () => {
+            pepe()?.shuffle?.();
+            sound('wash', 'riffle');
+          },
+          smoosh: () => sound('smoosh', 'deal'),
+          rake: () => sound('rake', 'riffle'),
+          square: () => sound('square', 'tap'),
+          done: () => sound('settle'),
         },
       });
     }
     return shuffleTake?.frames ?? [() => {}];
+  }
+  // the raft is solved against the frame it is played in, so a window that changes NESTING throws
+  // the take away and it is built again on the shape that is actually up (the spread does the same)
+  function dropShuffle() {
+    shuffleTake?.dispose?.();
+    shuffleTake = null;
   }
 
   const DECK_SIDE = 'R'; // the deck stands at his right, so the hand that works it is that one
@@ -374,12 +407,21 @@ export async function build(ctx) {
   }
 
   const api = {
-    // the deck cut and riffled together, tapped square
+    // THE SMOOSH: the deck washed flat about the cloth under both palms, raked back and squared
     shuffle() {
       if (!deck) return Promise.resolve();
       stop();
       fan.clear();
-      return play(shuffleFrames());
+      // THE BEAT'S FRAME MOVED, and until the camera and the flow catch up this moves it. `riffle`
+      // is a 62° rake on a 0.34 m insert built to read a bridge in profile; there is no bridge any
+      // more, and a smoosh played in that frame is 78 cards sawn off by all four edges. So if the
+      // caller has cut to it, reveal puts the shot on the plan view the raft is actually staged
+      // in. It is a no-op the moment flow cuts `fan` for this beat itself — see the contract note.
+      const C = ctx.pieces.camera;
+      if (C?.current === 'riffle') C.cut?.(SHOT.shuffle);
+      const frames = shuffleFrames();
+      frames[0]();
+      return play(frames);
     },
     // a packet cut off the deck and dealt face down in an arc; resolves with the number of cards
     async fan() {
@@ -443,6 +485,17 @@ export async function build(ctx) {
     // row pulled in to 19 cm (reveal-takes.js → stagedRow); the camera's three inserts should be
     // aimed at these, not at ctx.layout.spread.slots, or they will centre on empty cloth.
     slots,
+    // THE SMOOSH'S FOOTPRINT, in world metres on the cloth: the corners of the raft of washed
+    // cards, for a camera that wants to compose a plate on the shuffle instead of on the spread.
+    // It is deliberately NOT published as `tableBounds` — the camera reads that one for the fan
+    // plate, and the picking frame must stay composed on the seventy-eight the visitor is being
+    // asked to click, not opened up to hold a raft that is gone by then.
+    get smooshBounds() {
+      const R = shuffleTake?.raft ?? null;
+      if (!R) return null;
+      const d = Math.hypot(card.w, card.h) / 2; // a washed card lies any way up
+      return [[-(R.ax + d), R.cz - R.az - d], [R.ax + d, R.cz - R.az - d], [-(R.ax + d), R.cz + R.az + d], [R.ax + d, R.cz + R.az + d]];
+    },
     // where the fan's cards are on screen (CSS px), left to right — for tests and captions
     fanScreenPositions: () => fan.screenPositions(),
     // His drawn hand on the cloth. It takes itself off whenever the camera is not overhead (see
@@ -450,6 +503,11 @@ export async function build(ctx) {
     // are there for a piece that wants the cloth to itself while the camera stays where it is.
     hand,
     _fan: fan,
+    // the smoosh take, once it has been built: its raft, its meshes and the deck's new order, for
+    // tools/_rv11-mix.mjs — which measures the mixing rather than taking anyone's word for it
+    get _shuffle() {
+      return shuffleTake;
+    },
     async setState(name) {
       shown = name;
       // the beats over the cloth are judged from above, the rest from the frontal 'table'
