@@ -61,6 +61,13 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   frog" — and there was never a chair there to sit on. He now asks them closer and the absence is
   the joke: "There is nowhere to sit, which keeps the visits honest." The chairs in the card
   readings stay; those are drawn on the plates, or are figures of speech.
+- **The pose drawings are the user's, and `pepe-standing-2` is the chosen standing pose.** 2026-09-06
+  they drew ten body poses and two overhead hands into `theatre/public/` — standing (front and
+  three-quarter), watering, one arm forward, a four-drawing walk cycle, crouching, and `hand-full` /
+  `hand-pinch`. All on identical 1233x1275 pages, so a cut-out registers between them. Of the two
+  near-identical standing variants the user chose: "2 is better than 3". Use `pepe-standing-2.png`;
+  `-3` stays in the repo but is not the one. Before these existed his only drawing was seated and
+  legless, and a walk meant inventing a silhouette he had not drawn — that constraint is gone.
 - **Chat or voice.** The visitor answers by typing (`dialogue.ask`, a drawn input in the picture) or by voice
   (a mic button: the browser's SpeechRecognition; when voice is on, Pepe is also spoken by speechSynthesis).
   Chat is the default, voice a toggle; both must work in Chrome.
