@@ -82,6 +82,15 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
     · both hands are IN it, flat, palms down, fingers spread, pushing the cards around each other.
   Then, and only then, the cards are gathered into a squared pile and the fan comes out of it for the
   visitor to choose from. The neat arc is correct AFTER the smoosh; it is not the smoosh.
+- **A card is picked up by its CORNER, never by its middle.** 2026-09-06, the user, on the picking
+  hand: "right now it picks the middle of the card, which makes no sense". They are right twice over.
+  A person takes a card by an edge or a corner — a palm laid flat on the face of one is how you hold
+  a card DOWN, not how you lift it. And in an overlapping spread the middle of a card is under its
+  neighbour: the corner is the only part there is to take. The pinch drawing (public/hand-pinch.png,
+  cut to public/pepe/hand-pinch.png) is a thumb and forefinger on a card's corner and was drawn for
+  exactly this; its plate carries two contact points, a fingertip and a palm centre, and a pick must
+  pose by the FINGERTIP on the corner the visitor can actually see. The palm contact is for the
+  smoosh, where a flat hand pushing cards about is right.
 - **Chat or voice.** The visitor answers by typing (`dialogue.ask`, a drawn input in the picture) or by voice
   (a mic button: the browser's SpeechRecognition; when voice is on, Pepe is also spoken by speechSynthesis).
   Chat is the default, voice a toggle; both must work in Chrome.
