@@ -344,6 +344,7 @@ export async function build(ctx) {
     g.add(clock);
     O.hangCords(g, 0, 2.06 + 0.185, 0.1, HOOK_Y, WALL + 0.012);
     g.userData.pendulum = clock.userData.pendulum;
+    g.userData.setClockTime = clock.userData.setTime;
   }
 
   // ---- the stage-left wall (no window there): one round picture and a small shelf of jars ------------
@@ -416,6 +417,31 @@ export async function build(ctx) {
   // against the room and the figure (tools/_cover.mjs on the two shots, and subtract).
   if (!new URLSearchParams(location.search).has('nodress')) ctx.scene.add(g);
 
+  // ---- the wall clock keeps the visitor's own time ----------------------------------------------
+  // The user, round 7: "i'm also wondering if the clock over pepe could always display the actual
+  // time of the user?" It used to be stopped at five to midnight. It now reads `new Date()` — the
+  // browser's clock, so the visitor's own wall time, whatever zone they are in — and the hands are
+  // moved only when the MINUTE turns over. That is one step a minute, on the stepped clock like
+  // everything else in the room, and it is also exactly what the real clock on the visitor's wall
+  // is doing while they watch. There is no seconds hand: at 60 px of dial in the wide shot a third
+  // hand ticking every second is the only fast thing in a room built out of holds, and it reads as
+  // a fault in the drawing rather than as time passing. The pendulum below carries the seconds.
+  //   ?now=HH:MM pins the dial, so a screenshot of the room is reproducible.
+  const pinned = new URLSearchParams(location.search).get('now');
+  const pinnedAt = /^\d{1,2}:\d{2}$/.test(pinned ?? '') ? pinned.split(':').map(Number) : null;
+  let shownMinute = -1;
+  function tellTheTime() {
+    const set = g.userData.setClockTime;
+    if (!set) return;
+    const d = new Date();
+    if (pinnedAt) d.setHours(pinnedAt[0], pinnedAt[1], 0, 0);
+    const minuteOfDay = d.getHours() * 60 + d.getMinutes();
+    if (minuteOfDay === shownMinute) return; // the hands hold until the minute turns
+    shownMinute = minuteOfDay;
+    set(d);
+  }
+  tellTheTime();
+
   return {
     group: g,
     // the shop's board over Pepe's head. `mesh` is what a pointer is raycast against, `pivot` is
@@ -448,6 +474,7 @@ export async function build(ctx) {
       if (!ctx.clock.stepped) return;
       const p = g.userData.pendulum;
       if (p) p.rotation.z = 0.16 * Math.sin(ctx.clock.t * Math.PI);
+      tellTheTime();
     },
   };
 }

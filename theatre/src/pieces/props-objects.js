@@ -570,19 +570,37 @@ export function wallClock({ r = 0.17 }) {
   const M = materials();
   // a solid black bezel round a bare paper face: the one prop everyone reads from across the room
   const g = roundFrame({ r, tex: T.clockTexture(), depth: 0.06, rim: 0.034, darkRim: true });
-  // hands (a fixed, deadpan time: five to midnight), solid ink
+  // THE HANDS. Two strokes of solid ink, geometry and not painted into the face texture
+  // (`clockTexture` draws the bezel, the sixty ticks, four numerals and the boss — no hands), so
+  // they can be pointed at whatever the visitor's own clock says. Each is modelled pointing at XII
+  // and pivots at the boss: its geometry is pushed up its own length, and `rotation.z` is then the
+  // angle read ANTI-clockwise from XII — so a clock angle t (clockwise, the way a dial is read)
+  // is `rotation.z = -t`, and III is -pi/2.
   const hour = box(0.012, r * 0.5, 0.004, M.solid);
   hour.geometry.translate(0, r * 0.2, 0);
-  hour.rotation.z = 0.06;
   hour.position.z = 0.03;
   const minute = box(0.008, r * 0.78, 0.004, M.solid);
   minute.geometry.translate(0, r * 0.32, 0);
-  minute.rotation.z = Math.PI / 6;
   minute.position.z = 0.034;
   const pin = cyl(0.008, 0.008, 0.01, M.solid, 10);
   pin.rotation.x = Math.PI / 2;
   pin.position.z = 0.036;
   g.add(hour, minute, pin);
+  // Neither hand is set dead on its mark: the face was drawn by hand and the hands were fitted to
+  // it by hand, so each carries a fixed lean of about a third of a degree. Fixed, not per-frame —
+  // the ink pass already boils the contour of every drawn edge in the room, and a hand that also
+  // wandered on its own would read as a shiver on the one prop the eye checks for a number.
+  const LEAN = { hour: 0.006, minute: -0.005 };
+  // Point the hands at a time. `d` is a Date; only hours and minutes are read, so the minute hand
+  // sits on its mark and steps over to the next one when the minute turns — which is what a real
+  // clock of this kind does, and what a stop-motion one would do. The hour hand carries the
+  // minutes with it, as an hour hand does, so at half past it is halfway between two numerals.
+  g.userData.setTime = (d = new Date()) => {
+    const h = d.getHours() % 12, m = d.getMinutes();
+    minute.rotation.z = -((m / 60) * Math.PI * 2) + LEAN.minute;
+    hour.rotation.z = -(((h + m / 60) / 12) * Math.PI * 2) + LEAN.hour;
+  };
+  g.userData.setTime();
   // a pendulum below, swinging on twos
   const pend = new THREE.Group();
   pend.position.set(0, -r + 0.01, 0.005);
