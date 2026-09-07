@@ -10,12 +10,16 @@
 export const PROMPTS = {
   // Short, because at the fan the lettering stands on the band of cloth above the slot row and
   // that band is a sixth of the frame: three lines fit there, five sit on the cards.
-  pick: [
-    'Choose a card. Click one, or name it: third from the left.',
-    'A second. They are all face down, which is the point.',
-    'And the third. Take your time; not too much of it.',
-  ],
-  pickAgain: ['I did not follow. Point at one, or count from the left.', 'Once more. A number, or left, right, middle.'],
+  // ONE LINE FOR ALL THREE (the user: "take three cards is enough, we dont need comments for each
+  // card draw"). He says it once and then lets them get on with it; since dialogue's round 8 the
+  // line holds until something replaces it, so it stands through all three picks on its own.
+  // He asks them to TOUCH one: the spoken ordinal still resolves and is still what he falls back on
+  // when they typed something he could not follow, but in a wash nobody can see which card is third
+  // from the left, so it is no longer advertised.
+  pick: ['Pick three cards. I will explain things as we go along.'],
+  // Here the words earn their keep: he could not follow what they typed, so he offers the aim the
+  // picture cannot. Left, right and the middle of a wash are things a person can point at by eye.
+  pickAgain: ['I did not follow. Put a finger on one.', 'Once more. Touch one, or say left, right, the middle.'],
   pickForYou: 'Very well. I will choose. People do not like it when I choose.',
   followup: 'You may ask one thing about the cards. One.',
   followupNone: 'No question. That is rarer than you would think.',

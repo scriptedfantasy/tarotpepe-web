@@ -277,11 +277,14 @@ export async function build(ctx) {
   // and one of them ("I shuffle seven times") stopped being true the day the riffle became a wash.
   // They are gone: what he says over his own hands is the turn in which he agreed to deal, written
   // fresh, and when he has written nothing he works in silence. See `drawing`.
+  // `opts.stream` is a reply somebody started earlier. The greeting uses it: the request goes out
+  // on the visitor's click and is read here, so the swing and the landing are spent writing rather
+  // than waiting. Everything else is unchanged — a beat that hands no stream asks for one now.
   async function speak(args, opts = {}) {
     const token = run;
     skipBeat = false;
     if (M?.available) P.pepeAnim?.consider?.(3); // he thinks while the first sentence comes
-    let r = await render(M?.reply ? M.reply(args) : null, opts);
+    let r = await render(opts.stream ?? (M?.reply ? M.reply(args) : null), opts);
     if (!r.said && r.held == null && alive(token) && !skipBeat && D?.script) r = await render(scriptedLines(D.script, args), opts);
     return r;
   }
@@ -343,7 +346,9 @@ export async function build(ctx) {
       for (let k = 0; k < 3 && alive(token); k++) {
         if (!R?.awaitPick) return;
         const landed = R.awaitPick();
-        let prompt = PROMPTS.pick[k], tries = 0;
+        // Only the first pick carries a line. The other two open the field under the sentence that
+        // is already standing, so he asks once and says nothing over the second and third.
+        let prompt = k === 0 ? PROMPTS.pick[0] : null, tries = 0;
         for (;;) {
           if (!alive(token)) return;
           const ac = new AbortController();
@@ -684,6 +689,14 @@ export async function build(ctx) {
     if (P.entrance?.open) await P.entrance.open();
     else C?.cut?.('home');
     if (!alive(token)) return;
+
+    // HE STARTS WRITING AT THE DOOR. The greeting used to be asked for after all of this had
+    // finished — the swing, the walk in, the doorway beat and the landing — and the model's first
+    // sentence is a couple of seconds beyond that, so the visitor stood in a silent room for a long
+    // time. The request goes out now, and is read below when the room has been looked at. None of
+    // the waiting moved; it is simply spent writing.
+    const greeting = M?.reply ? M.reply({ beat: 'greeting' }) : null;
+
     await wait(0.9); // the parlour, seen from the doorway, before we sit down
     if (!alive(token)) return;
 
@@ -703,7 +716,7 @@ export async function build(ctx) {
     // evening, not ours. Three sentences at most; the field opens under the third.
     api.beat = 'greeting';
     D.folio?.('greeting');
-    const g = await speak({ beat: 'greeting' }, { keepLast: true, hold: 1.2 });
+    const g = await speak({ beat: 'greeting' }, { keepLast: true, hold: 1.2, stream: greeting });
     if (!alive(token)) return;
     const out = await conversation(token, g.held);
     if (!alive(token)) return;

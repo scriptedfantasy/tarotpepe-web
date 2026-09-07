@@ -1298,7 +1298,11 @@ export async function build(ctx) {
     // block also listens; a final recognition result submits.
     async ask(prompt = SCRIPT.question[0], { respond = false, hold = 0.2, signal = null, timeout = 0, value = '', instant = false } = {}) {
       if (signal?.aborted) return null;
-      const said = api.say(prompt, { hold, keep: true });
+      // A FALSY PROMPT OPENS THE FIELD AND SAYS NOTHING. He has already spoken and his line is
+      // standing (round 8), so a caller that wants another answer to the same sentence — the second
+      // and third card of a reading, where the user asked for one line and not three — hands no
+      // prompt and the card is left exactly as it is.
+      const said = prompt ? api.say(prompt, { hold, keep: true }) : Promise.resolve();
       if (instant) finish();
       const onAbortSay = () => finish();
       signal?.addEventListener('abort', onAbortSay, { once: true });
