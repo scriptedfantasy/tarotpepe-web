@@ -999,7 +999,14 @@ export function pepeApi() {
 // what a visitor gets online is byte-for-byte what the dev server answers.
 export function pepeMiddleware(root) {
   let handler = null;
-  pepeApi().configureServer({ config: { root }, middlewares: { use: (fn) => (handler = fn) } });
+  // Vite's server carries a logger; the plain Node server does not. The handler logs a struck card
+  // name and a failed provider call, and a missing logger there would take the whole process down.
+  const logger = {
+    info: (m) => console.log(m),
+    warn: (m) => console.warn(m),
+    error: (m) => console.error(m),
+  };
+  pepeApi().configureServer({ config: { root, logger }, middlewares: { use: (fn) => (handler = fn) } });
   return handler;
 }
 
