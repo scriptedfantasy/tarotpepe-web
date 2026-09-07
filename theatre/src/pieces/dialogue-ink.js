@@ -5,6 +5,7 @@
 //   drawName     a name LETTERED in the sign hand (titles-sign.js) rather than set in a font
 //   drawCaret    the visitor's caret: an upright pen stroke standing on the baseline
 //   drawDots     the thinking mark: three dots struck one at a time while he writes
+//   drawArrow    the mark at the card's corner: there is more of this sentence, and it waits for you
 //   drawMic      the carbon microphone that stands on the table beside the ashtray
 //
 // ROUND 7 took the speaker's dashes out. Round 6 opened each register with one — his laid in his
@@ -162,6 +163,42 @@ export function drawDots(svg, n = 3, seed = 0, { color = INK, weight = 2.7 } = {
   // the paper underlay first, the way an inker leaves a gap round a drawn object, then the mark
   svg.innerHTML =
     `<path d="${d}" fill="none" stroke="${PAPER}" stroke-width="${(weight * 2.1).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<path d="${d}" fill="none" stroke="${color}" stroke-width="${weight.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+
+// THE ARROW — the mark at the corner of the card that says there is more of this sentence, and
+// that it waits for the visitor.
+//
+// ROUND 9, the user: "at the end, when he has filled the second line, add a little arrow for the
+// user to click next when he's ready". Before it, a take that would not fit the well was replaced
+// on a stopwatch (0.55 s after the last word landed) whether the visitor had finished reading it
+// or not — "he switches over a bit too fast". So the clock is gone and this mark takes its place.
+//
+// It is drawn with the same pen as everything else on the card and it is NOT a glyph: a shaft with
+// a slight bow in it, and a two-stroke head whose barbs cross past the point the way a hand's do —
+// the hand does not stop on the mark. Re-struck on every 12 fps step from a frame-keyed seed, so it
+// boils exactly as the dots, the caret and the card's own edge do.
+//
+// Laid in HIS green (dialogue.js, PEPE_GREEN), because what waits behind it is the rest of HIS
+// sentence: an ink arrow in the corner of the card would read as the visitor's own mark.
+//
+// viewBox 0 0 26 18 — the shaft on the middle line, the point at x = 22.
+export function drawArrow(svg, seed = 0, { color = INK, weight = 2.6 } = {}) {
+  const rng = mulberry32(211 + (((seed % 1009) + 1009) % 1009) * 13);
+  svg.setAttribute('viewBox', '0 0 26 18');
+  const y = 9 + (rng() - 0.5) * 0.5;
+  const tip = 20.9 + (rng() - 0.5) * 0.5;
+  const ds = [
+    pathD(stroke(3.4, y + (rng() - 0.5) * 0.4, tip, y, rng, { wobble: 0.45, overshoot: 0.6 })),
+    // the barbs, drawn as two separate strokes that run a little PAST the point rather than meeting
+    // it — the same corner the card's own frame has, where the pen does not stop on the mark
+    pathD(stroke(13.2, 2.7, tip + 0.9, y - 0.35, rng, { wobble: 0.38, overshoot: 0.55 })),
+    pathD(stroke(13.2, 15.3, tip + 0.9, y + 0.35, rng, { wobble: 0.38, overshoot: 0.55 })),
+  ];
+  const d = ds.join('');
+  // the paper underlay first, so the mark keeps its own gap in whatever is behind it
+  svg.innerHTML =
+    `<path d="${d}" fill="none" stroke="${PAPER}" stroke-width="${(weight * 2.4).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>` +
     `<path d="${d}" fill="none" stroke="${color}" stroke-width="${weight.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`;
 }
 

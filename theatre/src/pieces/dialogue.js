@@ -111,13 +111,19 @@
 //
 // API (ctx.pieces.dialogue):
 //   say(text, {hold, keep}) → Promise          reveals a caption, resolves after it has been read
-//                                              (and leaves it standing until the next one)
+//                                              (and leaves it standing until the next one). A line
+//                                              that does not fit the well is cut into takes and the
+//                                              promise settles on the LAST of them — so a line the
+//                                              visitor is still turning through has not been said
+//                                              yet, and nothing downstream of it happens early
+//                                              (see THE ARROW; TAKE_WAIT is the backstop)
 //   ask(prompt, {respond, signal, timeout, value, instant}) → Promise<string|null>
 //                                              says the prompt, opens the visitor's block (+ the mic),
 //                                              resolves with the text on Return ('' on Escape); null when
 //                                              the signal aborts or `timeout` seconds pass; `instant` shows
 //                                              the prompt at once (judging stills); `value` pre-fills it
-//   skip()                                     the visitor's key: the line typed out in full, then (again) cut
+//   skip()                                     the visitor's gesture: the take typed out in full,
+//                                              then (again) the next take of the line — one at a time
 //   asking                                     true while the visitor's block is up
 //   voice                                      {on, canListen, canSpeak}; setVoice(on)
 //   reply(answer) → string                     the line that folds the answer back, verbatim
@@ -136,7 +142,7 @@ import { SCRIPT, lineFor, linesFor, reply as scriptReply, POSITIONS, positionKey
 import { bySlug } from '../core/deck.js';
 import { INK } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
-import { SVGNS, drawCaret, drawDots, drawMic, drawPlacard, drawName, CAN_LETTER, PLACARD_BLEED } from './dialogue-ink.js';
+import { SVGNS, drawCaret, drawDots, drawArrow, drawMic, drawPlacard, drawName, CAN_LETTER, PLACARD_BLEED } from './dialogue-ink.js';
 
 export const meta = {
   name: 'dialogue',
@@ -164,12 +170,30 @@ const BLINK_LISTEN = 3; // ... while the microphone is listening: twice as quick
 //   · a line too long for the well is not allowed to stretch the card. It is CUT INTO TAKES and
 //     the takes are played into the same card, one after the other, the way a subtitle changes
 //     while the card it is set in does not. (The alternative — hold the line and let the card
-//     grow — is the fault we are fixing.)
+//     grow — is the fault we are fixing.) Each take FILLS the well — both lines of it, to the last
+//     word that fits — and the visitor turns to the next one when they are ready: see splitTakes
+//     and THE ARROW.
 const WELL_LINES = 2; // his register, in lines of type. The whole point: it never changes.
 const REPLY_LINES = 2; // the visitor's register. Reserved whether or not there is a word in it.
 const REGISTER_GAP = 0.4; // the paper between the two registers, in ems. Not a rule: a gap.
 const LINE_H = 1.5; // the leading, as a multiple of the type size (and the CSS line-height)
-const TAKE_HOLD = 0.55; // seconds a take that is not the last of its line is held before the cut
+// ---- THE ARROW, AND THE END OF THE STOPWATCH -------------------------------------------------
+// Round 9, the user: "he switches over a bit too fast ... at the end, when he has filled the second
+// line, add a little arrow for the user to click next when he's ready." A take that is not the last
+// of its line used to be replaced 0.55 s after its last word landed, whether it had been read or
+// not. It is not replaced on a clock any more: when the take is typed out and there is more of the
+// sentence behind it, a drawn arrow comes up at the corner of the card (dialogue-ink.js, drawArrow)
+// and the next take waits for the visitor — the arrow, a click anywhere on the card, Space, Return.
+//
+// AND THE EVENING STILL CANNOT HANG. A visitor who never clicks is not a visitor who stops the
+// show: the take takes itself off after TAKE_WAIT, which is eleven times the hold it replaces and
+// about twice as long as an unhurried second reading of two lines of type. The arrow is an
+// invitation to take your time, not a gate.
+const TAKE_WAIT = 6; // seconds a full take waits for the visitor before it moves on by itself
+// What the mouth is told, since the true length of a line is now the visitor's business: the typing
+// plus an unhurried beat between one take and the next. He finishes the sentence at a human pace
+// and then holds; he does not mouth along with somebody else's reading speed.
+const TAKE_PACE = 1.1;
 const PHONE = 700; // frames narrower than this are a phone: the card takes nearly the whole width
 // The type floor (BRIEF.md: nothing lettered below 13 px). The caption face is clamped there.
 const FONT_MIN = 13;
@@ -397,6 +421,26 @@ function buildStyle() {
     #dialogue .cap .caret { display: inline-block; width: 0.53em; height: 1.15em; vertical-align: baseline; margin-left: 0.12em; }
     #dialogue .cap .caret > svg { display: block; width: 100%; height: 100%; overflow: visible; }
     #dialogue .cap .caret.off { visibility: hidden; }
+    /* THE ARROW: the mark at the card's bottom-right corner while the rest of a sentence waits.
+       It is a hand-drawn stroke on a transparent button, and the BUTTON is bigger than the mark —
+       38 px on a laptop, never under 34 on a phone — so a thumb has something to land on. It sits
+       inside the card's own corner, below the visitor's register and clear of the caret (which
+       cannot be up at the same time: a take never waits while the field is open) and clear of the
+       microphone, which stands outside the card's rectangle in every shot (see place_mic). */
+    #dialogue .cap .next {
+      position: absolute; right: 0.35em; bottom: 0.15em; z-index: 3;
+      /* a button carries the browser's own 13.3 px font unless it is told not to, and every
+         measurement on this card is an em of the card's type: take the card's face */
+      font: inherit; letter-spacing: normal;
+      width: max(34px, 2.4em); height: max(34px, 2.4em);
+      display: flex; align-items: center; justify-content: center;
+      padding: 0; margin: 0; border: 0; background: transparent; appearance: none; outline: 0;
+      pointer-events: auto; cursor: pointer;
+    }
+    #dialogue .cap .next[hidden] { display: none; }
+    #dialogue .cap .next > svg { display: block; width: 2.1em; height: 1.45em; overflow: visible; }
+    /* while the arrow is up the card itself takes the clicks, so a tap ANYWHERE on it advances */
+    #dialogue .cap.waiting { pointer-events: auto; cursor: pointer; }
     /* the keystrokes land here and nowhere else; nothing of it is ever seen */
     #dialogue .cap .keys {
       position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 2;
@@ -489,6 +533,20 @@ export async function build(ctx) {
   drawMic(micSvg, 31);
   mic.appendChild(micSvg);
   root.appendChild(mic);
+
+  // THE ARROW. One element for the whole evening — it is moved into each fresh inner block rather
+  // than rebuilt, so the mark keeps its identity and a tap that lands as the card is re-set still
+  // lands on the same button. It is a real button (a thumb, a Tab, a screen reader) wrapped round a
+  // drawn stroke; the stroke is what is seen.
+  const arrow = document.createElement('button');
+  arrow.type = 'button';
+  arrow.className = 'next';
+  arrow.hidden = true;
+  arrow.setAttribute('aria-label', 'Read on');
+  arrow.title = 'Read on';
+  const arrowSvg = document.createElementNS(SVGNS, 'svg');
+  arrowSvg.setAttribute('aria-hidden', 'true');
+  arrow.appendChild(arrowSvg);
 
   let typing = null; // { words, start, hold, done, keep, chars }
   let inter = null; // { until, done }
@@ -819,6 +877,7 @@ export async function build(ctx) {
     placard.setAttribute('class', 'placard');
     placard.setAttribute('aria-hidden', 'true');
     cap.insertBefore(placard, cap.firstChild);
+    cap.appendChild(arrow); // the same button, moved into the new block: never rebuilt
     letterNames();
     drawCard();
   }
@@ -851,11 +910,35 @@ export async function build(ctx) {
   // and the ruler sets the same class, so what is measured is what is set.
   const lineHTML = (t) => `<div class="line">${wordMarkup(t)}</div>`;
   // Cut a line into takes, each of which fits the well. The most words that fit is found by
-  // bisection (a dozen measurements for a long sentence rather than one per word) — and then the
-  // cut is walked BACK to the last clause that ends inside it, the way a subtitler breaks a line:
-  // a full stop first, then a semicolon or colon, then a comma. A take that ends on "made for a"
-  // and hands "frog." to the next one is the mark of a machine, not of a hand.
+  // bisection (a dozen measurements for a long sentence rather than one per word).
+  //
+  // AND THEN IT KEEPS THEM. Round 9, the user: "I wonder whether you could actually use the full
+  // width of the second line because, as far as I can tell, you're not using the full width of the
+  // second line." They were right, and it was this function's fault. It used to walk the cut BACK
+  // from the greedy fit to the last clause that ended inside it — a full stop, then a semicolon or
+  // colon, then a comma — and it was allowed to walk back as far as 45% of the take to find one. A
+  // semicolon a third of the way along line two therefore sent everything after it to the next
+  // take, and the card cut away from a half-empty second line.
+  //
+  // MEASURED, on 21 real lines off the live model (91–392 characters), fill of line two averaged
+  // over every take that has another take behind it (tools/_dlg-r9-fill.mjs):
+  //
+  //                                    1600x900 (736 px card)   390x760 (351 px card)
+  //     walk back to 55% (round 8)            57.8%                    70.9%
+  //     walk back 2 words (shipped)           88.4%                    85.8%
+  //     no clause break at all                92.6%                    88.0%
+  //
+  // So: the cut is the last word that FITS, and the clause break is only preferred when it is
+  // within the last CLAUSE_REACH words of it — near enough that keeping it costs a word or two of
+  // paper rather than a third of a line. That is worth 4 points of fill against breaking anywhere
+  // (the last two columns) and it still stops a take ending on "made for a" whenever a full stop
+  // happens to land in reach.
+  //
+  // The widow rule is kept only where it matters: a take of ONE word, alone on the card, is a
+  // scrap, so the take before it hands one word back. Round 8 also pulled words back from a
+  // two-word ending; that is a legible take and it costs a line of paper to avoid.
   const BREAKS = [/[.?!…]["'”’)]?$/, /[;:]$/, /,$/];
+  const CLAUSE_REACH = 2; // words the cut may walk back to reach a clause ending, and no further
   function splitTakes(text, maxLines = WELL_LINES) {
     const words = String(text).split(/\s+/).filter(Boolean);
     if (words.length < 2) return [String(text)];
@@ -874,8 +957,8 @@ export async function build(ctx) {
       }
       let cut = max;
       if (max < words.length) {
-        // do not walk back past a bit over half the take, or the card starts holding scraps
-        const least = i + Math.max(1, Math.ceil((max - i) * 0.55));
+        // the clause break is a preference, not a rule: it is taken only if it is right there
+        const least = Math.max(i + 1, max - CLAUSE_REACH);
         for (const re of BREAKS) {
           for (let j = max; j >= least; j--)
             if (re.test(words[j - 1])) {
@@ -884,9 +967,8 @@ export async function build(ctx) {
             }
           if (cut !== max) break;
         }
-        // and never leave a widow: a last take of one or two words takes a few back with it
-        const left = words.length - cut;
-        if (left > 0 && left < 3 && cut - i > 3 && fits(cut, words.length)) cut -= 3 - left;
+        // never a single word alone on a take: the one before it hands a word back
+        if (words.length - cut === 1 && cut - i > 2) cut -= 1;
       }
       takes.push(words.slice(i, cut).join(' '));
       i = cut;
@@ -921,6 +1003,8 @@ export async function build(ctx) {
   // caption standing up where there was nothing (via show), `clear()`, a beat that ends with
   // nothing to say, and the door.
   function cut() {
+    arrowStill = false;
+    setArrow(false);
     cap.hidden = true;
     cap.classList.remove('asking');
     cap.innerHTML = '';
@@ -983,6 +1067,7 @@ export async function build(ctx) {
   // the seed is what makes it literal. A fresh sheet is cut only when there was nothing on the
   // paper a moment ago.
   function show(text) {
+    arrowStill = false;
     const fresh = cap.hidden;
     closeField(); // an ask still waiting resolves null; the visitor's register is emptied
     dropThink(); // he has written: the dots go
@@ -1007,6 +1092,7 @@ export async function build(ctx) {
   }
   // Move on to the next take of a line: the same card, a new set of words in its well.
   function nextTake(t) {
+    setArrow(false); // the mark belongs to the take that has just gone
     t.ti += 1;
     t.words = setTake(t.takes[t.ti]);
     t.chars = -1;
@@ -1025,6 +1111,7 @@ export async function build(ctx) {
   // A line still in its takes is finished on its LAST take, whole — never half-said — and that last
   // take is the one that stands.
   function finish() {
+    setArrow(false);
     if (typing) {
       const t = typing;
       typing = null;
@@ -1040,6 +1127,46 @@ export async function build(ctx) {
       i.done?.();
     }
   }
+
+  // ---- the arrow: there is more of this sentence, and it is waiting for you ---------------------
+  // Up only when a take of HIS is standing whole and another take is behind it. Never while the
+  // visitor's field is open (a take cannot wait there — `ask` says its prompt to the end before the
+  // field is opened) and never on the last take of a line, where there is nothing to go on to.
+  let arrowUp = false;
+  // A judging still has no clock running under it, so nothing would put the mark up or keep it
+  // there. This says the still asked for it: see setState's `still`.
+  let arrowStill = false;
+  function drawTheArrow() {
+    if (!arrowUp) return;
+    // The nib's own weight. The mark is drawn in a 26-unit box laid out at 2.1em, so a unit is
+    // about 1.3 px on a laptop and 1.05 on a phone: 2.0 units lands at ~2.6 px against the 3.6 px
+    // pen that framed the card, and ~2.0 px against the 2.25 px frame of a phone's. The mark is a
+    // hair lighter than the sheet it is drawn on, which is the right way round.
+    drawArrow(arrowSvg, ctx.clock.frame, { color: PEPE_GREEN, weight: Math.max(1.9, fontPx() * 0.125) });
+  }
+  function setArrow(on) {
+    const want = !!on && !field && !cap.hidden;
+    if (want === arrowUp) return;
+    arrowUp = want;
+    arrow.hidden = !want;
+    cap.classList.toggle('waiting', want);
+    if (want) drawTheArrow();
+    else if (document.activeElement === arrow) arrow.blur();
+  }
+  // Advance one take. The mark goes down before the take is turned, so the pointerdown and the
+  // click that follows it cannot both count as a gesture.
+  function onArrow(e) {
+    if (!arrowUp || field) return;
+    e.preventDefault(); // ... and the button does not take the focus off a pointer
+    e.stopPropagation();
+    setArrow(false);
+    api.skip();
+  }
+  // A tap anywhere on the card, while the card is waiting. `.cap.waiting` is the only state in
+  // which the card takes pointer events at all — every other moment it is transparent to them, so
+  // a click on the picture still reaches the flow (and the cards) exactly as it did.
+  cap.addEventListener('pointerdown', onArrow);
+  arrow.addEventListener('click', onArrow); // Return / Space on a button reached by Tab
 
   // ---- the thinking mark ------------------------------------------------------------------------
   // Three dots struck one at a time while a turn of his is in flight, and nothing else: the puppet
@@ -1246,8 +1373,11 @@ export async function build(ctx) {
     say(text, { hold = 1.2, keep = false } = {}) {
       finish();
       const { takes, words } = show(text);
-      // how long the line takes to say: the typing, plus a cut between each take and the next
-      const seconds = text.length / CPS + (takes.length - 1) * TAKE_HOLD;
+      // How long he is TALKING, which since round 9 is no longer how long the line is up: a line in
+      // more than one take waits for the visitor between them, and how long they take over it is
+      // their business and not his mouth's. So the puppet (and the sound piece's typing) is given
+      // the typing plus an unhurried beat per cut, which is the pace he would say it at.
+      const seconds = text.length / CPS + (takes.length - 1) * TAKE_PACE;
       ctx.pieces.pepeAnim?.say?.(text, seconds + 0.2);
       ctx.emit?.('dialogue:say', { text, seconds, takes: takes.length });
       return new Promise((res) => {
@@ -1383,8 +1513,13 @@ export async function build(ctx) {
       return answer;
     },
 
-    // The visitor's key: a take still typing is shown whole and holds a moment; a take already
-    // whole cuts to the next take of the line, or ends the line (or a card's title).
+    // THE VISITOR'S KEY, and since round 9 the visitor's ONLY way through a long line. One gesture
+    // moves one take and no more: a take still typing is shown whole and stops there — with the
+    // arrow up, because there is more behind it — and the NEXT gesture turns to the next take. It
+    // has never dumped a whole line and it does not now; `finish()` is reached only on the last
+    // take, where there is nothing left to turn to. Space and Return arrive here from flow's own
+    // key handler, a click on the picture from its pointer handler, and a tap on the card or on the
+    // arrow from the card itself.
     skip() {
       if (typing) {
         const t = typing;
@@ -1471,7 +1606,16 @@ export async function build(ctx) {
       wasPending = false;
       const p = ctx.params;
       const i = +(p.get('line') ?? 0);
-      const still = (text) => reveal(show(text).words, Infinity);
+      // A still of a line too long for the well shows the card as it actually stands at that
+      // moment: the first take, whole, with the arrow waiting at the corner for the visitor.
+      const still = (text) => {
+        const { takes, words } = show(text);
+        reveal(words, Infinity);
+        if (takes.length > 1) {
+          arrowStill = true;
+          setArrow(true);
+        }
+      };
       api.folio(name);
       // The visitor's register is bare unless a still is deliberately asking for words in it. In the
       // running film it only ever holds what they are typing AT THAT MOMENT, so a judging frame with
@@ -1536,7 +1680,12 @@ export async function build(ctx) {
         place_mic();
       }
       if (inter && t >= inter.until) finish();
-      if (!typing) return;
+      // the arrow boils like every other line on the card, on the same 12 fps step
+      if (arrowUp) drawTheArrow();
+      if (!typing) {
+        if (!inter && !arrowStill) setArrow(false);
+        return;
+      }
       const chars = Math.floor((t - typing.start) * CPS + 1e-6);
       if (chars !== typing.chars) {
         reveal(typing.words, chars);
@@ -1545,11 +1694,17 @@ export async function build(ctx) {
       const last = typing.words[typing.words.length - 1];
       const typed = typing.start + (last ? last.at - 1 : 0) / CPS;
       const more = typing.ti < typing.takes.length - 1;
-      // a take that is not the last of its line cuts to the next one in the same card; the last
-      // take of a line waits out its hold (and the spoken voice, if it is on) and ends the line
+      // A take that is not the last of its line puts the arrow up the moment its last word has
+      // landed and then WAITS — for the visitor, or, if they do nothing at all, for TAKE_WAIT. The
+      // last take of a line waits out its hold (and the spoken voice, if it is on) and ends the line.
       if (more) {
-        if (t >= typed + TAKE_HOLD) nextTake(typing);
-      } else if (t >= typed + typing.hold && !typing.speaking) finish();
+        const whole = t >= typed;
+        setArrow(whole);
+        if (whole && t >= typed + TAKE_WAIT) nextTake(typing);
+      } else {
+        setArrow(false);
+        if (t >= typed + typing.hold && !typing.speaking) finish();
+      }
     },
   };
   ctx.on('resize', () => {
