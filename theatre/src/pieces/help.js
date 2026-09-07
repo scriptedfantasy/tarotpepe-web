@@ -310,6 +310,14 @@ export async function build(ctx) {
         return;
       }
     }
+    // the signature at the foot. It leads out of the film, so it opens a second window and leaves
+    // the notice standing: a visitor who touches it has not said they are done reading.
+    const cr = b.credit;
+    if (cr && x >= cr.x && x <= cr.x + cr.w && y >= cr.y && y <= cr.y + cr.h) {
+      window.open(cr.href, '_blank', 'noopener');
+      ctx.emit?.('help:credit');
+      return;
+    }
     // a click on the paper does nothing; a click off it puts the notice down
     if (x < b.sheet.x || x > b.sheet.x + b.sheet.w || y < b.sheet.y || y > b.sheet.y + b.sheet.h) close();
   });

@@ -16,7 +16,9 @@
 //
 // Measure: the sheet is at most 560 px and at most 88% of the frame's width, the body is lettered
 // at a 13 px cap or better on every frame we ship, and every line is wrapped to the measure by
-// signWidth, so a 390 px phone gets the same notice with more turns in it.
+// signWidth, so a 390 px phone gets the same notice with more turns in it. (The one line set
+// smaller than that is the credit at the foot — 12 px on a phone. It is a signature, not an
+// instruction: nobody has to read it to know what to do.)
 import { INK, PAPER, inkLine } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 import { signCaps, signWidth } from './titles-sign.js';
@@ -37,8 +39,21 @@ export const BILL = {
   ],
 };
 
+// The hand that drew the shop, at the foot of its own notice — the smallest print on the sheet and
+// the only line on it that is not about the room. The handle is the link: it is struck at full ink
+// and ruled under, and «CONJURED BY» is set back, so the part that leads somewhere is the part that
+// looks touched. There is no at-sign in the sign hand (titles-sign.js is a case of caps, numerals
+// and points), so the «@» is cut here, by the same pen, and boils with the rest.
+export const CREDIT = {
+  by: 'CONJURED BY',
+  handle: 'SCRPTDFNTSY',
+  href: 'https://x.com/scrptdfntsy',
+};
+
 const BLEED = 26; // room on the plate for the border's overshoot and the drop-hatch
 const TRACK = 0.16; // the body's tracking; the heading is wider
+const CRED_TRACK = 0.15;
+const AT_ADV = 104; // the at-sign's advance, in the case's own units (cap height = 100)
 
 // Wrap one line to a measure, in the hand it will be lettered in.
 function wrap(text, capH, maxW) {
@@ -98,13 +113,48 @@ function layout(w, h, k) {
   const side = ctrlW[0] + ctrlW[1] + ctrlGap <= sheetW - 2 * pad;
   const ctrlBlockH = side ? ctrlH : ctrlH * 2 + ctrlGap * 0.7;
 
+  // the double border, hoisted out of the strike so the credit knows where the inner rule runs
+  const in1 = Math.max(6, sheetW * 0.022);
+  const in2 = in1 + Math.max(3.5, pen * 2.4);
+
+  // ---- the credit line, set to the measure ----------------------------------------------------
+  // It lives in the margin the sheet already had under its controls. If that margin is not deep
+  // enough for it — a phone's is not — the gap between the small print and the controls gives the
+  // difference up, so the sheet ends exactly as tall as it was before anybody signed it.
+  const cred = setCredit(sheetW - 2 * pad, capFoot);
+  const wantTop = Math.max(9, cred.cap * 0.8); // clear of the controls
+  const wantBot = in2 + Math.max(6, cred.cap * 0.55); // clear of the inner rule
+  const want = wantTop + cred.cap + wantBot;
+  const preCtrl = Math.max(pad * 0.28, pad * 0.72 - Math.max(0, want - pad));
+  // and if the foot is still short of what the signature asked for, the signature gives the
+  // difference up — half off the space above it, half off the space below. The sheet never grows a
+  // pixel to fit it: it is the last thing on the notice and the first to be told to move over.
+  const short = Math.max(0, want - (pad + (pad * 0.72 - preCtrl)));
+  const credTop = Math.max(4, wantTop - short * 0.5);
+  const credBot = Math.max(in2 + 2, wantBot - (short - (wantTop - credTop)));
+
   const yHead = pad + capHead * 0.5;
   const yRule1 = yHead + capHead * 0.5 + pad * 0.62;
   const yBody = yRule1 + pad * 0.72;
   const yRule2 = yBody + bodyH + pad * 0.5;
   const yFoot = yRule2 + pad * 0.5;
-  const yCtrl = yFoot + foot.length * capFoot * 1.7 + pad * 0.72;
-  const sheetH = Math.round(yCtrl + ctrlBlockH + pad);
+  const yCtrl = yFoot + foot.length * capFoot * 1.7 + preCtrl;
+  const yCred = yCtrl + ctrlBlockH + credTop; // the credit's cap line
+  // the depth the sheet had before anybody signed it — the controls have moved up inside it, and
+  // that, and nothing else, is where the credit's room comes from
+  const sheetH = Math.round(yFoot + foot.length * capFoot * 1.7 + pad * 0.72 + ctrlBlockH + pad);
+
+  // where it is lettered, and the box a thumb has to hit — the whole line, not only the handle
+  cred.x = Math.round((sheetW - cred.w) / 2);
+  cred.capY = yCred;
+  cred.box = {
+    x: Math.max(pad * 0.4, cred.x - cred.cap * 1.1),
+    y: yCtrl + ctrlBlockH + 1, // everything under the controls and inside the border is the credit
+    w: Math.min(sheetW - 2 * (pad * 0.4), cred.w + cred.cap * 2.2),
+    h: 0,
+  };
+  cred.box.w = Math.min(cred.box.w, sheetW - pad * 0.4 - cred.box.x);
+  cred.box.h = sheetH - Math.max(2, in2 * 0.4) - cred.box.y; // down to the border, and no further
 
   // ---- where the controls sit, in sheet coordinates -------------------------------------------
   const boxes = [];
@@ -121,7 +171,28 @@ function layout(w, h, k) {
     });
   }
 
-  return { sheetW, sheetH, pen, pad, capBody, capHead, capFoot, capCtrl, numW, lead, items, foot, boxes, yHead, yRule1, yBody, yRule2, yFoot };
+  return { sheetW, sheetH, pen, pad, capBody, capHead, capFoot, capCtrl, numW, lead, items, foot, boxes, cred, in1, in2, yHead, yRule1, yBody, yRule2, yFoot };
+}
+
+// Set «CONJURED BY @SCRPTDFNTSY» in one line at the smallest hand on the sheet, and say where each
+// of its three parts starts: the words, the at-sign cut here, and the handle that is the link.
+function setCredit(measure, capFoot) {
+  let cap = Math.max(12, Math.min(15, capFoot * 0.82));
+  const put = () => {
+    const track = CRED_TRACK * (cap / 0.72);
+    const wBy = signWidth(CREDIT.by, { capH: cap, tracking: CRED_TRACK });
+    const wHandle = signWidth(CREDIT.handle, { capH: cap, tracking: CRED_TRACK });
+    const wAt = (cap * AT_ADV) / 100;
+    const gap = cap * 0.85; // the word space: an at-sign set close reads as part of the word before it
+    return { cap, wBy, wAt, wHandle, track, gap, w: wBy + gap + wAt + track + wHandle };
+  };
+  let m = put();
+  if (m.w > measure) {
+    cap = Math.max(10, cap * (measure / m.w)); // a narrow sheet gets a smaller signature, not a turn
+    m = put();
+  }
+  // the handle, and the rule under it, run from the at-sign to the end of the name
+  return { ...m, byX: 0, atX: m.wBy + m.gap, handleX: m.wBy + m.gap + m.wAt + m.track, x: 0, capY: 0, box: null };
 }
 
 // Strike the laid-out notice twice — one plate for each parity of the two — and say where it sits.
@@ -132,11 +203,14 @@ function plate(w, h, dpr, L) {
   return {
     sheet: { x: x0, y: y0, w: L.sheetW, h: L.sheetH },
     controls: L.boxes.map((b) => ({ key: b.key, x: x0 + b.x, y: y0 + b.y, w: b.w, h: b.h })),
+    // the credit's box, in the same coordinates as the controls, and where it goes
+    credit: { x: x0 + L.cred.box.x, y: y0 + L.cred.box.y, w: L.cred.box.w, h: L.cred.box.h, href: CREDIT.href },
     plates,
     bleed: BLEED,
     capBody: L.capBody,
     capFoot: L.capFoot,
     capCtrl: L.capCtrl,
+    capCredit: L.cred.cap,
   };
 }
 
@@ -188,8 +262,7 @@ function strike(sheetW, sheetH, dpr, o) {
   rule(g, 0, sheetH, 0, 0, pen * 0.72, nib, 2);
 
   // ---- the double border, like the board the notice comes from ---------------------------------
-  const in1 = Math.max(6, sheetW * 0.022);
-  const in2 = in1 + Math.max(3.5, pen * 2.4);
+  const in1 = o.in1, in2 = o.in2;
   rule(g, in1, in1, sheetW - in1, in1, pen * 1.25, nib, 5);
   rule(g, sheetW - in1, in1, sheetW - in1, sheetH - in1, pen * 1.25, nib, 5);
   rule(g, sheetW - in1, sheetH - in1, in1, sheetH - in1, pen * 1.25, nib, 5);
@@ -228,7 +301,64 @@ function strike(sheetW, sheetH, dpr, o) {
     rule(g, b.x, b.y + b.h, b.x, b.y, pen * 1.1, nib, 4);
     signCaps(g, b.label, b.x + b.w / 2, b.y + b.h / 2, { capH: o.capCtrl, tracking: 0.2, pen: Math.max(1.45, o.capCtrl * 0.14), seed: b.key === 'leave' ? 121 : 122, boil });
   }
+
+  // ---- and who conjured it ----------------------------------------------------------------------
+  // Under the controls, in the margin the sheet already had: the words set back to seven tenths of
+  // the ink, the name at full strength with a rule under it. Nothing here is blue and nothing is
+  // underlined but the name, which is the whole of the sign that it goes somewhere.
+  const cr = o.cred;
+  const credPen = Math.max(1.15, cr.cap * 0.11);
+  const mid = cr.capY + cr.cap * 0.5;
+  signCaps(g, CREDIT.by, cr.x + cr.byX, mid, { capH: cr.cap, tracking: CRED_TRACK, pen: credPen, align: 'left', seed: 140, boil, alpha: 0.68 });
+  atSign(g, cr.x + cr.atX, cr.capY, cr.cap, credPen * 1.02, nib);
+  signCaps(g, CREDIT.handle, cr.x + cr.handleX, mid, { capH: cr.cap, tracking: CRED_TRACK, pen: credPen * 1.06, align: 'left', seed: 141, boil });
+  const uy = cr.capY + cr.cap * 1.24;
+  rule(g, cr.x + cr.atX - cr.cap * 0.06, uy, cr.x + cr.handleX + cr.wHandle, uy, credPen * 0.72, nib, 2);
   return c;
+}
+
+// The at-sign, cut here because the sign hand has none: one ring left open at the foot, the pen's
+// flick out of it, and the little bowl inside. Same nib as the rules, so it boils with them.
+function atSign(g, x, capY, capH, pen, rng) {
+  // The mark is wider than a letter and fills the whole cap band — an at-sign is a big sort — and
+  // the ring is drawn a hair finer than the letters beside it so the middle stays white.
+  const cx = x + (capH * AT_ADV) / 200, cy = capY + capH * 0.5;
+  const R = capH * 0.4, Ry = capH * 0.5;
+  const wob = Math.max(0.12, capH * 0.022);
+  const ring = [];
+  for (let i = 0; i <= 26; i++) {
+    const a = 0.44 * Math.PI + 1.74 * Math.PI * (i / 26); // round from the foot to the right side
+    ring.push([cx + R * Math.cos(a), cy + Ry * Math.sin(a)]);
+  }
+  penPath(g, ring, pen, wob, rng);
+  // the ring stops at the right, where the pen turns down and out again — the whole of the mark's
+  // right-hand side is that one flick, and it is what tells it from a Q
+  const [ex, ey] = ring[ring.length - 1];
+  penPath(g, [[ex, ey], [ex + R * 0.3, ey + Ry * 0.34], [ex + R * 0.44, ey - Ry * 0.04]], pen * 0.86, wob, rng);
+  // the bowl inside, kept small and light: at this size a fat one fills the ring and the whole mark
+  // goes black, which is how a hand-cut at-sign turns into a full stop in a circle.
+  const bowl = [];
+  for (let i = 0; i <= 14; i++) {
+    const a = 0.2 * Math.PI + 1.8 * Math.PI * (i / 14);
+    bowl.push([cx - R * 0.05 + R * 0.44 * Math.cos(a), cy + Ry * 0.38 * Math.sin(a)]);
+  }
+  penPath(g, bowl, pen * 0.7, wob * 0.5, rng);
+}
+
+// A polyline drawn with a pen that shakes — inkLine only takes two points.
+function penPath(g, pts, width, wobble, rng) {
+  g.save();
+  g.strokeStyle = INK;
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.beginPath();
+  pts.forEach(([px, py], i) => {
+    const jx = px + (rng() - 0.5) * 2 * wobble, jy = py + (rng() - 0.5) * 2 * wobble;
+    i ? g.lineTo(jx, jy) : g.moveTo(jx, jy);
+  });
+  g.lineWidth = width * (0.9 + rng() * 0.24);
+  g.stroke();
+  g.restore();
 }
 
 // a ruled line with a pen's overshoot at both ends
