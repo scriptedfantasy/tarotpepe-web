@@ -582,9 +582,12 @@ export async function build(ctx) {
         await lay([], false);
         loopPlay(fan.pushFrames(() => shuffleTake?.hideCards?.()), 14);
       } else if (name === 'pick') {
-        // one card carried out of the mass to slot 0
+        // one card carried out of the mass to slot 0 — and it is STANDING UP first, because that is
+        // the card the hand arrives at live: the visitor's pointer lifts it clear of the heap, and
+        // the take is judged on the grip his fingers take on it (round 13: by a corner)
         await lay([], false);
         fan.lay();
+        fan.liftIndex(fan.middleIndex);
         loopPlay(fan.pickFrames(fan.entries[fan.middleIndex], 0), 12);
       } else if (name === 'gather') {
         await lay([], false);

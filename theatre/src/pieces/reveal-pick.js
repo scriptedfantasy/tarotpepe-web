@@ -34,7 +34,7 @@ import { mulberry32 } from '../core/rng.js';
 import { cardGeometry } from './cards-geometry.js';
 import { compose, dealTrack, handFrames, handSide, laidPose } from './reveal-takes.js';
 import { deckStacks } from './reveal-shuffle.js';
-import { WASH, bandFor, indexAt, nearBand, LIFT, DEEP } from './reveal-wash.js';
+import { WASH, bandFor, indexAt, nearBand, LIFT, DEEP, cardCorners } from './reveal-wash.js';
 
 const PI = Math.PI;
 const lerp = (a, b, u) => a + (b - a) * u;
@@ -48,6 +48,68 @@ const yawL = (x, z) => -Math.atan2(x + SHOULDER[0], z - SHOULDER[1]);
 // a wash is not touching a card, it is lying on a heap of them and pushing (reveal-hand.js CONTACT)
 const HR = (x, z, y, floor = 0, pose = 'splay') => ({ x, y, z, yaw: yawR(x, z), pose, side: 'R', floor, by: 'palm' });
 const HL = (x, z, y, floor = 0, pose = 'splay') => ({ x, y, z, yaw: yawL(x, z), pose, side: 'L', floor, by: 'palm' });
+
+// ── THE CARD IS TAKEN BY A CORNER (round 13) ──────────────────────────────────────────────────────
+// THE USER, watching the hand come down on the card he had chosen: "review the picker hand as well,
+// right now it picks the middle of the card, which makes no sense". It does not. A person takes a
+// card by an edge or a CORNER — a palm laid flat on the face of one is how you hold a card DOWN, not
+// how you lift it — and in this wash the middle of a card is usually under its neighbour, so the
+// corner is the only part of it there is to take. (BRIEF.md carries it as a rule now.)
+//
+// WHICH CORNER, and why. Two rules, in this order:
+//   · IT IS ONE OF THE TWO ON HIS SIDE OF THE CARD. Measured as DEPTH along his own reach — how far
+//     past the card's middle a corner lies — and not as plain distance, because the two ends of a
+//     near edge lying square across the reach are both a little FURTHER from the shoulder than the
+//     middle is, and neither of them is beyond it. His arm comes in over the top edge of the frame
+//     (reveal-hand.js: the drawing enters from his side and the sleeve runs back to his own wrist),
+//     so a corner on his side is the first the hand meets and the arm never crosses the card's face
+//     to reach it. It is the argument the turn was corrected by in round 9: "a hand that lies over
+//     the card it is about to turn is a hand you cannot see".
+//   · AND, OF THOSE TWO, ONE THE VISITOR COULD SEE. A corner that lay UNDER a higher card while the
+//     mass was closed loses to one that was showing on the same card, so the fingers take the corner
+//     they were looking at when they chose it. Often neither was showing — this wash buries three
+//     corners or more on 55 of the 78 — and then it is simply the deeper of the two.
+// The chosen corner is kept in the CARD'S OWN FRAME, so the fingers stay on that same corner while
+// the card comes up out of the mass, travels and turns under them. Measured in tools/_rv13-grip.mjs:
+// over the whole wash the nip is 120 mm out of the middle of its card and on his side of it, every
+// time; it is the nearest corner of the four on 96 % of them and the exposure rule takes the rest.
+const GRIP_IN = 0.011; // how far in along the card's diagonal the nip sits, so the two fingers straddle the corner
+
+// the four corners in the mesh's own frame — cards-geometry: the width runs along x and the art's
+// top toward −z — as [x, z] pairs
+const localCorners = (w, h) => [
+  [-w / 2, -h / 2],
+  [w / 2, -h / 2],
+  [w / 2, h / 2],
+  [-w / 2, h / 2],
+];
+// …and where one of them falls on the cloth for a face-DOWN card, centred at (x, z) with
+// rotation.set(PI, ry, 0). Worked out from the Euler itself and not guessed: with x = PI the local
+// x axis goes to (cos ry, 0, sin ry) and the local z axis to (sin ry, 0, −cos ry) — the flip
+// reverses the second one, which is what turns a plain yaw into this pair of signs. (The first cut
+// of this had the sines the other way round, which is a REFLECTION: it lands the same 131 mm from
+// the middle of the card and is not a corner at all except when the card lies square. It is checked
+// against the mesh's own matrix over all 78 cards in tools/_rv13-grip.mjs.)
+function cornerAt(x, z, ry, lc) {
+  const c = Math.cos(ry), s = Math.sin(ry);
+  return { x: x + lc[0] * c + lc[1] * s, z: z + lc[0] * s - lc[1] * c };
+}
+// Was this point on the cloth under a card lying HIGHER in the heap? Answered off the wash's own
+// footprints and ranks, which is how the eye answers it (reveal-wash.js → indexAt does the same sum
+// for the pointer), so "the visitor could see this corner" means the same thing to both.
+const REACH = Math.hypot(WASH.card.w, WASH.card.h) / 2;
+function coveredAt(x, z, rank) {
+  for (const p of WASH.poses) {
+    if (p.rank <= rank) continue; // lying under this card: it cannot bury anything of it
+    if (Math.hypot(p.x - x, p.z - z) > REACH) continue;
+    const q = cardCorners(p);
+    let inside = false;
+    for (let i = 0, k = q.length - 1; i < q.length; k = i++)
+      if (q[i][1] > z !== q[k][1] > z && x < ((q[k][0] - q[i][0]) * (z - q[i][1])) / (q[k][1] - q[i][1]) + q[i][0]) inside = !inside;
+    if (inside) return true;
+  }
+  return false;
+}
 
 // player: { play(frames, opts) → Promise } — the piece's take player (reveal.js)
 // hand: the reveal-hand api, or null. His hands push the mass out, take the card and rake it up.
@@ -176,6 +238,31 @@ export function buildPick(ctx, cards, player, hand = null, slots = ctx.layout.sp
     out.ry = -p.ang; // a card lying face DOWN is yawed the other way by the flip
     out.roll = 0; // flat on the cloth: the photograph's first check
     return out;
+  }
+  // WHICH CORNER OF THIS CARD HIS FINGERS TAKE — the argument is at the head of the file. Worked out
+  // on the card's RESTING pose, where the wash's ranks say what was buried and what was showing, and
+  // returned in the card's own frame, so it is the same corner however far the card has since been
+  // stood up or carried.
+  const LOCAL = localCorners(W, H);
+  function gripCorner(e, side) {
+    const r = restPose(e, {});
+    const rank = WASH.poses[e.i]?.rank ?? 0;
+    const sx = side === 'L' ? -SHOULDER[0] : SHOULDER[0], sz = SHOULDER[1];
+    // How far INTO the card a corner is, measured along his own reach: negative is the near half,
+    // the half his fingers can get to without lying on the card. Depth and not plain distance,
+    // because the two corners of a near edge lying square across the reach are both a little
+    // further from the shoulder than the card's middle is and neither is "beyond" it.
+    const mid = Math.hypot(r.x - sx, r.z - sz) || 1;
+    const ux = (r.x - sx) / mid, uz = (r.z - sz) / mid;
+    const scored = LOCAL.map((lc) => {
+      const c = cornerAt(r.x, r.z, r.ry, lc);
+      return { lc, depth: (c.x - r.x) * ux + (c.z - r.z) * uz, covered: coveredAt(c.x, c.z, rank) };
+    }).sort((a, b) => a.depth - b.depth);
+    // the two on HIS SIDE of the middle, and never the far pair: a hand that reaches past the middle
+    // of a card to take the far corner is lying on the card, which is the whole complaint
+    const near = scored.filter((s) => s.depth < 0);
+    const pick = near.length ? near : scored.slice(0, 1);
+    return (pick.find((s) => !s.covered) ?? pick[0]).lc;
   }
   const liftedY = Y + T / 2 + DEEP + LIFT.y;
   function applyEntry(e) {
@@ -346,7 +433,6 @@ export function buildPick(ctx, cards, player, hand = null, slots = ctx.layout.sp
     const from = { p: e.mesh.position.clone(), ry: e.mesh.rotation.y };
     const to = slotPose(slot);
     const side = handSide(from.p.x); // the hand nearest the card he is taking
-    const sgn = side === 'L' ? -1 : 1;
     const fr = dealTrack(e.mesh, from, to, {
       spin: 0.12,
       apex: hand ? 0.026 : 0.05, // carried in his fingers, not flicked: it stays near the cloth
@@ -369,27 +455,78 @@ export function buildPick(ctx, cards, player, hand = null, slots = ctx.layout.sp
       e.removed = true;
     };
     if (!hand) return fr;
-    // His hand takes the card the visitor chose: in from the top of the frame, thumb and
-    // forefinger down on the card, a two-frame hold, and only then does the card travel.
+    // HIS HAND TAKES THE CARD THE VISITOR CHOSE, BY A CORNER. Four drawings before the card moves,
+    // and they are the whole of the grip: the open hand comes in over the top edge of the frame, it
+    // comes down beside the corner still open, THE FINGERS CLOSE ON IT (the pinch plate, the user's
+    // own drawing of a thumb and forefinger on a card's corner), and one drawing is held while the
+    // grip takes. A hand that materialises already holding a card is not what this film does; four
+    // drawings is a third of a second, and this beat plays three times a reading.
     const D = 4;
-    const pinch = (p, ry, y) => ({ x: p.x, y: y ?? 0.006, z: p.z + 0.03, yaw: sgn * -ry * 0.6 - 0.12, side, pose: 'pinch' });
+    const lc = gripCorner(e, side); // in the card's frame: the same corner all the way to the slot
+    // The nip, for a card centred at (x, z) and yawed ry: the corner drawn a few millimetres in
+    // along its own diagonal, so the two fingers straddle the corner instead of pinching thin air.
+    const nip = (x, z, ry) => {
+      const c = cornerAt(x, z, ry, lc);
+      const dx = x - c.x, dz = z - c.z, L = Math.hypot(dx, dz) || 1;
+      return { x: c.x + (dx / L) * GRIP_IN, z: c.z + (dz / L) * GRIP_IN };
+    };
+    // one drawing of the hand: the fingers at `g`, `back` metres up-frame of it (the approach), `y`
+    // above whatever they are resting on and `floor` metres of card under them — a chosen card
+    // stands 20 mm proud of the cloth and the hand must be drawn ON it, not under it
+    const bearing = (x, z) => (side === 'L' ? yawL(x, z) : yawR(x, z));
+    const spec = (g, { y = 0.005, back = 0, floor = 0, pose = 'pinch' } = {}) => {
+      const x = g.x, z = g.z - back;
+      return { x, y, z, yaw: bearing(x, z), side, pose, floor, by: 'tip' };
+    };
+    const g0 = nip(from.p.x, from.p.z, from.ry);
+    const g1 = nip(to.p.x, to.p.z, to.ry);
+    const stands = Math.max(0, from.p.y - Y); // how proud of the cloth the chosen card is standing
+    // and the ride: the fingers hold that corner while the card is carried, so the card PIVOTS about
+    // the point they hold — the flick dealTrack puts in the flight is a card turning between a
+    // finger and a thumb. Taken off the mesh itself, so the bank and the spin are in it.
+    //
+    // IT IS PADDED AT THE FRONT WITH THE APPROACH'S OWN DRAWINGS, and that is not book-keeping.
+    // `compose` draws EVERY track in every drawing, clamped to its first frame before it starts, so
+    // a ride that begins at D is still drawing its first pose in drawings 0…D−1 — and since the
+    // hand goes wherever the LAST claim of the drawing put it, the ride's pinch was overwriting the
+    // open hand coming in and the approach could not be seen at all. Four dead drawings at its head
+    // leave those to the approach.
+    const _c = new THREE.Vector3();
     const ride = [];
+    for (let k = 0; k < D; k++) ride.push(() => {}); // the fingers are still on their way in
     for (let k = 0; k < fr.length; k++)
       ride.push(() => {
         e.mesh.updateMatrixWorld(true);
-        hand.at(e.mesh.position.x, Math.max(0, e.mesh.position.y - Y) + 0.006, e.mesh.position.z + 0.03, { yaw: sgn * -e.mesh.rotation.y * 0.6 - 0.12, side, pose: 'pinch' });
+        e.mesh.localToWorld(_c.set(lc[0], 0, lc[1]));
+        const dx = e.mesh.position.x - _c.x, dz = e.mesh.position.z - _c.z, L = Math.hypot(dx, dz) || 1;
+        const x = _c.x + (dx / L) * GRIP_IN, z = _c.z + (dz / L) * GRIP_IN;
+        hand.at(x, 0.005, z, { yaw: bearing(x, z), side, pose: 'pinch', floor: Math.max(0, _c.y - Y), by: 'tip' });
       });
     ride.push(() => hand.off());
     return compose([
       { offset: D, frames: fr },
       {
         offset: 0,
-        frames: handFrames(hand, [{ ...pinch(from.p, from.ry, 0.07), z: from.p.z - 0.24 }, { ...pinch(from.p, from.ry, 0.03), z: from.p.z - 0.08 }, pinch(from.p, from.ry), pinch(from.p, from.ry), { off: true }]),
+        frames: handFrames(hand, [
+          spec(g0, { y: 0.075, back: 0.2, pose: 'point' }), // in over the top edge of the frame, open
+          spec(g0, { y: 0.03, back: 0.075, pose: 'point' }), // down beside the corner, still open
+          spec(g0, { y: 0.005, floor: stands }), // the fingers close on the corner
+          spec(g0, { y: 0.005, floor: stands }), // held one drawing: the grip takes
+          { off: true },
+        ]),
       },
-      { offset: D, frames: ride },
+      { offset: 0, frames: ride },
       {
+        // …and it is put down by the same corner: the fingers stay on it as it lands, open, and go
+        // back out the way they came
         offset: D + fr.length - 1,
-        frames: handFrames(hand, [{ off: true }, pinch(to.p, to.ry), { ...pinch(to.p, to.ry, 0.04), z: to.p.z - 0.14 }, { ...pinch(to.p, to.ry, 0.08), z: to.p.z - 0.32 }, { off: true }]),
+        frames: handFrames(hand, [
+          { off: true },
+          spec(g1, { y: 0.004, floor: Math.max(0, to.p.y - Y) }),
+          spec(g1, { y: 0.03, back: 0.13, pose: 'point' }),
+          spec(g1, { y: 0.075, back: 0.3, pose: 'point' }),
+          { off: true },
+        ]),
       },
     ]);
   }
@@ -643,6 +780,45 @@ export function buildPick(ctx, cards, player, hand = null, slots = ctx.layout.sp
       if (e.lift !== l0 || !e.mesh.visible) applyEntry(e);
     }
   }
+  // WHICH CORNER HIS FINGERS WOULD TAKE CARD i BY, for tools/_rv13-grip.mjs — the grip is measured
+  // rather than eyeballed: the corner in the card's own frame, where it and the nip are on the cloth
+  // now, where the corner lay while the mass was closed, and whether anything was lying over it
+  // there.
+  const _g = new THREE.Vector3();
+  function gripOf(i, side = null) {
+    const e = entries[i];
+    if (!e) return null;
+    const s = side ?? handSide(e.mesh.position.x);
+    const lc = gripCorner(e, s);
+    // off the MESH's own matrix and never off mesh.rotation.y: a take sets the card's quaternion,
+    // and reading a Euler back out of one comes back on another branch (y is decomposed into
+    // ±90°), which would put this corner on the opposite side of the card from the drawn one
+    e.mesh.updateMatrixWorld(true);
+    const cx = e.mesh.position.x, cz = e.mesh.position.z;
+    const w0 = e.mesh.localToWorld(_g.set(lc[0], 0, lc[1])).clone();
+    const c = { x: w0.x, z: w0.z };
+    const L = Math.hypot(cx - c.x, cz - c.z) || 1;
+    const r = restPose(e, {});
+    const rest = cornerAt(r.x, r.z, r.ry, lc);
+    return {
+      side: s,
+      lc,
+      centre: [cx, cz],
+      corner: [c.x, c.z],
+      nip: [c.x + ((cx - c.x) / L) * GRIP_IN, c.z + ((cz - c.z) / L) * GRIP_IN],
+      corners: LOCAL.map((q) => {
+        const w = e.mesh.localToWorld(_g.set(q[0], 0, q[1]));
+        return [w.x, w.z];
+      }),
+      rest: [rest.x, rest.z],
+      covered: coveredAt(rest.x, rest.z, WASH.poses[e.i]?.rank ?? 0),
+      buried: LOCAL.map((q) => {
+        const w = cornerAt(r.x, r.z, r.ry, q);
+        return coveredAt(w.x, w.z, WASH.poses[e.i]?.rank ?? 0);
+      }),
+    };
+  }
+
   // where the cards are on screen (CSS px), left to right: for tests and for a caption that points
   // at "the third from the left"
   function screenPositions() {
@@ -706,6 +882,7 @@ export function buildPick(ctx, cards, player, hand = null, slots = ctx.layout.sp
     doPick,
     gather,
     step,
+    gripOf,
     screenPositions,
     get armed() {
       return armed;

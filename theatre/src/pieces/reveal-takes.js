@@ -181,7 +181,15 @@ export function turnEdge(phi, H) {
 // the hand is turned across so its arm runs up past the side of the card. Reaching for the middle
 // of the near edge means reaching over the whole card, and a hand that lies over the card it is
 // about to turn is a hand you cannot see: the card rears up in front of it and swallows it.
-export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 0.058, yaw = -0.46 } = {}) {
+//
+// ROUND 13, AND IT IS THE SAME RULE AS THE PICK'S: A CARD IS TAKEN BY ITS CORNER. The corner was
+// already right here — dx puts the contact 8 mm in from the outer corner of the near edge — but the
+// DRAWING was the flat splayed hand with a fingertip on it, which from overhead is a palm laid on
+// the card. It is the PINCH plate now for every drawing in which the fingers are on the card: the
+// hand comes in open, the thumb and forefinger close on that corner, and the card comes up on them.
+// The flat hand comes back at the foot, where the fingers are steadying a card standing on its edge
+// rather than holding one — which is what a flat hand is for.
+export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 0.057, yaw = -0.46 } = {}) {
   const at = (phi, ry, cue, extraY = 0, extraZ = 0) => () => {
     const { rx, y, dz } = turnPose(phi, H);
     mesh.visible = true;
@@ -222,17 +230,18 @@ export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 
   const side = handSide(slot.p.x);
   const s = side === 'L' ? -1 : 1;
   const X = slot.p.x + s * dx;
-  const base = { yaw, side, pose: 'point' };
-  // The fingers on the near edge, drawing it up. `tuck` is how far UPSTAGE of the edge the
-  // fingertip sits — that is, how much of the fingertip the card overhangs. It is what makes the
-  // turn read as a hand lifting a card rather than a card levitating next to a hand.
-  // `ride` is how far up the edge the finger has come. It starts near nought: the finger slides
-  // UNDER the near edge and stays on the cloth while the card tips over it, which is what puts the
-  // last few millimetres of the fingertip behind the card instead of on top of it — a cut-out at
-  // the edge's own height draws over the card and reads as a hand lying on it.
+  const base = { yaw, side, pose: 'point' }; // the OPEN hand: the approach, the foot, the way out
+  // The fingers on the corner of the near edge, drawing it up — the pinch, because they are holding
+  // the card. `tuck` is how far UPSTAGE of the edge the nip sits — that is, how much of the card
+  // overhangs the fingers. It is what makes the turn read as a hand lifting a card rather than a
+  // card levitating next to a hand.
+  // `ride` is how far up the edge the fingers have come. It starts near nought: they slide UNDER the
+  // near edge and stay on the cloth while the card tips over them, which is what puts the last few
+  // millimetres of the fingers behind the card instead of on top of it — a cut-out at the edge's own
+  // height draws over the card and reads as a hand lying on it.
   const on = (phi, tuck = 0, ride = 1) => {
     const e = turnEdge(phi, H);
-    return { ...base, x: X, y: Math.min(e.y * ride, 0.9 * hand.HAND.reach) + 0.002, z: slot.p.z + e.z - tuck };
+    return { ...base, pose: 'pinch', x: X, y: Math.min(e.y * ride, 0.9 * hand.HAND.reach) + 0.002, z: slot.p.z + e.z - tuck };
   };
   // Past halfway the fingers leave the edge and go to the card's FOOT, where a hand steadying a
   // card that is standing up actually is. Riding the top edge to 78° floats the whole drawing
@@ -250,10 +259,10 @@ export function turnTrack(mesh, slot, landed, H, { cues = {}, hand = null, dx = 
       offset: 0,
       frames: handFrames(hand, [
         { off: true }, // before this card's turn: another card's hand may be on the cloth
-        { ...base, x: X, y: 0.055, z: near - 0.24 }, // in from the top of the frame
-        { ...base, x: X, y: 0.018, z: near - 0.08 },
-        on(0), // the fingertip lands on the near edge
-        on(12, 0.009, 0.12), // and the edge comes up OVER it: the finger is still on the cloth
+        { ...base, x: X, y: 0.055, z: near - 0.24 }, // in from the top of the frame, open
+        { ...base, x: X, y: 0.018, z: near - 0.08 }, // down beside the corner, still open
+        on(0, 0.006), // and CLOSED on it: the nip a few millimetres in from the corner
+        on(12, 0.009, 0.12), // the edge comes up OVER them: the fingers are still on the cloth
         on(34, 0.007, 0.42),
         foot(62, 0.034), // the fingers slide down to the foot of the card as it comes up
         foot(78, 0.026),
