@@ -373,6 +373,21 @@ export async function build(ctx) {
     });
   }
 
+  // THE SHEET GOES UP AT BUILD, NOT WHEN THE EVENING ASKS FOR IT. The user, on reloading the page:
+  // "whenenver i reload i get a quick cut of the room scene before it cuts back to the door". They
+  // were seeing the truth — `#entrance` was display:none until `flow` reached its door beat, and
+  // flow starts several frames after main.js begins painting, with the camera sitting at `home`.
+  // So the first thing the visitor saw was the parlour, and the door arrived as a cut ON TOP of it.
+  // Raising the sheet here means the door is the first thing ever drawn: `open()` calls show('closed')
+  // again and both it and `sheet()` are idempotent, so nothing is struck twice.
+  //
+  // Not under ?view= or ?shot=1: a judging frame of another piece must not have a door over it, and
+  // a screenshot never waits at one.
+  if (!ctx.view && !ctx.shotMode) {
+    show('closed');
+    paint(SHUT);
+  }
+
   const api = {
     get showing() {
       return mode !== 'hidden';
