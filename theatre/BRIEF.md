@@ -227,6 +227,15 @@ small `node` script with the Write tool and run it.
 
 ## Rules for builders
 
+- **Whether the writing is any good is the USER'S call, not yours and not a critic's.** 2026-09-07:
+  "note that you're not to judge wether the text is interesting or not, thats my job". Draft it,
+  measure what can be measured — length, latency, whether a rule still holds, whether the model still
+  calls the tool — and put the versions side by side for them to read. Do not rank them, do not say
+  which reads better, and do not quietly ship the one you prefer. This applies to his lines, the card
+  readings, the persona and every title card; it does not apply to things with a right answer, where
+  you should still say plainly what the measurement shows.
+
+
 1. Edit only the files your piece owns (its `meta.files`, plus new files you create named
    `src/pieces/<piece>-*.js`). Never edit `main.js`, `layout.js`, `index.html` or another piece's file. If you
    need a contract change, say so in your return value; do not make it.
