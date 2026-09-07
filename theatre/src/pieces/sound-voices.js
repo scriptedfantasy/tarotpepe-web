@@ -37,6 +37,13 @@ export const LEVEL = {
   flip: 0.085,
   riffle: 0.135,
   tap: 0.108,
+  // the smoosh (reveal round 11 asked for these and had been falling back on riffle/deal/tap).
+  // A wash is not a riffle: it is long, dry, soft-topped and it has no snap anywhere in it, so it
+  // sits well under the riffle it replaced.
+  wash: 0.072,
+  smoosh: 0.04,
+  rake: 0.078,
+  square: 0.058,
   title: 0.088,
   closing: 0.088,
   creak: 0.045,
@@ -63,6 +70,10 @@ export const TRIM = {
   flip: 1.752,
   riffle: 3.07,
   tap: 1.897,
+  wash: 0.683,
+  smoosh: 0.86,
+  rake: 1.258,
+  square: 1.461,
   title: 0.748,
   closing: 0.748,
   creak: 24.194,
@@ -84,6 +95,16 @@ export const LENGTH = {
   flip: 0.09,
   riffle: 0.47,
   tap: 0.12,
+  wash: 0.98,
+  // 0.66, and the number is not a taste. reveal-shuffle.js fires this every FIFTH drawing of the
+  // 24-drawing swirl, and the take runs at 12 fps: that is one push every 5/12 = 0.417 s. A cue
+  // shorter than the gap leaves bare room tone between the pushes and the swirl reads as five
+  // separate shoves instead of one continuous movement of paper — which is the whole difference
+  // between a wash and five deals. Each push now runs a quarter of a second into the next one.
+  // Change the cadence in reveal-shuffle and this number changes with it.
+  smoosh: 0.66,
+  rake: 0.74,
+  square: 0.19,
   title: 1.5,
   closing: 1.5,
   creak: 0.44,
@@ -106,16 +127,36 @@ function out(ac, dest, pan) {
 }
 
 // a decaying envelope: full level on the first sample, then down. `hold` keeps it flat first.
-function decay(g, t, dur, level, hold = 0) {
+//
+// `attack` is the one exception to "nothing fades in", and it exists for exactly one family of
+// sounds: a flat palm pushing a heap of cards around. A card that is STRUCK — dealt, landed,
+// tapped, knocked — has a transient on its first sample and keeps it. A card that is SLITHERING
+// under a hand does not: there is no moment at which the slither begins, and a 30 ms ramp is what
+// makes a wash read as a wash instead of as a burst of noise. It is a de-click, not a swell.
+//
+// AND IT STARTS AT ZERO, NOT AT ONE. A GainNode's value before its first scheduled event is its
+// default, which is 1. `setValueAtTime(v, t)` takes effect on the first sample frame at or after t;
+// `start(t)` begins inside the frame that CONTAINS t. When those two round the other way — which
+// happens for some fractions of a frame and not others, and every cue in the live graph is fired at
+// `currentTime + 0.005 + ahead`, a fraction of a frame every time — the source's first sample goes
+// out at unity. One sample of raw noise at full scale, i.e. a click, on a cue whose whole level is
+// 0.02. Zeroing the param first removes the window entirely. It changes nothing about a cue
+// rendered on a whole frame, which is why every trim in the table above still stands.
+function decay(g, t, dur, level, hold = 0, attack = 0) {
   const floor = Math.max(1e-5, level * 0.0008);
-  g.gain.setValueAtTime(level, t);
-  if (hold > 0) g.gain.setValueAtTime(level, t + hold);
+  g.gain.value = 0;
+  const a = Math.max(0, Math.min(attack, dur * 0.6));
+  if (a > 0) {
+    g.gain.setValueAtTime(floor, t);
+    g.gain.linearRampToValueAtTime(level, t + a);
+  } else g.gain.setValueAtTime(level, t);
+  if (hold > 0) g.gain.setValueAtTime(level, t + a + hold);
   g.gain.exponentialRampToValueAtTime(floor, t + dur);
   g.gain.setValueAtTime(0, t + dur + 0.002);
 }
 
 // a filtered burst of noise: the whole paper vocabulary is this with different numbers
-function burst(ac, dest, { t, dur, level, freq, q = 1, type = 'bandpass', sweep = 0, hold = 0, pan = 0, seed = 1 }) {
+function burst(ac, dest, { t, dur, level, freq, q = 1, type = 'bandpass', sweep = 0, hold = 0, attack = 0, pan = 0, seed = 1 }) {
   const rng = mulberry32(seed);
   const src = ac.createBufferSource();
   src.buffer = noiseBuffer(ac);
@@ -125,7 +166,7 @@ function burst(ac, dest, { t, dur, level, freq, q = 1, type = 'bandpass', sweep 
   f.frequency.setValueAtTime(freq, t);
   if (sweep) f.frequency.linearRampToValueAtTime(Math.max(40, freq + sweep), t + dur);
   const g = ac.createGain();
-  decay(g, t, dur, level, hold);
+  decay(g, t, dur, level, hold, attack);
   src.connect(f);
   f.connect(g);
   g.connect(out(ac, dest, pan));
@@ -144,6 +185,7 @@ function struck(ac, dest, { t, dur, level, freq, type = 'sine', partials = [], p
     o.type = ty;
     o.frequency.setValueAtTime(f, t);
     const og = ac.createGain();
+    og.gain.value = 0; // see decay(): a gain node's default is 1, and one sample of it is a click
     og.gain.setValueAtTime(amp, t);
     if (d < dur) og.gain.exponentialRampToValueAtTime(Math.max(1e-5, amp * 0.001), t + d);
     o.connect(og);
@@ -198,6 +240,7 @@ export function roomTone(ac, dest, { level: want = LEVEL.room } = {}) {
   door.frequency.setValueAtTime(VEIL.open, t);
   door.Q.value = 0.6;
   const g = ac.createGain();
+  g.gain.value = 0; // see decay(): never let the default 1 reach a sample
   g.gain.setValueAtTime(level, t); // cut in, no fade
   src.connect(hp);
   hp.connect(lp);
@@ -321,6 +364,90 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.tap;
     }
 
+    // ---- THE SMOOSH. A wash is not a riffle and must not sound like one. A riffle is a spring
+    // and a snap: twenty edges released in 400 ms. A wash is seventy-eight cards lying flat under
+    // two flat palms being pushed around each other, and it is a long DRY SLITHER — broad, soft at
+    // the top, no transient, no cascade, no pack coming together at the end. Round 11 of reveal
+    // asked for these four by name and has been playing riffle/deal/tap until they existed.
+
+    // the deck spilling out from under his palms and becoming a mass: six slithers laid over each
+    // other, staggered, each sweeping down, so that no single one of them can be heard as an event
+    // and the whole thing reads as one continuous movement of paper
+    case 'wash': {
+      const n = 6;
+      for (let i = 0; i < n; i++) {
+        const u = i / (n - 1);
+        const at = t + 0.5 * u * u; // they crowd the beginning, where the deck is coming apart
+        const dur = 0.34 + rng() * 0.22;
+        const f = 2600 - 900 * u + rng() * 500;
+        burst(ac, dest, {
+          t: at,
+          dur,
+          level: L('wash') * (0.5 + 0.5 * (1 - u)) * (0.7 + rng() * 0.5),
+          freq: f,
+          q: 0.55 + rng() * 0.4,
+          sweep: -(500 + rng() * 500),
+          attack: 0.03 + rng() * 0.03,
+          hold: 0.04 + rng() * 0.07,
+          pan,
+          seed: seed + i * 7,
+        });
+      }
+      // the heap itself, spreading on the cloth: no pitch, just a low body under the slither
+      burst(ac, dest, { t, dur: 0.9, level: L('wash') * 0.34, freq: 380, q: 0.5, type: 'lowpass', attack: 0.08, hold: 0.24, pan, seed: seed + 61 });
+      return LENGTH.wash;
+    }
+
+    // one push of the palms through the mass. It is fired every five drawings while the smoosh
+    // runs, so it has to LAYER: short, soft-topped, no click, and a third of the wash's level.
+    case 'smoosh': {
+      const f = 1500 + rng() * 900;
+      burst(ac, dest, { t, dur: 0.52 + rng() * 0.08, level: L('smoosh'), freq: f, q: 0.6, sweep: -(300 + rng() * 400), attack: 0.05, hold: 0.16, pan, seed });
+      burst(ac, dest, { t: t + 0.03 + rng() * 0.05, dur: 0.44, level: L('smoosh') * 0.55, freq: 2500 + rng() * 700, q: 0.75, sweep: -600, attack: 0.045, hold: 0.1, pan, seed: seed + 1 });
+      // the palm on the cloth under it
+      burst(ac, dest, { t, dur: 0.62, level: L('smoosh') * 0.3, freq: 300, q: 0.5, type: 'lowpass', attack: 0.07, hold: 0.22, pan, seed: seed + 2 });
+      return LENGTH.smoosh;
+    }
+
+    // the gather: both palms dragging the mass in from the two ends of the cloth. Unlike the wash
+    // it GATHERS — the grains thicken as the cards pile up instead of thinning — and it ends on the
+    // pile arriving, not on a snap.
+    case 'rake': {
+      burst(ac, dest, { t, dur: 0.62, level: L('rake') * 0.8, freq: 1700, q: 0.5, sweep: -700, attack: 0.05, hold: 0.16, pan, seed });
+      const n = 11;
+      for (let i = 0; i < n; i++) {
+        const u = i / (n - 1);
+        // the spacing closes up as the heap does
+        const at = t + 0.58 * (1 - Math.pow(1 - u, 1.7)) + (rng() - 0.5) * 0.02;
+        burst(ac, dest, {
+          t: Math.max(t, at),
+          dur: 0.03 + rng() * 0.05,
+          level: L('rake') * (0.22 + 0.5 * u) * (0.6 + rng() * 0.6),
+          freq: 1300 + rng() * 1600,
+          q: 0.9 + rng(),
+          attack: 0.006,
+          pan,
+          seed: seed + i,
+        });
+      }
+      // the pile landing on the deck's own square
+      burst(ac, dest, { t: t + 0.58, dur: 0.14, level: L('rake') * 0.5, freq: 260, q: 0.8, type: 'lowpass', pan, seed: seed + 40 });
+      return LENGTH.rake;
+    }
+
+    // the pile pressed square between two palms. From straight above this is a hairline, so it is
+    // the quietest event on the table: paper edges shifting against each other, a hand's weight
+    // behind them, and no wood at all — the wooden knock is `tap`, which is edges on a table.
+    case 'square': {
+      // no struck tone anywhere in it: two palms coming together on a pile of paper is a PRESS,
+      // and the moment it becomes a strike it is `tap` — which is the wooden one, and is a
+      // different event on a different beat.
+      burst(ac, dest, { t, dur: 0.12, level: L('square'), freq: 1250 + rng() * 500, q: 0.7, sweep: -450, attack: 0.024, pan, seed });
+      burst(ac, dest, { t, dur: 0.17, level: L('square') * 0.62, freq: 240, q: 0.7, type: 'lowpass', attack: 0.032, hold: 0.03, pan, seed: seed + 1 });
+      burst(ac, dest, { t, dur: 0.15, level: L('square') * 0.34, freq: 132, q: 0.6, type: 'lowpass', attack: 0.03, pan, seed: seed + 2 });
+      return LENGTH.square;
+    }
+
     // the title figure: two struck notes, a fifth apart, on the 12 fps grid. Deadpan.
     // and its inversion for the closing card: the same first note, the same interval, downwards.
     case 'title':
@@ -435,4 +562,4 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall'];

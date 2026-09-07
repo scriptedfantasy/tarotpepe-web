@@ -28,10 +28,30 @@
 // door's five cues over its 2.6 s swing; a deal round the table) is put down in one go at the
 // moment it starts, so a slow frame cannot collapse it into a single click.
 //
+// THE TUNE (round 4). "we need a background tune, something that would fit tarotpepe." It is in
+// src/pieces/sound-tune.js, it is composed there in code like everything else here, and there are
+// THREE of them because whether one is any good is the user's call and not this piece's:
+//
+//   ?tune=a   the music box — a comb-tine box, D minor, slow waltz, 32 bars, 68.6 s  (the default)
+//   ?tune=b   the line — hold music down a telephone band, in the key of the dial tone, 50.5 s
+//   ?tune=c   the mechanism — a reed drone and one plucked string on cycles that disagree, 112 s
+//   ?tune=0   none
+//
+// and `t` in the page walks a → b → c → none without reloading, because reloading puts the visitor
+// back on the landing behind a shut door and nobody compares three tunes that way.
+//
+// It has its own fader under the master, for the same reason the escapement does: bars are laid on
+// the audio clock three and a half seconds ahead of the render loop, and a duck or a door arriving
+// has to reach the notes that are already on the timeline. It goes behind the door with the room tone — the
+// parlour's music is in the parlour, so on the landing it is heard through two inches of wood — and
+// it steps back under Pepe's spoken voice further than the room tone does, because it is the only
+// thing in the film that occupies the same register he does.
+//
 // api: play(name) · at(seconds, name) · start() · stop() · setState(name) · duck(on) · mute(on)
-//      toggleMute() · muted · running · cues · timeline · render(name, seconds, opts)
-//      (the last two are for tools/_sound-probe.mjs)
+//      toggleMute() · muted · running · cues · timeline · tune · setTune(id)
+//      render(name, seconds, opts) · measureTune(id, opts)   (the last two are for tools/)
 import { LEVEL, LENGTH, TRIM, CUES, VEIL, play as voice, tick as clockTick, roomTone } from './sound-voices.js';
+import { TUNES, TUNE_IDS, DEFAULT_TUNE, TUNE_LEVEL, makeTune, renderTune } from './sound-tune.js';
 
 export const meta = {
   name: 'sound',
@@ -43,6 +63,9 @@ export const meta = {
 const CLOCK_FALLBACK = [-0.05, 2.45, -2.45];
 const DUCK_ROOM = 0.5; // the room tone under Pepe's spoken voice
 const DUCK_CLOCK = 0.55;
+// The tune steps back further than either, because it is the only thing here with pitch in it and
+// a spoken voice has to sit on top of it, not beside it.
+const DUCK_TUNE = 0.34;
 const CREAK_GAP = 18; // seconds between chair creaks, at the least
 // The street, through the shutters. The evening is a conversation now and runs as long as the
 // visitor likes, so it is not a list of two moments: it is one horn a minute or two, for ever.
@@ -50,6 +73,11 @@ const STREET_FIRST = 42;
 const STREET_GAP = [64, 128];
 const DOOR_MAX = 3.2; // if a door starts swinging and never arrives, the room opens anyway
 const AHEAD = 2.0; // how far ahead of the render loop the escapement is scheduled, in seconds
+// The tune is scheduled further ahead than the escapement, and for a reason the escapement does not
+// have: a frame longer than the lookahead leaves a HOLE, and a missing tick is a missing tick while
+// a missing bar is the music stopping. Three and a half seconds is longer than any bar any of the
+// three tunes has (the line's is 3.16 s), so a single stalled frame can never cost a whole bar.
+const TUNE_AHEAD = 3.5;
 
 export async function build(ctx) {
   const silent = !!ctx.shotMode;
@@ -59,9 +87,16 @@ export async function build(ctx) {
   let master = null;
   let clockBus = null; // the escapement has its own fader: it is scheduled seconds ahead, and a
   // duck or a door arriving must reach the ticks that are already on the timeline
+  let tuneBus = null; // and the tune, for the same reason: its bars are laid seconds ahead too
+  let tune = null;
   let room = null;
   let running = false;
   let muted = params.get('mute') === '1';
+  // ?tune=a|b|c, ?tune=0 / off / none for silence. An unknown name falls back to the default rather
+  // than to nothing, so a typo is audible instead of mysterious.
+  const tuneParam = (params.get('tune') ?? '').toLowerCase();
+  const OFF = ['0', 'off', 'none', 'no'];
+  let tuneId = OFF.includes(tuneParam) ? null : TUNE_IDS.includes(tuneParam) ? tuneParam : DEFAULT_TUNE;
   let ducked = false;
   let typingOn = true;
   let seed = 1;
@@ -124,6 +159,9 @@ export async function build(ctx) {
       clockBus = ac.createGain();
       clockBus.gain.setValueAtTime(1, ac.currentTime);
       clockBus.connect(master);
+      tuneBus = ac.createGain();
+      tuneBus.gain.setValueAtTime(1, ac.currentTime);
+      tuneBus.connect(master);
     }
     if (ac.state === 'suspended') ac.resume?.();
     return ac;
@@ -140,6 +178,11 @@ export async function build(ctx) {
     if (!clockBus || !ac) return;
     clockBus.gain.setValueAtTime((ducked ? DUCK_CLOCK : 1) * (veiled ? VEIL.gain : 1), Math.max(when, ac.currentTime));
   }
+  // and the tune's own fader, which carries only the duck; the door is on the tune's own filter
+  function tuneLevel(when = ac?.currentTime ?? 0) {
+    if (!tuneBus || !ac) return;
+    tuneBus.gain.setValueAtTime(ducked ? DUCK_TUNE : 1, Math.max(when, ac.currentTime));
+  }
   function startRoom() {
     if (!ac || room) return;
     room = roomTone(ac, master, { level: LEVEL.room });
@@ -150,6 +193,30 @@ export async function build(ctx) {
     room = null;
     veilFrom = veilTo = 0;
   }
+  // The tune begins on the same gesture the room tone does. If a door is already swinging in front
+  // of the parlour it begins BEHIND it, muffled and at half level, and is cut open when the leaf
+  // arrives — the music is in the room, and on the landing you are not in the room yet.
+  //
+  // IT IS WRAPPED, AND THAT IS NOT SUPERSTITION. `entrance.open()` calls `sound.start()` bare —
+  // no try, no catch — one line before it lays the door's seven cues on the audio clock. A throw
+  // anywhere inside start() therefore takes the DOOR with it, and the film opens on a door. The
+  // music is the least important thing in this piece and it is not allowed to cost the most
+  // important one; if it cannot be built, the parlour is simply quiet.
+  function startTune() {
+    if (!ac || tune || !tuneId) return;
+    try {
+      const now = ac.currentTime;
+      tune = makeTune(ac, tuneBus, { which: tuneId, level: TUNE_LEVEL, veiled: now < veilTo, veil: VEIL });
+      tuneLevel();
+    } catch (e) {
+      console.warn('[sound] the tune did not start:', e?.message ?? e);
+      tune = null;
+    }
+  }
+  function stopTune() {
+    tune?.stop();
+    tune = null;
+  }
 
   // A door is swinging in front of the parlour, from `from` until `to` on the audio clock: the
   // room tone goes behind two inches of wood, and the clock on the back wall with it. Both are cut,
@@ -159,6 +226,8 @@ export async function build(ctx) {
     veilTo = to;
     clockLevel(from, true);
     clockLevel(to, false);
+    tune?.veil(true, from);
+    tune?.veil(false, to);
     if (!room) return;
     room.veil(true, from);
     room.veil(false, to);
@@ -268,7 +337,25 @@ export async function build(ctx) {
     get door() {
       return { from: veilFrom, to: veilTo };
     },
-    stats: { played: 0, dropped: 0, contexts: 0, ticks: 0 },
+    stats: { played: 0, dropped: 0, contexts: 0, ticks: 0, bars: 0 },
+
+    // ---- the tune ---------------------------------------------------------------------------
+    tunes: TUNES,
+    get tune() {
+      if (!tuneId) return null;
+      const m = TUNES[tuneId];
+      return { id: tuneId, title: m.title, key: m.key, metre: m.metre, bpm: m.bpm, bars: m.bars, loop: m.loop, playing: !!tune, bar: tune?.bar ?? 0 };
+    },
+    // switch tunes without reloading: the running one is dropped and the next begins on the next
+    // bar of the audio clock. `null` / '0' is silence.
+    setTune(id) {
+      const next = id == null || OFF.includes(String(id).toLowerCase()) ? null : TUNE_IDS.includes(id) ? id : tuneId;
+      if (next === tuneId) return tuneId;
+      stopTune();
+      tuneId = next;
+      if (running) startTune();
+      return tuneId;
+    },
 
     // The first gesture. Safe to call as often as anyone likes; safe before the stage exists.
     start() {
@@ -278,12 +365,14 @@ export async function build(ctx) {
       running = true;
       locateClock();
       startRoom();
+      startTune();
       armClock();
       armStreet();
     },
     stop() {
       running = false;
       stopRoom();
+      stopTune();
       clearTimeout(streetTimer);
       streetTimer = null;
       clearTimeout(typeTimer);
@@ -348,6 +437,7 @@ export async function build(ctx) {
       ducked = on;
       roomLevel();
       clockLevel();
+      tuneLevel();
       if (ac && veilTo > ac.currentTime) {
         // a door is still to arrive: keep its cut, at the new level
         roomLevel(veilTo, false);
@@ -374,6 +464,7 @@ export async function build(ctx) {
       if (name === 'silent') api.stop();
       else if (running) {
         startRoom();
+        startTune();
         armClock();
       }
     },
@@ -381,6 +472,17 @@ export async function build(ctx) {
     update() {
       if (silent || !running) return;
       pumpClock();
+      // the tune's bars, laid ahead of the render loop exactly as the escapement's ticks are: a
+      // frame that takes a second cannot put a hole in it, and the join between the last bar of a
+      // pass and the first bar of the next is only ever the join between two adjacent bars
+      if (tune && !muted && state !== 'silent') {
+        try {
+          api.stats.bars += tune.pump(ac.currentTime, TUNE_AHEAD);
+        } catch (e) {
+          console.warn('[sound] the tune stopped:', e?.message ?? e);
+          stopTune();
+        }
+      }
       // Pepe's spoken voice, if the visitor turned it on: poll rather than reach into dialogue.js
       if (++speakPoll % 6 === 0) {
         const speaking = !!(window.speechSynthesis && window.speechSynthesis.speaking);
@@ -390,7 +492,11 @@ export async function build(ctx) {
 
     // ---- the probe's hook: render one cue into an OfflineAudioContext and hand back the samples --
     // tools/_sound-probe.mjs measures peak, length and spectral centroid from this.
-    async render(name, seconds = 1.4, { seed: s = 7, sampleRate = 22050, pan = 0 } = {}) {
+    // `at` is the time the cue is laid on, and it matters more than it looks: the live graph fires
+    // everything at `ac.currentTime + 0.005 + ahead`, which is never a whole sample frame, and a
+    // cue rendered at a round 0.02 s is the one case that hides a sample-alignment fault. The
+    // probes render both.
+    async render(name, seconds = 1.4, { seed: s = 7, sampleRate = 22050, pan = 0, at: when = 0.02 } = {}) {
       const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
       if (!OC) return null;
       const oc = new OC(2, Math.max(64, Math.ceil(seconds * sampleRate)), sampleRate);
@@ -398,11 +504,11 @@ export async function build(ctx) {
       bus.gain.value = 1;
       bus.connect(oc.destination);
       if (name === 'room') roomTone(oc, bus, { level: LEVEL.room });
-      else if (name === 'clock') clockTick(oc, bus, 0.02, { level: LEVEL.clock, pan });
+      else if (name === 'clock') clockTick(oc, bus, when, { level: LEVEL.clock, pan });
       else if (name === 'clock-run')
         // the escapement as it actually runs: a second apart, tick and tock alternating
         for (let k = 0; k < Math.floor(seconds - 0.15); k++) clockTick(oc, bus, 0.1 + k, { level: LEVEL.clock, pan, tock: k % 2 === 1, seed: 900 + k });
-      else voice(oc, bus, name, 0.02, { seed: s, pan });
+      else voice(oc, bus, name, when, { seed: s, pan });
       const buf = await oc.startRendering();
       return {
         name,
@@ -411,11 +517,24 @@ export async function build(ctx) {
         r: Array.from(buf.getChannelData(1)),
       };
     },
+
+    // ---- the tune probe's hook -----------------------------------------------------------------
+    // `passes` passes of the tune's material, rendered offline through the very code the page runs,
+    // handed back AS A Float32Array AND NOT AS AN ARRAY OF NUMBERS. Two passes of the music box is
+    // three million floats; JSON across a websocket is not the way to measure a tune. The caller
+    // (tools/_tune-probe.mjs) does its arithmetic inside the page and brings back twenty numbers.
+    async tuneBuffer(which = tuneId ?? 'a', { passes = 2, sampleRate = 22050, tail = 4 } = {}) {
+      const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      if (!OC) return null;
+      const meta = TUNES[which] ?? TUNES.a;
+      const { buf, offset } = await renderTune(OC, which, meta.bars * passes, { sampleRate, tail });
+      return { data: buf.getChannelData(0), sampleRate: buf.sampleRate, offset, loop: meta.loop, bars: meta.bars, passes, meta };
+    },
   };
 
   if (silent) {
     // ?shot=1: no listeners, no context, no timers. The piece is a stub with the same shape.
-    return { ...api, play: () => 0, at: () => 0, start() {}, stop() {}, update() {}, render: async () => null };
+    return { ...api, play: () => 0, at: () => 0, start() {}, stop() {}, update() {}, render: async () => null, tuneBuffer: async () => null, setTune: () => null };
   }
 
   // ---- the gesture, and the visitor's mute key ---------------------------------------------------
@@ -427,6 +546,14 @@ export async function build(ctx) {
     const tag = e.target?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     if (e.key === 'm' || e.key === 'M') api.mute();
+    // `t` walks the three tunes and then silence, without reloading — the user is meant to choose
+    // between them by ear and a page reload puts them back on the landing behind a shut door.
+    if (e.key === 't' || e.key === 'T') {
+      const order = [...TUNE_IDS, null];
+      const next = order[(order.indexOf(tuneId) + 1) % order.length];
+      api.setTune(next);
+      console.log('[sound] tune:', next ? `${next} — ${TUNES[next].title}` : 'none');
+    }
   });
 
   // ---- what the rest of the evening tells us, without anyone having to call us --------------------
