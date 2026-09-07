@@ -205,7 +205,7 @@ const PLAIN = [
   ],
   [
     /\bclock\b|\bpendulum\b|\bseconds hand\b/,
-    ['The exchange clock. It has a seconds hand because the women here were timed on every call. Nothing in this room is urgent any more.'],
+    ['The exchange clock. It kept the time the women here were paid by, to the minute. It still keeps it; nothing in this room is urgent any more.'],
   ],
   [/\bcat\b|\banimal\b/, ['The cat. It was here before I was and nobody has asked it to leave.', 'A cat asleep on a dead exchange. It is not mine and it does not know that.']],
   [/\brug\b|\bcarpet\b/, ['A rug. It is mine, and it is the only soft thing between me and a floor that was bolted down.']],

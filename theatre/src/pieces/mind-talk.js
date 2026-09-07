@@ -233,7 +233,7 @@ const RECALL_MEMORY = only(
 const DIRECT = [
   [
     only(`(?:hi|hello|hey|yo|good evening|good afternoon|good day|evening|hallo|howdy|greetings)(?: there| again| to you| pepe| tarot pepe| frog| my friend| mate)*`),
-    ['Good evening. Come closer. There is nowhere to sit, which keeps the visits honest.', 'Good evening. You are standing, which saves us both a sentence.'],
+    ['come in, anon. the deck is face down and it can stay that way as long as you like.', 'come closer, anon. nothing in here bites, except occasionally the third card.'],
   ],
   [
     only(

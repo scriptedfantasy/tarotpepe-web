@@ -23,7 +23,7 @@ export const POSITION_KEYS = ['brought', 'going', 'do'];
 // The evening, beat by beat
 // ---------------------------------------------------------------------------------------------
 const greeting = [
-  'Good evening. Come closer. There is nowhere to sit, which keeps the visits honest.',
+  'come in, anon. the deck is face down and it can stay that way as long as you like.',
   'I am Tarot Pepe. I read three cards when somebody asks me to. Until then we talk; I am not in a hurry.',
   'Not palms, not leaves, not faces, though I will look at yours. Nothing said here leaves the room, and the room is small.',
 ];

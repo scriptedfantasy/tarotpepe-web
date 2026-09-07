@@ -24,7 +24,7 @@ export const PROMPTS = {
   followup: 'You may ask one thing about the cards. One.',
   followupNone: 'No question. That is rarer than you would think.',
   // the field is open and he has nothing to answer: the greeting was lost, or the mind said nothing
-  opening: 'Good evening. Sit, and say what you like. The cards can wait.',
+  opening: 'say what you like, anon. the cards can wait.',
   // a silence, then another, then the last one: no timer runs after this, so the field simply stays
   quiet: [
     'Take your time. I have sat through longer silences than this one.',
