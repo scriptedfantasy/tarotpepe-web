@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "postinstall": "npm --prefix theatre ci",
+    "postinstall": "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm --prefix theatre ci",
     "build": "npm --prefix theatre run build",
     "start": "npm --prefix theatre start"
   }
