@@ -84,9 +84,10 @@ export function scriptedLines(script, { beat, user = '', slug = null, position =
       // piece is missing entirely
       text = said ? script.reply(/\?\s*$/.test(said) ? said : said + '?') : script.interjections.question[1].replace('“{answer}” ', '');
       break;
-    case 'fan':
-      text = script.draw[0];
-      break;
+    // there is no 'shuffle' and no 'fan' case any more, and there is nothing to put in one:
+    // round 6 took the stage patter out of script.js (the user: no scripted sentences about the
+    // shuffling) and the flow no longer asks for either beat. What he says over his own hands is
+    // the turn in which he agreed to deal; if he wrote none, nobody speaks.
     case 'recall':
       // only reached with no mind piece at all: the mind's own script (mind-voice → recallScript)
       // names the cards, which this cannot do from here

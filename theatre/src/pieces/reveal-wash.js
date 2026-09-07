@@ -107,7 +107,7 @@ export function cardCorners(p, card = CARD) {
 // a card held over the row while the visitor looks at it passes 19 mm above anything already lying
 // there. The fan did exactly this (its own box ran to z 0.230, inside the bar), and taking those
 // 32 mm off every card instead closes the window for a card on the diagonal completely.
-function confine(p, cfg, slack) {
+export function confine(p, cfg, slack) {
   const e = extentOf(p.ang);
   const xr = Math.max(0.02, cfg.xcap - e.x);
   const zlo0 = ROW.z + ROW_CLEAR + e.z, zhi0 = cfg.zcap - e.z;
@@ -275,6 +275,12 @@ export function bandFor(aspect, seed = 0) {
   WASH.bounds = boundsOf(WASH.poses);
   return true;
 }
+
+// The limits the mass is laid inside, for the shape that is up: what the frame allows across, what
+// the camera allows down it, and how far the ranks are evened. The SMOOSH is confined by the same
+// numbers now (reveal-shuffle.js), because since round 6 the mass his hands leave IS this mass —
+// there is no push-out in between to correct anything he did.
+export const bandCfg = () => BANDS[WASH.shape] ?? BANDS.wide;
 
 // where card i lies, and how high it rides in the heap (0 = on the cloth, total−1 = on top)
 export const poseOf = (i) => WASH.poses[i] ?? WASH.poses[0];

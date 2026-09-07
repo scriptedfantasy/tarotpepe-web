@@ -1,7 +1,7 @@
 // PIECE: reveal — the card choreography, drawn on twos: the SMOOSH (the deck spilled flat on the
-// cloth and washed round under both palms — reveal-shuffle.js), the PUSH-OUT (that same mass
-// pressed out into a broad ragged band the visitor can pick along — reveal-pick.js, where the
-// seventy-eight lie is reveal-wash.js), the visitor's pick (the card under the pointer stands UP
+// cloth and washed round under both palms until it comes to rest as the surface the visitor picks
+// from — reveal-shuffle.js; where the seventy-eight lie is reveal-wash.js), the visitor's pick (the
+// card under the pointer stands UP
 // the frame in two drawings and is taken by a tap on it; it is carried to its slot in four, the
 // apex held), the GATHER (both hands raking the mass back into a squared deck — which is where the
 // deck comes back), the deal (three cards laid from his own hand, for the flow that has no
@@ -20,9 +20,13 @@
 // judging state with `?t=` shows a deterministic frame and a live take is the same list played.
 //
 // API (all Promises resolve when the motion has settled):
-//   shuffle() → Promise                    the smoosh; it ENDS with the wash lying on the cloth
-//   fan() → Promise<count>                 the push-out: the mass opened into the band. Kept its
-//                                          name because flow calls it and nothing else fits.
+//   shuffle() → Promise                    the smoosh; it ENDS with the wash lying at rest on the
+//                                          cloth, on the poses the visitor will pick from
+//   fan() → Promise<count>                 the hand-over, one drawing: this piece's seventy-eight
+//                                          take the smoosh's place at the identical poses. Round 6
+//                                          removed the push-out that used to be here (the user:
+//                                          "lets remove: story card and push out"); the name stays
+//                                          because flow calls it and nothing else fits.
 //   awaitPick() → Promise<pick|null>       arms the pointer (it stands a card up out of the mass; a
 //                                          tap on the standing card takes it — 119 x 208 px on a
 //                                          phone, measured, tools/_rv12-pick.mjs); resolves with
@@ -438,17 +442,18 @@ export async function build(ctx) {
       frames[0]();
       return play(frames);
     },
-    // THE PUSH-OUT: the churned mass pressed out into a band the visitor can pick along. It keeps
-    // the name `fan` because flow calls it and there is nothing else it could be called; there is
-    // no fan. Resolves with the number of cards on the cloth.
+    // THE HAND-OVER. It keeps the name `fan` because flow calls it and reveal's judging states are
+    // named for it; there is no fan and, since round 6, no push-out either (the user: "lets remove:
+    // story card and push out"). The smoosh settles onto reveal-wash's own poses under his working
+    // hands, so all this does is take the smoosh's seventy-eight off the cloth in the same drawing
+    // this piece's seventy-eight come on at the identical poses, and arm them. Nothing moves in it.
+    // Resolves with the number of cards on the cloth.
     async fan() {
       stop();
       fan.clear();
       clearDrawn();
       ground.step(); // the cards those patches belonged to have just been disposed
-      // the smoosh's own seventy-eight are taken off the cloth in the drawing the pick piece's
-      // seventy-eight take over it, at the same poses, so the swap cannot be seen
-      const frames = fan.pushFrames(() => shuffleTake?.hideCards?.());
+      const frames = fan.handoverFrames(() => shuffleTake?.hideCards?.());
       frames[0]();
       await play(frames);
       return fan.remaining().length;
@@ -578,9 +583,13 @@ export async function build(ctx) {
           await api.gather();
         })();
       } else if (name === 'fanning') {
-        // the push-out itself, looping: the churn opening into the band under both palms
+        // THE BEAT THAT DELIVERS THE PICK SURFACE, looping. It used to be the push-out — the churn
+        // opening into a band under both palms — and there is no push-out (round 6). What actually
+        // hands the visitor the cloth now is the END of the wash: the last drawings of the swirl,
+        // where the mass comes to rest, and the four in which his hands lift off it and leave.
         await lay([], false);
-        loopPlay(fan.pushFrames(() => shuffleTake?.hideCards?.()), 14);
+        const all = shuffleFrames();
+        loopPlay(all.slice(Math.max(0, all.length - 18)), 14);
       } else if (name === 'pick') {
         // one card carried out of the mass to slot 0 — and it is STANDING UP first, because that is
         // the card the hand arrives at live: the visitor's pointer lifts it clear of the heap, and

@@ -23,17 +23,21 @@
 //
 // THE DRAWINGS (world metres on the cloth, the table top at y = layout.spread.y):
 //   2  the squared deck, both hands coming down onto it from up-frame
-//   6  THE WASH: the pile pushed over and splayed out under two palms into a raft of 78 cards, the
+//   6  THE SPLAY: the pile pushed over and opened out under two palms into a mass of 78 cards, the
 //      deck thinning card by card as they leave it — the top of the deck travels furthest
 //  30  THE SWIRL: three revolutions, ten stepped drawings each. The hands describe slow circles in
 //      OPPOSITE senses, mirrored across the frame's axis and half a turn apart, so one is always
 //      up-frame of the other; every card inside a hand's reach is carried round with it and turned
-//      with it, and the two counter-rotations shear the raft between them. Cards under a palm ride
+//      with it, and the two counter-rotations shear the mass between them. Cards under a palm ride
 //      up over their neighbours, so the top layer — which is all a plan view sees — is a different
-//      set of cards every drawing.
-//   4  his hands off the heap, up the frame, and out — AND THE WASH STAYS WHERE IT IS (round 12).
-//      There is no rake here and no squared pile: the visitor picks out of this mass, so the deck
-//      does not come back until the gather at the end of the reading (reveal-pick.js).
+//      set of cards every drawing. THE LAST TWELVE OF THESE ARE THE SETTLE (round 6, the user:
+//      "lets remove: story card and push out"): the cards come to rest, under his working hands, on
+//      reveal-wash.js's own poses — the arrangement the pointer, the grip, the camera's plate and
+//      the spoken ordinal are all measured against — so that nothing has to be pushed out into a
+//      band afterwards. The seventeen drawings that used to do that are gone.
+//   4  his hands off the heap, up the frame, and out — AND THE WASH IS ALREADY AT REST. There is no
+//      rake here and no squared pile: the visitor picks out of this mass, so the deck does not come
+//      back until the gather at the end of the reading (reveal-pick.js).
 // Forty-two drawings + a two-frame hold: 3.67 s at 12 fps. Long enough that it reads as thorough —
 // three whole revolutions of both hands — and short enough that nobody is waiting to choose.
 // The hands are the user's own drawings, cut by tools/hand-cutout.mjs (reveal-hand.js → PLATES),
@@ -49,6 +53,7 @@ import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import { cardGeometry } from './cards-geometry.js';
 import { hold, compose, handFrames } from './reveal-takes.js';
+import { WASH, LIFT, confine, bandCfg } from './reveal-wash.js';
 
 const _v = new THREE.Vector3();
 
@@ -132,54 +137,48 @@ export function deckStacks(deck, T) {
   return { real, nTotal, nBase, W, H, T, hTemplate, stack, cards, pivot, flat, showReal, hide, dispose };
 }
 
-// ── WHERE THE RAFT LIES, AND WHAT SHAPE IT IS ──────────────────────────────────────────────────
+// ── WHERE THE WASH LIES, AND WHOSE ARRANGEMENT IT IS ───────────────────────────────────────────
 // The user sent a photograph of a real smoosh on a real table and BRIEF.md records it as five
-// things to check. Three of them are about this block, and the first cut of it failed all three:
-// it laid the seventy-eight on an even golden-angle fill of an ELLIPSE and held them there with a
-// per-card radial re-spread, which is a recipe for the one thing he ruled out — "the outline of
-// the whole mass is ragged, NOT A DISC and not an arc", "stacks of three or four and gaps of bare
-// cloth". An even fill of an ellipse is a disc with no gaps in it by construction.
+// things to check: the cards lie FLAT; they are at EVERY angle; they overlap heavily and
+// irregularly, with stacks of three and four, gaps of bare cloth and a ragged outline; the mass is
+// several cards across each way; both hands are IN it while it is being pushed.
 //
-// So the raft is built the other way round:
-//   · ITS BOUNDARY IS RAGGED. `EDGE` is a closed curve — a few harmonics with rolled phases — that
-//     runs between about 0.54 and 1.0 of the nominal ellipse. Because it only ever eats INWARD the
-//     frame margins below still hold exactly, and no two seeds give the same outline.
-//   · ITS FILL IS CLUMPED. The cards are not spread over the region, they are dealt to `clumps`
-//     knots of uneven size and scattered round those, so the mass comes out with knots three and
-//     four deep and bare cloth between them, which is what a pile pushed about with two hands does.
-//   · ITS FOOTPRINT IS HELD BY ONE NUMBER. See `hold` in the swirl: a similarity transform cannot
-//     round off an outline or even out a density, and the per-card re-spread that was here did
-//     both. (It did not even hold the footprint: measured, the raft went from 0.191 m² to 0.059 —
-//     it collapsed to a third and the top layer fell from 61 cards to 49.)
+// ROUND 11 laid the mass here, on an ellipse of its own with a ragged boundary curve, twelve
+// knots, three bays and twelve strays — and then round 12 pushed that mass out into a BAND for the
+// visitor to pick along, because a heap has no left-to-right ranks and "the third from the left"
+// has to mean something. ROUND 6 OF THE FLOW REMOVES THE PUSH-OUT (the user: "lets remove: story
+// card and push out"), so the mass this beat leaves is the mass the visitor picks from, and it
+// therefore has to satisfy everything a pick surface owes as well as everything the photograph
+// asks: clear of the three reading slots, inside the frame and the rim, and ranked and evened
+// across the picture.
 //
-// It is solved against the frame it is played in, exactly the way the band the mass is pushed out
-// into is (reveal-wash.js → BANDS). The plan view over the cloth measures 0.798 x 0.449 m at 16:9 and 0.430 x 0.839 m
-// on a 390x760 phone (tools/_rv10-frame.mjs, on the `fan` plate), two different pictures wanting
-// two different rafts. A washed card lies ANY WAY UP — that is what makes a wash a wash and not a
-// spread — so it reaches 0.131 m from its own centre in the worst direction, and the nominal
-// ellipse of centres is the frame's window pulled in by that on every side, and by the rim again.
-//   wide  |x| ≤ 0.150, z ∈ 0.294..0.417 → the mass 0.562 x 0.408 at its widest, which is four mean
-//         cards by three: 118 mm inside the frame's side edge, 20 mm inside top and bottom.
-//   tall  |x| ≤ 0.058, z ∈ 0.150..0.440 → 0.378 x 0.552, three mean cards by four, 26 mm inside a
-//         phone's side edge.
-// Seventy-eight cards are 2.31 m² of card, so a wash CANNOT be one card deep on a 1.21 m² cloth
-// and no arrangement makes it one: the raft is a heap, which is what a smoosh looks like from
-// above anyway — a churning mass with a changing top layer. `DEEP` is how proud of the cloth that
-// heap rides; the hands are drawn on top of it (`floor`).
-const TALL_BELOW = 1.25; // the shape at which the spread re-nests, and the raft with it
+// reveal-wash.js solves precisely that, and it is the arrangement the pointer, the grip, the
+// camera's plate and the spoken ordinal are all measured against (tools/_rv12-band.mjs,
+// _rv8-point.mjs, _rv13-grip.mjs). So there is no second arrangement here any more: this file
+// SPLAYS the deck out into reveal-wash's poses, swirls the cards about under both palms, and
+// settles them back onto those same poses before his hands come off. The photograph's five checks
+// are met by that layout — measured, 88 % of the mass three or more cards deep, 8.5 % bare cloth
+// inside its own outline, no two angles alike — and they are measured where they matter now, on
+// the surface the visitor actually chooses from.
+//
+// What is left in this block is the HANDS: where a palm orbits, how wide the circle is, and how far
+// a palm carries the cards under it. Two mirrored circles have to work the WHOLE mass — a hand that
+// never reaches the ends of it leaves the cards there exactly as the deck spilled them, and the
+// mixing probe (tools/_rv11-mix.mjs) reads that straight off the ranks.
+const TALL_BELOW = 1.25; // the shape at which the mass re-lays, and the hands with it
+// THE CIRCLE IS SMALL AND THE REACH IS LONG, and that is the whole of the tuning. A palm carries
+// the cards under it (`DRAG`, 0.92 of its own travel), so a hand that TRAVELS across the mass does
+// not mix it, it transports it: circles of 98 mm radius over this band pulled the seventy-eight out
+// into two clumps with bare cloth between them, which is two piles being pushed apart and is the
+// picture the user asked to be rid of. A palm working in a small circle with a long reach shears the
+// cards round itself instead, which is what a wash is. The circle is sized to stay ON the mass — the
+// band's centres run to about |x| 0.24 across and 37 mm deep, so 58 mm of x and 34 mm of z keeps
+// both palms inside it — and the reach, not the travel, is what gets to the ends of it.
 const RAFT = {
-  //     the nominal ellipse of centres        the knots        where a palm orbits, and how far it reaches
-  wide: { ax: 0.185, cz: 0.3555, az: 0.068, clumps: 12, sig: 0.032, voids: 3, hx: 0.104, rx: 0.048, rz: 0.062, reach: 0.132 },
-  tall: { ax: 0.060, cz: 0.297, az: 0.146, clumps: 9, sig: 0.028, voids: 2, hx: 0.054, rx: 0.024, rz: 0.110, reach: 0.112 },
+  //     where a palm orbits (x of its centre, and the circle's two radii), and how far it reaches
+  wide: { hx: 0.125, rx: 0.058, rz: 0.034, reach: 0.145 },
+  tall: { hx: 0.055, rx: 0.026, rz: 0.048, reach: 0.120 },
 };
-// The ragged outline: [harmonic, amplitude]. Two and three are the lobes that stop it being a
-// disc, five is the nick out of the rim that stops the lobes being a flower.
-const EDGE = [[2, 0.18], [3, 0.13], [5, 0.09]];
-// Cards that lie off on their own, out at the rim, away from every knot — and past the ragged
-// curve, out to the nominal ellipse, which is the frame's own limit. Twelve of seventy-eight, and
-// they do most of the work of the word RAGGED: a mass whose every card is in the mass has a clean
-// edge however lumpy you cut the curve it was laid to.
-const STRAY = 12;
 const DEEP = 0.016; // the raft's own thickness, drawn: 78 cards of 0.8 mm would be 62
 const N = 78; // the deck, the user's rule
 // Stepped drawings per revolution of a hand — 36 degrees a drawing, which is a circle you can
@@ -187,7 +186,7 @@ const N = 78; // the deck, the user's rule
 // two read as a stir and left five of the seventy-eight within three ranks of where they started.
 const PER = 10;
 const TURNS = 3;
-const WASH = 6; // drawings the squared deck takes to open out into the raft
+const SPLAY = 6; // drawings the squared deck takes to open out into the wash
 const RUN = 3; // how long one card takes to travel, in drawings, in the wash
 // how hard a hand carries the cards under it, and how far it turns them with it
 const DRAG = 0.92, SPIN = 0.85;
@@ -258,86 +257,46 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
   // tools/_rv11-mix.mjs drives the take and reads the same numbers the drawing reads.
   const rng = mulberry32(3100 + (ctx.seed | 0));
   const px = new Float64Array(N), pz = new Float64Array(N), pa = new Float64Array(N);
-  // THE RAGGED BOUNDARY, in the ellipse's own units: how far out the raft goes at this bearing.
-  // Normalised so its maximum is exactly 1 — the nominal ellipse is the frame's promise and the
-  // raggedness is only ever allowed to eat inward from it.
-  const edgePh = EDGE.map(() => rng() * 2 * Math.PI);
-  const edgeSum = EDGE.reduce((s, e) => s + e[1], 0);
-  const edgeAt = (th) => {
-    let v = 1;
-    for (let k = 0; k < EDGE.length; k++) v += EDGE[k][1] * Math.cos(EDGE[k][0] * th + edgePh[k]);
-    return v / (1 + edgeSum);
+
+  // ── WHERE THE SEVENTY-EIGHT COME TO REST, AND IT IS NOT THIS FILE'S ARRANGEMENT (round 6) ──────
+  //
+  // THE USER: "lets remove: story card and push out." The push-out was the second half of this
+  // beat — his palms came back down on the churn and travelled out to the ends of the cloth,
+  // seventeen more drawings, and the mass opened into a band the visitor picked along. It is gone.
+  // The visitor picks from the mass THIS take leaves, which means this take has to leave the mass
+  // in the one place a pick surface is allowed to be:
+  //   · clear of the three reading slots, because a chosen card lands in that bar and nothing may
+  //     be lying under one;
+  //   · inside the frame the choosing is composed on, and inside the table's rim;
+  //   · and RANKED AND EVENED LEFT TO RIGHT, which is the whole of the ordinal. "The third from the
+  //     left" is a subscript into reveal-wash.js's poses, and a heap has no ranks. That ordering
+  //     used to be the push-out's one real job.
+  // reveal-wash.js already solves exactly that (`layout` → knots, bays, every angle, `evenOut`,
+  // `confine`), and its answer is what the pointer, the grip, the camera's plate and the ordinal
+  // are all measured against. So the wash's poses are this beat's TARGET rather than a second
+  // arrangement it has to be pushed into: the deck is splayed straight out into them, swirled about
+  // under both palms, and settled back onto them before his hands come off. Nothing is pushed and
+  // nothing is squared. What used to be a separate `fan` beat is one drawing of hand-over.
+  const slot = WASH.poses.map((p) => ({ x: p.x, z: p.z, a: p.ang }));
+  const B = WASH.bounds; // the box the mass occupies, corners and all
+  const CZ = (B.z0 + B.z1) / 2 + LIFT.z / 2; // the middle of it down the frame (z0 carries the hover's travel)
+
+  // The swirl's own boundary is the wash's, angle for angle: a card is held off the reading row and
+  // inside the rim by the same solver that laid the poses, so nothing the hands do can push a card
+  // somewhere the mass is not allowed to be. (It replaces an ellipse and a ragged closed curve of
+  // this file's own, which knew about the frame but not about the reading row — it did not have to,
+  // because the push-out came afterwards and corrected everything.)
+  const cfg = bandCfg();
+  const NOSLACK = { x: 0, z: 0, r: 0 };
+  const _c = { x: 0, z: 0, ang: 0 };
+  const clampHard = (i) => {
+    _c.x = px[i];
+    _c.z = pz[i];
+    _c.ang = pa[i];
+    confine(_c, cfg, NOSLACK);
+    px[i] = _c.x;
+    pz[i] = _c.z;
   };
-  // TWO BOUNDARIES, and they do different jobs. `clampRagged` is the ragged curve and it is used
-  // to lay the wash out: a card that falls past the rim is folded back under it by a random last
-  // few per cent, so nothing accumulates into a clean arc along the edge of the mass. `clampHard`
-  // is the nominal ellipse — the frame's own promise, the line that keeps 78 cards off the edges
-  // of the picture — and it is the only one the swirl is allowed to use. Folding to the RAGGED
-  // curve every drawing was a ratchet: it trimmed the outermost cards a little each time while
-  // the size correction pushed the inner ones out to compensate, and the raft quietly halved.
-  const foldTo = (i, lim) => {
-    const q = Math.hypot(px[i] / R.ax, (pz[i] - R.cz) / R.az);
-    if (q < 1e-6 || q <= lim) return;
-    const s = lim / q;
-    px[i] *= s;
-    pz[i] = R.cz + (pz[i] - R.cz) * s;
-  };
-  const clampRagged = (i) => foldTo(i, edgeAt(Math.atan2((pz[i] - R.cz) / R.az, px[i] / R.ax)) * (0.94 + rng() * 0.06));
-  const clampHard = (i) => foldTo(i, 1);
-  // WHERE THE SEVENTY-EIGHT LIE ONCE THE DECK IS WASHED OUT. Not a fill: a set of KNOTS of uneven
-  // size, each card scattered round the one it was dealt to. Between the knots is bare cloth, in
-  // the knots are three and four cards on top of each other, and the outline that comes out of it
-  // is the ragged one above with lumps of its own — which is the photograph.
-  const gauss = () => Math.sqrt(-2 * Math.log(1 - rng())) * Math.cos(2 * Math.PI * rng());
-  const knot = [];
-  for (let c = 0; c < R.clumps; c++) {
-    const th = rng() * 2 * Math.PI, rr = Math.sqrt(rng()) * 0.86;
-    const lim = edgeAt(th);
-    knot.push({ x: R.ax * rr * lim * Math.cos(th), z: R.cz + R.az * rr * lim * Math.sin(th), w: 0.45 + rng() * rng() * 2.2 });
-  }
-  const wsum = knot.reduce((s, k) => s + k.w, 0);
-  const slot = [];
-  for (let i = 0; i < N - STRAY; i++) {
-    let t = rng() * wsum, c = 0;
-    while (c < knot.length - 1 && (t -= knot[c].w) > 0) c++;
-    slot.push({ x: knot[c].x + gauss() * R.sig, z: knot[c].z + gauss() * R.sig * 0.78, a: (rng() - 0.5) * 2 * Math.PI });
-  }
-  // the strays: out at the rim, at bearings of their own, nowhere near a knot
-  for (let i = 0; i < STRAY; i++) {
-    const th = ((i + 0.25 + rng() * 0.7) / STRAY) * 2 * Math.PI;
-    const rr = Math.min(1, (0.86 + rng() * 0.30) * edgeAt(th) + 0.10);
-    slot.push({ x: R.ax * rr * Math.cos(th), z: R.cz + R.az * rr * Math.sin(th), a: (rng() - 0.5) * 2 * Math.PI, stray: true });
-  }
-  // AND THE HOLES. A heap pushed about by two hands has bare cloth showing through it — the
-  // photograph does, plainly — and knots alone will not make one: twelve gaussians over an ellipse
-  // this size overlap into a pavement. So a few discs of cloth are cleared: any card whose centre
-  // falls inside one is pushed out to its rim, which opens the hole without moving anything else
-  // and without changing the number of cards anywhere near it.
-  for (let v = 0; v < R.voids; v++) {
-    const th = rng() * 2 * Math.PI, rr = 0.28 + rng() * 0.52;
-    const vx = R.ax * rr * Math.cos(th), vz = R.cz + R.az * rr * Math.sin(th) * 0.9;
-    const vr = 0.030 + rng() * 0.022;
-    for (const s of slot) {
-      const d = Math.hypot(s.x - vx, (s.z - vz) * 1.35);
-      if (d > vr || d < 1e-5) continue;
-      const k = vr / d;
-      s.x = vx + (s.x - vx) * k;
-      s.z = vz + (s.z - vz) * k;
-    }
-  }
-  // …and the whole scatter slid back onto the frame's axis. Knots of uneven weight in uneven
-  // places do not average to nothing: this seed's came out 60 mm to the left, and a mass sitting
-  // off to one side of two symmetrical hands is a composition fault, not a smoosh. A rigid
-  // translation moves nothing relative to anything, so the raggedness and the gaps survive it.
-  const mx = slot.reduce((a, s) => a + s.x, 0) / N, mz = slot.reduce((a, s) => a + s.z, 0) / N;
-  for (let i = 0; i < N; i++) {
-    px[i] = slot[i].x - mx;
-    pz[i] = slot[i].z - mz + R.cz;
-    if (slot[i].stray) clampHard(i);
-    else clampRagged(i);
-    slot[i].x = px[i];
-    slot[i].z = pz[i];
-  }
   // A PILE PUSHED OVER SPLAYS FROM THE TOP: the card on top slides furthest, the one on the cloth
   // hardly moves. So the deck's own order is mapped onto the raft by reach — card 0 (the bottom)
   // takes the nearest slot to the deck's square, card 77 the furthest — and the raft comes out
@@ -389,7 +348,7 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
   // ---- 6 drawings: THE WASH. The pile is pushed over and splayed out under two palms ------------
   // The top of the deck goes first and goes furthest; the pile under his hands thins card by card.
   const leaveAt = new Float64Array(N);
-  for (let i = 0; i < N; i++) leaveAt[i] = ((N - 1 - i) / (N - 1)) * (WASH - RUN);
+  for (let i = 0; i < N; i++) leaveAt[i] = ((N - 1 - i) / (N - 1)) * (SPLAY - RUN);
   const spill = []; // where each card starts: somewhere in the deck's own square
   // …and the scatter is ACROSS the deck's square, not along it. The deck stands 140 mm from the
   // near edge of the plan view and a card is 227 long, so a card jittered 45 mm down-frame of the
@@ -400,7 +359,7 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
     pz[i] = spill[i].z;
     pa[i] = spill[i].a;
   }
-  for (let k = 1; k <= WASH; k++) {
+  for (let k = 1; k <= SPLAY; k++) {
     let left = 0;
     for (let i = 0; i < N; i++) {
       const u = Math.min(1, Math.max(0, (k - leaveAt[i]) / RUN));
@@ -409,10 +368,25 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
       px[i] = spill[i].x + (s.x - spill[i].x) * u;
       pz[i] = spill[i].z + (s.z - spill[i].z) * u;
       pa[i] = spill[i].a + (s.a - spill[i].a) * u;
+      // …AND HELD INSIDE THE PICTURE ON THE WAY OUT. A card leaves the deck squared and lands at
+      // any angle, and it is TURNING as it slides: at three-quarters of the way it can be pointing
+      // straight down the frame, which is the attitude in which it reaches furthest, and measured
+      // it put a corner 21 mm past where a card is allowed to come to rest and 2 mm off the near
+      // edge of the plate. The mass's own boundary is applied with the card's travel, so a card
+      // still lying in the deck's square is not dragged out of it and one that has arrived is
+      // already where the wash confined it — the correction only bites in between.
+      if (u > 0) {
+        _c.x = px[i];
+        _c.z = pz[i];
+        _c.ang = pa[i];
+        confine(_c, cfg, NOSLACK);
+        px[i] += (_c.x - px[i]) * u;
+        pz[i] += (_c.z - pz[i]) * u;
+      }
     }
     // the palms travel out and up-frame with the cards they are pushing
-    const u = k / WASH;
-    const hxk = 0.052 + (R.hx + R.rx * 0.5 - 0.052) * u, hzk = DZ - 0.012 + (R.cz + R.rz * 0.4 - DZ + 0.012) * u;
+    const u = k / SPLAY;
+    const hxk = 0.052 + (R.hx + R.rx * 0.5 - 0.052) * u, hzk = DZ - 0.012 + (CZ + R.rz * 0.4 - DZ + 0.012) * u;
     const vis = (i) => k > leaveAt[i];
     snap(left, vis, HL(-hxk, hzk, 0.003, DEEP), HR(hxk, hzk, 0.003, DEEP), k === 1 ? cues.wash : null);
   }
@@ -433,7 +407,7 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
   // each turn is opposite: they close on the middle together and open out together.
   const orbit = (k) => {
     const th = -Math.PI / 2 + (k / PER) * 2 * Math.PI;
-    return { x: R.hx + R.rx * Math.cos(th), z: R.cz + R.rz * Math.sin(th) };
+    return { x: R.hx + R.rx * Math.cos(th), z: CZ + R.rz * Math.sin(th) };
   };
   // THE LEFT HAND IS THE RIGHT ONE TURNED THROUGH HALF A CIRCLE, mirrored in x and half a turn
   // behind. It is worth saying why, because the house rule is symmetry about the frame's axis and
@@ -449,7 +423,7 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
   //     drag the middle of it against itself. That shear is what the measurement is for.
   const mirror = (k) => {
     const h = orbit(k);
-    return { x: -h.x, z: 2 * R.cz - h.z };
+    return { x: -h.x, z: 2 * CZ - h.z };
   };
   let hR = orbit(0), hL = mirror(0);
   const carry = (h0, h1, w) => {
@@ -517,22 +491,101 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
     const set = new Set(near);
     ord = ord.filter((i) => !set.has(i)).concat(near);
   };
+  // ── THE SETTLE: the swirl ENDS ON THE WASH'S OWN POSES (round 6) ───────────────────────────────
+  //
+  // There is no push-out to correct anything afterwards, so the last third of the swirl is where
+  // the mass comes to rest — under his hands, while they are still working it, which is where a
+  // heap of cards settles in life. Each card is drawn onto a pose of reveal-wash's by an attractor
+  // that reaches exactly 1 on the last drawing of the swirl, so the four drawings of his hands
+  // lifting off play over a mass that has already stopped moving, and the pick piece's own
+  // seventy-eight can take over at the identical poses one drawing later.
+  //
+  // WHICH CARD TAKES WHICH POSE is chosen to make the settle as small as it can be. The washed
+  // cards are interchangeable — they are face-down placeholders, all alike — so the pairing is free:
+  // rank by rank across the picture first (the shortest possible pairing in x on its own, and it is
+  // the axis the ordinal is counted on), then improved by swapping pairs while a swap shortens the
+  // two travels taken together, counting a turn of the card as well as a slide of it. Measured, that
+  // leaves a settle of a few millimetres a drawing — less movement than the swirl the visitor has
+  // been watching for two seconds.
+  const SETTLE = 12;
+  const SPIN_COST = 0.02; // a half-turn of a card counted as 63 mm of travel, in the pairing above
+  let tx = null, tz = null, ta = null;
+  const angNear = (a, t) => t + 2 * Math.PI * Math.round((a - t) / (2 * Math.PI));
+  function chooseRest() {
+    const P = WASH.poses; // already sorted left to right: pose k is the (k+1)-th from the left
+    const to = new Int32Array(N);
+    Array.from({ length: N }, (_, i) => i)
+      .sort((a, b) => px[a] - px[b])
+      .forEach((i, k) => (to[i] = k));
+    const cost = (i, j) => {
+      const p = P[j], da = angNear(pa[i], p.ang) - pa[i];
+      return (px[i] - p.x) ** 2 + (pz[i] - p.z) ** 2 + (SPIN_COST * da) ** 2;
+    };
+    const rr = mulberry32(5150 + (ctx.seed | 0));
+    for (let n = 0; n < 12000; n++) {
+      const a = (rr() * N) | 0, b = (rr() * N) | 0;
+      if (a === b) continue;
+      const ja = to[a], jb = to[b];
+      if (cost(a, ja) + cost(b, jb) > cost(a, jb) + cost(b, ja)) {
+        to[a] = jb;
+        to[b] = ja;
+      }
+    }
+    tx = new Float64Array(N);
+    tz = new Float64Array(N);
+    ta = new Float64Array(N);
+    for (let i = 0; i < N; i++) {
+      const p = P[to[i]];
+      tx[i] = p.x;
+      tz[i] = p.z;
+      ta[i] = angNear(pa[i], p.ang);
+    }
+    // …and the HEAP'S ORDER with it. A card has to end up lying as high in the mass as the pose it
+    // takes says (reveal-wash's own rank), or the hand-over would restack all seventy-eight in one
+    // drawing and the top layer — which is the whole of what a plan view sees — would change under
+    // the visitor's eye. It is set once, here, and `rideUp` stops for the rest of the beat.
+    const next = new Array(N);
+    for (let i = 0; i < N; i++) next[P[to[i]].rank] = i;
+    ord = next;
+  }
+
   const step = (2 * Math.PI) / PER;
-  const q0 = spread(); // where and how big the wash left the raft: what the swirl has to give back
-  for (let k = 1; k <= TURNS * PER; k++) {
+  const q0 = spread(); // where and how big the splay left the mass: what the swirl has to give back
+  const TURNSTEPS = TURNS * PER;
+  for (let k = 1; k <= TURNSTEPS; k++) {
     const nR = orbit(k), nL = mirror(k);
     carry(hR, nR, step);
     carry(hL, nL, -step);
-    for (let i = 0; i < N; i++) clampHard(i);
-    holdSize(q0, 1);
-    // and again, because the size correction is what can push a card past the line: the nominal
-    // ellipse is the frame's promise — nothing bisected by an edge — and it is checked last, on
-    // every drawing, not only on the one the wash finishes on (tools/_rv11-win.mjs walks all 58).
-    for (let i = 0; i < N; i++) clampHard(i);
+    const m = k - (TURNSTEPS - SETTLE); // 1..SETTLE once the mass is coming to rest
+    if (m <= 0) {
+      for (let i = 0; i < N; i++) clampHard(i);
+      holdSize(q0, 1);
+      // and again, because the size correction is what can push a card past the line: the mass's
+      // boundary is the frame's promise — nothing bisected by an edge, nothing over the reading
+      // row — and it is checked last, on every drawing (tools/_rv11-win.mjs walks all 44).
+      for (let i = 0; i < N; i++) clampHard(i);
+    } else {
+      if (!tx) chooseRest();
+      const w = 1 / (SETTLE - m + 1); // reaches 1 on the last drawing: the mass lands exactly
+      for (let i = 0; i < N; i++) {
+        px[i] += (tx[i] - px[i]) * w;
+        pz[i] += (tz[i] - pz[i]) * w;
+        pa[i] += (ta[i] - pa[i]) * w;
+      }
+      // and the boundary still holds while it settles: his palms are still dragging cards about
+      // (`carry`, above) and a drag is not bound by anything. Without this a card pushed outward
+      // early in the settle is only pulled back in proportion to how far through the settle it is,
+      // and measured, three of them crossed the near edge of the frame by 84 mm on the way. On the
+      // last drawing the attractor has already landed the card on a pose the wash confined, so this
+      // is a no-op there and the mass ends exactly where reveal-wash put it.
+      for (let i = 0; i < N; i++) clampHard(i);
+    }
     hR = nR;
     hL = nL;
-    rideUp(hR, 3);
-    rideUp(hL, 3);
+    if (m <= 0) {
+      rideUp(hR, 3);
+      rideUp(hL, 3);
+    }
     // The two palms are drawn 0.6 mm apart in height. They are flat cut-outs on one plane and they
     // do overlap at the top and the bottom of their circles — which is right, that is two hands in
     // one heap of cards — and two coplanar quads fight for the pixel where they cross.
@@ -540,19 +593,20 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
   }
   const swirled = snaps.length - 1;
 
-  // ---- 4 drawings: his hands come off the heap, AND THE WASH STAYS WHERE IT IS -------------------
+  // ---- 4 drawings: his hands come off the heap, AND THE WASH IS ALREADY AT REST -------------------
   //
-  // ROUND 12, AND IT IS THE USER'S NOTE: "what if the users picks directly from the swoosh, with all
-  // cards layed out messily?" Round 11 raked the seventy-eight back into a squared pile here, and a
-  // neat fan came out of that pile for the visitor to choose from. There is no fan. The mass IS the
-  // pick surface: he presses it out into a band (reveal-pick.js → pushFrames) and the visitor takes
-  // three straight out of it, so the rake belongs at the END of the reading now — it is what the
-  // gather does (reveal-pick.js → gatherFrames), and the deck does not come back until then.
-  // His hands simply lift off the heap, up the frame, and out of the picture.
+  // ROUND 12 (the user: "what if the users picks directly from the swoosh, with all cards layed out
+  // messily?") deleted the rake that used to be here and the neat fan that came out of it: the mass
+  // IS the pick surface. ROUND 6 OF THE FLOW (the user: "lets remove … push out") deletes the other
+  // half of that answer — the seventeen drawings in which he pressed the churn out into a band. The
+  // settle above has already brought every card onto the pose it will be chosen from, so these four
+  // drawings are exactly what they say: two hands lifting off a mass that is not moving, up the
+  // frame and out of the picture. The rake is the GATHER's, at the far end of the reading
+  // (reveal-pick.js → gatherFrames), and the deck does not come back until then.
   const off = (x, z, y, floor, cue = null) => snap(0, ALL, HL(-x, z, y, floor), HR(x, z, y, floor), cue);
-  off(R.hx, R.cz - 0.03, 0.010, DEEP);
-  off(R.hx + 0.02, R.cz - 0.16, 0.062, DEEP);
-  off(R.hx + 0.04, R.cz - 0.30, 0.108, 0, cues.done);
+  off(R.hx, CZ - 0.03, 0.010, DEEP);
+  off(R.hx + 0.02, CZ - 0.16, 0.062, DEEP);
+  off(R.hx + 0.04, CZ - 0.30, 0.108, 0, cues.done);
   snap(0, ALL, null, null, null);
   // THE DECK'S NEW ORDER, bottom to top, as the gather will find it: the cards furthest from the
   // deck's square are raked first and end up at the bottom of the pile. Nothing here draws it — the
@@ -596,15 +650,17 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
     stacks: S,
     group,
     meshes,
-    raft: R,
-    // what the mixing probe needs: the drawing the raft is complete on, the drawing the swirl ends
+    // the hands' circles, and the box the mass lies in — what anything asking this take how big the
+    // wash is wants (reveal.js → smooshBounds, tools/_rv11-win.mjs)
+    raft: { ...R, ax: B.x, cz: CZ, az: (B.z1 - B.z0) / 2 },
+    // what the mixing probe needs: the drawing the splay is complete on, the drawing the swirl ends
     // on, and the deck's new order bottom-to-top in terms of where each card started
     marks: { washed, swirled, raked: snaps.length - 1 },
     order: () => order.slice(),
     // WHERE THE WASH LIES WHEN HIS HANDS COME OFF IT — the seventy-eight, in world metres on the
-    // cloth, bottom of the heap first. This is the beat's whole output now: reveal-pick.js starts
-    // its push-out from exactly these poses, so the mass the visitor sees opening is the mass he
-    // just washed and not a second drawing of one.
+    // cloth. Since round 6 this is reveal-wash's own arrangement, card for card: the settle lands
+    // on it, so the pick piece lays its seventy-eight at the identical poses in the drawing this
+    // beat's cards leave the cloth, and the hand-over cannot be seen. reveal-pick.js checks it.
     rest: () => {
       const s = snaps[snaps.length - 1].p;
       return Array.from({ length: N }, (_, i) => ({ x: s[i * ST], z: s[i * ST + 1], ang: s[i * ST + 2], rank: (s[i * ST + 3] - Y - T / 2) / DEEP }));

@@ -322,103 +322,61 @@ export function buildPick(ctx, cards, player, hand = null, slots = ctx.layout.sp
     deckReal();
   }
 
-  // ---- THE PUSH-OUT: the churned mass opened into the band --------------------------------------
+  // ---- THE HAND-OVER: this piece's seventy-eight take the wash's place -----------------------------
   //
-  // This is what used to be the fan, and it is the beat the whole round turns on. The swirl leaves
-  // a heap about the middle of the cloth with both his palms in it; he does not gather it and he
-  // does not square it. He presses down, and PUSHES IT OUT — both hands travelling from the middle
-  // to the two ends of the cloth, the cards spilling out from under them left and right until the
-  // heap has become a band the visitor can pick along. Nothing is squared, nothing is turned face
-  // up, nothing is put in order: every card keeps the angle the swirl gave it and lands where
-  // reveal-wash.js says, which is a mass at every angle with knots, bays and a ragged outline.
+  // ROUND 6, AND IT IS THE USER'S CUT: "lets remove: story card and push out." What stood here was
+  // the PUSH-OUT — seventeen drawings in which both his palms came back down onto the churn the
+  // smoosh had left and travelled out to the two ends of the cloth, the cards spilling from under
+  // them left and right until the heap had become a band. It was a second piece of business after a
+  // piece of business, and it existed for one reason that was not staging: a heap has no left-to-
+  // right ranks, and "the third from the left" has to land on the card a person would point at.
   //
-  // The cards leave in order of how far out they are going, because that is what a spreading palm
-  // does: the ones nearest the middle are pushed first and the ends of the band fill last.
-  const PUSH = 12, RUN = 3;
-  function pushFrames(before = null) {
+  // THAT ORDERING IS NOT LOST; IT MOVED. reveal-wash.js still lays the mass — sorted by x, with the
+  // ranks pulled part-way to an even pitch by `evenOut`, every card confined clear of the reading
+  // row and inside the rim — and the SMOOSH now settles onto that arrangement itself, under his
+  // working hands, over the last twelve drawings of the swirl (reveal-shuffle.js → chooseRest). So
+  // the mass his hands leave IS this mass, `remaining()` is still ordered across the picture and
+  // `pickByOrdinal` is still a subscript.
+  //
+  // What is left to do here is a swap, not a move: the smoosh's placeholders go off the cloth and
+  // this piece's own seventy-eight come on at the identical poses, in one drawing, with nothing
+  // moving in it. `before` is the smoosh's `hideCards`. The second drawing is a held one, so a take
+  // played at 12 fps has a frame to land on.
+  function handoverFrames(before = null) {
     makeEntries();
     stacks();
-    const from = restMass() ?? fallbackMass();
-    const to = entries.map((e) => restPose(e, {}));
-    // the drawing each card starts moving on: sorted by how far from the middle it is going
-    const byOut = entries.map((e) => e.i).sort((a, b) => Math.abs(to[a].x) - Math.abs(to[b].x));
-    const startAt = new Float64Array(N);
-    byOut.forEach((i, r) => {
-      startAt[i] = ((PUSH - RUN) * r) / Math.max(1, N - 1);
-    });
-
-    const frames = [];
-    const F = (fn) => frames.push(fn);
-    // two drawings: his palms come back down onto the heap and press
-    for (let k = 0; k < 2; k++)
-      F(() => {
-        before?.();
-        deckDrawing(0);
-        entries.forEach((e, i) => {
-          const f = from[i % from.length];
-          e.flying = true;
-          e.mesh.visible = true;
-          e.mesh.position.set(f.x, Y + T / 2 + (f.rank ?? i / N) * DEEP, f.z);
-          e.mesh.rotation.set(PI, -f.ang, 0);
-        });
-        if (k === 0) {
-          sound('deal');
-          pepe()?.shuffle?.();
-        }
-      });
-    // twelve drawings: the push. Each card takes three to travel, and the mass opens behind his
-    // palms rather than all at once.
-    for (let k = 1; k <= PUSH; k++)
-      F(() => {
-        deckDrawing(0);
-        entries.forEach((e, i) => {
-          const a = from[i % from.length], b = to[i];
-          const u = clamp01((k - startAt[i]) / RUN);
-          e.flying = true;
-          e.mesh.visible = true;
-          e.mesh.position.set(lerp(a.x, b.x, u), lerp(Y + T / 2 + (a.rank ?? i / N) * DEEP, b.y, u) + 0.004 * Math.sin(PI * u), lerp(a.z, b.z, u));
-          e.mesh.rotation.set(PI, lerp(-a.ang, b.ry, u), 0);
-        });
-        if (k === 1 || k === 5 || k === 9) sound('riffle');
-      });
-    // and the mass at rest, his hands off it: the cloth belongs to the visitor now
-    F(() => {
+    const settle = () => {
+      before?.();
+      deckDrawing(0);
       for (const e of entries) {
         e.flying = false;
         e.lift = e.liftTarget = 0;
         applyEntry(e);
       }
-      sound('settle');
-    });
-    if (!hand) return frames;
-    // his palms: down in the middle of the heap, out to the two ends of the band, and away up-frame
-    const b = WASH.bounds, cz = (b.z0 + b.z1) / 2;
-    const specs = [];
-    const push = (u) => {
-      const x = lerp(0.055, b.x * 0.80, u), z = lerp(cz + 0.02, cz - 0.01, u);
-      return [HL(-x, z, 0.003, DEEP), HR(x, z, 0.003, DEEP)];
     };
-    specs.push([HL(-0.075, cz - 0.16, 0.075), HR(0.075, cz - 0.16, 0.075)]);
-    specs.push(push(0));
-    for (let k = 1; k <= PUSH; k++) specs.push(push(k / PUSH));
-    specs.push([HL(-b.x * 0.80, cz - 0.05, 0.020, DEEP * 0.5), HR(b.x * 0.80, cz - 0.05, 0.020, DEEP * 0.5)]);
-    specs.push([HL(-b.x * 0.66, cz - 0.20, 0.075), HR(b.x * 0.66, cz - 0.20, 0.075)]);
-    specs.push([{ off: true }, { off: true }]);
-    return compose([
-      { offset: 0, frames },
-      { offset: 0, frames: handFrames(hand, specs.map((s) => s[0])) },
-      { offset: 0, frames: handFrames(hand, specs.map((s) => s[1])) },
-    ]);
-  }
-  // the heap the push-out starts from, when no smoosh has played (a judging still on its own, or a
-  // flow that has cut straight to the choosing): the band's own cards pulled into a churn about the
-  // middle of the cloth, which is what the swirl leaves
-  function fallbackMass() {
-    const rng = mulberry32(6100 + ctx.seed);
-    const b = WASH.bounds, cz = (b.z0 + b.z1) / 2;
-    // `rank` is a FRACTION of the heap's depth here, the way the smoosh take publishes it, not the
-    // integer rank the poses carry
-    return WASH.poses.map((p) => ({ x: p.x * 0.30 + (rng() - 0.5) * 0.05, z: cz + (p.z - cz) * 0.55 + (rng() - 0.5) * 0.04, ang: p.ang, rank: p.rank / N }));
+    // THE SWAP IS ONLY INVISIBLE IF THE TWO ARRANGEMENTS ARE THE SAME ONE, and that is a contract
+    // between two files rather than something either can see. It is worth a millimetre of checking
+    // rather than a bug nobody can describe: if a smoosh has played and it did not land where the
+    // wash says, the console says so and by how much.
+    const check = () => {
+      const from = restMass();
+      if (!from || from.length !== N) return;
+      let worst = 0;
+      for (let i = 0; i < N; i++) {
+        let d = Infinity;
+        for (const p of WASH.poses) d = Math.min(d, Math.hypot(p.x - from[i].x, p.z - from[i].z));
+        worst = Math.max(worst, d);
+      }
+      if (worst > 0.001) console.warn(`[reveal] the wash came to rest ${(1000 * worst).toFixed(1)} mm off the poses the visitor picks from; the hand-over will be visible`);
+    };
+    return [
+      () => {
+        check();
+        settle();
+        sound('settle');
+      },
+      settle,
+    ];
   }
 
   // where a picked card lies in slot k: a millimetre off, a few degrees off, as a hand puts it.
@@ -874,8 +832,10 @@ export function buildPick(ctx, cards, player, hand = null, slots = ctx.layout.sp
     liftIndex,
     fakePicks,
     clear,
-    pushFrames,
-    fanFrames: pushFrames, // the beat kept its name in flow and in reveal's judging states
+    handoverFrames,
+    // the beat kept its names in flow and in reveal's judging states; there is no push and no fan
+    pushFrames: handoverFrames,
+    fanFrames: handoverFrames,
     pickFrames,
     gatherFrames,
     arm,

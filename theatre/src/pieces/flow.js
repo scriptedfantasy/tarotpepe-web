@@ -1,15 +1,23 @@
 // PIECE: flow — the whole evening, which is a conversation.
 //
 //   the door · Pepe greets · and then the visitor talks to him, and he answers, for as long as
-//   they like · when the visitor asks for a reading — in whatever words — the story card, the
-//   shuffle, the fan, three picks, the gather, three cards turned and read · and then the
-//   conversation carries on, from the same field, with the cards on the table · when the visitor
-//   says good night, the door, and the sign-off card · a click starts the evening again.
+//   they like · when the visitor asks for a reading — in whatever words — the deck is washed out
+//   over the cloth, three are taken out of the wash, the rest is raked up, three cards turned and
+//   read · and then the conversation carries on, from the same field, with the cards on the table
+//   · when the visitor says good night, the door, and the sign-off card · a click starts the
+//   evening again.
+//
+// ROUND 6 CUT TWO THINGS OUT OF THAT, and they are the user's: "lets remove: story card and push
+// out. also i dont think we should have scripted sentences about the shuffling etc, if anything
+// pepe should generate what he says so everytime feels unique." So the reading no longer opens on
+// a held chapter card; the wash is not pressed out into a band in a second beat, the visitor picks
+// from the mass his hands leave; and nothing canned is read over any of it — his line over the
+// wash is the turn in which he agreed to deal, and if he wrote none, he works in silence.
 //
 // There is no script of beats any more and no fixed number of exchanges. The loop is one line
 // long: the visitor says something, the mind answers, the visitor says something. Everything else
-// — the cards, the camera moves, the story card — hangs off the intent the mind reports for a
-// turn ('talk' · 'draw' · 'recall' · 'farewell'). He never deals on his own schedule.
+// — the cards, the camera moves — hangs off the intent the mind reports for a turn ('talk' ·
+// 'draw' · 'recall' · 'farewell'). He never deals on his own schedule.
 //
 // THE CARDS CAN BE GONE BACK TO (round 5, the user: "once the cards are drawn, the user has to be
 // able to see their cards again"). The three stay on the cloth after the reading, but the
@@ -65,7 +73,10 @@ const IMPATIENT_S = 3;
 const TURN_S = 26;
 const IDLE_S = 90; // the visitor's silence at the field: he says a line and opens it again
 const PICK_S = 75; // ... at the fan: Pepe chooses
-const CHAPTER_S = 4.0; // the story card, held long enough to read its four lines (round 3: 1.7 → 2.3s on screen)
+// How long a line over the wash may take to start arriving. The wash is 3.7 s of hands in cards and
+// the mind takes about 2.7 s; past this the line would go up over a table his hands had already
+// left, so it is dropped and the beat stays silent. Nothing scripted takes its place — round 6.
+const WASH_LINE_S = 3.6;
 const DOOR_S = 3.4;
 const LANDING_S = 3.0; // the parlour, held, before anybody says anything
 
@@ -194,8 +205,13 @@ export async function build(ctx) {
   // each(k, sentence): called before sentence k is said (a cut mid-turn).
   // max: how many sentences of the source are used at all — the rest are dropped and the mind is
   //      told to stop writing. With keepLast, max counts the held one too (2 said + 1 held).
+  // first: how long the FIRST sentence may take to arrive. The default is his whole thinking time,
+  //      which is right when the visitor is waiting for an answer and nothing else is happening. It
+  //      is not right over the wash: something IS happening there, the beat is 3.7 s long, and a
+  //      line that arrives after his hands have left is a line said to an empty table. See
+  //      `drawing`.
   // → { said: how many went up, held: the one kept back }
-  async function render(source, { hold = 1.2, keepLast = false, each = null, max = MAX_SENTENCES } = {}) {
+  async function render(source, { hold = 1.2, keepLast = false, each = null, max = MAX_SENTENCES, first = FIRST_SENTENCE_S } = {}) {
     const token = run;
     const it = iterate(source);
     let said = 0, held = null, taken = 0;
@@ -223,7 +239,7 @@ export async function build(ctx) {
         // how long we wait for the next sentence: the mind's whole thinking time for the first,
         // less for each after it, and barely any once the field could already be open
         const ready = keepLast && held != null && said >= 1;
-        const r = await timeout(it.next(), ready ? IMPATIENT_S : n ? NEXT_SENTENCE_S : FIRST_SENTENCE_S);
+        const r = await timeout(it.next(), ready ? IMPATIENT_S : n ? NEXT_SENTENCE_S : first);
         if (r === TIMEOUT) {
           M?.abort?.();
           if (ready) drain(it);
@@ -251,8 +267,16 @@ export async function build(ctx) {
     return { said, held };
   }
 
-  // One of the beats the mind still owns as a beat: the greeting, the shuffle, the fan, a reading,
-  // the farewell. The script speaks if the mind says nothing at all.
+  // One of the beats the mind still owns as a beat: the greeting, a reading, a second look, the
+  // farewell. The script speaks if the mind says nothing at all.
+  //
+  // THE STAGE BUSINESS IS NOT ONE OF THEM ANY MORE (round 6, and it is the user's note: "i dont
+  // think we should have scripted sentences about the shuffling etc, if anything pepe should
+  // generate what he says so everytime feels unique"). The shuffle and the fan used to ask for a
+  // beat here and, failing a model, read two lines out of script.js — the same two every evening,
+  // and one of them ("I shuffle seven times") stopped being true the day the riffle became a wash.
+  // They are gone: what he says over his own hands is the turn in which he agreed to deal, written
+  // fresh, and when he has written nothing he works in silence. See `drawing`.
   async function speak(args, opts = {}) {
     const token = run;
     skipBeat = false;
@@ -310,21 +334,6 @@ export async function build(ctx) {
     // which card a recall points at: the mind's own answer, or the ordinal read off their words
     const focus = Number.isInteger(turn?.focus) ? turn.focus : intent === 'recall' ? recallFocus(said) : null;
     return { intent, focus, sentences: sentencesOf(turn) };
-  }
-
-  // ---- a story card: cut in, typed, held, cut out (a key or a click ends the hold) ------------------
-  async function chapter(n, behind = null) {
-    // the titles piece cuts the hinges it does not want; a cut one is an instant hinge, not a hold
-    // on an empty frame
-    if (!T?.chapter?.(n)) {
-      behind?.();
-      return;
-    }
-    cue('snap');
-    await wait(CHAPTER_S, { skippable: true });
-    behind?.();
-    T?.hide?.();
-    await wait(0.45);
   }
 
   // ---- the visitor's three picks --------------------------------------------------------------------
@@ -491,50 +500,63 @@ export async function build(ctx) {
   }
 
   // ---- the cards, because the visitor asked for them ----------------------------------------------
-  // `sentences` is the turn in which he agreed to it: the mind writes that turn as the shuffle
-  // line, so it is said over his working hands, not before them. Returns the line the conversation
+  // ONE PIECE OF BUSINESS: the deck goes over under both palms, is washed round, comes to rest, and
+  // the visitor takes three out of it where it lies. `sentences` is the turn in which he agreed to
+  // it, said over his working hands rather than before them. Returns the line the conversation
   // picks up on afterwards (said over the open field).
   async function drawing(token, nth, sentences) {
-    // the one story card in the evening, and this is where it belongs: the cards coming out. A
-    // second reading does not get one — a card twice is a slideshow.
-    // The camera is already on the deck behind the story card, so the card lifts on the shuffle
-    // rather than on a wide of a room in which nothing is about to move.
-    if (nth === 0) await chapter(1, () => C?.cut?.('riffle'));
-    else {
-      M?.newSpread?.(); // the cloth cleared, the conversation kept
-      cut('riffle');
-      await wait(0.5);
-    }
+    // ROUND 6, AND THEY ARE THE USER'S TWO CUTS: "lets remove: story card and push out."
+    //
+    // THE STORY CARD IS GONE. A full-frame chapter card — ARCANA & DIVINATION / The Cards — used
+    // to be held four seconds here before the first reading of an evening. The reading begins on
+    // the cards themselves now. (The card itself still exists in titles.js, where it is that
+    // piece's own judged `chapter` state; nothing in the evening asks for it.)
+    //
+    // THE PUSH-OUT IS GONE. The mass the visitor picks from is the mass the smoosh leaves: his
+    // hands come off the heap and the cloth is theirs. There is no second beat in which both palms
+    // come back down and travel out to the ends of the table. What was the `fan` beat is now the
+    // hand-over, one drawing long, so this reads as ONE piece of business: he washes the deck in
+    // front of them and then they choose out of it.
+    if (nth > 0) M?.newSpread?.(); // a second reading: the cloth cleared, the conversation kept
+    // The plan view over the cloth, where the wash is staged, and the frame the whole of this beat
+    // is played in. (It used to cut to `riffle`, a 62° rake built to read a bridge in profile;
+    // there is no bridge, and reveal.shuffle() only had to cut away from it again.)
+    if (C?.current !== 'fan') cut('fan');
+    await wait(0.35);
     if (!alive(token)) return null;
 
-    // The shuffle, staged: the frame is on the deck before a card moves, and the riffle plays in
-    // it — the cut, the halves parted a hand's width, the six drawings of the interleave, the pile
-    // stood on its edge and tapped square. Round 3 played all of that in a wide of the whole
-    // parlour, where the deck is nine millimetres of the picture behind a bottle, and his line
-    // went up in front of it besides.
+    // THE SMOOSH, AND WHAT HE SAYS OVER IT — WHICH HE WRITES, OR THERE IS NONE.
+    //
+    // `sentences` is the turn in which he agreed to deal, so it goes over his working hands rather
+    // than in front of them. On a provider that answers a request by DOING it, that turn comes back
+    // as a bare tool call with no words in it at all (measured: the OpenRouter path returns
+    // `deal_cards` and nothing else), and then he is asked for the wash beat instead — one line,
+    // written this evening, about this visitor. Nothing behind that is scripted: script.js's
+    // `shuffle` and `draw` banks are empty, so the mind's own written brain answers this beat with
+    // nothing, and A KEYLESS EVENING PLAYS THE WASH IN SILENCE. That is the intended frame and not
+    // a hole in one: the top-down of the cloth, both palms in seventy-eight cards, the sound of it,
+    // and no lettering. The answer to "read my cards" is him doing it.
+    //
+    // The budget is the beat's own length. The wash is 3.7 s and the mind takes about 2.7 s, so a
+    // line that has not started by then would go up over a table his hands had already left; it is
+    // dropped instead, and the mind is told to stop writing.
     api.beat = 'shuffle';
     D.folio?.('shuffle');
-    await wait(0.15);
     const shuffling = R?.shuffle?.() ?? Promise.resolve();
-    await wait(0.7); // the cut and the parting before he says a word over them
-    // his first sentence goes over the riffle; the riffle is two seconds long and his turn is not,
-    // so the rest of it is played on him rather than on a deck that has stopped moving
-    const over = await render(sentences, { hold: 1.2, each: closer });
-    if (!over.said) await speak({ beat: 'shuffle' }, { hold: 1.2, each: closer });
-    await timeout(shuffling, 12);
+    await wait(0.7); // the deck going over under both palms, before he says a word over it
+    const over = await render(sentences, { hold: 1.2, max: 2 });
+    if (!over.said && M?.available && M?.reply && alive(token) && !skipBeat) await render(M.reply({ beat: 'shuffle' }), { hold: 1.2, max: 2, first: WASH_LINE_S });
+    await timeout(shuffling, 14);
     if (!alive(token)) return null;
-    await wait(0.4);
 
+    // The hand-over: reveal's own seventy-eight take the wash's place at exactly the poses the
+    // smoosh left them in, and the cloth is armed. Nothing moves in it.
     api.beat = 'fan';
     D.folio?.('fan');
-    cut('fan');
-    const fanning = R?.fan?.() ?? Promise.resolve();
-    // two sentences here, not three: the pick prompt is the third thing said and the visitor has
-    // been watching cards being dealt for five seconds already
-    await speak({ beat: 'fan' }, { hold: 1.2, max: 2 });
-    await timeout(fanning, 15);
+    if (C?.current !== 'fan') cut('fan'); // his second sentence may have gone up close on him
+    await timeout(R?.fan?.() ?? Promise.resolve(), 10);
     if (!alive(token)) return null;
-    await wait(0.4);
+    await wait(0.3);
 
     await pickThree(token);
     if (!alive(token)) return null;
@@ -696,7 +718,10 @@ export async function build(ctx) {
     }
     if (!alive(token)) return;
     await wait(0.6);
-    await chapter(3, () => C?.cut?.('door'));
+    // the door again, and then the sign-off card. There is no story card at this hinge — titles.js
+    // cuts it deliberately (two typographic cards back to back is a slideshow, not a film) — so
+    // this is a plain cut, not a held card that draws nothing.
+    C?.cut?.('door');
     await wait(DOOR_S, { skippable: true });
     if (!alive(token)) return;
     api.beat = 'closing';
@@ -860,21 +885,27 @@ export async function build(ctx) {
         D.folio?.('talk');
         D.ask(D.reply(SAMPLE_ANSWER), { instant: true, value: 'can you read my cards' });
       } else if (name === 'shuffle') {
-        // reveal's own setState cuts to its judging shot; the flow's frame goes on after it
+        // reveal's own setState cuts to its judging shot; the flow's frame goes on after it.
+        // AND THERE IS NO LETTERING HERE, which is the round's change and not an omission: the
+        // wash has no script over it any more, and on an evening with no model there is nothing to
+        // put on the placard at all. This is the frame as a keyless visitor sees it — both palms
+        // in seventy-eight cards, and nobody talking.
         await R?.setState?.('shuffle');
-        cam('riffle');
+        cam('fan');
         D.folio?.('shuffle');
-        D.setState('shuffle');
       } else if (name === 'fan') {
         await R?.setState?.('fan');
         cam('fan');
         D.folio?.('fan');
         D.ask(PROMPTS.pick[0], { instant: true });
       } else if (name === 'dealt') {
+        // the three in the row, face down, a breath before the first is turned. Nothing is said
+        // here in the running film either — the pick prompt was cut when the third card landed and
+        // the first card's own title placard has not come up yet — so the still carries no
+        // lettering, exactly as the beat does.
         await R?.setState?.('dealt');
         cam('turn');
         D.folio?.('draw');
-        D.setState('draw');
       } else if (name === 'reading') {
         await R?.setState?.('revealed');
         cam('turn');

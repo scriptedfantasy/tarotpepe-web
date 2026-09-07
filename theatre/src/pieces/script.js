@@ -6,7 +6,8 @@
 // mention it. A caption is one breath: never more than twenty words.
 //
 // Shape:
-//   SCRIPT.greeting / question / shuffle / draw / turn / farewell   arrays of captions, said in order
+//   SCRIPT.greeting / question / turn / farewell                   arrays of captions, said in order
+//   SCRIPT.shuffle / draw                                          EMPTY on purpose — see the note by them
 //   SCRIPT.answer                                                  templates; {answer} is the visitor's text, verbatim
 //   SCRIPT.interjections.{empty,long,question,again}               when the visitor types nothing / a lot / a question
 //   SCRIPT.cards[slug][brought|going|do]                          two captions per card per position (78 × 3 × 2)
@@ -54,12 +55,28 @@ const interjections = {
   again: ['You have said that already. It is not less true the second time.'],
 };
 
-const shuffle = ['I shuffle seven times. Not for luck; seven is where it stops being the same deck.', 'Please do not help.'];
+// THE STAGE BUSINESS HAS NO SCRIPT, AND THAT IS DELIBERATE (round 6, the user: "i dont think we
+// should have scripted sentences about the shuffling etc, if anything pepe should generate what he
+// says so everytime feels unique"). These two banks used to be read out over the wash and over the
+// cards being laid — the same four sentences every evening — and one of them had gone plainly
+// false besides: he does not riffle seven times, he washes the deck once, in front of the visitor.
+//
+//   shuffle  'I shuffle seven times. Not for luck; seven is where it stops being the same deck.'
+//            'Please do not help.'
+//   draw     'Three cards. Left to right: what you brought, what is actually going on, what to do
+//             about it.'  ·  'That is the whole method. I did not invent it, and I have not
+//             improved it.'
+//
+// What he says over his own hands now is the turn in which he agreed to deal, written that
+// evening; when he has written none he works in silence, which is what a man washing cards in
+// front of you does. The KEYS stay because mind-voice.js indexes both unconditionally
+// (BEATS.shuffle / BEATS.fan / BEATS.draw read s.shuffle[0..1] and s.draw[0..1]) and that file
+// belongs to the mind piece: emptied, those beats resolve to nothing said, which is the intended
+// answer; deleted, they would throw. The mind piece should drop the three entries, and then these
+// two lines can go with them.
+const shuffle = [];
 
-const draw = [
-  'Three cards. Left to right: what you brought, what is actually going on, what to do about it.',
-  'That is the whole method. I did not invent it, and I have not improved it.',
-];
+const draw = [];
 
 // Said as each card is turned, before its intertitle.
 const turn = ['The first card. What you brought.', 'The second. What is actually going on.', 'The third. What to do about it.'];
