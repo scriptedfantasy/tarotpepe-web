@@ -649,11 +649,33 @@ export function matEdgeTexture(seed = 42) {
   );
 }
 
-// ---- radio front: a solid grille with paper slots, a paper dial with one needle ------------------
+// ---- radio front: a solid grille with paper slots, a paper dial with FOUR stations ---------------
+// ROUND 8 — THE VISITOR WORKS THIS SET. The needle is no longer a stroke on the sheet: props-
+// objects.js stands a real edge of ink in front of the paper and steps it from stop to stop, the
+// way the clock's hands are geometry and not painted on its face. So the two files have to agree
+// on where the stops are to the pixel, and this is where they agree — everything below is in the
+// sheet's own px (512 x 312), and the object turns it into metres off the front face's own UVs.
+//
+// FOUR STOPS, and the leftmost of them is OFF: the needle parked against the left edge of the
+// window, outside the ticked scale, which is what a dead set looks like. The other three sit on
+// three of the scale's own major ticks, so a tuned needle is on a mark and an untuned one is not.
+export const RADIO_DIAL = {
+  texW: 512,
+  texH: 312,
+  x: 268, y: 38, w: 218, h: 108, // the dial window
+  scale: [288, 466], // the ticked scale runs between these
+  needle: [78, 124], // the needle's top and bottom: clear of PARIS INTER, past the ticks
+  //           off   a      b    c
+  stations: [278, 332.5, 377, 421.5],
+  knobs: [326, 428], // the two knobs' centres; the second is the tuning knob and it turns
+  knobY: 214,
+};
+
 export function radioTexture(seed = 12) {
+  const D = RADIO_DIAL;
   return drawTexture(
-    512,
-    312,
+    D.texW,
+    D.texH,
     (g, W, H, rng) => {
       paper(g, W, H, PAPER, { grain: 0, seed });
       const o = { width: 2.6, wobble: 0.8, rng };
@@ -666,22 +688,30 @@ export function radioTexture(seed = 12) {
         inkLine(g, gx + 16, y, gx + gw - 16, y + (rng() - 0.5) * 3, { width: 9, wobble: 1.2, rng, color: LABEL_PAPER });
       }
       // dial window
-      const dx = 268, dy = 38, dw = 218, dh = 108;
+      const dx = D.x, dy = D.y, dw = D.w, dh = D.h;
       g.fillStyle = LABEL_PAPER;
       g.fillRect(dx, dy, dw, dh);
       inkRect(g, dx, dy, dw, dh, { ...o, width: 3 });
-      inkLine(g, dx + 16, dy + dh * 0.62, dx + dw - 16, dy + dh * 0.62, { ...o, width: 2 });
+      const sy = dy + dh * 0.62; // the line the ticks stand on
+      inkLine(g, dx + 16, sy, dx + dw - 16, sy, { ...o, width: 2 });
       for (let i = 0; i < 17; i++) {
-        const x = dx + 20 + (i / 16) * (dw - 40);
-        inkLine(g, x, dy + dh * 0.62 - (i % 4 ? 5 : 11), x, dy + dh * 0.62 + 5, { ...o, width: i % 4 ? 1.6 : 2.4 });
+        const x = D.scale[0] + (i / 16) * (D.scale[1] - D.scale[0]);
+        inkLine(g, x, sy - (i % 4 ? 5 : 11), x, sy + 5, { ...o, width: i % 4 ? 1.6 : 2.4 });
       }
-      // the needle, one stroke, on a station
-      inkLine(g, dx + 84, dy + 14, dx + 96, dy + dh - 14, { ...o, width: 3.4 });
+      // The three stations are the three interior majors, cut deeper and heavier than the rest, so
+      // the eye can see there are places for the needle to stop before it has moved at all. And at
+      // the far left, hard against the frame, the OFF stop: one heavy stroke off the end of the
+      // scale, where the needle sits while the set is dead.
+      // and they are cut heavier than a tick has any business being, because the dial window lands
+      // 41 x 20 px in the home frame and a 5 px mark on a 312 px sheet arrives as a fifth of a
+      // pixel: at that size a mark is either drawn like this or it is not drawn at all.
+      for (const x of D.stations.slice(1)) inkLine(g, x, sy - 24, x, sy + 8, { ...o, width: 5 });
+      inkLine(g, D.stations[0], sy - 22, D.stations[0], sy + 8, { ...o, width: 5.6 });
       penText(g, 'PARIS INTER', dx + dw / 2, dy + 26, { size: 15, weight: 2.2, rng, tracking: 0.22 });
       // two solid knobs under the dial (geometry doubles them; the drawing gives them mass)
-      for (const kx of [326, 428]) {
-        dot(g, kx, 214, 34);
-        inkLine(g, kx, 186, kx, 200, { width: 4, wobble: 0.4, rng, color: LABEL_PAPER });
+      for (const kx of D.knobs) {
+        dot(g, kx, D.knobY, 34);
+        inkLine(g, kx, D.knobY - 28, kx, D.knobY - 14, { width: 4, wobble: 0.4, rng, color: LABEL_PAPER });
       }
       penText(g, 'RADIOLA', 377, 282, { size: 22, weight: 3.2, rng, tracking: 0.3 });
     },

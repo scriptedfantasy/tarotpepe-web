@@ -42,6 +42,7 @@ export async function build(ctx) {
   const railY = room.bands?.rail?.[0] ?? 2.6;
 
   let signMesh = null, signPivot = null; // the wall board over Pepe's head; published below
+  let radioObj = null; // the set on the cart; the visitor's one switch, wired up at the foot of this file
 
   const WALL = -D / 2; // back wall plane
   const FLUSH = WALL + 0.04; // furniture backs sit just in front of the skirting
@@ -136,10 +137,13 @@ export async function build(ctx) {
     cart.userData.noShadow = true; // its shadow would black out the wall behind it and swallow the bottles
     g.add(cart);
     const top = cart.userData.top;
-    // the radio on the top board, right; four big bottles on the left
+    // the radio on the top board, right; four big bottles on the left. Round 8: it works, and the
+    // whole of that is at the foot of this file, under THE RADIO.
     const r = O.radio({ w: 0.42, h: 0.26, d: 0.18 });
     r.position.set(0.25, top, 0.0);
+    r.name = 'radio';
     cart.add(r);
+    radioObj = r;
     cart.add(
       O.row({
         x0: -0.48,
@@ -442,8 +446,209 @@ export async function build(ctx) {
   }
   tellTheTime();
 
+  // ---- THE RADIO. The one thing in this room the visitor is allowed to work. ---------------------
+  // The user, round 8: "would be cool if we could turn the tune on and off and switch through them
+  // via the radio receiver." And his own persona, about this very prop: "The radio on the cart. It
+  // works and you do not switch it on." So the visitor does, and the set has to be honest about it.
+  //
+  // THE DEFAULT IS OFF, and that is a decision, not an oversight. sound.js starts tune `a` on the
+  // first gesture; this piece switches it off before any gesture can happen, unless the URL asked
+  // for a tune by name. Three reasons:
+  //   1. The dial. If the music is playing while the needle is parked against its left-hand stop,
+  //      the drawing is lying about the room. Either the needle would have to start on a station —
+  //      and then the visitor never gets the moment of switching the set on, which is the thing the
+  //      user asked for — or the radio is not the thing making the sound, and then it is a switch
+  //      with nothing behind it.
+  //   2. His line. The set says it is off. He says it is off. It is off.
+  //   3. The first thing a visitor hears should be the door, the escapement and the room, which is
+  //      what the sound piece spent four rounds building. Music over that is a menu screen.
+  // CONSISTENT WITH ?tune=: `?tune=a|b|c` is an explicit switch-on — the tune plays and the needle
+  // starts on that station, because a URL asking for a tune has done what the click does. `?tune=0`
+  // and a bare URL are both OFF, with the needle at the stop. The `t` key still walks the three
+  // tunes and silence, and the needle FOLLOWS it (see update): whoever changed the station, the
+  // dial shows the station.
+  const RADIO = (() => {
+    const IDS = [null, 'a', 'b', 'c']; // stop 0 is off; the other three are sound.js's own names
+    // The needle is thrown at its mark and comes back onto it: three drawings on twos, half a
+    // second, the same 12 fps grid the pendulum and the boil are on. A needle that slid would be
+    // the only continuous movement in the film.
+    const THROW = [0.46, 1.1, 1.0];
+    const NUDGE = 0.17; // how far the tuning knob turns under a pointer, in radians
+    const MIN_TAP = 44; // px: what a thumb needs, whatever the radio measures on the glass
+    // ?tune=a|b|c starts ON that station; ?tune=0/off/none/no and a bare URL are both the left
+    // stop. A `?tune=` that names nothing keeps sound.js's own rule — it falls back to the default
+    // tune rather than to silence, so a typo is audible instead of mysterious — and the needle goes
+    // to the station that is actually playing.
+    const OFFWORDS = ['0', 'off', 'none', 'no'];
+    const param = (ctx.params ?? new URLSearchParams(location.search)).get('tune');
+    const asked = (param ?? '').toLowerCase();
+    let station = param == null || OFFWORDS.includes(asked) ? 0 : Math.max(1, IDS.indexOf(asked));
+    let from = station, to = station, frame0 = -1e9;
+    let hover = false, cursorMine = false, told = false;
+
+    const glass = ctx.renderer?.domElement ?? null;
+    const ray = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    const sound = () => ctx.pieces.sound; // built after this piece: never cached
+    const point = () => radioObj?.userData?.setStation?.(station);
+    point();
+
+    // the set's box on the glass, in px — the front face's own eight corners, projected
+    function hitBox() {
+      const face = radioObj?.userData?.face;
+      if (!face) return null;
+      face.updateMatrixWorld(true);
+      const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
+      const xs = [], ys = [];
+      const v = new THREE.Vector3();
+      const { width: bw, height: bh, depth: bd } = radioObj.userData;
+      for (const dx of [-bw / 2, bw / 2]) for (const dy of [-bh / 2, bh / 2]) for (const dz of [-bd / 2, bd / 2]) {
+        v.set(dx, dy, dz);
+        face.localToWorld(v).project(ctx.camera);
+        xs.push(((v.x + 1) / 2) * W);
+        ys.push(((1 - v.y) / 2) * H);
+      }
+      return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+    }
+    // WHAT A THUMB ACTUALLY HAS TO HIT: the set's own box, grown about its centre to at least 44 px
+    // each way, the extra falling on bare cloth on the cart's top board. Nothing else in the room is
+    // clickable within a foot of there, so the margin costs nothing and a miss costs the feature.
+    //
+    // MEASURED (tools/_props-r8-radio.mjs), and the news is not what anyone expected. The set is not
+    // too SMALL on a phone. It is not in the picture at all:
+    //     1600 x 900   home 95.9 x 59.3 px at x 483    wide 77.2 x 47.8 px at x 545
+    //     390 x 760    home 92.6 x 57.3 px at x -111   wide 92.6 x 57.3 px at x -111
+    //     360 x 800    home 85.5 x 52.9 px at x -102   wide 85.5 x 52.9 px at x -102
+    // A portrait window crops the frame to the middle of the room — the window, the curtains and the
+    // whole cart are outside it, and the radio's right-hand edge stops 18 px short of the left of
+    // the glass. The margin below therefore never fires: at 93 px the set is twice the size a thumb
+    // needs. What a phone lacks is not reach, it is the frame. That is the camera's call or the set
+    // dressing's, not this control's, and no hidden hotspot at the edge of the picture will do —
+    // an affordance nobody can see is not one. Until then the radio is a desktop control, and `t`
+    // (sound.js) is the other way through the three tunes.
+    function tapBox() {
+      const b = hitBox();
+      if (!b) return null;
+      const w = Math.max(b.w, MIN_TAP), h = Math.max(b.h, MIN_TAP);
+      return { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h, grown: w > b.w || h > b.h };
+    }
+    function onRadio(ev) {
+      if (!glass || !radioObj) return false;
+      const r = glass.getBoundingClientRect();
+      if (!r.width || !r.height) return false;
+      const px = ev.clientX - r.left, py = ev.clientY - r.top;
+      // the drawing first: a pointer actually on the set, wherever it is on screen
+      ndc.set((px / r.width) * 2 - 1, -(py / r.height) * 2 + 1);
+      ray.setFromCamera(ndc, ctx.camera);
+      if (ray.intersectObject(radioObj, true).length) return true;
+      // then the margin, which is what makes it reachable on a phone
+      const b = tapBox();
+      return !!b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
+    }
+
+    // one stop on, and round again at the end: off → a → b → c → off
+    function turn(next = (station + 1) % IDS.length) {
+      from = station;
+      to = next;
+      station = next;
+      frame0 = ctx.clock.frame;
+      sound()?.setTune?.(IDS[next]);
+      // THE CRACKLE. Between two stations there is nothing on the air, and that is the sound of
+      // the knob having done something. It is fired on the click and not on the arrival: the hand
+      // is on the knob now, the needle catches up over the next half second.
+      sound()?.play?.('static');
+      ctx.emit?.('props:radio', { station: next, tune: IDS[next] });
+    }
+    function setHover(on) {
+      if (hover === on) return;
+      hover = on;
+      if (!glass) return;
+      if (on) {
+        glass.style.cursor = 'pointer';
+        cursorMine = true;
+      } else if (cursorMine) {
+        // only ever put back what this piece put there: reveal-fan.js and help.js share the cursor
+        glass.style.cursor = '';
+        cursorMine = false;
+      }
+    }
+    glass?.addEventListener('pointermove', (ev) => {
+      if (ev.pointerType === 'touch') return;
+      setHover(onRadio(ev));
+    });
+    glass?.addEventListener('pointerleave', (ev) => {
+      if (ev.pointerType !== 'touch') setHover(false);
+    });
+    glass?.addEventListener('pointerdown', (ev) => {
+      if (!onRadio(ev)) return;
+      // flow.js reads any pointerdown on the window as the visitor skipping ahead through Pepe's
+      // line, which a visitor reaching for the radio did not mean. So the event stops here — and
+      // sound's own "first gesture" unlock, which lives on that same window, is called by hand.
+      ctx.pieces.sound?.start?.();
+      ev.stopPropagation();
+      turn();
+    });
+
+    return {
+      get station() {
+        return station;
+      },
+      get tune() {
+        return IDS[station];
+      },
+      hitBox,
+      tapBox,
+      turn,
+      // for the tools and for setState: put the needle on a stop with no throw and no crackle
+      set(next) {
+        station = from = to = Math.max(0, Math.min(IDS.length - 1, next | 0));
+        frame0 = -1e9;
+        point();
+        sound()?.setTune?.(IDS[station]);
+      },
+      update(ctx2) {
+        // The default, said once, as late as possible: this piece is built before sound.js, so
+        // there is nothing to tell until the first frame. Nothing has been heard yet either — the
+        // tune does not start until the visitor's first gesture — so switching it off here is
+        // switching it off before it was ever on.
+        if (!told && ctx.pieces.sound) {
+          told = true;
+          if (station === 0) ctx.pieces.sound.setTune?.(null);
+        }
+        // Whoever changed the station — the `t` key, another piece — the dial shows the station.
+        // Only while the sound piece is actually RUNNING: before the visitor's first gesture there
+        // is nothing playing to follow, and under ?shot=1 the piece is a stub whose `tune` is a
+        // frozen snapshot of the default, which would drag the needle off any stop a still asked
+        // for.
+        const live = ctx.pieces.sound?.running;
+        const id = live ? ctx.pieces.sound.tune?.id ?? null : IDS[station];
+        if (told && IDS[station] !== id) {
+          const i = IDS.indexOf(id);
+          if (i >= 0) {
+            from = station;
+            to = i;
+            station = i;
+            frame0 = ctx2.clock.frame;
+          }
+        }
+        const k = Math.floor((ctx2.clock.frame - frame0) / 2);
+        const u = k >= 0 && k < THROW.length ? from + (to - from) * THROW[k] : to;
+        radioObj?.userData?.setStation?.(u);
+        // and the knob turns a little further under a pointer, which is the whole of the
+        // affordance: no glow, no outline, a knob that can be seen to move
+        const knob = radioObj?.userData?.knob;
+        if (knob && hover) knob.rotation.z -= NUDGE;
+      },
+    };
+  })();
+
   return {
     group: g,
+    // THE RADIO on the cart, round 8. `station` is 0..3 (0 is off), `tune` the sound piece's own
+    // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
+    // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
+    // is actually given (which is bigger, on a phone).
+    radio: RADIO,
     // the shop's board over Pepe's head. `mesh` is what a pointer is raycast against, `pivot` is
     // its hook line (rotate that and the board swings on its cord), and w/h are its size in metres.
     // help.js hangs its own tag under the pivot and tips it when the pointer is over the board.
@@ -469,12 +674,18 @@ export async function build(ctx) {
       table: new THREE.Vector3(-0.36, 0.82 + 0.2, chest.position.z + 0.02),
       pendant: new THREE.Vector3(0, 2.5, 0),
     },
-    setState() {},
+    // `radio-off` / `radio-a` / `radio-b` / `radio-c` put the needle on a stop for a still. Every
+    // other name is the room as it stands, which is what the judging shot wants.
+    setState(name = 'default') {
+      const m = /^radio-(off|a|b|c)$/.exec(name ?? '');
+      if (m) RADIO.set(m[1] === 'off' ? 0 : 'abc'.indexOf(m[1]) + 1);
+    },
     update(ctx) {
       if (!ctx.clock.stepped) return;
       const p = g.userData.pendulum;
       if (p) p.rotation.z = 0.16 * Math.sin(ctx.clock.t * Math.PI);
       tellTheTime();
+      RADIO.update(ctx);
     },
   };
 }

@@ -49,6 +49,9 @@ export const LEVEL = {
   creak: 0.045,
   street: 0.024,
   type: 0.02,
+  // the radio's knob, between two stations. Under the escapement's own level: the visitor has just
+  // touched something and must hear that they did, and nothing more than that.
+  static: 0.03,
   // the door, which is nearer the lens than anything else in the film and louder for it
   latch: 0.072,
   hinge: 0.058,
@@ -79,6 +82,7 @@ export const TRIM = {
   creak: 24.194,
   street: 1.3,
   type: 4.621,
+  static: 1.697,
   latch: 2.241,
   hinge: 29.544,
   knock: 1.569,
@@ -110,6 +114,7 @@ export const LENGTH = {
   creak: 0.44,
   street: 0.62,
   type: 0.03,
+  static: 0.3,
   clock: 0.055,
   latch: 0.06,
   hinge: 0.42,
@@ -495,6 +500,37 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.street;
     }
 
+    // THE RADIO'S KNOB, turned one stop. Three things in 300 ms and no music in any of them: the
+    // detent — a small dry bakelite click, which is the visitor's own hand and is the loudest
+    // moment here — then the carrier, a band of hiss that opens as the needle leaves the station it
+    // was on and closes onto the next, and half a dozen grains of atmospheric crackle scattered
+    // through it. There is no whistle: a heterodyne squeal is the one sound a radio makes that has
+    // PITCH in it, and pitch is what the tune has and what Pepe's voice has, so a squeal would be
+    // the crackle arguing with both of them across the whole width of the placard.
+    case 'static': {
+      // the detent
+      burst(ac, dest, { t, dur: 0.007, level: L('static'), freq: 2400, q: 1.2, pan, seed });
+      burst(ac, dest, { t, dur: 0.026, level: L('static') * 0.4, freq: 420, q: 1.4, type: 'lowpass', pan, seed: seed + 1 });
+      // the carrier, opening and closing: two bands crossing, so neither reads as a note
+      burst(ac, dest, { t: t + 0.01, dur: 0.2, level: L('static') * 0.5, freq: 1500, q: 0.7, sweep: 900, attack: 0.02, hold: 0.05, pan, seed: seed + 2 });
+      burst(ac, dest, { t: t + 0.03, dur: 0.22, level: L('static') * 0.34, freq: 3000, q: 0.6, sweep: -1400, attack: 0.03, hold: 0.04, pan, seed: seed + 3 });
+      // and the air on it: grains, irregular, thinning out as the needle arrives
+      for (let i = 0; i < 7; i++) {
+        const u = i / 6;
+        const at = t + 0.02 + 0.24 * Math.pow(u, 0.9) + (rng() - 0.5) * 0.03;
+        burst(ac, dest, {
+          t: Math.max(t, at),
+          dur: 0.004 + rng() * 0.009,
+          level: L('static') * (0.55 - 0.36 * u) * (0.5 + rng() * 0.8),
+          freq: 1200 + rng() * 2800,
+          q: 1.4 + rng() * 2,
+          pan,
+          seed: seed + 10 + i,
+        });
+      }
+      return LENGTH.static;
+    }
+
     // ---- the door the film opens on. It is a foot from the lens, so it is the nearest, driest,
     // loudest thing in the picture, and it is all wood and one small piece of brass.
 
@@ -562,4 +598,4 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static'];

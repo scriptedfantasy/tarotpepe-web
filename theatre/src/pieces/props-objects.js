@@ -743,7 +743,16 @@ export function barCart({ w = 0.9, d = 0.42, h = 0.8 }) {
   return g;
 }
 
-// ---- radio: a hero prop the size of a bottle crate -------------------------------------------------
+// ---- radio: a hero prop the size of a bottle crate, and the one thing here that WORKS -------------
+// Round 8: the user asked to be able to turn the tune on and off and walk through the three of them,
+// and this is the switch. Two things move — the needle across the dial and the tuning knob under it
+// — and they are both real geometry, for the reason the clock's hands are: what they point at is
+// not known when the sheet is drawn. Everything is placed off the drawn sheet's own pixels
+// (T.RADIO_DIAL), so the needle stands on the tick that was drawn for it.
+//
+// `userData.setStation(u)` takes a FLOAT index into the four stops — 0 is off, 1/2/3 are the three
+// tunes — because props.js throws the needle past its mark and lets it come back, which is what a
+// needle on a spring does and what nothing here does if it is only ever given whole numbers.
 export function radio({ w = 0.44, h = 0.27, d = 0.19 }) {
   const M = materials();
   const g = new THREE.Group();
@@ -751,17 +760,42 @@ export function radio({ w = 0.44, h = 0.27, d = 0.19 }) {
   const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [M.wood, M.wood, M.wood, M.wood, front, M.wood]);
   body.castShadow = true;
   body.position.y = h / 2 + 0.014;
+  body.name = 'radio-front';
   g.add(body);
-  // two solid knobs under the dial, where the drawing has them (u 0.637 / 0.836, v 0.314)
-  for (const u of [0.637, 0.836]) {
-    const k = cyl(0.024, 0.024, 0.016, M.solid, 16);
-    k.rotation.x = Math.PI / 2;
-    k.position.set((u - 0.5) * w, (0.314 - 0.5) * h + body.position.y, d / 2 + 0.008);
+
+  // the drawn sheet's px, in the front face's own metres
+  const D = T.RADIO_DIAL;
+  const PX = (x) => (x / D.texW - 0.5) * w;
+  const PY = (y) => (0.5 - y / D.texH) * h + body.position.y;
+
+  // THE NEEDLE. One edge of solid ink standing 4 mm proud of the paper, so the pen finds it as a
+  // silhouette against the dial and not as a line inside a drawing.
+  const nTop = PY(D.needle[0]), nBot = PY(D.needle[1]);
+  const needle = box(0.0048, nTop - nBot, 0.0035, M.solid);
+  needle.position.set(PX(D.stations[0]), (nTop + nBot) / 2, d / 2 + 0.004);
+  needle.name = 'radio-needle';
+  g.add(needle);
+
+  // Two solid knobs under the dial, where the drawing has them. Each is its own group now, so the
+  // paper mark on its face goes round WITH it: the right-hand one is the tuning knob and turns a
+  // quarter of a circle at every stop, and a knob that turns with no mark on it has not turned.
+  const knobs = D.knobs.map((u) => {
+    const k = new THREE.Group();
+    k.position.set(PX(u), PY(D.knobY), d / 2 + 0.008);
+    const disc = cyl(0.024, 0.024, 0.016, M.solid, 16);
+    disc.rotation.x = Math.PI / 2;
+    k.add(disc);
+    // The mark runs from the boss almost to the rim and is 7 mm wide, which on a knob 48 mm across
+    // is as big as a mark can be and still be a mark. Measured on the home frame: the knob lands 11
+    // px, so this is a 2 x 5 px slash of paper in a solid disc — the smallest thing in the room
+    // that is still a thing, and the reason the NEEDLE and not the knob carries the reading.
+    const mark = box(0.007, 0.02, 0.004, M.paper);
+    mark.position.set(0, 0.0095, 0.009);
+    k.add(mark);
     g.add(k);
-    const mark = box(0.005, 0.014, 0.004, M.paper);
-    mark.position.set(k.position.x, k.position.y + 0.011, d / 2 + 0.017);
-    g.add(mark);
-  }
+    return k;
+  });
+
   for (const sx of [-1, 1]) {
     const foot = cyl(0.014, 0.016, 0.014, M.solid, 10);
     foot.position.set(sx * (w / 2 - 0.04), 0.007, 0.03);
@@ -769,8 +803,23 @@ export function radio({ w = 0.44, h = 0.27, d = 0.19 }) {
   }
   const ant = rod([w / 2 - 0.04, h, -0.04], [w / 2 + 0.2, h + 0.36, -0.06], 0.004, M.solid);
   g.add(ant);
+
+  const xs = D.stations.map(PX);
   g.userData.width = w;
   g.userData.height = h;
+  g.userData.depth = d;
+  g.userData.face = body; // what a pointer is raycast against
+  g.userData.needle = needle;
+  g.userData.knob = knobs[1];
+  g.userData.stations = xs;
+  // Point the set at a stop. Between two stops the needle is between them and the knob is part-way
+  // round; past the last one it keeps going, so an overshoot is an overshoot and not a clamp.
+  g.userData.setStation = (u) => {
+    const i = Math.max(0, Math.min(xs.length - 2, Math.floor(u)));
+    needle.position.x = xs[i] + (xs[i + 1] - xs[i]) * (u - i);
+    knobs[1].rotation.z = -u * (Math.PI / 2); // clockwise, seen from the front, one detent a stop
+  };
+  g.userData.setStation(0);
   return g;
 }
 
