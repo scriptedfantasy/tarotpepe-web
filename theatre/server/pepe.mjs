@@ -993,4 +993,14 @@ export function pepeApi() {
   };
 }
 
+// THE SAME HANDLER, OUTSIDE VITE. In development the routes are a Vite plugin; in production there
+// is no Vite, only a Node process serving dist/ (server.mjs). This hands that process the very same
+// middleware by letting the plugin mount it into a stand-in server — so there is one handler, and
+// what a visitor gets online is byte-for-byte what the dev server answers.
+export function pepeMiddleware(root) {
+  let handler = null;
+  pepeApi().configureServer({ config: { root }, middlewares: { use: (fn) => (handler = fn) } });
+  return handler;
+}
+
 export { SYSTEM, SYSTEM_ROOM, SYSTEM_BEATS, PERSONAS, DEFAULT_STYLE, styleOf, situation, buildMessages, TOOLS, toolsFor, openaiTools, anthropicTools, cardGate, FAKES };

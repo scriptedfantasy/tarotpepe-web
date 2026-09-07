@@ -17,8 +17,28 @@ function progressIndex() {
   };
 }
 
+// What ships. Vite copies all of public/ into dist/, and most of public/ is not for a visitor: the
+// progress board and its hundreds of screenshots (754 MB), and the source drawings — the user's
+// pose and hand pages, which tools/pepe-cutout.mjs and hand-cutout.mjs read and cut into public/pepe/
+// at build time. The app fetches the cuts, never the sources. tarotpepe_backside.png stays: the card
+// back offers it under ?back=orig.
+function shipOnlyWhatIsAsked() {
+  return {
+    name: 'ship-only-what-is-asked',
+    apply: 'build',
+    async closeBundle() {
+      const { rm, readdir } = await import('node:fs/promises');
+      const dist = new URL('./dist/', import.meta.url);
+      await rm(new URL('progress/', dist), { recursive: true, force: true });
+      for (const name of await readdir(dist)) {
+        if (/^(pepe-[a-z0-9-]+|hand-(full|pinch))\.png$/.test(name)) await rm(new URL(name, dist), { force: true });
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [pepeApi(), progressIndex()],
+  plugins: [pepeApi(), progressIndex(), shipOnlyWhatIsAsked()],
   server: { host: '127.0.0.1', port: 5173, strictPort: true },
   build: { target: 'es2022' },
 });
