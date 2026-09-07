@@ -278,7 +278,15 @@ export async function build(ctx) {
     pendant.position.set(L.pendant.x, L.pendant.y - 0.24, L.pendant.z);
     pendant.target.position.set(L.pendant.x, 0, L.pendant.z);
     tableLamp.position.set(L.table.x, L.table.y - 0.02, L.table.z);
-    floorLamp.position.set(L.floor.x, L.floor.y, L.floor.z);
+    // The floor lamp is optional: the user took the object out of the room, and a practical with no
+    // drawn source is a light from nowhere. Absent, it is doused rather than left at the origin.
+    if (L.floor) {
+      floorLamp.position.set(L.floor.x, L.floor.y, L.floor.z);
+      floorLamp.visible = true;
+    } else {
+      floorLamp.visible = false;
+      floorLamp.intensity = 0;
+    }
   }
   placeLamps(LAMPS_FALLBACK);
 

@@ -386,22 +386,15 @@ export async function build(ctx) {
     g.add(rf);
   }
 
-  // ---- in front of the side walls: the floor lamp (left) and the hat stand (right) ---------------------
-  // Both a hand's width in from the side walls, so the wide shot keeps them whole. Tried downstage
-  // and tried swapping sides in round 3; both put a cropped black mass hard against a frame edge.
-  // What separates the coat from the bottle cabinet behind it is the cabinet coming down to 1.5 m —
-  // the top half of the coat now hangs against bare plaster.
-  const lamp = O.floorLamp({ h: 1.62 });
-  lamp.position.set(-W / 2 + 0.5, 0, -0.2);
-  g.add(lamp);
-  // Round 4: the stand came 0.3 m downstage. Standing at z = -0.75 its pole ran straight down the
-  // middle of the bottle cabinet in both the wide and the door shot and its coat covered the right
-  // third of every shelf — half the bottles were behind it. Round 3 tried moving it downstage and
-  // it landed hard against the frame edge, but the wide has opened out since; at -0.45 the pole
-  // clears the cabinet's right stile and the stand is still 0.55 m inside the wall.
-  const stand = O.hatStand({ h: 1.85, rng });
-  stand.position.set(W / 2 - 0.55, 0, -0.45);
-  g.add(stand);
+  // ---- in front of the side walls: nothing, now -------------------------------------------------------
+  // A floor lamp stood at the left and a hat stand with a black overcoat at the right, each a hand's
+  // width in from its wall, and three rounds went into where they should stand. The user took both
+  // out: "i'd like you to remove the lamp on the left side, and also the coat hanger on the right, i
+  // dont feel they fit". They were the two tallest objects in the room and the only two standing
+  // free of a wall, and both were largely black — between them they held the near corners of every
+  // frontal shot. The corners are bare boards and wainscot now.
+  //
+  // If either is ever wanted back, `floorLamp` and `hatStand` are still in props-objects.js.
 
   // ---- overhead: the three-petal pendant over the table -------------------------------------------------
   // hangs at the height of the window heads, so it clears the sign on the wall behind it
@@ -442,9 +435,11 @@ export async function build(ctx) {
       fringe: rug.userData.rug.fringe,
       plainFrom: RUG.near - rug.userData.rug.border - 0.006,
     },
-    // practicals, for the lighting piece: where the drawn lamps are
+    // Practicals, for the lighting piece: where the drawn lamps are. There are two now. The floor
+    // lamp was the third and the user took it out of the room, so its light goes with it — a source
+    // hanging in the air where an object used to be is exactly the kind of lighting this film does
+    // not do. lighting.js reads `floor` as optional and douses that lamp when it is absent.
     lamps: {
-      floor: lamp.position.clone().add(new THREE.Vector3(0, 1.45, 0)),
       table: new THREE.Vector3(-0.36, 0.82 + 0.2, chest.position.z + 0.02),
       pendant: new THREE.Vector3(0, 2.5, 0),
     },
