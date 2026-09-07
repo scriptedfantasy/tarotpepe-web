@@ -67,8 +67,51 @@
 // the table beside the ashtray (its world position is projected into the frame, so it sits in the
 // picture and takes the shot's perspective), ringed with ink while it is listening.
 //
+// ROUND 8: A LINE IS RESOLVED, AND SEPARATELY IT IS CLEARED — AND THEY ARE NO LONGER THE SAME
+// EVENT. The user: "the chat box as it is now sometimes the text disappears too fast." Until this
+// round a caption was cut by a stopwatch: `say` typed the line, held it `hold` seconds, and took it
+// off the paper, so a sentence the visitor had not finished reading went while they were reading
+// it. A subtitle card does not fade on a clock. (The user chose this over rolling the lines
+// upward, so there is no scroll here and there is not going to be one.)
+//
+// The two halves are now separate:
+//
+//   RESOLVED — unchanged, to the millisecond. `say()`'s promise still settles at
+//     start + length/CPS + hold (and after the spoken voice, when the voice is on), because
+//     flow.js sequences the whole evening off those promises: `render` awaits one before it plays
+//     the next sentence, `speak` counts them, the readings loop and `revisit` pace their cuts by
+//     them. Nothing about the timing contract moved.
+//   CLEARED — his line is not taken off the paper by that promise at all. It STANDS in his
+//     register until something replaces it: his next sentence, a card's intertitle, the thinking
+//     mark below, or `clear()`. `finish()` resolves; only `show()`, `intertitle()` and `cut()`
+//     clear. That distinction is the whole round.
+//
+// So the card carries his last words through every silence in the evening: the wash (he says one
+// line over his hands and works four seconds in silence — the line is still there), the pick
+// prompts (the prompt stands over the whole pick, docked at the head of the frame), the beat
+// between two of his sentences, the readings. `keep` is accepted and does nothing: everything
+// keeps now.
+//
+// WHAT ENDS HIS LINE, EXACTLY. His next mark on the card, and nothing else — where "his next mark"
+// includes the thinking dots. The visitor pressing RETURN does not clear it either: it un-holds it
+// (their turn is over, his is beginning), and 250 ms later the dots take the register. So the
+// question they answered is in front of them for the whole time they are answering it, which is
+// what the two registers were built for. The visitor's FIRST KEYSTROKE was the other candidate and
+// it is wrong: it would take the question away at the exact moment they start answering it. The
+// field OPENING is wronger still — `ask` says the prompt and opens the field under it in the same
+// breath, so that would erase the line as it arrived.
+//
+// AND A MARK WHILE HE WRITES (round 8, the user, on latency: "i think we can solve this latency
+// problem by adding an animation to the chat box when Taro Pepe thinks"). Three dots in his
+// register, struck one at a time on the 12 fps clock, drawn with the pen (dialogue-ink.js,
+// drawDots) and laid in his green. They come up only when a turn is actually pending — flow is in
+// a beat where the visitor is waiting on WORDS from him and his register is empty — and only after
+// a quarter of a second of it, so an answer that arrives at once never flashes them. His first
+// sentence takes the register back. See THE THINKING MARK.
+//
 // API (ctx.pieces.dialogue):
 //   say(text, {hold, keep}) → Promise          reveals a caption, resolves after it has been read
+//                                              (and leaves it standing until the next one)
 //   ask(prompt, {respond, signal, timeout, value, instant}) → Promise<string|null>
 //                                              says the prompt, opens the visitor's block (+ the mic),
 //                                              resolves with the text on Return ('' on Escape); null when
@@ -84,18 +127,20 @@
 //                                              longer decides anything on the card; it is the
 //                                              event other pieces listen for
 //   lineFor/linesFor(slug, position)           the card's lines for that position
-//   clear()                                    cuts whatever is up
+//   thinking(on)                               the three dots, asked for directly (see the contract note)
+//   clear()                                    cuts whatever is up — the only thing that takes a
+//                                              line off the card without putting another in its place
 //   anchors                                    {shot: {x, y, w, floor}} — editable; flow.js sets the same
-//   setState(name)                             greeting | question | reading | farewell (+ any script key)
+//   setState(name)                             greeting | question | reading | thinking | farewell (+ any script key)
 import { SCRIPT, lineFor, linesFor, reply as scriptReply, POSITIONS, positionKey } from './script.js';
 import { bySlug } from '../core/deck.js';
 import { INK } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
-import { SVGNS, drawCaret, drawMic, drawPlacard, drawName, CAN_LETTER, PLACARD_BLEED } from './dialogue-ink.js';
+import { SVGNS, drawCaret, drawDots, drawMic, drawPlacard, drawName, CAN_LETTER, PLACARD_BLEED } from './dialogue-ink.js';
 
 export const meta = {
   name: 'dialogue',
-  judge: { shot: 'pepe', states: ['greeting', 'question', 'reading', 'farewell'], dom: true },
+  judge: { shot: 'pepe', states: ['greeting', 'question', 'reading', 'thinking', 'farewell'], dom: true },
   files: ['src/pieces/dialogue.js', 'src/pieces/dialogue-ink.js', 'src/pieces/script.js'],
 };
 
@@ -128,6 +173,41 @@ const TAKE_HOLD = 0.55; // seconds a take that is not the last of its line is he
 const PHONE = 700; // frames narrower than this are a phone: the card takes nearly the whole width
 // The type floor (BRIEF.md: nothing lettered below 13 px). The caption face is clamped there.
 const FONT_MIN = 13;
+
+// ---- THE THINKING MARK -------------------------------------------------------------------------
+// Three dots in his register while a turn of his is in flight. The numbers, all of them measured:
+//
+//   · a turn against the live model (openrouter / gpt-5.6-luna) takes 2.6–4.1 s from the visitor's
+//     Return to his first sentence — flow awaits mind.turn(), which reads the WHOLE turn before it
+//     hands anything back, so the wait is the turn and not its first token;
+//   · a quarter of a second of it passes before the pen touches the card, so a script answer (which
+//     arrives inside a frame) never flashes a mark nobody had time to read;
+//   · a dot every three stepped frames, then four frames of the three of them standing, then the
+//     paper is wiped and the hand starts again: 13 frames, 1.08 s, a cycle you can count.
+const THINK_WAIT = 0.25; // seconds a turn must be pending before the first dot is struck
+const THINK_STEP = 3; // stepped frames between one dot and the next (12 fps → 0.25 s each)
+const THINK_REST = 4; // ... and the three of them held before the hand starts again
+const THINK_CYCLE = 3 * THINK_STEP + THINK_REST;
+// WHEN A TURN IS PENDING, and this is the honest part of it. `mind` has no flag of its own to read
+// and dialogue may not reach into it, so the signal is flow's own published beat (flow.js: `beat`
+// is in its API) — and there are exactly two beats in which the visitor is waiting on WORDS from
+// him with nothing else happening on the screen:
+//
+//   reply     the visitor has said something and flow is inside `listen()`, awaiting mind.turn().
+//             This is the 2.6–4.1 s the round is about. The beat holds while the turn is played,
+//             so the mark's OTHER condition — his register is empty — is what ends it: his first
+//             sentence takes the card back.
+//   greeting  the first turn of the evening, where the card has never been up at all.
+//
+// Every other beat has the room doing something instead of him talking, and a mark there would be
+// a lie: `shuffle` and `fan` are his hands in the cards (the user cut the scripted lines over the
+// wash — a keyless evening plays it in silence, with nothing on the card at all), `reading` and
+// `recall` stand under the card's own lettered intertitle, which is a better thing to look at than
+// three dots. The contract note in the return value asks flow for an explicit `thinking()` instead.
+const THINKING_BEATS = ['greeting', 'reply'];
+// A plate with no room in it. The evening ends `cut('door')` → the closing card, and a line that is
+// standing (rather than being said) has no business hanging over the drawn door.
+const BARE_SHOTS = ['door', 'threshold'];
 
 // HIS GREEN, AS TYPE. The user: "just make pepes font green - and users font black".
 //
@@ -306,6 +386,12 @@ function buildStyle() {
       font-size: 1em; font-weight: 600; letter-spacing: 0.085em; text-indent: 0.085em;
       line-height: 1.5; word-break: break-word; margin: 0; color: ${INK};
     }
+    /* THE THINKING MARK: three dots on the line his words will be set on. It is one line of his
+       register — the well is bottom-aligned, so the dots stand exactly where the last line of a
+       sentence of his would — and it is drawn, not set: the svg is struck by drawDots on every
+       stepped frame. */
+    #dialogue .cap .think { height: ${LINE_H}em; }
+    #dialogue .cap .think > svg { display: block; margin: 0 auto; width: 3.05em; height: ${LINE_H}em; overflow: visible; }
     /* the caret stands on the line; its box keeps drawCaret's own proportion so the nib lands
        exactly on the baseline whatever size the card is set at */
     #dialogue .cap .caret { display: inline-block; width: 0.53em; height: 1.15em; vertical-align: baseline; margin-left: 0.12em; }
@@ -408,6 +494,21 @@ export async function build(ctx) {
   let inter = null; // { until, done }
   let field = null; // { input, answer, caret:[el], submit, dispose }
   let beat = 'idle';
+  // ROUND 8. `standing` is the whole of the new state: there are words of HIS on the card — being
+  // typed, or long since read and simply still there. It is set the moment a line is put into the
+  // well and unset by the three things that take his words off it: a cut, the visitor sending a
+  // line of their own (their Return ends his turn on the card, not their first keystroke), and the
+  // thinking mark taking the register.
+  let standing = false;
+  let think = null; // { svg, at } the thinking mark, while it is up
+  let thinkForced = false; // the judging still asks for it directly
+  // when he began owing the visitor a line; 0 = he owes nothing. It is kept on the WALL clock and
+  // not on `ctx.clock.raw`, which is only sampled once a rendered frame: the arming happens inside a
+  // keydown, and on a machine drawing at four frames a second a stale `raw` would let the quarter
+  // second elapse instantly and flash the mark at an answer that was about to arrive anyway.
+  let owedAt = 0;
+  let wasPending = false;
+  const nowS = () => performance.now() / 1000;
   // What is standing in the VISITOR's register. In the running film this is only ever what they are
   // typing at that moment: it is cleared when they press Return, and the reserved empty register is
   // what the card shows while he answers.
@@ -815,18 +916,41 @@ export async function build(ctx) {
     const lw = Math.max(1.8, Math.min(3.6, w * 0.0064));
     drawPlacard(placard, w, h, placardSeed, lw, rules);
   }
+  // The card off the paper altogether. This is now a rare event — the evening's captions replace
+  // one another inside a card that stands — and it is kept for the four cases that mean it: a new
+  // caption standing up where there was nothing (via show), `clear()`, a beat that ends with
+  // nothing to say, and the door.
   function cut() {
     cap.hidden = true;
     cap.classList.remove('asking');
     cap.innerHTML = '';
     placard = null;
     mic.hidden = true;
+    standing = false;
+    think = null;
     if (field) {
       const f = field;
       field = null;
       stopListening();
       f.dispose?.(); // an ask() still waiting resolves null
     }
+  }
+  // The FIELD goes and the card stays: the visitor's register is emptied (their words are theirs
+  // only while they are writing them — the user's rule) and reserved again, his line is untouched,
+  // and the drawn card is not re-cut. This is what the end of the visitor's turn looks like now;
+  // before this round it was a `cut()`, which is why the card went blank the moment they pressed
+  // Return and stayed blank for the whole of his turn.
+  function closeField() {
+    if (!field) return;
+    const f = field;
+    field = null;
+    stopListening();
+    cap.classList.remove('asking');
+    mic.hidden = true;
+    f.input?.remove();
+    const reply = cap.querySelector('.reply');
+    if (reply) reply.innerHTML = visitorLine();
+    f.dispose?.(); // an ask() still waiting resolves null (its own settle() is re-entrant-safe)
   }
   // Set one take into the well of a card that is already standing. The card itself is not touched:
   // same measure, same height, same seed — so the pen does not redraw and nothing flickers between
@@ -852,15 +976,27 @@ export async function build(ctx) {
   const visitorLine = () => `<div class="answer">${lastAnswer ? stableGlyphs(lastAnswer) : ''}</div>`;
   // Stand a fresh card up and cut the line into takes that fit his register. Returns the takes and
   // the word spans of the first of them.
+  // ROUND 8: a caption no longer tears the card down and builds another one. If a card is already
+  // standing — which, now that a line holds until it is replaced, is nearly always — the SAME sheet
+  // keeps its place, its measure and its seed, and only the words in the well change. That is what
+  // "one object" has meant on paper since round 3 and what the takes of a long line already did;
+  // the seed is what makes it literal. A fresh sheet is cut only when there was nothing on the
+  // paper a moment ago.
   function show(text) {
-    cut();
-    syncDock();
-    place();
-    placardSeed = 7 + (String(text).length % 23) * 3;
+    const fresh = cap.hidden;
+    closeField(); // an ask still waiting resolves null; the visitor's register is emptied
+    dropThink(); // he has written: the dots go
+    owedAt = 0;
+    if (fresh) {
+      syncDock();
+      place();
+      placardSeed = 7 + (String(text).length % 23) * 3;
+    }
     render('', visitorLine());
     cap.hidden = false;
     const takes = splitTakes(text);
     const words = setTake(takes[0]);
+    standing = true;
     fit();
     drawCard();
     return { takes, words };
@@ -877,23 +1013,106 @@ export async function build(ctx) {
     t.start = ctx.clock.t;
     if (ctx.clock.frozen) reveal(t.words, Infinity);
   }
-  // Finish the caption up (typing or intertitle): resolve its promise; cut it unless asked to keep.
-  // A line still in its takes is finished on its LAST take, whole — never half-said.
+  // Finish the caption up (typing or intertitle): RESOLVE its promise, and leave it standing.
+  //
+  // This is the round's hinge. It used to `cut()` here — the promise settling and the card being
+  // taken off the paper were one event — so a sentence went the instant flow stopped waiting for
+  // it, which is what the user saw: "the chat box as it is now sometimes the text disappears too
+  // fast". They are separate now. The promise still settles at exactly the same millisecond (see
+  // update(): typed + hold, and after the spoken voice), so flow's sequencing of the whole evening
+  // is untouched; the words stay on the card until something replaces them.
+  //
+  // A line still in its takes is finished on its LAST take, whole — never half-said — and that last
+  // take is the one that stands.
   function finish() {
     if (typing) {
       const t = typing;
       typing = null;
       while (t.ti < t.takes.length - 1) nextTake(t);
       reveal(t.words, Infinity);
-      if (!t.keep) cut();
+      standing = true;
       t.done?.();
     }
     if (inter) {
       const i = inter;
       inter = null;
-      cut();
+      standing = true;
       i.done?.();
     }
+  }
+
+  // ---- the thinking mark ------------------------------------------------------------------------
+  // Three dots struck one at a time while a turn of his is in flight, and nothing else: the puppet
+  // does the thinking (pepeAnim.consider, fired by flow at exactly the same moment) and this is the
+  // card's half of it, so it is a mark and not a performance.
+  //
+  // It stands only when his register is EMPTY. A line of his that is already up holds instead —
+  // between two sentences of a turn, over the wash, under an open field — because a card with his
+  // last sentence on it is a better answer to "is this thing working" than a card with dots on it.
+  const bareCard = () => !typing && !inter && !field && !think && !standing;
+  function dropThink() {
+    if (!think) return;
+    think = null;
+    const well = cap.querySelector('.well');
+    if (well) well.innerHTML = '';
+  }
+  // Strike the dots for this frame. The count walks 1 · 2 · 3 and rests, and the marks are re-drawn
+  // on every step from a seed keyed to the frame, so they boil like every other line in the film.
+  // A FROZEN clock counts from the frame itself rather than from the mark standing up (a still has
+  // no history), so `?t=` walks the cycle deterministically and a contact sheet of it is honest.
+  function drawThink() {
+    if (!think?.svg) return;
+    const since = ctx.clock.frozen ? ctx.clock.frame : ctx.clock.frame - think.at;
+    const k = ((since % THINK_CYCLE) + THINK_CYCLE) % THINK_CYCLE;
+    const n = k < THINK_STEP ? 1 : k < 2 * THINK_STEP ? 2 : 3;
+    // the nib's own weight, cut from the type size the card is set at — and never so light that a
+    // 13 px phone caption gets a mark thinner than the type standing beside it
+    drawDots(think.svg, n, ctx.clock.frame, { color: PEPE_GREEN, weight: Math.max(2.8, fontPx() * 0.2) });
+  }
+  function standThink() {
+    if (think) return;
+    if (cap.hidden) {
+      syncDock();
+      place();
+      placardSeed = 7 + (ctx.clock.frame % 23) * 3;
+      render('', visitorLine());
+      cap.hidden = false;
+    }
+    const well = cap.querySelector('.well');
+    if (!well) return;
+    well.innerHTML = '<div class="line think"><svg aria-hidden="true"></svg></div>';
+    think = { svg: well.querySelector('svg'), at: ctx.clock.frame };
+    standing = false; // the dots are not words: the next line replaces them without ceremony
+    drawThink();
+    fit();
+    drawCard();
+    ctx.emit?.('dialogue:thinking', { on: true });
+  }
+  // Is a turn of his actually in flight? flow's own beat says so (see THINKING_BEATS), and the
+  // judging state asks for it directly.
+  function turnPending() {
+    if (thinkForced) return true;
+    const f = ctx.pieces.flow;
+    return !!f && THINKING_BEATS.includes(f.beat);
+  }
+  // Called on every stepped frame. Arms on the beat he starts owing a line in, waits out
+  // THINK_WAIT, stands the dots up, and takes them down the moment the beat moves on — which is how
+  // the wash stays silent when he wrote nothing over it.
+  function tickThinking() {
+    const want = turnPending();
+    if (want && !wasPending && !owedAt) owedAt = nowS();
+    wasPending = want;
+    if (!want) {
+      owedAt = 0;
+      if (think) {
+        dropThink();
+        ctx.emit?.('dialogue:thinking', { on: false });
+        if (bareCard()) cut(); // nothing said, nothing asked: the card has no business standing
+      }
+      return;
+    }
+    if (!think && !standing && !typing && !inter && owedAt && nowS() - owedAt >= THINK_WAIT) standThink();
+    else if (think) drawThink();
   }
 
   // ---- the visitor's register ----------------------------------------------------------------------
@@ -1020,9 +1239,10 @@ export async function build(ctx) {
       ctx.emit?.('dialogue:folio', { beat });
     },
 
-    // Reveal one caption in HIS register. `keep` leaves the caption up after it resolves. (`who`
-    // is accepted and ignored: round 5 named the speaker over the line and round 6 took the name
-    // off the card altogether. Callers may still pass it; it does nothing.)
+    // Reveal one caption in HIS register. It resolves after the line has been read — the typing
+    // plus `hold`, unchanged — and then STANDS there until his next line replaces it (round 8).
+    // (`keep` and `who` are accepted and do nothing: every line keeps now, and round 6 took the
+    // speaker's name off the card altogether.)
     say(text, { hold = 1.2, keep = false } = {}) {
       finish();
       const { takes, words } = show(text);
@@ -1048,11 +1268,16 @@ export async function build(ctx) {
     intertitle(slug, position, { hold = INTER_HOLD } = {}) {
       finish();
       const [n, name, label] = interLines(slug, position);
-      cut();
-      syncDock();
-      place();
+      const fresh = cap.hidden;
+      closeField();
+      dropThink();
+      owedAt = 0;
+      if (fresh) {
+        syncDock();
+        place();
+        placardSeed = 13 + (name.length % 19) * 5;
+      }
       const rng = mulberry32(101 + name.length * 5);
-      placardSeed = 13 + (name.length % 19) * 5;
       // The card's own name is hand-lettered, as it is on the card (STYLE.md §2.6); the numeral
       // above it and the position under it are the caption's set face, small. It is the SAME card
       // as every caption's, the same measure and the same height — but a title is not a
@@ -1079,8 +1304,11 @@ export async function build(ctx) {
       signal?.addEventListener('abort', onAbortSay, { once: true });
       await said;
       signal?.removeEventListener('abort', onAbortSay);
+      // The ask was called off before the field could open — a card taken at the fan, a tap on a
+      // card lying on the table. His prompt is left standing (round 8): it is the last thing he
+      // said and nothing has replaced it yet.
       if (signal?.aborted || cap.hidden) {
-        cut();
+        closeField();
         return null;
       }
       // his question stays where it is, in his own register, and the field opens in theirs
@@ -1090,13 +1318,25 @@ export async function build(ctx) {
       const answer = await new Promise((res) => {
         let done = false;
         let timer = null;
+        // THE END OF THE VISITOR'S TURN — and, since round 8, the end of HIS line's tenure and not
+        // of the card. It used to `cut()`: the whole placard came off the paper the instant they
+        // pressed Return, and stayed off for the two-and-a-half to four seconds the mind took to
+        // answer. Now the field closes, their register empties (their words are theirs only while
+        // they are writing them), his question stays exactly where it is — and `standing` is
+        // dropped, which is what lets the thinking mark take his register a quarter of a second
+        // later if he has not answered by then. If he answers first, his sentence replaces the
+        // question directly and the card is never blank at all.
         const settle = (v) => {
           if (done) return;
           done = true;
           clearTimeout(timer);
           window.removeEventListener('keydown', refocus, true);
           signal?.removeEventListener('abort', onAbort);
-          cut();
+          closeField();
+          if (typeof v === 'string' && v) {
+            standing = false; // they have spoken: his line holds only until he answers
+            if (!owedAt) owedAt = nowS();
+          }
           res(v);
         };
         const submit = () => settle(input.value.trim().replace(/\s+/g, ' '));
@@ -1182,11 +1422,37 @@ export async function build(ctx) {
       for (let i = 0; i < lines.length; i++) await api.say(lines[i], { hold });
     },
 
+    // THE MARK, ASKED FOR DIRECTLY. Nothing calls this yet: the mark is inferred from the beat flow
+    // publishes (THINKING_BEATS), because dialogue may not reach into `mind` and `mind` has no flag
+    // of its own. It is the door for the contract change this round asks for — flow saying
+    // `D.thinking(true)` on the line before `mind.turn(said)` and `D.thinking(false)` on the line
+    // after it, which would put the mark on the actual call rather than on a beat that stands for
+    // it. `thinking(false)` takes the dots down and, if there is nothing else on the card, the card
+    // with them.
+    thinking(on = true) {
+      thinkForced = !!on;
+      if (thinkForced) {
+        if (!owedAt) owedAt = nowS();
+        return;
+      }
+      owedAt = 0;
+      if (think) {
+        dropThink();
+        ctx.emit?.('dialogue:thinking', { on: false });
+        if (bareCard()) cut();
+      }
+    },
+
+    // The one thing that takes a line off the paper without putting another in its place: a new
+    // evening, the visitor's Escape, the walk back out through the door.
     clear() {
       hush();
       if (typing) typing.speaking = false;
       finish();
       cut();
+      thinkForced = false;
+      owedAt = 0;
+      wasPending = false;
       lastAnswer = ''; // a new evening: neither of them has said anything yet
     },
 
@@ -1196,6 +1462,9 @@ export async function build(ctx) {
     setState(name) {
       finish();
       cut();
+      thinkForced = false;
+      owedAt = 0;
+      wasPending = false;
       const p = ctx.params;
       const i = +(p.get('line') ?? 0);
       const still = (text) => reveal(show(text).words, Infinity);
@@ -1221,6 +1490,13 @@ export async function build(ctx) {
           instant: true,
           value: p.get('answer') ?? 'I keep starting things and not finishing them.',
         });
+      } else if (name === 'thinking') {
+        // THE CARD WHILE HE IS WRITING. The state the whole of round 8's second half is about: the
+        // visitor has said their line, their register is empty and reserved, his is empty too, and
+        // the pen is striking the three dots. A frozen clock shows all three of them.
+        thinkForced = true;
+        lastAnswer = '';
+        standThink();
       } else if (name === 'answer') {
         still(scriptReply(said));
       } else if (name === 'greeting') {
@@ -1238,6 +1514,12 @@ export async function build(ctx) {
       // closing against the edge it hangs from, and the picking beat starting or ending, which
       // takes it to the head of the frame and back (see THE DOCK). Nothing else.
       tickDock();
+      // A line that is only STANDING (said, read, and waiting to be replaced) comes off at the
+      // door: the evening ends on the drawn door and the sign-off card, and neither of them is a
+      // frame his last sentence belongs in. A line still being said is left alone.
+      if (standing && !typing && !inter && !field && BARE_SHOTS.includes(shotName())) cut();
+      // the thinking mark: struck while a turn of his is in flight, gone the moment he writes
+      tickThinking();
       if (!cap.hidden) {
         if (!travel && Math.abs(barFrac() - lastBar) > 0.001) place();
         drawCard();

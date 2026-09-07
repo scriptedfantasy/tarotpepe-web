@@ -4,6 +4,7 @@
 //                strokes that cross at every corner, and the ink rules across it
 //   drawName     a name LETTERED in the sign hand (titles-sign.js) rather than set in a font
 //   drawCaret    the visitor's caret: an upright pen stroke standing on the baseline
+//   drawDots     the thinking mark: three dots struck one at a time while he writes
 //   drawMic      the carbon microphone that stands on the table beside the ashtray
 //
 // ROUND 7 took the speaker's dashes out. Round 6 opened each register with one — his laid in his
@@ -123,6 +124,45 @@ export function drawCaret(svg, seed = 5) {
   svg.innerHTML =
     `<path class="u" d="${d}" fill="none" stroke="${PAPER}" stroke-width="9" stroke-linecap="round"/>` +
     `<path d="${d}" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round"/>`;
+}
+
+// THE THINKING MARK — three dots, struck one at a time, on the line his words will be set on.
+//
+// ROUND 8. Time to his first sentence is about three seconds on the live model, and for all of it
+// the card stood empty: not a man thinking, a page that has stopped. The puppet already thinks
+// (pepeAnim.consider — the pin back, the head tilted, the eyes up and away); this is the CARD's
+// half of the same beat, and it is drawn with the same pen as everything else on the placard.
+//
+// It is not three full stops set in the caption face. A dot from a pen is the nib PUT DOWN and
+// lifted: two short overlapping strokes with the hand's wobble in them, so the mark has an edge
+// that is not a circle. They are re-struck on every 12 fps step, so they boil exactly as the rest
+// of the drawing does — a held dot is never the same dot twice.
+//
+// They are laid in HIS green, not in ink, because the colour of a mark is the only thing on this
+// card that says whose it is (dialogue.js, PEPE_GREEN): three black dots in his register would
+// read as the visitor's own.
+//
+// viewBox 0 0 34 12 — the baseline at y = 7.6, the three at x = 6, 17, 28.
+export function drawDots(svg, n = 3, seed = 0, { color = INK, weight = 2.7 } = {}) {
+  const rng = mulberry32(101 + (((seed % 1009) + 1009) % 1009) * 7);
+  svg.setAttribute('viewBox', '0 0 34 12');
+  const xs = [6, 17, 28];
+  const ds = [];
+  for (let i = 0; i < Math.max(0, Math.min(n, xs.length)); i++) {
+    const x = xs[i] + (rng() - 0.5) * 0.55;
+    const y = 7.6 + (rng() - 0.5) * 0.55;
+    ds.push(pathD(stroke(x - 0.5, y - 0.1, x + 0.5, y - 0.3, rng, { wobble: 0.3, overshoot: 0.12 })));
+    ds.push(pathD(stroke(x - 0.3, y + 0.3, x + 0.4, y + 0.15, rng, { wobble: 0.24, overshoot: 0.1 })));
+  }
+  const d = ds.join('');
+  if (!d) {
+    svg.innerHTML = '';
+    return;
+  }
+  // the paper underlay first, the way an inker leaves a gap round a drawn object, then the mark
+  svg.innerHTML =
+    `<path d="${d}" fill="none" stroke="${PAPER}" stroke-width="${(weight * 2.1).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<path d="${d}" fill="none" stroke="${color}" stroke-width="${weight.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`;
 }
 
 // The microphone: a carbon ball head on a yoke, a stem, a turned foot. A ring is drawn on the
