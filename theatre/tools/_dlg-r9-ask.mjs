@@ -33,7 +33,10 @@ const out = await page.evaluate(async () => {
     const field = !!cap.querySelector('input.keys');
     const arrow = !!cap.querySelector('.next') && !cap.querySelector('.next').hidden;
     const caret = !!cap.querySelector('.caret');
-    const mic = !document.querySelector('#dialogue .mic')?.hidden;
+    // round 10 took the microphone off the card; `!undefined` was reading TRUE on every frame and
+    // the clash counter below has been counting every frame the arrow was up ever since
+    const micEl = document.querySelector('#dialogue .mic');
+    const mic = !!micEl && !micEl.hidden;
     if (well !== last) {
       takes++;
       last = well;

@@ -412,6 +412,11 @@ function buildStyle() {
     #dialogue .cap .next > svg { display: block; width: 2.1em; height: 1.45em; overflow: visible; }
     /* while the arrow is up the card itself takes the clicks, so a tap ANYWHERE on it advances */
     #dialogue .cap.waiting { pointer-events: auto; cursor: pointer; }
+    /* ... and while it is the VISITOR'S turn the card is the thing they put a thumb on. The hidden
+       input already covers the padding box; this takes the drawn bleed at the edge with it, so a
+       thumb that lands on the pen stroke rather than inside it still opens the keyboard. Every
+       other moment the card is transparent to pointers and a tap on the picture reaches the fan. */
+    #dialogue .cap.asking { pointer-events: auto; }
     /* the keystrokes land here and nowhere else; nothing of it is ever seen */
     #dialogue .cap .keys {
       position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 2;
@@ -496,6 +501,9 @@ export async function build(ctx) {
   let typing = null; // { words, start, hold, done, keep, chars }
   let inter = null; // { until, done }
   let field = null; // { input, answer, caret:[el], submit, dispose }
+  // the visitor's next tap owes the field a keyboard — a field that opened with no gesture to
+  // focus inside. One shot, dropped the moment it is spent or the field goes. See THE FIELD, ON A PHONE.
+  let armed = false;
   let beat = 'idle';
   // ROUND 8. `standing` is the whole of the new state: there are words of HIS on the card — being
   // typed, or long since read and simply still there. It is set the moment a line is put into the
@@ -526,6 +534,26 @@ export async function build(ctx) {
     const bar = ctx.dom.letterbox?.querySelector?.('.bar.bottom');
     return bar && bar.offsetHeight > 0 ? BAR : 0;
   }
+  // ---- ROUND 11: THE KEYBOARD, AND THE CARD UNDER IT ----------------------------------------------
+  // A phone's on-screen keyboard does not change window.innerHeight. It covers the bottom of the
+  // picture and leaves the layout viewport exactly where it was, so a card standing on the floor
+  // line stands BEHIND it: measured on an iPhone 14, the card occupies 521–627 px of a 664 px
+  // frame and the keyboard takes the bottom ~290. The visitor types and sees nothing appear, which
+  // reads as the field not working at all.
+  //
+  // window.visualViewport is the thing a keyboard does move, so the card stands on the VISIBLE
+  // floor while the field is open and drops back to the picture's own when it closes. Nothing else
+  // about it changes — same measure, same centre, same drawn edge, same anchor — and on a desktop,
+  // where nothing ever covers the frame, the inset is zero and this is not in the arithmetic at all.
+  const KB_MIN = 80; // px of covered frame under which this is a URL bar shrinking, not a keyboard
+  function kbInset() {
+    const vv = window.visualViewport;
+    if (!field || !vv) return 0;
+    const h = ctx.size?.h || window.innerHeight || vv.height;
+    const covered = Math.round(h - (vv.height + vv.offsetTop));
+    return covered >= KB_MIN ? covered : 0;
+  }
+  let lastKb = 0;
   // Put the card on its anchor for the current shot. Its width is the anchor's measure and its
   // height follows from the row and the well — both fixed — so there is nothing here to measure and
   // nothing that a longer sentence can move. The anchor's `y` is the TOP of the block; a `y` below
@@ -535,6 +563,7 @@ export async function build(ctx) {
   let cardW = 0; // the card's width in px right now — the ruler is cut to the same measure
   function place() {
     const a = ANCHORS[shotName()];
+    lastKb = kbInset(); // whatever branch this takes, the keyboard has been read for this drawing
     const W = ctx.size?.w || root.clientWidth || window.innerWidth || 1600;
     const mid = !!a && a.at === 'centre';
     cap.classList.toggle('mid', mid);
@@ -569,7 +598,8 @@ export async function build(ctx) {
     if (!a || a.y > floor) {
       anchored = false; // hung by the bottom edge: nothing left to fit
       cap.style.top = 'auto';
-      cap.style.bottom = `${((1 - floor) * 100).toFixed(3)}%`;
+      const line = ((1 - floor) * 100).toFixed(3);
+      cap.style.bottom = lastKb ? `calc(${line}% + ${lastKb}px)` : `${line}%`;
     } else {
       anchored = true;
       cap.style.bottom = '';
@@ -841,6 +871,7 @@ export async function build(ctx) {
     if (field) {
       const f = field;
       field = null;
+      armed = false;
       f.dispose?.(); // an ask() still waiting resolves null
     }
   }
@@ -853,8 +884,10 @@ export async function build(ctx) {
     if (!field) return;
     const f = field;
     field = null;
+    armed = false;
     cap.classList.remove('asking');
     f.input?.remove();
+    if (lastKb && !cap.hidden) place(); // the keyboard is going with it: the card back on the floor
     const reply = cap.querySelector('.reply');
     if (reply) reply.innerHTML = visitorLine();
     f.dispose?.(); // an ask() still waiting resolves null (its own settle() is re-entrant-safe)
@@ -991,6 +1024,76 @@ export async function build(ctx) {
   cap.addEventListener('pointerdown', onArrow);
   arrow.addEventListener('click', onArrow); // Return / Space on a button reached by Tab
 
+  // ---- ROUND 11: THE FIELD, ON A PHONE ------------------------------------------------------------
+  // The user, on a phone: "sometimes I can actually put something in, sometimes it doesn't really
+  // work". Intermittent, and the reproduction (tools/_dlg-r11-touch.mjs — an iPhone 14 driven by
+  // taps only, ten evenings) says why. A phone raises its on-screen keyboard for focus() only while
+  // the gesture that asked for it is still in force, and `ask()` calls focus() in a PROMISE
+  // CONTINUATION — after `await said`. So:
+  //
+  //   8 evenings in 10  the clock finished his last take, not the visitor. There is no gesture
+  //                     anywhere near the focus() and no phone raises a keyboard for it. The caret
+  //                     blinks in their register and the keys do nothing.
+  //   2 evenings in 10  the visitor's own tap finished the take, the promise settled inside that
+  //                     tap's task, and focus() DID land in the gesture — and then the same tap's
+  //                     compatibility mousedown, 14 ms later, moved the focus to the body and put
+  //                     the keyboard away again:
+  //
+  //     28.014  pointerdown  canvas      → flow.onPointer → skip() → finish() → the promise
+  //     28.015  focus()      input.keys  → focusin, activeElement = input.keys
+  //     28.029  mousedown    canvas      → focusout, activeElement = body
+  //
+  // Three things follow, and all three are here rather than in flow.js, because none of them is
+  // flow's business: it is the card's own field.
+  const FOCUSABLE = '#ui, button, a[href], input, textarea, select, [contenteditable], [tabindex]';
+  // ONE. Whether we are inside a gesture right now, measured the way a browser measures it: a flag
+  // raised in the capture phase of every gesture event and lowered on the next MACROtask. A promise
+  // continuation of something the gesture resolved runs as a microtask and still sees it — which is
+  // exactly the case a phone raises a keyboard for.
+  let gesture = null;
+  for (const g of ['pointerdown', 'pointerup', 'touchend', 'mousedown', 'click'])
+    window.addEventListener(g, () => {
+      gesture = g;
+      setTimeout(() => {
+        gesture = null;
+      }, 0);
+    }, true);
+  // TWO. THE CARD IS THE TAP TARGET, and it focuses the field in the pointerdown itself — never a
+  // frame later. The hidden input covers the card, so most taps focus it natively; this catches the
+  // drawn bleed at the edge and any moment the input is not the top-most thing under the thumb.
+  cap.addEventListener('pointerdown', (e) => {
+    if (!field || e.target === field.input) return; // the input took it itself: let it, natively
+    e.preventDefault(); // ... and nothing on the card may take the focus off it instead
+    field.input.focus();
+  });
+  // THREE. A TAP SOMEWHERE ELSE MAY NOT TAKE THE FIELD AWAY. mousedown's DEFAULT ACTION is what
+  // moves the focus, so cancelling it — and nothing else of the event; flow listens on pointerdown
+  // and is untouched, and the click still fires — is the whole of the second fault above. Controls
+  // that are meant to take the focus (the help bill in #ui, a button, another field) keep it.
+  //
+  // And the first fault: the field that opened with no gesture to focus inside cannot raise a
+  // keyboard, so the visitor's NEXT tap is spent on it, once, wherever it lands. Not while a tap
+  // already belongs to something else on the table — the spread being chosen from, a card lying
+  // face up that a finger on it would bring back — where the card itself is the target and a
+  // keyboard over the cloth would be an ambush. (`armed` itself is declared with the rest of the
+  // field's state, up top, because cut() and closeField() drop it.)
+  function tapIsOurs() {
+    const f = ctx.pieces.flow;
+    if (f && f.beat === 'fan') return false; // the spread is out: every tap belongs to the cards
+    return (ctx.pieces.reveal?.picks?.length ?? 0) === 0; // cards are down and touchable
+  }
+  window.addEventListener('pointerdown', (e) => {
+    if (!field || !armed || e.target === field.input || e.target?.closest?.('#dialogue')) return;
+    if (!tapIsOurs()) return;
+    armed = false;
+    field.input.focus();
+  }, true);
+  window.addEventListener('mousedown', (e) => {
+    if (!field || e.target === field.input || e.target?.closest?.(FOCUSABLE)) return;
+    e.preventDefault();
+    if (document.activeElement !== field.input) field.input.focus();
+  }, true);
+
   // ---- the thinking mark ------------------------------------------------------------------------
   // Three dots struck one at a time while a turn of his is in flight, and nothing else: the puppet
   // does the thinking (pepeAnim.consider, fired by flow at exactly the same moment) and this is the
@@ -1113,6 +1216,16 @@ export async function build(ctx) {
     input.spellcheck = false;
     input.maxLength = 240;
     input.setAttribute('aria-label', 'Your answer');
+    // WHAT THE PHONE'S OWN KEYBOARD IS TOLD. The face is 16 px (the .keys rule) because anything
+    // smaller makes iOS zoom the whole picture the moment the field takes the focus. The rest:
+    //   enterkeyhint  the Return key reads SEND, which is what it does — the visitor's turn ends
+    //   autocapitalize  their words are set in capitals on the card either way; what goes to the
+    //                   mind is a sentence, so it is sentence-cased like one
+    //   autocorrect / spellcheck  off: a name off a tarot card is not a typo
+    input.setAttribute('enterkeyhint', 'send');
+    input.setAttribute('inputmode', 'text');
+    input.setAttribute('autocapitalize', 'sentences');
+    input.setAttribute('autocorrect', 'off');
     input.value = value;
     cap.appendChild(input);
     field = { input, answer, caret: [c] };
@@ -1219,7 +1332,14 @@ export async function build(ctx) {
       // his question stays where it is, in his own register, and the field opens in theirs
       const input = openBlock(value);
       if (!input) return null;
-      if (!ctx.shotMode) input.focus();
+      if (!ctx.shotMode) {
+        input.focus();
+        // ROUND 11. This focus() is in a promise continuation. If the visitor's own tap is what
+        // finished his last take it is still inside that tap and a phone raises its keyboard for
+        // it; if the clock finished the take there is no gesture here at all and no keyboard is
+        // possible — so their next tap is armed to open it instead. See THE FIELD, ON A PHONE.
+        armed = !gesture;
+      }
       const answer = await new Promise((res) => {
         let done = false;
         let timer = null;
@@ -1253,6 +1373,10 @@ export async function build(ctx) {
         };
         input.addEventListener('keydown', (e) => {
           e.stopPropagation();
+          // A key confirming an IME candidate is not the end of a turn. Android soft keyboards
+          // report every key of a composition as keyCode 229, and so does every CJK keyboard on a
+          // laptop: the Return that closes the candidate list must not send the line.
+          if (e.isComposing || e.keyCode === 229) return;
           if (e.key === 'Enter') {
             e.preventDefault();
             submit();
@@ -1260,6 +1384,13 @@ export async function build(ctx) {
             e.preventDefault();
             settle('');
           }
+        });
+        // ... and the soft keyboards that deliver their Return as an EDIT rather than as a key.
+        // enterkeyhint="send" gets most of them to send a keydown; this is the rest.
+        input.addEventListener('beforeinput', (e) => {
+          if (e.inputType !== 'insertLineBreak' && e.inputType !== 'insertParagraph') return;
+          e.preventDefault();
+          submit();
         });
         window.addEventListener('keydown', refocus, true);
         signal?.addEventListener('abort', onAbort, { once: true });
@@ -1428,7 +1559,10 @@ export async function build(ctx) {
       // the thinking mark: struck while a turn of his is in flight, gone the moment he writes
       tickThinking();
       if (!cap.hidden) {
-        if (!travel && Math.abs(barFrac() - lastBar) > 0.001) place();
+        // ... and the on-screen keyboard sliding up or away under it. visualViewport fires its own
+        // resize, but a phone animates the keyboard over several frames and iOS is not reliable
+        // about firing for every one of them, so the inset is also read on the stepped clock.
+        if (!travel && (Math.abs(barFrac() - lastBar) > 0.001 || kbInset() !== lastKb)) place();
         drawCard();
       }
       // the caret: an ink dash, on and off on the 12fps clock
@@ -1474,5 +1608,18 @@ export async function build(ctx) {
     if (placard) placard.dataset.k = ''; // force the card to be re-cut at the new size
     drawCard();
   });
+  // The keyboard opening and shutting, and the picture being pushed about under it. It is NOT the
+  // window resize above: window.innerHeight does not move for a keyboard, so nothing else in the
+  // film hears this at all — only the card, and only to stand above the visible floor.
+  if (window.visualViewport) {
+    const onKeyboard = () => {
+      if (cap.hidden) return;
+      place();
+      fit();
+      drawCard();
+    };
+    window.visualViewport.addEventListener('resize', onKeyboard);
+    window.visualViewport.addEventListener('scroll', onKeyboard);
+  }
   return api;
 }
