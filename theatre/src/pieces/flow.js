@@ -811,7 +811,7 @@ export async function build(ctx) {
     }
   }
   function onPointer(e) {
-    if (e.target?.closest?.('#dialogue')) return; // the field, the mic
+    if (e.target?.closest?.('#dialogue')) return; // the field, the arrow
     if (cardsLive() && tapped == null) {
       const i = cardAt(e);
       if (i != null) {

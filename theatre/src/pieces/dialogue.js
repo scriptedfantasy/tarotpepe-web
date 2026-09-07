@@ -58,14 +58,10 @@
 // The visitor's answer is drawn, not typed into a form: the same face, in their own two-line
 // register, with an ink dash for a caret that blinks on the 12 fps clock. Past two lines their
 // register rolls — the head of their sentence rides out of it, a whole line at a time — and the
-// card does not grow. A hidden input takes the real keystrokes (and the speech recogniser's words)
-// and nothing else. Their words are theirs only while they are writing them: the register empties
+// card does not grow. A hidden input takes the real keystrokes and nothing else. Their words are
+// theirs only while they are writing them: the register empties
 // the moment they press Return (the user: "the user knows what they typed they only need to see it
 // as they type, not after"), but it stays RESERVED, so the card never changes shape.
-//
-// The microphone is a prop, not an icon: a pen-drawn carbon microphone on a stand that stands on
-// the table beside the ashtray (its world position is projected into the frame, so it sits in the
-// picture and takes the shot's perspective), ringed with ink while it is listening.
 //
 // ROUND 8: A LINE IS RESOLVED, AND SEPARATELY IT IS CLEARED — AND THEY ARE NO LONGER THE SAME
 // EVENT. The user: "the chat box as it is now sometimes the text disappears too fast." Until this
@@ -77,7 +73,7 @@
 // The two halves are now separate:
 //
 //   RESOLVED — unchanged, to the millisecond. `say()`'s promise still settles at
-//     start + length/CPS + hold (and after the spoken voice, when the voice is on), because
+//     start + length/CPS + hold, because
 //     flow.js sequences the whole evening off those promises: `render` awaits one before it plays
 //     the next sentence, `speak` counts them, the readings loop and `revisit` pace their cuts by
 //     them. Nothing about the timing contract moved.
@@ -118,14 +114,13 @@
 //                                              yet, and nothing downstream of it happens early
 //                                              (see THE ARROW; TAKE_WAIT is the backstop)
 //   ask(prompt, {respond, signal, timeout, value, instant}) → Promise<string|null>
-//                                              says the prompt, opens the visitor's block (+ the mic),
-//                                              resolves with the text on Return ('' on Escape); null when
+//                                              says the prompt, opens the visitor's block, resolves
+//                                              with the text on Return ('' on Escape); null when
 //                                              the signal aborts or `timeout` seconds pass; `instant` shows
 //                                              the prompt at once (judging stills); `value` pre-fills it
 //   skip()                                     the visitor's gesture: the take typed out in full,
 //                                              then (again) the next take of the line — one at a time
 //   asking                                     true while the visitor's block is up
-//   voice                                      {on, canListen, canSpeak}; setVoice(on)
 //   reply(answer) → string                     the line that folds the answer back, verbatim
 //   intertitle(slug, position, {hold})         the card's held title, on a card of its own
 //   read(slug, position) → Promise             intertitle, then the card's lines
@@ -142,7 +137,7 @@ import { SCRIPT, lineFor, linesFor, reply as scriptReply, POSITIONS, positionKey
 import { bySlug } from '../core/deck.js';
 import { INK } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
-import { SVGNS, drawCaret, drawDots, drawArrow, drawMic, drawPlacard, drawName, CAN_LETTER, PLACARD_BLEED } from './dialogue-ink.js';
+import { SVGNS, drawCaret, drawDots, drawArrow, drawPlacard, drawName, CAN_LETTER, PLACARD_BLEED } from './dialogue-ink.js';
 
 export const meta = {
   name: 'dialogue',
@@ -154,7 +149,6 @@ const CPS = 28; // characters per second; words appear whole, on the 12fps clock
 const INTER_HOLD = 1.5; // seconds a card's intertitle is held
 const BAR = 0.07; // the titles piece's letterbox bar, fraction of the frame
 const BLINK = 6; // frames the caret is on, then off (12fps → half a second each)
-const BLINK_LISTEN = 3; // ... while the microphone is listening: twice as quick
 
 // THE CARD IS ONE OBJECT, AND IT DOES NOT RESIZE. Round 3 shrink-wrapped it to each line — 700 px
 // for one sentence, 560 for the next, 980 for the one after — so under a table that never moved the
@@ -315,29 +309,7 @@ function setAnchors(w) {
 }
 setAnchors(typeof window === 'undefined' ? 1600 : window.innerWidth || 1600);
 
-// The microphone's place on the table: beside the ashtray (table-objects PLACES.ashtray is
-// [-0.15, -0.13]), a little towards the visitor. Metres, table space; y is the cloth.
-const MIC_SPOT = [-0.435, 0.14];
-const MIC_TALL = 0.078; // how tall the prop stands in the world; its size in frame follows the shot
-
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-
-// Pepe's spoken voice: a calm English one, a little slow, a little low.
-let chosenVoice = null;
-function pickVoice() {
-  if (chosenVoice) return chosenVoice;
-  const voices = window.speechSynthesis?.getVoices?.() ?? [];
-  if (!voices.length) return null;
-  const en = voices.filter((v) => /^en/i.test(v.lang));
-  const prefer = ['Daniel', 'Google UK English Male', 'Microsoft George', 'Oliver', 'Arthur', 'Google US English', 'Alex', 'Samantha'];
-  chosenVoice =
-    prefer.map((name) => en.find((v) => v.name === name || v.name.startsWith(name))).find(Boolean) ??
-    en.find((v) => /GB/i.test(v.lang)) ??
-    en[0] ??
-    voices[0];
-  return chosenVoice;
-}
-window.speechSynthesis?.addEventListener?.('voiceschanged', () => (chosenVoice = null));
 
 function buildStyle() {
   const style = document.createElement('style');
@@ -425,8 +397,7 @@ function buildStyle() {
        It is a hand-drawn stroke on a transparent button, and the BUTTON is bigger than the mark —
        38 px on a laptop, never under 34 on a phone — so a thumb has something to land on. It sits
        inside the card's own corner, below the visitor's register and clear of the caret (which
-       cannot be up at the same time: a take never waits while the field is open) and clear of the
-       microphone, which stands outside the card's rectangle in every shot (see place_mic). */
+       cannot be up at the same time: a take never waits while the field is open). */
     #dialogue .cap .next {
       position: absolute; right: 0.35em; bottom: 0.15em; z-index: 3;
       /* a button carries the browser's own 13.3 px font unless it is told not to, and every
@@ -447,18 +418,6 @@ function buildStyle() {
       pointer-events: auto; opacity: 0; border: 0; padding: 0; margin: 0; background: transparent;
       font: 16px var(--typewriter); color: transparent; caret-color: transparent; appearance: none; outline: 0;
     }
-    /* the microphone: a prop standing on the table */
-    #dialogue .mic {
-      position: absolute; pointer-events: auto; cursor: pointer; padding: 0; margin: 0; border: 0;
-      background: transparent; appearance: none; outline: 0; display: block; color: ${INK};
-    }
-    #dialogue .mic[hidden] { display: none; }
-    #dialogue .mic > svg { display: block; width: 100%; height: 100%; overflow: visible; }
-    #dialogue .mic .ball { fill: none; }
-    #dialogue .mic.on .ball { fill: ${INK}; }
-    #dialogue .mic.on .grille { display: none; }
-    #dialogue .mic .ring { visibility: hidden; }
-    #dialogue .mic.listening .ring { visibility: visible; }
   `;
   return style;
 }
@@ -511,7 +470,6 @@ function wordMarkup(text) {
 const ORDINAL = ['The first card', 'The second card', 'The third card'];
 
 export async function build(ctx) {
-  const THREE = ctx.THREE;
   const root = ctx.dom.dialogue;
   document.head.appendChild(buildStyle());
   setAnchors(ctx.size?.w || window.innerWidth || 1600);
@@ -520,19 +478,6 @@ export async function build(ctx) {
   cap.className = 'cap';
   cap.hidden = true;
   root.appendChild(cap);
-
-  // the microphone stands in the picture whether or not a caption is up
-  const mic = document.createElement('button');
-  mic.type = 'button';
-  mic.className = 'mic';
-  mic.hidden = true;
-  mic.setAttribute('aria-label', 'Speak instead of typing');
-  mic.title = 'Speak instead of typing';
-  const micSvg = document.createElementNS(SVGNS, 'svg');
-  micSvg.setAttribute('aria-hidden', 'true');
-  drawMic(micSvg, 31);
-  mic.appendChild(micSvg);
-  root.appendChild(mic);
 
   // THE ARROW. One element for the whole evening — it is moved into each fresh inner block rather
   // than rebuilt, so the mark keeps its identity and a tap that lands as the card is re-set still
@@ -571,124 +516,6 @@ export async function build(ctx) {
   // typing at that moment: it is cleared when they press Return, and the reserved empty register is
   // what the card shows while he answers.
   let lastAnswer = '';
-
-  // ---- the voice: the visitor's (SpeechRecognition) and Pepe's (speechSynthesis) ----
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
-  const canListen = !!Recognition;
-  const canSpeak = !!window.speechSynthesis && typeof window.SpeechSynthesisUtterance === 'function';
-  let voiceOn = false;
-  let recog = null;
-  let utterance = null;
-  function hush() {
-    if (!canSpeak) return;
-    utterance = null;
-    try {
-      window.speechSynthesis.cancel();
-    } catch {}
-  }
-  function speak(text) {
-    if (!canSpeak || !voiceOn || ctx.shotMode) return Promise.resolve();
-    hush();
-    return new Promise((res) => {
-      let done = false;
-      const end = () => {
-        if (done) return;
-        done = true;
-        if (utterance === u) utterance = null;
-        res();
-      };
-      const u = new SpeechSynthesisUtterance(text);
-      const v = pickVoice();
-      if (v) u.voice = v;
-      u.rate = 0.9;
-      u.pitch = 0.85;
-      u.onend = end;
-      u.onerror = end;
-      utterance = u;
-      setTimeout(end, 1500 + (text.length / 9) * 1000); // a stuck synthesiser never holds the show
-      try {
-        window.speechSynthesis.speak(u);
-      } catch {
-        end();
-      }
-    });
-  }
-  function stopListening() {
-    if (!recog) return;
-    const r = recog;
-    recog = null;
-    try {
-      r.onend = null;
-      r.onresult = null;
-      r.onerror = null;
-      r.abort();
-    } catch {}
-    mic.classList.remove('listening');
-  }
-  // Listen into the visitor's block: interim words as they come, the final result submitted.
-  function listen(submit) {
-    if (!canListen || !voiceOn || !field || ctx.shotMode) return;
-    stopListening();
-    let r;
-    try {
-      r = new Recognition();
-    } catch {
-      return;
-    }
-    recog = r;
-    r.lang = navigator.language || 'en-GB';
-    r.interimResults = true;
-    r.continuous = false;
-    r.maxAlternatives = 1;
-    r.onresult = (ev) => {
-      let text = '', final = false;
-      for (let i = 0; i < ev.results.length; i++) {
-        text += ev.results[i][0].transcript;
-        if (ev.results[i].isFinal) final = true;
-      }
-      if (!field) return;
-      field.input.value = text.trim();
-      drawAnswer();
-      if (final && text.trim()) submit();
-    };
-    r.onend = () => {
-      if (recog !== r) return;
-      recog = null;
-      mic.classList.remove('listening');
-      // the browser stops after a silence: keep the ear open while the block is up
-      if (voiceOn && field) setTimeout(() => field && voiceOn && !recog && listen(submit), 250);
-    };
-    r.onerror = (ev) => {
-      if (recog !== r) return;
-      if (ev?.error === 'not-allowed' || ev?.error === 'service-not-allowed') {
-        recog = null;
-        setVoice(false);
-      }
-    };
-    try {
-      r.start();
-      mic.classList.add('listening');
-    } catch {
-      recog = null;
-    }
-  }
-  function setVoice(on) {
-    voiceOn = !!on && (canListen || canSpeak);
-    mic.classList.toggle('on', voiceOn);
-    ctx.emit?.('dialogue:voice', { on: voiceOn });
-    if (!voiceOn) {
-      stopListening();
-      hush();
-      if (typing) typing.speaking = false;
-    } else if (field?.submit) listen(field.submit);
-  }
-  mic.addEventListener('pointerdown', (e) => e.stopPropagation());
-  mic.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setVoice(!voiceOn);
-    field?.input?.focus();
-  });
 
   // ---- placing the block ------------------------------------------------------------------------
   const shotName = () => ctx.pieces.camera?.current ?? 'home';
@@ -1009,13 +836,11 @@ export async function build(ctx) {
     cap.classList.remove('asking');
     cap.innerHTML = '';
     placard = null;
-    mic.hidden = true;
     standing = false;
     think = null;
     if (field) {
       const f = field;
       field = null;
-      stopListening();
       f.dispose?.(); // an ask() still waiting resolves null
     }
   }
@@ -1028,9 +853,7 @@ export async function build(ctx) {
     if (!field) return;
     const f = field;
     field = null;
-    stopListening();
     cap.classList.remove('asking');
-    mic.hidden = true;
     f.input?.remove();
     const reply = cap.querySelector('.reply');
     if (reply) reply.innerHTML = visitorLine();
@@ -1105,7 +928,7 @@ export async function build(ctx) {
   // taken off the paper were one event — so a sentence went the instant flow stopped waiting for
   // it, which is what the user saw: "the chat box as it is now sometimes the text disappears too
   // fast". They are separate now. The promise still settles at exactly the same millisecond (see
-  // update(): typed + hold, and after the spoken voice), so flow's sequencing of the whole evening
+  // update(): typed + hold), so flow's sequencing of the whole evening
   // is untouched; the words stay on the card until something replaces them.
   //
   // A line still in its takes is finished on its LAST take, whole — never half-said — and that last
@@ -1294,51 +1117,8 @@ export async function build(ctx) {
     cap.appendChild(input);
     field = { input, answer, caret: [c] };
     drawAnswer();
-    mic.hidden = !(canListen || canSpeak); // no ear, no prop: a dead object on the table is worse
-    place_mic();
     input.addEventListener('input', drawAnswer);
     return input;
-  }
-
-  // ---- the microphone, standing on the table -------------------------------------------------------
-  const pA = new THREE.Vector3(), pB = new THREE.Vector3(), fwd = new THREE.Vector3();
-  function place_mic() {
-    if (mic.hidden) return;
-    const W = ctx.size.w || window.innerWidth, H = ctx.size.h || window.innerHeight;
-    const y = ctx.layout.table.top + 0.0025;
-    pA.set(MIC_SPOT[0], y, MIC_SPOT[1]).project(ctx.camera);
-    pB.set(MIC_SPOT[0], y + MIC_TALL, MIC_SPOT[1]).project(ctx.camera);
-    ctx.camera.getWorldDirection(fwd);
-    const overhead = -fwd.y > 0.86; // a plan view: a standing prop would read as a mistake
-    const sx = (pA.x * 0.5 + 0.5) * W, sy = (-pA.y * 0.5 + 0.5) * H;
-    const tall = Math.abs((-pB.y * 0.5 + 0.5) * H - sy);
-    const inFrame = pA.z < 1 && sx > W * 0.04 && sx < W * 0.96 && sy > H * 0.1 && sy < H * 0.99;
-    // The card is an opaque object standing in the front of the picture: a prop that would fall
-    // behind it is not on the table any more, so it goes to the corner of the frame instead. Both
-    // tests below are proper rectangle tests against the card WHEREVER IT IS STANDING — round 7
-    // gave the card a second place to stand (the head of the frame, through the picking beat) and
-    // an "is it below the card's top edge" test sent the prop off the top of the picture there.
-    const box = cap.hidden ? null : cap.getBoundingClientRect();
-    let h, left, top;
-    const tallH = Math.max(26, Math.min(58, tall * (66 / 54)));
-    const behindCard = !!box && sx > box.left - 34 && sx < box.right + 34 && sy > box.top - 8 && sy - tallH < box.bottom + 8;
-    if (!overhead && inFrame && tall > 12 && !behindCard) {
-      h = tallH; // 54 of the 66 drawn units are the prop's body
-      left = sx - (h * 56) / 66 / 2;
-      top = sy - h * (56.5 / 66);
-    } else {
-      // no table under it in this shot, or the card is over the table: it stands at the near right
-      // corner of the picture — and steps up over the card only if the card is standing there too
-      h = Math.max(34, Math.min(56, H * 0.062));
-      left = W * 0.93 - (h * 56) / 66 / 2;
-      top = H * (1 - barFrac()) - h - H * 0.035;
-      if (box && top + h > box.top - 6 && top < box.bottom + 6) top = box.top - h - 6;
-      top = Math.max(H * (barFrac() + 0.02), top);
-    }
-    mic.style.width = `${((h * 56) / 66).toFixed(1)}px`;
-    mic.style.height = `${h.toFixed(1)}px`;
-    mic.style.left = `${left.toFixed(1)}px`;
-    mic.style.top = `${top.toFixed(1)}px`;
   }
 
   function interLines(slug, position) {
@@ -1381,16 +1161,8 @@ export async function build(ctx) {
       ctx.pieces.pepeAnim?.say?.(text, seconds + 0.2);
       ctx.emit?.('dialogue:say', { text, seconds, takes: takes.length });
       return new Promise((res) => {
-        typing = { words, takes, ti: 0, start: ctx.clock.t, hold, done: res, keep, chars: -1, speaking: false };
+        typing = { words, takes, ti: 0, start: ctx.clock.t, hold, done: res, keep, chars: -1 };
         if (ctx.clock.frozen) reveal(words, Infinity);
-        // with the voice on the caption also waits for the line to be said
-        if (voiceOn && canSpeak) {
-          const t = typing;
-          t.speaking = true;
-          speak(text).then(() => {
-            if (typing === t) t.speaking = false;
-          });
-        }
       });
     },
 
@@ -1424,8 +1196,7 @@ export async function build(ctx) {
 
     // Says the prompt and keeps it up with the visitor's block under it. Resolves with the text
     // (trimmed) on Return, '' on Escape, null when `signal` aborts or `timeout` seconds pass with
-    // no answer. With respond:true it also says the reply before resolving. With the voice on the
-    // block also listens; a final recognition result submits.
+    // no answer. With respond:true it also says the reply before resolving.
     async ask(prompt = SCRIPT.question[0], { respond = false, hold = 0.2, signal = null, timeout = 0, value = '', instant = false } = {}) {
       if (signal?.aborted) return null;
       // A FALSY PROMPT OPENS THE FIELD AND SAYS NOTHING. He has already spoken and his line is
@@ -1496,7 +1267,6 @@ export async function build(ctx) {
         if (field) {
           field.submit = submit;
           field.dispose = () => settle(null); // cut from outside (clear, the next say): no answer
-          if (voiceOn) listen(submit);
         }
       });
       // Their words go the moment they are said. Round 6 left the last thing they typed standing in
@@ -1526,10 +1296,6 @@ export async function build(ctx) {
         const last = t.words[t.words.length - 1];
         const total = last ? last.at - 1 : 0;
         const whole = t.chars >= total;
-        if (t.speaking) {
-          hush();
-          t.speaking = false;
-        }
         if (!whole) {
           reveal(t.words, Infinity);
           t.chars = total;
@@ -1549,11 +1315,6 @@ export async function build(ctx) {
     get asking() {
       return !!field;
     },
-    get voice() {
-      return { on: voiceOn, canListen, canSpeak };
-    },
-    setVoice,
-
     // A card, read: the title, then its lines.
     async read(slug, position, { hold = 1.3 } = {}) {
       await api.intertitle(slug, position);
@@ -1585,8 +1346,6 @@ export async function build(ctx) {
     // The one thing that takes a line off the paper without putting another in its place: a new
     // evening, the visitor's Escape, the walk back out through the door.
     clear() {
-      hush();
-      if (typing) typing.speaking = false;
       finish();
       cut();
       thinkForced = false;
@@ -1646,7 +1405,7 @@ export async function build(ctx) {
         lastAnswer = '';
         standThink();
       } else if (name === 'answer') {
-        still(scriptReply(said));
+        still(scriptReply(p.get('answer') ?? 'I keep starting things and not finishing them.'));
       } else if (name === 'greeting') {
         still(SCRIPT.greeting[i] ?? SCRIPT.greeting[0]);
       } else {
@@ -1672,12 +1431,10 @@ export async function build(ctx) {
         if (!travel && Math.abs(barFrac() - lastBar) > 0.001) place();
         drawCard();
       }
-      // the caret: an ink dash, on and off on the 12fps clock; quicker while the ear is open
+      // the caret: an ink dash, on and off on the 12fps clock
       if (field) {
-        const period = mic.classList.contains('listening') ? BLINK_LISTEN : BLINK;
-        const off = !ctx.shotMode && Math.floor(ctx.clock.frame / period) % 2 === 1;
+        const off = !ctx.shotMode && Math.floor(ctx.clock.frame / BLINK) % 2 === 1;
         for (const c of field.caret) c.classList.toggle('off', off);
-        place_mic();
       }
       if (inter && t >= inter.until) finish();
       // the arrow boils like every other line on the card, on the same 12 fps step
@@ -1696,14 +1453,14 @@ export async function build(ctx) {
       const more = typing.ti < typing.takes.length - 1;
       // A take that is not the last of its line puts the arrow up the moment its last word has
       // landed and then WAITS — for the visitor, or, if they do nothing at all, for TAKE_WAIT. The
-      // last take of a line waits out its hold (and the spoken voice, if it is on) and ends the line.
+      // last take of a line waits out its hold and ends the line.
       if (more) {
         const whole = t >= typed;
         setArrow(whole);
         if (whole && t >= typed + TAKE_WAIT) nextTake(typing);
       } else {
         setArrow(false);
-        if (t >= typed + typing.hold && !typing.speaking) finish();
+        if (t >= typed + typing.hold) finish();
       }
     },
   };
@@ -1716,7 +1473,6 @@ export async function build(ctx) {
     fit();
     if (placard) placard.dataset.k = ''; // force the card to be re-cut at the new size
     drawCard();
-    place_mic();
   });
   return api;
 }

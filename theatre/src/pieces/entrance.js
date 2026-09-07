@@ -334,12 +334,26 @@ export async function build(ctx) {
   }
 
   // a click on the picture, or a key: the visitor knocks
+  // A click can land before the evening has asked for the door. The sheet is up from build, but
+  // flow reaches open() a beat or two later, and until it does there is no promise to resolve — so
+  // the first click of a visit was swallowed and the visitor had to click again (the sound builder's
+  // probe clicked once and reported a door that never opened). The click is kept, and open() takes
+  // it the moment it starts waiting.
+  let pendingKnock = false;
   function knock() {
+    if (pendingKnock) {
+      pendingKnock = false;
+      return Promise.resolve();
+    }
     return new Promise((res) => (knocked = res));
   }
   function onDown(e) {
-    if (mode !== 'closed' || !knocked) return;
+    if (mode !== 'closed') return;
     e.preventDefault?.();
+    if (!knocked) {
+      pendingKnock = true;
+      return;
+    }
     const go = knocked;
     knocked = null;
     go();

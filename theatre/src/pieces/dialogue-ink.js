@@ -6,7 +6,6 @@
 //   drawCaret    the visitor's caret: an upright pen stroke standing on the baseline
 //   drawDots     the thinking mark: three dots struck one at a time while he writes
 //   drawArrow    the mark at the card's corner: there is more of this sentence, and it waits for you
-//   drawMic      the carbon microphone that stands on the table beside the ashtray
 //
 // ROUND 7 took the speaker's dashes out. Round 6 opened each register with one — his laid in his
 // green and contoured in ink, the visitor's a single stroke — because green TYPE at #69b964 could
@@ -14,9 +13,9 @@
 // pepes font green - and users font black, lines not needed". So the colour moved into the words
 // (a darker shade of his own green; see PEPE_GREEN in dialogue.js) and drawDash is gone.
 //
-// The caret and the microphone are drawn twice — once wide in paper, so the hatching behind them
-// is knocked out the way an inker leaves a gap around a drawn object, and once in ink at the pen's
-// own weight. Nothing here is a box, a band or a background. Everything is a stroke.
+// The caret is drawn twice — once wide in paper, so the hatching behind it is knocked out the way
+// an inker leaves a gap around a drawn object, and once in ink at the pen's own weight. Nothing
+// here is a box, a band or a background. Everything is a stroke.
 import { INK, PAPER } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 import { signCaps, signGlyphs, SIGN_ASCENT, SIGN_DESCENT, SIGN_HAS } from './titles-sign.js';
@@ -86,31 +85,6 @@ export function arc(cx, cy, rx, ry, rng, { from = 0, to = Math.PI * 2, wobble = 
 }
 
 export const pathD = (pts) => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
-
-// Parallel chords inside a circle, at `angle`, `gap` apart: a hatched grille.
-function chords(cx, cy, r, angle, gap, rng) {
-  const ca = Math.cos(angle), sa = Math.sin(angle);
-  const out = [];
-  for (let d = -r + gap * 0.6; d < r - gap * 0.4; d += gap) {
-    const half = Math.sqrt(Math.max(0, r * r - d * d)) - 0.6;
-    if (half < 0.8) continue;
-    const mx = cx - sa * d, my = cy + ca * d;
-    out.push(stroke(mx - ca * half, my - sa * half, mx + ca * half, my + sa * half, rng, { wobble: 0.35, overshoot: 0.3 }));
-  }
-  return out;
-}
-
-// Draw a set of paths twice into an svg: a wide paper underlay, then the ink line over it.
-// `groups` is [{ d, cls, fill }] — cls goes on the ink copy only, so CSS can hide parts of it.
-function twice(groups, lw) {
-  const under = groups
-    .map((g) => `<path d="${g.d}" fill="none" stroke="${PAPER}" stroke-width="${(lw * 4.2).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`)
-    .join('');
-  const over = groups
-    .map((g) => `<path class="${g.cls ?? ''}" d="${g.d}" fill="${g.fill ?? 'none'}" stroke="${INK}" stroke-width="${(g.w ?? lw).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`)
-    .join('');
-  return `<g class="under">${under}</g><g class="over">${over}</g>`;
-}
 
 // THE CARET: the nib standing on the line where the visitor's next letter will go — an upright pen
 // stroke from the baseline to a little over the cap height, with the hand's own wobble in it.
@@ -200,42 +174,6 @@ export function drawArrow(svg, seed = 0, { color = INK, weight = 2.6 } = {}) {
   svg.innerHTML =
     `<path d="${d}" fill="none" stroke="${PAPER}" stroke-width="${(weight * 2.4).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>` +
     `<path d="${d}" fill="none" stroke="${color}" stroke-width="${weight.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`;
-}
-
-// The microphone: a carbon ball head on a yoke, a stem, a turned foot. A ring is drawn on the
-// table around the foot while it is listening. viewBox 0 0 56 66, the foot at (28, 56).
-export function drawMic(svg, seed = 31) {
-  const rng = mulberry32(seed);
-  svg.setAttribute('viewBox', '0 0 56 66');
-  const cx = 28, cy = 19, r = 12.6;
-  const lw = 1.6;
-
-  const head = pathD(arc(cx, cy, r, r, rng, { wobble: 0.7, n: 40 }));
-  const grille = [...chords(cx, cy, r - 1.6, Math.PI / 4, 3.1, rng), ...chords(cx, cy, r - 1.6, -Math.PI / 4, 3.1, rng)].map(pathD);
-  const band = pathD(stroke(cx - r + 1.4, cy + 0.6, cx + r - 1.4, cy + 0.6, rng, { wobble: 0.5, overshoot: 0.6 }));
-  // the yoke: two arms from the sides of the head down to the collar
-  const armL = pathD(arc(cx, cy + 2.4, r + 3.4, r + 5.6, rng, { from: Math.PI * 0.98, to: Math.PI * 0.52, wobble: 0.5 }));
-  const armR = pathD(arc(cx, cy + 2.4, r + 3.4, r + 5.6, rng, { from: Math.PI * 0.02, to: Math.PI * 0.48, wobble: 0.5 }));
-  const collar = pathD(stroke(cx - 4.4, 38.4, cx + 4.4, 38.4, rng, { wobble: 0.35, overshoot: 0.5 }));
-  const stemL = pathD(stroke(cx - 2.1, 38.6, cx - 2.1, 54.4, rng, { wobble: 0.3, overshoot: 0.4 }));
-  const stemR = pathD(stroke(cx + 2.1, 38.6, cx + 2.1, 54.4, rng, { wobble: 0.3, overshoot: 0.4 }));
-  const footTop = pathD(arc(cx, 55.2, 9.6, 2.8, rng, { wobble: 0.4, n: 26 }));
-  const footRim = pathD(arc(cx, 57.0, 11.4, 3.3, rng, { wobble: 0.45, n: 26 }));
-  const ring = pathD(arc(cx, 58.2, 26.5, 8.8, rng, { wobble: 1.0, n: 44 }));
-
-  const groups = [
-    { d: head, cls: 'ball', w: lw },
-    ...grille.map((d) => ({ d, cls: 'grille', w: lw * 0.62 })),
-    { d: band, cls: 'grille', w: lw * 0.8 },
-    { d: armL, w: lw },
-    { d: armR, w: lw },
-    { d: collar, w: lw },
-    { d: stemL, w: lw },
-    { d: stemR, w: lw },
-    { d: footTop, w: lw },
-    { d: footRim, w: lw },
-  ];
-  svg.innerHTML = twice(groups, lw) + `<path class="ring" d="${ring}" fill="none" stroke="${INK}" stroke-width="${lw}" stroke-linecap="round"/>`;
 }
 
 

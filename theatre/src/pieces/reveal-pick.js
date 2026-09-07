@@ -532,8 +532,8 @@ export function buildPick(ctx, cards, player, hand = null, slots = ctx.layout.sp
     const start = new Map(far.map((e, k) => [e, ((SWEEP - RUN2) * k) / Math.max(1, far.length - 1)]));
     for (let k = 1; k <= SWEEP; k++) {
       F(() => {
-        if (k === 1) sound('riffle');
-        if (k === 5 || k === 9) sound('deal');
+        if (k === 1) sound('rake');
+        if (k === 5 || k === 9) sound('rake');
         far.forEach((e, r) => {
           const a = rests.get(e);
           const f = clamp01((k - start.get(e)) / RUN2);
@@ -547,7 +547,7 @@ export function buildPick(ctx, cards, player, hand = null, slots = ctx.layout.sp
       sound('settle');
     });
     // squared between the two palms, twice
-    for (let k = 0; k < 4; k++) F(() => sound('tap'));
+    for (let k = 0; k < 2; k++) F(() => sound('square'));
     F(() => {
       for (const e of rem) e.mesh.visible = false;
       deckReal();

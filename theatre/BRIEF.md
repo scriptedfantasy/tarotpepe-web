@@ -46,7 +46,7 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
 - **Captions sit on a drawn placard (the user's decision, not open to a critic).** A paper card with a wobbly
   ink rule, the speaker in small tracked caps above, the line beneath in the caption face. A critic once
   had it removed in favour of free-floating text on the drawing; the user asked for the card back and
-  that settles it. Keep the drawn answer block, its ink caret and the microphone prop.
+  that settles it. Keep the drawn answer block and its ink caret.
 - **The caption card docks to the TOP for the picking beat, and only that beat (the user's
   exception).** 2026-09-05: "attach the caption card to the top during the card picking process".
   Bottom-centred it covered 89 px of a 170 px spread on a phone — 52% of the cards the visitor is
@@ -91,16 +91,20 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   exactly this; its plate carries two contact points, a fingertip and a palm centre, and a pick must
   pose by the FINGERTIP on the corner the visitor can actually see. The palm contact is for the
   smoosh, where a flat hand pushing cards about is right.
-- **Chat or voice.** The visitor answers by typing (`dialogue.ask`, a drawn input in the picture) or by voice
-  (a mic button: the browser's SpeechRecognition; when voice is on, Pepe is also spoken by speechSynthesis).
-  Chat is the default, voice a toggle; both must work in Chrome.
+- **Chat only. There is no voice (the user's decision, 2026-09-07).** The visitor answers by typing —
+  `dialogue.ask`, a drawn input in the picture — and that is the only way in. Rounds 1-9 also carried a
+  spoken half: a drawn microphone prop on the table, a toggle, the browser's SpeechRecognition feeding the
+  field, and Pepe read aloud by speechSynthesis when it was on. The user: "not sure the microphone works by
+  the way..? maybe we should remove it for now, it adds too much complexity." All of it is out — the prop,
+  the toggle, the recogniser, the synthesiser and the notice's line about it. Nothing on the card refers to
+  speaking aloud. Do not put it back without the user asking for it.
 - **It is a conversation, not a script of beats (the user's rule).** The visitor talks to Pepe freely,
-  by typing or by voice, and he answers; back and forth for as long as they like. He may offer a
+  by typing, and he answers; back and forth for as long as they like. He may offer a
   reading. He NEVER shuffles or deals on his own schedule: the cards come out only when the visitor
   asks for them, in whatever words they use. `mind` owns the conversation loop and detects that
   intent; `flow` waits for it before it touches `reveal`.
 - **The visitor chooses the cards.** After the shuffle Pepe fans the deck face down across the table and the
-  visitor picks three — click/tap a card in the fan, or say/type "the third from the left" — and each pick
+  visitor picks three — click/tap a card in the fan, or type "the third from the left" — and each pick
   slides to its slot before it is turned. `reveal` owns `fan()`, `pick(i)`, `awaitPick()` (raycast + a
   2-frame hover lift); `flow` wires the choice to the conversation.
 - The `mind` piece is judged on a transcript: `?view=mind&state=transcript` runs a canned visit (a fixed
