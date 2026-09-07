@@ -1,0 +1,13 @@
+{
+  "name": "tarotpepe-web",
+  "private": true,
+  "description": "Tarot Pepe. The app lives in theatre/; this file only points a host at it, so a deploy works whether or not the host was told the root directory.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "postinstall": "npm --prefix theatre ci",
+    "build": "npm --prefix theatre run build",
+    "start": "npm --prefix theatre start"
+  }
+}
