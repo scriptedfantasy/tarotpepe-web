@@ -346,9 +346,19 @@ export async function build(ctx) {
       for (let k = 0; k < 3 && alive(token); k++) {
         if (!R?.awaitPick) return;
         const landed = R.awaitPick();
-        // Only the first pick carries a line. The other two open the field under the sentence that
-        // is already standing, so he asks once and says nothing over the second and third.
-        let prompt = k === 0 ? PROMPTS.pick[0] : null, tries = 0;
+        // Only the first pick carries a line and a field. After it the placard is down and stays
+        // down: the second and third are a finger on a card and nothing else (the user: "we also
+        // dont need text there after the first pick, its a bit overkill"). If no finger comes in
+        // PICK_S, Pepe picks, and says nothing about it.
+        if (k > 0) {
+          if ((await timeout(landed, PICK_S)) === TIMEOUT) {
+            R.pickRandom?.();
+            await timeout(landed, 10);
+          }
+          await wait(0.6);
+          continue;
+        }
+        let prompt = PROMPTS.pick[0], tries = 0;
         for (;;) {
           if (!alive(token)) return;
           const ac = new AbortController();
@@ -378,23 +388,21 @@ export async function build(ctx) {
           await timeout(landed, 10);
           break;
         }
-        // The card is in its slot. Between the picks we cut back to him for a held beat — a start,
-        // the mouth open, a blink, then the deadpan again — so the locked top-down is broken twice
-        // and he is never off the screen for more than ten seconds. Not after the third: the gather
-        // follows straight on.
+        // The first card is in its slot. Once — after the first, and only the first (the user: "we
+        // only need the zoom out once after the first card. not three times") — we cut back to him
+        // for a held beat: a start, the mouth open, a blink, then the deadpan again, with nothing
+        // said over it. Then the overhead again for the other two, which run straight on.
         //
         // The cut is to `pepe`: from a frame that is nothing but cloth and card backs, the reaction
         // has to be a face, and a face at this size is the biggest change of scale in the evening.
         // His drawn hand takes itself off whenever the camera is not overhead (reveal-hand.js), so
         // his own two hands are on the cloth in this frame and there is no second one.
-        if (k < 2) {
-          await wait(0.35);
-          cut('pepe');
-          P.pepeAnim?.react?.();
-          await wait(1.9);
-          cut('fan');
-          await wait(0.35);
-        } else await wait(0.6);
+        await wait(0.35);
+        cut('pepe');
+        P.pepeAnim?.react?.();
+        await wait(1.9);
+        cut('fan');
+        await wait(0.35);
       }
       // the safety net: three cards in the slots whatever happened
       let guard = 0;

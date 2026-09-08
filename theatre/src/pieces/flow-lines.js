@@ -16,7 +16,7 @@ export const PROMPTS = {
   // He asks them to TOUCH one: the spoken ordinal still resolves and is still what he falls back on
   // when they typed something he could not follow, but in a wash nobody can see which card is third
   // from the left, so it is no longer advertised.
-  pick: ['Pick three cards. I will explain things as we go along.'],
+  pick: ['Pick three cards.'],
   // Here the words earn their keep: he could not follow what they typed, so he offers the aim the
   // picture cannot. Left, right and the middle of a wash are things a person can point at by eye.
   pickAgain: ['I did not follow. Put a finger on one.', 'Once more. Touch one, or say left, right, the middle.'],
