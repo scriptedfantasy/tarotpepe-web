@@ -194,9 +194,9 @@ You never break character. You are Tarot Pepe and there is nothing else you are.
 
 If someone brings something grave you neither counsel them nor go cold; you say the one plain true thing. If they are in danger tonight, tell them to telephone a person tonight, in your own voice, and mean it.
 
-THE ROOM DEALS, NOT YOU. Two levers reach it. deal_cards washes all seventy-eight face down across the cloth under your palms, and the visitor takes three out of the wash. show_cards puts the cards already lying there back in front of them. You use one or you do not; you never announce one and you never write out what you would have said instead. A lever the room has not put within reach this turn is not possible this turn.
+THE ROOM DEALS, NOT YOU. Two levers reach it. deal_cards washes all seventy-eight face down across the cloth under your palms, and the visitor takes three out of the wash. show_cards puts the cards already lying there back in front of them. You use one or you do not; you never announce one, you never say its name (the visitor cannot see the levers and has never heard of them), and you never write out what you would have said instead. A lever the room has not put within reach this turn is not possible this turn.
 
-A card is on the table only when the room says it is, and the visitor is looking at the same cloth you are. So you never name a card, or describe its picture, or read one, unless the room has said that card is down: not as an example, not as a guess, not as the card that would be. Three cards, left to right: what they brought, what is actually going on, what to do about it. You never draw a fourth.
+A card is on the table only when the room says it is, and the visitor is looking at the same cloth you are. So you never name a card, or describe its picture, or read one, unless the room has said that card is down: not as an example, not as a guess, not as the card that would be. Three cards, left to right: what they brought, what is actually going on, what to do about it — which you explain as each is turned, never before. You never draw a fourth.
 
 After what the visitor says there is a note in square brackets. It is the room telling you what is true at this moment, and it is the only way you know what the visitor can see. Take it as true and go on from there in your own way. Never mention it, never quote it, never answer it, and never write one of your own.`;
 
@@ -260,12 +260,12 @@ const TOOLS = {
     // anything pepe should generate what he says so everytime feels unique"). So the direction asks
     // for the one sentence rather than permitting none — nothing is added to it and nothing takes
     // its place — and says what it must not be about.
-    line: 'If the visitor has just asked you for a reading, or accepted one you offered, use deal_cards now and answer them in ONE short sentence as you do. That sentence is the last thing they hear before the cards and it plays over your own hands while you wash the deck; nothing is added to it. Say it to this visitor, about what they came in with — never about the shuffling. Do not count your shuffles, do not ask them not to help, and do not explain the three positions.',
+    line: 'If the visitor has just asked you for a reading, or accepted one you offered, use deal_cards now and answer them in ONE short sentence as you do. That sentence is the last thing they hear before the cards and it plays over your own hands while you wash the deck; nothing is added to it. Say it to this visitor, about what they came in with — never about the shuffling. Do not count your shuffles, do not ask them not to help, and do not explain the three positions. End by asking them, in your own words, to take three out of the wash: three is all they need to hear, not which and not where.',
     // The same lever, said to the room build as a fact about the room rather than as an order. What
     // survives the rewrite is everything the visitor can SEE and he cannot: that pulling it starts
     // the wash, and that whatever he writes in this turn is spent over his own working hands.
     state:
-      'deal_cards is within your reach this turn. Pulling it puts your hands on the deck: all seventy-eight go face down across the cloth under your palms and the visitor takes three straight out of the wash. Whatever you say in the same turn is the last thing they hear before the cards, and it plays over your working hands; nothing is added to it afterwards.',
+      'deal_cards is within your reach this turn. Pulling it puts your hands on the deck: all seventy-eight go face down across the cloth under your palms and the visitor takes three straight out of the wash. Whatever you say in the same turn is the last thing they hear before the cards, and it plays over your working hands; ask them for three in it and no more than that: not which, not where, not what the positions mean; nothing is added to it afterwards.',
   },
   show_cards: {
     description:
@@ -392,6 +392,7 @@ function allowedCards(b) {
 }
 
 // push(text) → [sentences to forward]; flush() → the tail. `struck` names the first offender.
+const LEVER_NAME = /\b(deal_cards|show_cards)\b/i;
 function cardGate(b, on = true) {
   const allowed = allowedCards(b);
   let buf = '';
@@ -401,6 +402,12 @@ function cardGate(b, on = true) {
     kept: '',
     check(s) {
       if (dead) return null;
+      // A lever's name in prose ("pull the deal_cards lever, anon") is the room's plumbing showing;
+      // that sentence goes and the line goes on without it.
+      if (LEVER_NAME.test(s)) {
+        gate.dropped = (gate.dropped ?? 0) + 1;
+        return null;
+      }
       const hit = namesACard(s, allowed);
       if (!hit) {
         gate.kept += (gate.kept ? ' ' : '') + s.trim();
@@ -519,7 +526,7 @@ function situation(b, names = []) {
     }
     case 'shuffle': {
       const about = b.about ? ` You took the reading to be about "${clip(b.about, 80)}".` : '';
-      return `The visitor asked for a reading and the deck is in your hands: all seventy-eight are face down and spread over the cloth, swirling round each other under both your palms, in front of them.${about} In a moment they will take three straight out of the wash.`;
+      return `The visitor asked for a reading and the deck is in your hands: all seventy-eight are face down and spread over the cloth, swirling round each other under both your palms, in front of them.${about} In a moment they will take three straight out of the wash. Ask them to, in your own words, in this one line: three is all they need to hear, not which and not where.`;
     }
     case 'fan':
       return 'The wash is lying on the cloth where your hands left it, at every angle, face down. The room is about to ask the visitor to take three out of it, in its own words.';

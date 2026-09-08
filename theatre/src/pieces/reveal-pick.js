@@ -555,17 +555,23 @@ export function buildPick(ctx, cards, player, hand = null, slots = ctx.layout.sp
     if (!hand) return frames;
     const b = WASH.bounds, cz = (b.z0 + b.z1) / 2;
     const specs = [];
+    // The hands ride ON the cards the whole way: on the wash's own depth while they are still out
+    // in it, and on the pile as it comes up under them — the pile ends the real deck's height, and a
+    // palm left on the cloth would be drawn underneath it (the user: "the hands are under the cards,
+    // they should be over the cards of course").
+    const pileH = units(N) * T;
     specs.push([HL(-b.x * 0.8, cz - 0.20, 0.080), HR(b.x * 0.8, cz - 0.20, 0.080)]);
     for (let k = 0; k < SWEEP; k++) {
       const u = k / (SWEEP - 1);
       const x = lerp(b.x * 0.86, 0.062, u), z = lerp(cz, dk.z, u);
-      specs.push([HL(-x, z, 0.004, DEEP * (1 - u)), HR(x, z, 0.004, DEEP * (1 - u))]);
+      const on = Math.max(DEEP * (1 - u), pileH * u);
+      specs.push([HL(-x, z, 0.004, on), HR(x, z, 0.004, on)]);
     }
-    specs.push([HL(-0.058, dk.z + 0.004, 0.006), HR(0.058, dk.z + 0.004, 0.006)]);
-    // the press: the two hands turned to face each other across the pile
+    specs.push([HL(-0.058, dk.z + 0.004, 0.006, pileH), HR(0.058, dk.z + 0.004, 0.006, pileH)]);
+    // the press: the two hands turned to face each other across the pile, over it
     const press = (dx) => [
-      { x: -(0.045 + dx), y: 0.006, z: dk.z + 0.004, yaw: 1.12, pose: 'splay', side: 'L', floor: 0 },
-      { x: 0.045 + dx, y: 0.006, z: dk.z + 0.004, yaw: -1.12, pose: 'splay', side: 'R', floor: 0 },
+      { x: -(0.045 + dx), y: 0.006, z: dk.z + 0.004, yaw: 1.12, pose: 'splay', side: 'L', floor: pileH },
+      { x: 0.045 + dx, y: 0.006, z: dk.z + 0.004, yaw: -1.12, pose: 'splay', side: 'R', floor: pileH },
     ];
     specs.push(press(0.018), press(0), press(0.014), press(0));
     specs.push([HL(-0.09, dk.z - 0.14, 0.055, units(N) * T), HR(0.09, dk.z - 0.14, 0.055, units(N) * T)]);

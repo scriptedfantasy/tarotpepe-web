@@ -73,6 +73,8 @@ const IMPATIENT_S = 3;
 const TURN_S = 26;
 const IDLE_S = 90; // the visitor's silence at the field: he says a line and opens it again
 const PICK_S = 75; // ... at the fan: Pepe chooses
+// His line over the wash counts as the ask when it asks for three, in any of his words for taking.
+const ASKS_THREE = /\b(take|pick|choose|pull|draw|tap|touch|lift|turn over|grab|select)\b[^.!?]{0,40}\b(three|3)\b/i;
 // How long a line over the wash may take to start arriving. The wash is 3.7 s of hands in cards and
 // the mind takes about 2.7 s; past this the line would go up over a table his hands had already
 // left, so it is dropped and the beat stays silent. Nothing scripted takes its place — round 6.
@@ -340,7 +342,7 @@ export async function build(ctx) {
   }
 
   // ---- the visitor's three picks --------------------------------------------------------------------
-  async function pickThree(token) {
+  async function pickThree(token, { asked = false } = {}) {
     picking = true;
     try {
       for (let k = 0; k < 3 && alive(token); k++) {
@@ -358,7 +360,9 @@ export async function build(ctx) {
           await wait(0.6);
           continue;
         }
-        let prompt = PROMPTS.pick[0], tries = 0;
+        // `asked`: his own line over the wash asked for three and is still standing; the field
+        // opens under it and nothing scripted goes up. Otherwise the room asks, once.
+        let prompt = asked ? null : PROMPTS.pick[0], tries = 0;
         for (;;) {
           if (!alive(token)) return;
           const ac = new AbortController();
@@ -561,8 +565,14 @@ export async function build(ctx) {
     D.folio?.('shuffle');
     const shuffling = R?.shuffle?.() ?? Promise.resolve();
     await wait(0.7); // the deck going over under both palms, before he says a word over it
-    const over = await render(sentences, { hold: 1.2, max: 2 });
-    if (!over.said && M?.available && M?.reply && alive(token) && !skipBeat) await render(M.reply({ beat: 'shuffle' }), { hold: 1.2, max: 2, first: WASH_LINE_S });
+    // Whatever he says last over the wash is what stands when the cloth is handed to the visitor,
+    // and he is told to ask for three in it. When it does, it IS the ask — the room does not put
+    // "Pick three cards." up after him (the user: "take three cards - the left right... - then
+    // pick three cards... overkill"). Only when his line does not ask does the room's line go up.
+    let washLine = '';
+    const last = (k, s) => (washLine = s ?? washLine);
+    const over = await render(sentences, { hold: 1.2, max: 2, each: last });
+    if (!over.said && M?.available && M?.reply && alive(token) && !skipBeat) await render(M.reply({ beat: 'shuffle' }), { hold: 1.2, max: 2, first: WASH_LINE_S, each: last });
     await timeout(shuffling, 14);
     if (!alive(token)) return null;
 
@@ -575,7 +585,7 @@ export async function build(ctx) {
     if (!alive(token)) return null;
     await wait(0.3);
 
-    await pickThree(token);
+    await pickThree(token, { asked: ASKS_THREE.test(washLine) });
     if (!alive(token)) return null;
     await wait(0.5);
     await timeout(R?.gather?.() ?? Promise.resolve(), 10);
