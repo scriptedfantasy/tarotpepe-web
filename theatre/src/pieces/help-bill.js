@@ -35,6 +35,13 @@ export const BILL = {
   controls: [
     { key: 'close', label: 'VERY WELL' },
     { key: 'leave', label: 'I AM LEAVING' },
+    // The sheet the visitor takes away with them (help-keep.js). It is the third thing a visitor
+    // may do about the notice and it is SET BACK — struck at a third of the ink, rules and
+    // lettering alike — until there is a reading to keep. The bill has no other language for an
+    // inactive thing: nothing here greys out, nothing here is disabled, so the answer is the one
+    // the pen already gives the credit at the foot — less ink. It still occupies its box, because
+    // a control that appears when the evening has begun is a control nobody knew was there.
+    { key: 'keep', label: 'KEEP THIS READING' },
   ],
 };
 
@@ -52,7 +59,8 @@ export const CREDIT = {
 const BLEED = 26; // room on the plate for the border's overshoot and the drop-hatch
 const TRACK = 0.16; // the body's tracking; the heading is wider
 const CRED_TRACK = 0.15;
-const AT_ADV = 104; // the at-sign's advance, in the case's own units (cap height = 100)
+export const AT_ADV = 104; // the at-sign's advance, in the case's own units (cap height = 100)
+const SET_BACK = 0.32; // the ink a control has when there is nothing for it to do
 
 // Wrap one line to a measure, in the hand it will be lettered in.
 function wrap(text, capH, maxW) {
@@ -71,10 +79,11 @@ function wrap(text, capH, maxW) {
 }
 
 /**
- * Set the notice for a frame of w x h CSS px. Returns the sheet's box, the two control boxes (all
+ * Set the notice for a frame of w x h CSS px. Returns the sheet's box, the control boxes (all
  * in CSS px, relative to the frame, with the sheet at rest) and the plates to blit.
+ * `inactive` names control keys that are struck SET BACK — a third of the ink — and do nothing.
  */
-export function cutBill(w, h, dpr = 2) {
+export function cutBill(w, h, dpr = 2, { inactive = [] } = {}) {
   // The notice is set at the largest hand that leaves it whole in the frame, and never at a cap
   // below the 13 px the world's rules put on lettering. A phone gets the same words with more
   // turns in them, not smaller words.
@@ -84,7 +93,7 @@ export function cutBill(w, h, dpr = 2) {
     if (L.sheetH <= h * 0.9) break;
     if (L.capBody <= 13.01) break; // the floor: no smaller hand than this
   }
-  return plate(w, h, dpr, L);
+  return plate(w, h, dpr, { ...L, off: new Set(inactive) });
 }
 
 function layout(w, h, k) {
@@ -104,13 +113,28 @@ function layout(w, h, k) {
   const foot = wrap(BILL.foot, capFoot, sheetW - 2 * pad);
   const bodyH = items.reduce((a, it) => a + it.lines.length * lead, 0) + (items.length - 1) * capBody * 0.62;
 
-  // the controls: side by side if the measure takes them, stacked if it does not (and a stacked
-  // pair is the better thumb target anyway)
+  // the controls: as many to a row as the measure takes, and a new row when it does not. Two of
+  // them used to fit side by side on any sheet and three do not, so the block is packed rather
+  // than switched — «VERY WELL» and «I AM LEAVING» keep their row on a laptop and «KEEP THIS
+  // READING» goes under them; a phone stacks all three, as it stacked two.
   // 44 px is the floor for a control a thumb has to hit, whatever the lettering in it measures
   const ctrlPadX = capCtrl * 1.15, ctrlH = Math.max(44, capCtrl * 2.6), ctrlGap = capCtrl * 0.9;
   const ctrlW = BILL.controls.map((c) => signWidth(c.label, { capH: capCtrl, tracking: 0.2 }) + 2 * ctrlPadX);
-  const side = ctrlW[0] + ctrlW[1] + ctrlGap <= sheetW - 2 * pad;
-  const ctrlBlockH = side ? ctrlH : ctrlH * 2 + ctrlGap * 0.7;
+  const ctrlMeasure = sheetW - 2 * pad;
+  const rows = [];
+  BILL.controls.forEach((c, i) => {
+    const row = rows[rows.length - 1];
+    const next = row ? row.w + ctrlGap + ctrlW[i] : ctrlW[i];
+    if (row && next <= ctrlMeasure) {
+      row.idx.push(i);
+      row.w = next;
+    } else rows.push({ idx: [i], w: ctrlW[i] });
+  });
+  // a sheet that stacks every control gives each one the whole measure, as it always did; a sheet
+  // that does not keeps the natural widths, centred, so a lone control is not a bar under a pair
+  const allSingle = rows.every((r) => r.idx.length === 1);
+  const rowGap = ctrlGap * 0.7;
+  const ctrlBlockH = rows.length * ctrlH + (rows.length - 1) * rowGap;
 
   // the double border, hoisted out of the strike so the credit knows where the inner rule runs
   const in1 = Math.max(6, sheetW * 0.022);
@@ -121,7 +145,11 @@ function layout(w, h, k) {
   // enough for it — a phone's is not — the gap between the small print and the controls gives the
   // difference up, so the sheet ends exactly as tall as it was before anybody signed it.
   const cred = setCredit(sheetW - 2 * pad, capFoot);
-  const wantTop = Math.max(9, cred.cap * 0.8); // clear of the controls
+  // Clear of the controls — and further clear of them since there are three. The signature is a
+  // LINK, and with the last control stacked directly over it a thumb that overshoots «KEEP THIS
+  // READING» by a few pixels used to land on x.com. A cap and a sixth of paper between the two,
+  // and the link's own box started below that gap (see cred.box), is what stops it.
+  const wantTop = Math.max(14, cred.cap * 1.15);
   const wantBot = in2 + Math.max(6, cred.cap * 0.55); // clear of the inner rule
   const want = wantTop + cred.cap + wantBot;
   const preCtrl = Math.max(pad * 0.28, pad * 0.72 - Math.max(0, want - pad));
@@ -148,7 +176,9 @@ function layout(w, h, k) {
   cred.capY = yCred;
   cred.box = {
     x: Math.max(pad * 0.4, cred.x - cred.cap * 1.1),
-    y: yCtrl + ctrlBlockH + 1, // everything under the controls and inside the border is the credit
+    // everything under the controls and inside the border is the credit — except a dead strip
+    // directly under the last control, so a thumb that misses it low misses everything
+    y: yCtrl + ctrlBlockH + Math.max(5, cred.cap * 0.5),
     w: Math.min(sheetW - 2 * (pad * 0.4), cred.w + cred.cap * 2.2),
     h: 0,
   };
@@ -157,18 +187,19 @@ function layout(w, h, k) {
 
   // ---- where the controls sit, in sheet coordinates -------------------------------------------
   const boxes = [];
-  if (side) {
-    let x = (sheetW - (ctrlW[0] + ctrlW[1] + ctrlGap)) / 2;
-    BILL.controls.forEach((c, i) => {
-      boxes.push({ key: c.key, label: c.label, x, y: yCtrl, w: ctrlW[i], h: ctrlH });
+  rows.forEach((r, ri) => {
+    const y = yCtrl + ri * (ctrlH + rowGap);
+    if (allSingle) {
+      const i = r.idx[0];
+      boxes.push({ key: BILL.controls[i].key, label: BILL.controls[i].label, x: pad, y, w: ctrlMeasure, h: ctrlH });
+      return;
+    }
+    let x = (sheetW - r.w) / 2;
+    for (const i of r.idx) {
+      boxes.push({ key: BILL.controls[i].key, label: BILL.controls[i].label, x, y, w: ctrlW[i], h: ctrlH });
       x += ctrlW[i] + ctrlGap;
-    });
-  } else {
-    const bw = sheetW - 2 * pad;
-    BILL.controls.forEach((c, i) => {
-      boxes.push({ key: c.key, label: c.label, x: pad, y: yCtrl + i * (ctrlH + ctrlGap * 0.7), w: bw, h: ctrlH });
-    });
-  }
+    }
+  });
 
   return { sheetW, sheetH, pen, pad, capBody, capHead, capFoot, capCtrl, numW, lead, items, foot, boxes, cred, in1, in2, yHead, yRule1, yBody, yRule2, yFoot };
 }
@@ -201,7 +232,7 @@ function plate(w, h, dpr, L) {
   const y0 = Math.round((h - L.sheetH) / 2);
   return {
     sheet: { x: x0, y: y0, w: L.sheetW, h: L.sheetH },
-    controls: L.boxes.map((b) => ({ key: b.key, x: x0 + b.x, y: y0 + b.y, w: b.w, h: b.h })),
+    controls: L.boxes.map((b) => ({ key: b.key, x: x0 + b.x, y: y0 + b.y, w: b.w, h: b.h, inactive: !!L.off?.has(b.key) })),
     // the credit's box, in the same coordinates as the controls, and where it goes
     credit: { x: x0 + L.cred.box.x, y: y0 + L.cred.box.y, w: L.cred.box.w, h: L.cred.box.h, href: CREDIT.href },
     plates,
@@ -292,13 +323,19 @@ function strike(sheetW, sheetH, dpr, o) {
     signCaps(g, ln, sheetW / 2, o.yFoot + o.capFoot * 0.85 + k * o.capFoot * 1.7, { capH: o.capFoot, tracking: 0.14, pen: Math.max(1.25, o.capFoot * 0.115), seed: 90 + k, boil, alpha: 0.9 });
   });
 
-  // ---- the two things a visitor may do about it ------------------------------------------------
+  // ---- the things a visitor may do about it ----------------------------------------------------
+  // One of them may have nothing to do yet — there is no reading to keep before there is a
+  // reading — and then the whole control, its box and its lettering alike, is struck at a third of
+  // the ink. Not hidden, not greyed, not crossed out: a printer with one colour of ink and a light
+  // hand, which is the only way this sheet has ever said "later".
+  const SEED = { close: 122, leave: 121, keep: 123 };
   for (const b of o.boxes) {
-    rule(g, b.x, b.y, b.x + b.w, b.y, pen * 1.1, nib, 4);
-    rule(g, b.x + b.w, b.y, b.x + b.w, b.y + b.h, pen * 1.1, nib, 4);
-    rule(g, b.x + b.w, b.y + b.h, b.x, b.y + b.h, pen * 1.1, nib, 4);
-    rule(g, b.x, b.y + b.h, b.x, b.y, pen * 1.1, nib, 4);
-    signCaps(g, b.label, b.x + b.w / 2, b.y + b.h / 2, { capH: o.capCtrl, tracking: 0.2, pen: Math.max(1.45, o.capCtrl * 0.14), seed: b.key === 'leave' ? 121 : 122, boil });
+    const a = o.off?.has(b.key) ? SET_BACK : 1;
+    rule(g, b.x, b.y, b.x + b.w, b.y, pen * 1.1, nib, 4, a);
+    rule(g, b.x + b.w, b.y, b.x + b.w, b.y + b.h, pen * 1.1, nib, 4, a);
+    rule(g, b.x + b.w, b.y + b.h, b.x, b.y + b.h, pen * 1.1, nib, 4, a);
+    rule(g, b.x, b.y + b.h, b.x, b.y, pen * 1.1, nib, 4, a);
+    signCaps(g, b.label, b.x + b.w / 2, b.y + b.h / 2, { capH: o.capCtrl, tracking: 0.2, pen: Math.max(1.45, o.capCtrl * 0.14), seed: SEED[b.key] ?? 122, boil, alpha: a });
   }
 
   // ---- and who conjured it ----------------------------------------------------------------------
@@ -318,7 +355,8 @@ function strike(sheetW, sheetH, dpr, o) {
 
 // The at-sign, cut here because the sign hand has none: one ring left open at the foot, the pen's
 // flick out of it, and the little bowl inside. Same nib as the rules, so it boils with them.
-function atSign(g, x, capY, capH, pen, rng) {
+// (help-keep.js signs the kept sheet with the same mark, so it is exported rather than copied.)
+export function atSign(g, x, capY, capH, pen, rng) {
   // The mark is wider than a letter and fills the whole cap band — an at-sign is a big sort — and
   // the ring is drawn a hair finer than the letters beside it so the middle stays white.
   const cx = x + (capH * AT_ADV) / 200, cy = capY + capH * 0.5;
@@ -361,9 +399,9 @@ function penPath(g, pts, width, wobble, rng) {
 }
 
 // a ruled line with a pen's overshoot at both ends
-function rule(g, x1, y1, x2, y2, width, rng, over = 4) {
+function rule(g, x1, y1, x2, y2, width, rng, over = 4, alpha = 1) {
   const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1;
   const ux = dx / len, uy = dy / len;
   const a = over * rng(), b = over * rng();
-  inkLine(g, x1 - ux * a, y1 - uy * a, x2 + ux * b, y2 + uy * b, { width, wobble: 0.85, rng, color: INK });
+  inkLine(g, x1 - ux * a, y1 - uy * a, x2 + ux * b, y2 + uy * b, { width, wobble: 0.85, rng, color: INK, alpha });
 }

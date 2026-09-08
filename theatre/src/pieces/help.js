@@ -36,11 +36,12 @@ import * as THREE from 'three';
 import { PAPER, drawTexture, inkMaterial, inkLine } from '../core/strokes.js';
 import { signCaps } from './titles-sign.js';
 import { cutBill } from './help-bill.js';
+import * as keep from './help-keep.js';
 
 export const meta = {
   name: 'help',
   judge: { shot: 'home', states: ['closed', 'hover', 'open'] },
-  files: ['src/pieces/help.js', 'src/pieces/help-bill.js'],
+  files: ['src/pieces/help.js', 'src/pieces/help-bill.js', 'src/pieces/help-keep.js'],
 };
 
 const HOLD = 2 / 12; // every drawing is on twos
@@ -122,13 +123,18 @@ export async function build(ctx) {
 
   let bill = null; // the cut notice: sheet box, control boxes, two plates
   let cutAt = '';
+  // «KEEP THIS READING» has nothing to keep until something has been said or drawn, and until then
+  // it is struck set back and does nothing. The state is part of the cut, so the notice is re-set
+  // when it changes rather than repainted over.
+  const inactive = () => (keep.hasReading(ctx) ? [] : ['keep']);
   function cut() {
     const w = ctx.size?.w || window.innerWidth, h = ctx.size?.h || window.innerHeight;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const key = `${Math.round(w)}x${Math.round(h)}@${dpr}`;
+    const off = inactive();
+    const key = `${Math.round(w)}x${Math.round(h)}@${dpr}/${off.join('+')}`;
     if (key === cutAt && bill) return bill;
     cutAt = key;
-    bill = cutBill(w, h, dpr);
+    bill = cutBill(w, h, dpr, { inactive: off });
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
@@ -192,6 +198,10 @@ export async function build(ctx) {
     pose = UP[0];
     setHover(false);
     cue('flip');
+    // …and the sheet is cut before it is asked for. A share sheet will not open for a page that
+    // asks a second after the tap, so the PDF is built while the notice is coming up and the tap
+    // finds it already made. See help-keep.js, HANDING IT OVER.
+    if (keep.hasReading(ctx)) keep.prepare(ctx).catch((e) => console.warn('[help] keep', e));
     ctx.emit?.('help:open');
   }
   function close() {
@@ -268,10 +278,15 @@ export async function build(ctx) {
     }
   });
 
-  // the notice's own two controls, and the paper around them
+  // the notice's own controls, and the paper around them
   root.addEventListener('pointerdown', (e) => {
     gesture();
     e.stopPropagation();
+    // a thumb coming down on «KEEP THIS READING» starts the sheet if the notice's own opening did
+    // not — the tap that follows is then a share call with nothing awaited in front of it
+    try {
+      if (showing && bill && hit(e) === 'keep' && keep.hasReading(ctx)) keep.prepare(ctx).catch(() => {});
+    } catch {}
   });
   // A pointer on the sheet, put back where it would be with the sheet at rest — the notice may
   // still be coming up when it is clicked (and in the judging browser, which renders at under a
@@ -284,6 +299,16 @@ export async function build(ctx) {
     const dx = (px - cx) / p.s, dy = (py - cy) / p.s;
     const c = Math.cos(-p.rot), s = Math.sin(-p.rot);
     return { x: cx + dx * c - dy * s, y: b.sheet.y + b.sheet.h / 2 + dx * s + dy * c };
+  }
+  // which control an event lands on, with the sheet put back at rest — or null
+  function hit(ev) {
+    if (!bill) return null;
+    const r = root.getBoundingClientRect();
+    const p = toRest(ev.clientX - r.left, ev.clientY - r.top, pose);
+    for (const c of bill.controls) {
+      if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) return c.key;
+    }
+    return null;
   }
   root.addEventListener('click', (ev) => {
     if (!showing) return;
@@ -304,6 +329,18 @@ export async function build(ctx) {
     const x = p.x, y = p.y;
     for (const c of b.controls) {
       if (x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h) {
+        // A control that is struck set back is not a control yet: it eats the click and does
+        // nothing, and the notice stays exactly where it is.
+        if (c.inactive) return;
+        // THE SHEET. It is handed over from inside this click and the notice keeps standing —
+        // a share sheet opens over the notice and the visitor comes back to it, and on a laptop
+        // the file lands in Downloads with the notice still up, which is where they left it.
+        // Nothing is awaited before deliver(): help-keep's blob was made when the notice opened.
+        if (c.key === 'keep') {
+          keep.hand(ctx).catch((e) => console.warn('[help] keep', e));
+          ctx.emit?.('help:keep');
+          return;
+        }
         close();
         // The door is another builder's: this piece says the visitor is going and stops there.
         if (c.key === 'leave') ctx.emit?.('help:leave');
@@ -340,14 +377,29 @@ export async function build(ctx) {
   });
 
   // ---------------------------------------------------------------------------------------------
+  // ?view=keep — page one of the sheet, in the DOM, so the views checker can look at it. It is not
+  // a piece (main.js's list is the contract and this is not on it): it is what the notice DOES, so
+  // it is drawn here, and it is awaited so the frame is up before the page says it is ready. A dev
+  // view is the one place the 1500 ms build budget is not the point — nothing ships this path.
+  if (ctx.view === 'keep') await keep.mountView(ctx);
+
   return {
     tag,
+    // the sheet the visitor takes away (help-keep.js), for the notice's own control and for tools
+    keep: keep.api,
     get showing() {
       return showing;
     },
     open,
     close,
     toggle: () => (showing ? close() : open()),
+    // one of the notice's own controls, as a box on screen in px — what a thumb has to hit, and
+    // how a tool finds the control it means to press
+    controlBox(key) {
+      const b = cut();
+      const c = b.controls.find((x) => x.key === key);
+      return c ? { x: c.x, y: c.y, w: c.w, h: c.h, inactive: c.inactive } : null;
+    },
     // the board's box on screen, in px — what a thumb has to hit
     hitBox() {
       if (!sign?.mesh) return null;
