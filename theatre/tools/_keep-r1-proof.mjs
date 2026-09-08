@@ -159,6 +159,19 @@ async function pass({ label, viewport, phone }) {
   const cx = Math.round(box.x + box.w / 2), cy = Math.round(box.y + box.h / 2);
   if (phone) await page.touchscreen.tap(cx, cy);
   else await page.mouse.click(cx, cy);
+  // ROUND 3 PUT THE READING ON THE CARD FIRST. «KEEP THIS READING» no longer hands the file over:
+  // it turns the notice into the reading, and «DOWNLOAD» at the foot of that is the tap that does
+  // (help-read.js). So this proof follows the visitor one control further along; everything it
+  // measures below — the file, the pages, the share call inside the gesture — is unchanged, and
+  // tools/_keep-r3-proof.mjs is where the reading itself is proved.
+  if (await page.evaluate(() => window.__theatre.pieces.help.reading === true)) {
+    await page.waitForTimeout(400);
+    const d = await page.evaluate(() => window.__theatre.pieces.help.readControlBox('download'));
+    if (!d) throw new Error('no DOWNLOAD control on the reading');
+    const dx = Math.round(d.x + d.w / 2), dy = Math.round(d.y + d.h / 2);
+    if (phone) await page.touchscreen.tap(dx, dy);
+    else await page.mouse.click(dx, dy);
+  }
   await page.waitForFunction(() => !!window.__theatre.pieces.help.keep.last, null, { timeout: 30000 }).catch(() => {});
   const last = await page.evaluate(() => {
     const l = window.__theatre.pieces.help.keep.last;

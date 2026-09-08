@@ -56,7 +56,7 @@ export const CREDIT = {
   href: 'https://x.com/scrptdfntsy',
 };
 
-const BLEED = 26; // room on the plate for the border's overshoot and the drop-hatch
+export const BLEED = 26; // room on the plate for the border's overshoot and the drop-hatch
 const TRACK = 0.16; // the body's tracking; the heading is wider
 const CRED_TRACK = 0.15;
 export const AT_ADV = 104; // the at-sign's advance, in the case's own units (cap height = 100)
@@ -255,48 +255,9 @@ function strike(sheetW, sheetH, dpr, o) {
   const pen = o.pen;
 
   // ---- the sheet, and the two edges that say it is lying on top --------------------------------
-  // A tight band of strokes just outside the bottom and right edges. Not a shadow: the marks an
-  // animator lays down where one sheet overlaps another, gone within a nail's breadth.
-  const band = Math.max(8, pen * 7);
-  const stroke = (x0, y0, dx, dy) =>
-    inkLine(g, x0, y0, x0 + dx, y0 + dy, { width: pen * 0.55, wobble: 0.35, rng: put, alpha: 0.55 + put() * 0.35 });
-  // Every stroke starts ON the edge and runs off it, a third to all of the band deep, and a
-  // quarter of them are left out: a hand, not a comb. Detached from the edge it reads as a dotted
-  // line lying on the floor, which is what the first cut of this did.
-  // …and the strokes gather in clumps along the run, most of them short, a few running the whole
-  // depth of the band, so it is a tone and not a fringe.
-  const thin = (u) => 0.18 + 0.42 * (0.5 + 0.5 * Math.sin(u * 0.055 + 1.7));
-  const deep = () => band * (0.18 + 0.82 * put() ** 1.7);
-  for (let i = 0, n = Math.round(sheetW / (pen * 1.05)); i < n; i++) {
-    const x = put() * (sheetW + band * 0.6);
-    if (put() < thin(x)) continue;
-    stroke(x, sheetH + 0.4, (put() - 0.5) * 1.3, deep());
-  }
-  // and down the right-hand edge, the same hand turned through a right angle
-  for (let i = 0, n = Math.round(sheetH / (pen * 1.05)); i < n; i++) {
-    const y = put() * (sheetH + band * 0.6);
-    if (put() < thin(y)) continue;
-    stroke(sheetW + 0.4, y, deep(), (put() - 0.5) * 1.3);
-  }
-  g.fillStyle = PAPER;
-  g.fillRect(0, 0, sheetW, sheetH);
-  // the paper's own cut edge. Without it a white sheet on a white room is only its ruled border,
-  // and the border reads as a frame hanging in the air rather than as a thing lying on top.
-  rule(g, 0, 0, sheetW, 0, pen * 0.72, nib, 2);
-  rule(g, sheetW, 0, sheetW, sheetH, pen * 0.72, nib, 2);
-  rule(g, sheetW, sheetH, 0, sheetH, pen * 0.72, nib, 2);
-  rule(g, 0, sheetH, 0, 0, pen * 0.72, nib, 2);
-
+  sheetEdge(g, sheetW, sheetH, pen, nib, put);
   // ---- the double border, like the board the notice comes from ---------------------------------
-  const in1 = o.in1, in2 = o.in2;
-  rule(g, in1, in1, sheetW - in1, in1, pen * 1.25, nib, 5);
-  rule(g, sheetW - in1, in1, sheetW - in1, sheetH - in1, pen * 1.25, nib, 5);
-  rule(g, sheetW - in1, sheetH - in1, in1, sheetH - in1, pen * 1.25, nib, 5);
-  rule(g, in1, sheetH - in1, in1, in1, pen * 1.25, nib, 5);
-  rule(g, in2, in2, sheetW - in2, in2, pen * 0.62, nib, 3);
-  rule(g, sheetW - in2, in2, sheetW - in2, sheetH - in2, pen * 0.62, nib, 3);
-  rule(g, sheetW - in2, sheetH - in2, in2, sheetH - in2, pen * 0.62, nib, 3);
-  rule(g, in2, sheetH - in2, in2, in2, pen * 0.62, nib, 3);
+  doubleBorder(g, sheetW, sheetH, pen, nib, o.in1, o.in2);
 
   // ---- the heading -----------------------------------------------------------------------------
   const boil = o.parity;
@@ -349,6 +310,55 @@ function strike(sheetW, sheetH, dpr, o) {
   return c;
 }
 
+// THE PAPER, and the two edges that say it is lying on top of the room. A tight band of strokes
+// just outside the bottom and right edges — not a shadow: the marks an animator lays down where one
+// sheet overlaps another, gone within a nail's breadth. Then the paper, then its own cut edge,
+// without which a white sheet on a white room is only its ruled border and the border reads as a
+// frame hanging in the air rather than as a thing lying on top.
+// (help-read.js strikes the reading's card with this and the rule below, so the two sheets the
+// notice can be are the same sheet.)
+export function sheetEdge(g, sheetW, sheetH, pen, nib, put) {
+  const band = Math.max(8, pen * 7);
+  const stroke = (x0, y0, dx, dy) =>
+    inkLine(g, x0, y0, x0 + dx, y0 + dy, { width: pen * 0.55, wobble: 0.35, rng: put, alpha: 0.55 + put() * 0.35 });
+  // Every stroke starts ON the edge and runs off it, a third to all of the band deep, and a
+  // quarter of them are left out: a hand, not a comb. Detached from the edge it reads as a dotted
+  // line lying on the floor, which is what the first cut of this did.
+  // …and the strokes gather in clumps along the run, most of them short, a few running the whole
+  // depth of the band, so it is a tone and not a fringe.
+  const thin = (u) => 0.18 + 0.42 * (0.5 + 0.5 * Math.sin(u * 0.055 + 1.7));
+  const deep = () => band * (0.18 + 0.82 * put() ** 1.7);
+  for (let i = 0, n = Math.round(sheetW / (pen * 1.05)); i < n; i++) {
+    const x = put() * (sheetW + band * 0.6);
+    if (put() < thin(x)) continue;
+    stroke(x, sheetH + 0.4, (put() - 0.5) * 1.3, deep());
+  }
+  // and down the right-hand edge, the same hand turned through a right angle
+  for (let i = 0, n = Math.round(sheetH / (pen * 1.05)); i < n; i++) {
+    const y = put() * (sheetH + band * 0.6);
+    if (put() < thin(y)) continue;
+    stroke(sheetW + 0.4, y, deep(), (put() - 0.5) * 1.3);
+  }
+  g.fillStyle = PAPER;
+  g.fillRect(0, 0, sheetW, sheetH);
+  rule(g, 0, 0, sheetW, 0, pen * 0.72, nib, 2);
+  rule(g, sheetW, 0, sheetW, sheetH, pen * 0.72, nib, 2);
+  rule(g, sheetW, sheetH, 0, sheetH, pen * 0.72, nib, 2);
+  rule(g, 0, sheetH, 0, 0, pen * 0.72, nib, 2);
+}
+
+// The double border, like the board the notice comes from: a heavy rule and a fine one inside it.
+export function doubleBorder(g, sheetW, sheetH, pen, nib, in1, in2) {
+  rule(g, in1, in1, sheetW - in1, in1, pen * 1.25, nib, 5);
+  rule(g, sheetW - in1, in1, sheetW - in1, sheetH - in1, pen * 1.25, nib, 5);
+  rule(g, sheetW - in1, sheetH - in1, in1, sheetH - in1, pen * 1.25, nib, 5);
+  rule(g, in1, sheetH - in1, in1, in1, pen * 1.25, nib, 5);
+  rule(g, in2, in2, sheetW - in2, in2, pen * 0.62, nib, 3);
+  rule(g, sheetW - in2, in2, sheetW - in2, sheetH - in2, pen * 0.62, nib, 3);
+  rule(g, sheetW - in2, sheetH - in2, in2, sheetH - in2, pen * 0.62, nib, 3);
+  rule(g, in2, sheetH - in2, in2, in2, pen * 0.62, nib, 3);
+}
+
 // The at-sign, cut here because the sign hand has none: one ring left open at the foot, the pen's
 // flick out of it, and the little bowl inside. Same nib as the rules, so it boils with them.
 // (help-keep.js signs the kept sheet with the same mark, so it is exported rather than copied.)
@@ -395,7 +405,7 @@ function penPath(g, pts, width, wobble, rng) {
 }
 
 // a ruled line with a pen's overshoot at both ends
-function rule(g, x1, y1, x2, y2, width, rng, over = 4, alpha = 1) {
+export function rule(g, x1, y1, x2, y2, width, rng, over = 4, alpha = 1) {
   const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1;
   const ux = dx / len, uy = dy / len;
   const a = over * rng(), b = over * rng();

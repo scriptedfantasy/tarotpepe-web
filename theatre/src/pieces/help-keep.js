@@ -529,6 +529,13 @@ export function ready(ctx) {
   return !!(cache && cache.blob && cache.sig === signature(readingNow(ctx)));
 }
 
+// The pages already rastered for the reading as it stands, or null. The notice shows the reading on
+// its own card before it hands the file over (help-read.js), and it shows THESE — the same plates
+// the PDF is written from — so what the visitor downloads is what they were looking at.
+export function pagesNow(ctx) {
+  return cache && cache.pages && cache.sig === signature(readingNow(ctx)) ? cache.pages : null;
+}
+
 const isTouch = () =>
   (navigator.maxTouchPoints ?? 0) > 0 || (window.matchMedia?.('(pointer: coarse)')?.matches ?? false);
 
@@ -597,6 +604,7 @@ export const api = {
   pdfFrom,
   prepare,
   ready,
+  pagesNow,
   deliver,
   hand,
   stamp,

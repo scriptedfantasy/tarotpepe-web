@@ -30,18 +30,27 @@
 // LEAVING is not this piece's business. The second control on the notice emits `help:leave` and
 // stops; the entrance piece owns the door.
 //
-// API: open() · close() · toggle() · showing · hitBox() (the board's box on screen, in px)
+// THE NOTICE HAS TWO FACES. «KEEP THIS READING» used to hand a PDF over from behind the notice; the
+// user: "rather than going direct to pdf download, can we show the reading in the ? card and have a
+// download button there?" So the card turns over and the reading is on the other side of it —
+// help-read.js, the same page plates the PDF is written from, on the same paper with the same
+// border and the same boil, scrolling inside the card and nowhere else. «DOWNLOAD» at its foot is
+// the tap that used to happen at once (share sheet on a phone, a file on a laptop, inside the
+// gesture either way) and «BACK» puts the notice up as it was.
+//
+// API: open() · close() · toggle() · showing · reading · hitBox() (the board's box on screen, in px)
 //      states: closed · hover (the board under a pointer) · open
 import * as THREE from 'three';
 import { PAPER, drawTexture, inkMaterial, inkLine } from '../core/strokes.js';
 import { signCaps } from './titles-sign.js';
 import { cutBill } from './help-bill.js';
+import { makeReader } from './help-read.js';
 import * as keep from './help-keep.js';
 
 export const meta = {
   name: 'help',
   judge: { shot: 'home', states: ['closed', 'hover', 'open'] },
-  files: ['src/pieces/help.js', 'src/pieces/help-bill.js', 'src/pieces/help-keep.js'],
+  files: ['src/pieces/help.js', 'src/pieces/help-bill.js', 'src/pieces/help-keep.js', 'src/pieces/help-read.js'],
 };
 
 const HOLD = 2 / 12; // every drawing is on twos
@@ -111,7 +120,10 @@ export async function build(ctx) {
     #help.up { display: block; pointer-events: auto; cursor: default; }
     /* on its way back down it is still drawn, but the room is the visitor's again */
     #help.going { pointer-events: none; }
-    #help canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    /* the notice's own plate, and only it: the reading's card hangs its own canvases inside #help */
+    #help > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    /* while the card is turned over, the notice is not drawn at all */
+    #help.reading > canvas { display: none; }
   `;
   document.head.appendChild(style);
   const root = document.createElement('div');
@@ -120,6 +132,30 @@ export async function build(ctx) {
   root.appendChild(canvas);
   ctx.dom.overlay.appendChild(root);
   const g = canvas.getContext('2d');
+
+  // ---------------------------------------------------------------------------------------------
+  // 2b. THE OTHER FACE OF THE CARD — the reading (help-read.js), mounted inside the notice
+  // ---------------------------------------------------------------------------------------------
+  const reader = makeReader({
+    onControl(key, phase) {
+      gesture();
+      if (key === 'back') {
+        if (phase === 'click') toNotice();
+        return;
+      }
+      // «DOWNLOAD». A thumb coming down warms the sheet if it is somehow not made yet; the click
+      // itself hands it over with nothing awaited in front of it, because a share sheet will not
+      // open for a page that asks a second after the tap. This is the tap «KEEP THIS READING» used
+      // to be, moved and otherwise untouched.
+      if (phase === 'down') {
+        if (keep.hasReading(ctx)) keep.prepare(ctx).catch(() => {});
+        return;
+      }
+      keep.hand(ctx).catch((e) => console.warn('[help] keep', e));
+      ctx.emit?.('help:keep');
+    },
+  });
+  root.appendChild(reader.el);
 
   let bill = null; // the cut notice: sheet box, control boxes, two plates
   let cutAt = '';
@@ -168,6 +204,7 @@ export async function build(ctx) {
   // 3. THE STATE OF THE THING
   // ---------------------------------------------------------------------------------------------
   let showing = false;
+  let mode = 'notice'; // which face of the card is up: 'notice' | 'reading'
   let anim = null; // { steps, frame0, then }
   let pose = DOWN[DOWN.length - 1];
   let hover = false;
@@ -204,8 +241,53 @@ export async function build(ctx) {
     if (keep.hasReading(ctx)) keep.prepare(ctx).catch((e) => console.warn('[help] keep', e));
     ctx.emit?.('help:open');
   }
+  // ---- the card turns over, and back ------------------------------------------------------------
+  // Nothing here animates. The notice comes UP off the bottom of the frame because a hand is laying
+  // it down in front of you; this is the same piece of paper turned over, and a turn in this film is
+  // a cut, not a tween.
+  function dropReading() {
+    if (mode !== 'reading') return false;
+    mode = 'notice';
+    root.classList.remove('reading');
+    painted = ''; // the notice's plate has not been blitted since the card turned over
+    return true;
+  }
+  function toReading() {
+    if (!showing || mode === 'reading') return;
+    mode = 'reading';
+    root.classList.add('reading');
+    layoutReader();
+    reader.top();
+    // the pages are the ones already rastered for the PDF; if the notice's own opening has not
+    // finished making them, they arrive a moment later and the card fills in
+    const made = keep.pagesNow(ctx);
+    if (made) reader.pages(made);
+    else
+      keep
+        .prepare(ctx)
+        .then((v) => {
+          if (mode !== 'reading') return;
+          reader.pages(v.pages);
+          reader.top();
+        })
+        .catch((e) => console.warn('[help] keep', e));
+    cue('flip');
+    ctx.emit?.('help:reading');
+  }
+  function toNotice() {
+    if (!dropReading()) return;
+    if (!anim) paint(pose, Math.floor(ctx.clock.frame / 2) % 2);
+    cue('flip');
+    ctx.emit?.('help:notice');
+  }
+  function layoutReader() {
+    const w = ctx.size?.w || window.innerWidth, h = ctx.size?.h || window.innerHeight;
+    reader.place(w, h, Math.min(2, window.devicePixelRatio || 1));
+  }
+
   function close() {
     if (!showing) return;
+    dropReading();
     showing = false;
     root.classList.add('going');
     anim = { steps: DOWN, frame0: ctx.clock.frame, then: () => root.classList.remove('up', 'going') };
@@ -215,6 +297,7 @@ export async function build(ctx) {
   }
   function jump(open_) {
     anim = null;
+    dropReading();
     showing = open_;
     read = read || open_;
     pose = open_ ? UP[UP.length - 1] : DOWN[DOWN.length - 1];
@@ -282,8 +365,9 @@ export async function build(ctx) {
   root.addEventListener('pointerdown', (e) => {
     gesture();
     e.stopPropagation();
+    if (mode === 'reading') return; // the card's own controls answer for themselves
     // a thumb coming down on «KEEP THIS READING» starts the sheet if the notice's own opening did
-    // not — the tap that follows is then a share call with nothing awaited in front of it
+    // not — the reading it turns to then has its pages already drawn
     try {
       if (showing && bill && hit(e) === 'keep' && keep.hasReading(ctx)) keep.prepare(ctx).catch(() => {});
     } catch {}
@@ -312,6 +396,17 @@ export async function build(ctx) {
   }
   root.addEventListener('click', (ev) => {
     if (!showing) return;
+    // THE READING'S FACE. Its two controls are the card's own and have already answered (they stop
+    // the click); everything left is either the paper of the reading, which does nothing, or the
+    // room around it, which turns the card back over — the same manners the notice keeps.
+    if (mode === 'reading') {
+      const L = reader.layout;
+      if (!L) return;
+      const r = root.getBoundingClientRect();
+      const x = ev.clientX - r.left, y = ev.clientY - r.top;
+      if (x < L.card.x || x > L.card.x + L.card.w || y < L.card.y || y > L.card.y + L.card.h) toNotice();
+      return;
+    }
     const b = bill;
     if (!b) return;
     if (anim) poseNow(ctx); // it may already be over; let it end
@@ -332,13 +427,11 @@ export async function build(ctx) {
         // A control that is struck set back is not a control yet: it eats the click and does
         // nothing, and the notice stays exactly where it is.
         if (c.inactive) return;
-        // THE SHEET. It is handed over from inside this click and the notice keeps standing —
-        // a share sheet opens over the notice and the visitor comes back to it, and on a laptop
-        // the file lands in Downloads with the notice still up, which is where they left it.
-        // Nothing is awaited before deliver(): help-keep's blob was made when the notice opened.
+        // THE SHEET. It is not handed over here any more: the card turns over and the reading is
+        // on the other side of it, with «DOWNLOAD» at its foot (help-read.js). The pages it shows
+        // are the ones prepare() started making when the notice came up.
         if (c.key === 'keep') {
-          keep.hand(ctx).catch((e) => console.warn('[help] keep', e));
-          ctx.emit?.('help:keep');
+          toReading();
           return;
         }
         close();
@@ -365,7 +458,8 @@ export async function build(ctx) {
     if (tag_ === 'INPUT' || tag_ === 'TEXTAREA') return; // he is being written to
     if (ev.key === 'Escape' && showing) {
       ev.stopImmediatePropagation();
-      close();
+      // one step back at a time: the reading gives the notice back, the notice gives the room back
+      mode === 'reading' ? toNotice() : close();
     } else if (ev.key === '?' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
       ev.stopImmediatePropagation();
       showing ? close() : open();
@@ -374,6 +468,7 @@ export async function build(ctx) {
   ctx.on?.('resize', () => {
     cutAt = '';
     if (showing || anim) cut();
+    if (mode === 'reading') layoutReader(); // the card is re-cut and the pages re-scaled to it
   });
 
   // ---------------------------------------------------------------------------------------------
@@ -393,6 +488,22 @@ export async function build(ctx) {
     open,
     close,
     toggle: () => (showing ? close() : open()),
+    // the reading, on the other side of the card
+    get reading() {
+      return mode === 'reading';
+    },
+    showReading: toReading,
+    hideReading: toNotice,
+    // one of the reading's own controls as a box on screen in px («DOWNLOAD», «BACK»), or null
+    // while it is scrolled out of the card
+    readControlBox: (k) => reader.box(k),
+    // the element that scrolls, its measure, and whether there is anything to scroll — a tool
+    // drives the real roll of paper rather than a number this piece keeps
+    readRoll: () => reader.roll,
+    readLayout: () => reader.layout,
+    get readScrollable() {
+      return reader.scrollable;
+    },
     // one of the notice's own controls, as a box on screen in px — what a thumb has to hit, and
     // how a tool finds the control it means to press
     controlBox(key) {
@@ -455,8 +566,9 @@ export async function build(ctx) {
         sign.pivot.rotation.x = a;
       }
 
-      // the notice
-      if (showing || anim) paint(poseNow(ctx2), parity);
+      // the notice, or the reading on the other side of it — either way, on twos
+      if (mode === 'reading') reader.step(parity);
+      else if (showing || anim) paint(poseNow(ctx2), parity);
     },
   };
 }
