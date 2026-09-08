@@ -44,7 +44,7 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   follow-up · farewell), what the visitor said, and the scripted line for that card as a hint of his voice.
   The mind yields SENTENCES; flow says them one at a time through `dialogue.say` (typed on twos, held, cut).
 - **Captions sit on a drawn placard (the user's decision, not open to a critic).** A paper card with a wobbly
-  ink rule, the speaker in small tracked caps above, the line beneath in the caption face. A critic once
+  ink rule, the speaker in small tracked caps above, the line beneath cut in the sign hand (titles-sign.js), the same hand as the notice — the user, seeing the notice: "i love this font - can we use this in the chat box as well?". No font is set anywhere on the placard; what the hand lacks is folded into it (signFold). A critic once
   had it removed in favour of free-floating text on the drawing; the user asked for the card back and
   that settles it. Keep the drawn answer block and its ink caret.
 - **The caption card docks to the TOP for the picking beat, and only that beat (the user's

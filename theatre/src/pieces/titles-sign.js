@@ -34,7 +34,10 @@
 // props-textures.js, whose own penText() takes `size` AS THE CAP HEIGHT: swap it for
 // `signCaps(g, t, x, y, { capH: size, pen: weight, rng, tracking })`, not `size:`.
 // The case holds A–Z, 0–9, the accented caps (É È Ê Ë À Á Â Ä Ç Î Ï Ì Í Ô Ò Ó Ö Û Ù Ú Ü Ñ) and
-// & · • — – - : ; , . ° ' ! ? « » / ( ) + = ×. SIGN_HAS(text) says whether a string is all in it.
+// & · • — – - : ; , . ° ' ! ? « » / ( ) + = ×. SIGN_HAS(text) says whether a string is all in it,
+// and signFold(text) puts a string INTO it — caps, the marks it holds kept and the ones it has not
+// flattened, quotes turned into « », and a short low dash for anything it has never cut. Pepe
+// answers in the visitor's language, so everything the placard letters is folded before it is set.
 import { mulberry32 } from '../core/rng.js';
 
 export const INK = '#0d0e0d';
@@ -182,7 +185,13 @@ const GLYPHS = {
   '+': [50, [[[8, 52], [42, 52]], [[25, 35], [25, 69]]]],
   '=': [50, [[[8, 40], [42, 40]], [[8, 64], [42, 64]]]],
   '×': [46, [[[9, 32], [37, 70]], [[37, 32], [9, 70]]]],
+  // THE SORT FOR A CHARACTER THE CASE DOES NOT HOLD. Pepe answers in the visitor's language now, so
+  // a line may carry a letter no signwriter here ever cut. A blank would be a hole in the sentence
+  // and a system font inside the drawing is forbidden (BRIEF.md rule 7), so the hand does what a
+  // hand does with a sort it has not got: it puts down a short dash, low, and moves on.
+  '�': [42, [[[9, 85], [33, 85]]]],
 };
+export const SIGN_TOFU = '�';
 
 // A letter carrying a mark: the base sort plus the accent the signwriter brushed over it.
 const MARKS = {
@@ -214,6 +223,74 @@ const sortFor = (ch) => {
   return [null, null];
 };
 export const SIGN_HAS = (text) => [...String(text).toUpperCase()].every((c) => sortFor(c)[0]);
+
+// ---------------------------------------------------------------------------------------------
+// FOLDING A STRING INTO THE CASE.
+//
+// The case is a signwriter's case: caps, numerals, a short list of points. Everything the drawing
+// letters used to be written for it — card names, shop signage, a notice in the room's own voice.
+// That stopped being true the moment Pepe began answering in the visitor's own language: a line
+// comes back with a lowercase ø in it, or a curly quote a word processor put there, or a script
+// this case has never held at all.
+//
+// So every string the hand is given is folded first, and the rules are the ones a signwriter would
+// use standing at the board with the sorts they own:
+//
+//   · lowercase goes up to caps (and ß comes up as SS, which is what toUpperCase already does);
+//   · a letter with a mark the case HAS keeps its mark — É È Ê Ë À Á Â Ä Ç Î Ï Ì Í Ô Ò Ó Ö Û Ù Ú
+//     Ü Ñ are cut sorts, so they are set, not flattened;
+//   · a letter with a mark the case has NOT is set as its base letter: Ø → O, Å → A, Ł → L, Ć → C.
+//     A tilde over an O is not worth a hole in the word;
+//   · the double quote in all its shapes becomes the « » the case does hold, opening then closing;
+//   · anything still unknown is the short low dash above. Never a blank, never a system font.
+//
+// Length is not preserved (ß → SS, … → three points), so fold FIRST and measure, wrap and reveal
+// the folded string: everything downstream counts its characters.
+const FOLD = {
+  'Ø': 'O', 'Å': 'A', 'Ł': 'L', 'Đ': 'D', 'Ð': 'D', 'Þ': 'TH', 'Æ': 'AE', 'Œ': 'OE', 'Ĳ': 'IJ',
+  'İ': 'I', 'Ə': 'E', 'Ŋ': 'NG', 'Ʒ': 'Z',
+  '“': '«', '”': '»', '„': '«', '‟': '»', '‹': '«', '›': '»', '〈': '«', '〉': '»',
+  '‘': "'", '’': "'", '‛': "'", '′': "'", '´': "'", '`': "'", '‚': ',',
+  '…': '...', '‑': '-', '‒': '–', '―': '—', '−': '-', '﹘': '-', '_': '-',
+  '⋅': '·', '∙': '·', '*': '·', '~': '-', '^': '·',
+  ' ': ' ', ' ': ' ', ' ': ' ', ' ': ' ', '　': ' ',
+  '，': ',', '。': '.', '、': ',', '！': '!', '？': '?', '：': ':', '；': ';',
+  '［': '(', '］': ')', '{': '(', '}': ')', '[': '(', ']': ')',
+  '<': '«', '>': '»', '§': '·', '¶': '·', '†': '+', '‰': '%',
+};
+const inCase = (c) => !!(GLYPHS[c] || ACCENTED[c]);
+function foldOne(c) {
+  if (inCase(c)) return c;
+  const m = FOLD[c];
+  if (m != null) return [...m].map((x) => (inCase(x) ? x : SIGN_TOFU)).join('');
+  // a letter carrying a mark the case has not: set the letter the mark sits on
+  const bare = c.normalize ? c.normalize('NFD').replace(/[\u0300-\u036f]/g, '') : c;
+  if (bare && bare !== c) {
+    const out = [...bare].map((x) => (inCase(x) ? x : '')).join('');
+    if (out) return out;
+  }
+  return SIGN_TOFU;
+}
+
+/** `text`, in the case the hand actually holds. See the note above. */
+export function signFold(text) {
+  let open = true;
+  let out = '';
+  for (const raw of String(text ?? '')) {
+    if (raw === '\n' || raw === '\r' || raw === '\t') {
+      out += ' ';
+      continue;
+    }
+    if (raw === '"') {
+      out += open ? '«' : '»';
+      open = !open;
+      continue;
+    }
+    // toUpperCase does the lowercase and the ß in one move, and can hand back more than one sort
+    for (const c of raw.toUpperCase()) out += foldOne(c);
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------------------------
 // Cutting a word. Every letter gets its own stem weight, its own lean (±2°), a slow baseline
@@ -327,6 +404,11 @@ export function signCaps(g, text, x, y, opts = {}) {
     seed = null,
     rng: outerRng = null,
     boil = 0,
+    // How many sorts of the word are actually INKED. The line is measured and placed whole — the
+    // rag never moves, the centring never shifts — and only the first `upto` of its letters are
+    // struck. That is a caption typing itself out on the placard (dialogue.js): the words arrive
+    // one at a time in the places they will keep. null draws the whole word.
+    upto = null,
   } = opts;
   // `weight` is the pen's width in px — except that letter() took a CSS font-weight there, so a
   // round hundred (100…900) is read as one and only makes the hand a little heavier. `pen` is
@@ -348,7 +430,8 @@ export function signCaps(g, text, x, y, opts = {}) {
   g.fillStyle = color;
   g.lineCap = 'round';
   g.lineJoin = 'round';
-  for (const L of m.glyphs) {
+  const inked = upto == null ? m.glyphs : m.glyphs.slice(0, Math.max(0, upto));
+  for (const L of inked) {
     const lrng = mulberry32((L.seedN + boil * 7919) >>> 0);
     const pw = L.pen * bolder;
     for (const st of L.strokes) {

@@ -18,34 +18,122 @@
 // here is a box, a band or a background. Everything is a stroke.
 import { INK, PAPER } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
-import { signCaps, signGlyphs, SIGN_ASCENT, SIGN_DESCENT, SIGN_HAS } from './titles-sign.js';
+import { signCaps, signGlyphs, signFold, signFit, SIGN_ASCENT, SIGN_DESCENT, SIGN_HAS } from './titles-sign.js';
 
 export const SVGNS = 'http://www.w3.org/2000/svg';
+
+// The resolution the card's lettering is cut at: the display's own, doubled, so the pen keeps its
+// edge when the browser scales the canvas — the same rule drawName has always used.
+export const inkDpr = () => Math.min(3, Math.max(2, (typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1) * 2));
+
+// ---------------------------------------------------------------------------------------------
+// ROUND 12 — EVERY WORD ON THE CARD IS LETTERED.
+//
+// The user, having read the notice on the wall: "i love this font - can you we use this in the chat
+// box as well?" So the typewriter face is off the placard altogether and the whole card is cut in
+// the sign hand, exactly as help-bill.js cuts the notice: wrapped to the measure with signWidth,
+// struck with the contour pen, re-cut on every second frame of the 12 fps clock so the words boil
+// with the drawing they are standing on.
+//
+// One canvas per register (his, the visitor's, and each row of an intertitle). A canvas is re-cut
+// only when something about it changed — the text, the measure, the cap, the colour, how much of it
+// has been typed, or the boil tick — so a held line costs one strike every second frame and a
+// blitted canvas the rest of the time.
+//
+// `lines` are ALREADY WRAPPED: [{ text, start }], where `start` is the character offset of the
+// line's first sort inside the block's own string. That offset is what lets a caption type itself
+// out: `shown` characters of the block are inked and the rest are not there yet, while the line is
+// measured and centred WHOLE, so the rag never moves and no word ever shifts under another.
+//
+// `bleed` is drawn room above and below the line grid — accents and commas reach past the cap band,
+// and the pen runs past the end of a stroke — and the caller takes it back with a negative margin,
+// so the block occupies exactly `lines.length × lead` of the card.
+export function drawBlock(canvas, lines, opts = {}) {
+  const {
+    width,
+    capH,
+    lead,
+    tracking = 0.14,
+    pen = null,
+    color = INK,
+    boil = 0,
+    seed = 3,
+    shown = Infinity,
+    bleed = 0,
+    alpha = 1,
+  } = opts;
+  const rows = lines.length ? lines : [{ text: '', start: 0 }];
+  const h = Math.max(1, Math.round(rows.length * lead + 2 * bleed));
+  const w = Math.max(1, Math.round(width));
+  const key = `${rows.map((l) => l.text).join('')}|${w}|${h}|${capH.toFixed(2)}|${lead.toFixed(2)}|${color}|${alpha}|${shown}|${boil}|${seed}|${tracking}`;
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+  if (bleed) canvas.style.margin = `${-bleed}px 0`;
+  if (canvas.dataset.k === key) return;
+  canvas.dataset.k = key;
+  const dpr = inkDpr();
+  const pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+  const g = canvas.getContext('2d');
+  if (canvas.width !== pw || canvas.height !== ph) {
+    canvas.width = pw;
+    canvas.height = ph;
+  }
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  const nib = pen ?? Math.max(1.25, capH * 0.125);
+  rows.forEach((L, i) => {
+    if (!L.text) return;
+    const upto = shown === Infinity ? null : Math.max(0, Math.min(L.text.length, shown - L.start));
+    if (upto === 0) return;
+    // the cap band sits centred in its line box, so the leading is even above and below
+    const top = bleed + i * lead + (lead - capH) / 2;
+    signCaps(g, L.text, w / 2, top, {
+      capH,
+      tracking,
+      pen: nib,
+      color,
+      alpha,
+      align: 'center',
+      baseline: 'top',
+      seed: seed + i * 17,
+      boil,
+      upto,
+    });
+  });
+}
 
 // The name on the card — the speaker above the rule, the card's own name in an intertitle — is
 // LETTERED, not set: the small hand-cut alphabet the titles piece cut for exactly this (its note
 // in titles-sign.js names the placard). Nothing inside the drawing is allowed to be a system font.
 // Drawn into a canvas at the display's own resolution (times two, so the pen keeps its edge when
 // the browser scales it), sized from the same measurement the letters are cut from.
-export function drawName(canvas, text, capH, { seed = 5, tracking = 0.3, pen = null, boil = 0 } = {}) {
-  const opts = { capH, tracking, seed, boil, ...(pen ? { pen } : {}) };
-  const m = signGlyphs(text, opts);
-  const pad = Math.max(2, capH * 0.3);
+export function drawName(canvas, text, capH, { seed = 5, tracking = 0.3, pen = null, boil = 0, maxW = 0, color = INK } = {}) {
+  // Into the case first: a card name, like everything else on the placard, may carry a sort the
+  // hand has not got. Then down to the measure, if there is one, rather than out of the card.
+  const t = signFold(text);
+  const cap = maxW > 0 ? signFit(t, maxW, { capH, tracking }) : capH;
+  const opts = { capH: cap, tracking, seed, boil, color, ...(pen ? { pen: pen * (cap / capH) } : {}) };
+  const m = signGlyphs(t, opts);
+  const pad = Math.max(2, cap * 0.3);
   const w = Math.ceil(m.width + pad * 2);
-  const h = Math.ceil(capH * (1 + SIGN_ASCENT + SIGN_DESCENT)) + 2;
-  const dpr = Math.min(4, Math.max(2, (window.devicePixelRatio || 1) * 2));
-  if (canvas.dataset.k !== `${text}|${w}|${h}|${seed}`) {
-    canvas.dataset.k = `${text}|${w}|${h}|${seed}`;
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
+  const h = Math.ceil(cap * (1 + SIGN_ASCENT + SIGN_DESCENT)) + 2;
+  const dpr = inkDpr();
+  const key = `${t}|${w}|${h}|${seed}|${boil}|${color}`;
+  if (canvas.dataset.k !== key) {
+    canvas.dataset.k = key;
+    const pw = Math.round(w * dpr), ph = Math.round(h * dpr);
     const g = canvas.getContext('2d');
+    if (canvas.width !== pw || canvas.height !== ph) {
+      canvas.width = pw;
+      canvas.height = ph;
+    }
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, w, h);
-    signCaps(g, text, w / 2, capH * SIGN_ASCENT + 1, { ...opts, align: 'center', baseline: 'top' });
+    signCaps(g, t, w / 2, cap * SIGN_ASCENT + 1, { ...opts, align: 'center', baseline: 'top' });
   }
   canvas.style.width = `${w}px`;
   canvas.style.height = `${h}px`;
-  return { w, h };
+  return { w, h, capH: cap };
 }
 export const CAN_LETTER = SIGN_HAS;
 
@@ -108,7 +196,7 @@ export function drawCaret(svg, seed = 5) {
 // (pepeAnim.consider — the pin back, the head tilted, the eyes up and away); this is the CARD's
 // half of the same beat, and it is drawn with the same pen as everything else on the placard.
 //
-// It is not three full stops set in the caption face. A dot from a pen is the nib PUT DOWN and
+// It is not three full stops out of the case. A dot from a pen is the nib PUT DOWN and
 // lifted: two short overlapping strokes with the hand's wobble in them, so the mark has an edge
 // that is not a circle. They are re-struck on every 12 fps step, so they boil exactly as the rest
 // of the drawing does — a held dot is never the same dot twice.

@@ -8,13 +8,13 @@
 // pen as the notice on the wall (help-bill.js) and set in the same two hands the room already
 // uses, and the visitor leaves with it in their pocket:
 //
-//   THE HAND, for everything that is LETTERED — the head, the date, the cards' names, the
-//     signature at the foot: titles-sign.js, the same alphabet that cut NOTICE TO VISITORS.
-//   THE FACE, for everything that is SET — the transcript: the typewriter serif in capitals,
-//     tracked, weight 600, each sort a hair off its baseline, which is exactly the type on the
-//     placard (dialogue.js). Two registers and no names on either of them: Pepe is his green
-//     #3a7736, the visitor is ink, and the colour is the whole of the distinction. That is the
-//     placard's convention and it is identical here, in print.
+//   ONE HAND, FOR ALL OF IT (round 2). The head, the date, the cards' names, the signature at the
+//     foot and — since the placard stopped setting its words in a face and started lettering them
+//     (dialogue.js, round 12) — the TRANSCRIPT as well: titles-sign.js, the same alphabet that cut
+//     NOTICE TO VISITORS on the wall. There is no typeface anywhere on this sheet.
+//     Two registers and no names on either of them: Pepe is his green #3a7736, the visitor is ink,
+//     and the colour is the whole of the distinction. That is the placard's convention and it is
+//     identical here, in print.
 //
 //   THE PAPER is PAPER #f8f9f4, never white, ruled with the notice's own double border.
 //   THE FOOT of every page is the same signature the notice carries, at the smallest hand, with
@@ -39,8 +39,9 @@
 // THE PAGE IS RASTERED AT 3x — 216 dpi at A5 — rather than at 2x (144 dpi), and that was decided by
 // looking: tools/_keep-r1-scale.mjs cuts the same strip of the sheet out of both rasters and blows
 // them up to the same size (public/progress/keep-r1-raster-2x.png, -3x.png). At 2x the sign hand
-// goes blunt and the typewriter face's serifs fill in; at 3x both keep their edge. It costs about
-// 500 KB a page instead of 250, which a share sheet does not notice.
+// goes blunt; at 3x it keeps its edge. It costs about 500 KB a page instead of 250, which a share
+// sheet does not notice — and it is what lets the transcript be lettered at all, since an 11 pt cap
+// on the page is a 33 px cap on the plate, inside the band the hand was cut for.
 //
 // API (hung on ctx.pieces.help.keep):
 //   readingNow(ctx)        {cards:[{slug,name}] left to right, transcript:[{role,text}], when:Date}
@@ -54,7 +55,7 @@
 //   last                   what the last hand() did: {path, ms, pages, blob}
 import { INK, PAPER, inkLine } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
-import { signCaps, signWidth } from './titles-sign.js';
+import { signCaps, signWidth, signFold } from './titles-sign.js';
 import { atSign, AT_ADV, CREDIT } from './help-bill.js';
 import { SCRIPT, linesFor, reply as scriptReply } from './script.js';
 import { PROMPTS, SAMPLE_ANSWER } from './flow-lines.js';
@@ -67,9 +68,8 @@ export const FILENAME = 'tarot-pepe-reading.pdf';
 export const PAGE = { w: 420, h: 595 };
 const SCALE = 3;
 
-// The placard's type, exactly (dialogue.js): the typewriter serif, capitals, tracked, weight 600.
-const TYPE = "'American Typewriter', 'Rockwell', 'Courier New', 'Georgia', serif";
-const TRACK = 0.085; // the em tracking the card sets its words at
+// The placard's own tracking, now that the placard letters its words rather than setting them.
+const TRACK = 0.13;
 const PEPE_GREEN = '#3a7736'; // his green, taken down until a sentence can be read in it
 const REG_GAP = 0.62; // the paper between one turn and the next, in lines
 
@@ -84,9 +84,14 @@ const BODY_TOP = 40; // where a continuation page starts
 // line of a turn is never sitting on the foot of the sheet
 const BODY_BOTTOM = FOOT_Y - FOOT_CAP * 4;
 
-// the transcript's measure
-const BODY_CAP = 8.6;
-const BODY_LEAD = BODY_CAP * 1.5; // the placard's own leading
+// THE TRANSCRIPT'S MEASURE, in page points. The typewriter face read at a cap of 8.6 pt; the sign
+// hand does not — it is cut for cap heights of 20–40 px and holds down to 14, and the page is
+// rastered at 3x, so a cap of 11 pt lands at 33 px on the plate, dead centre of the hand's band.
+// (14–16 pt on the page itself would put the transcript at more than half the size of TAROT PEPE
+// at the head of the sheet, which is a large-print book and not a keepsake.) The hand is wider than
+// the face was, so the sheet runs to more pages: that is what the transcript costs to letter.
+const BODY_CAP = 11;
+const BODY_LEAD = BODY_CAP * 1.7; // the leading a case of caps wants, the notice's own
 
 const DAYS = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
 const MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
@@ -191,60 +196,27 @@ function foot(g, rng) {
   signCaps(g, FOOT_TAIL, x + wBy + gap + wAt + tr, mid, { capH: cap, tracking: track, align: 'left', pen: pen * 1.06, seed: 211 });
 }
 
-// ---- THE FACE ---------------------------------------------------------------------------------
-// The transcript is SET, not lettered, and it is set exactly as the placard sets it: capitals, the
-// typewriter serif at weight 600, tracked 0.085 em, and every sort a hair off its baseline and a
-// fraction of a degree off upright, the way a line of hand-set slugs is. Canvas has no reliable
-// letter-spacing, so each glyph is placed by hand — which is also what buys the jitter.
-const face = (g, px) => (g.font = `600 ${px}px ${TYPE}`);
-
-function advance(g, ch, px) {
-  return g.measureText(ch).width + px * TRACK;
+// ---- THE TRANSCRIPT, LETTERED -------------------------------------------------------------------
+// One line of the record, struck by the same nib as everything else on the sheet. `y` is the
+// baseline, as it was when this was set type, so the pagination above did not have to move.
+function setLine(g, text, x, y, cap, color, seed) {
+  signCaps(g, text, x, y, {
+    capH: cap,
+    tracking: TRACK,
+    pen: Math.max(0.85, cap * 0.115),
+    color,
+    align: 'left',
+    baseline: 'alphabetic',
+    seed,
+  });
 }
 
-function measureLine(g, text, px) {
-  let w = 0;
-  for (const ch of text) w += advance(g, ch, px);
-  return w;
-}
-
-function setType(g, text, x, y, px, color, rng) {
-  g.save();
-  g.fillStyle = color;
-  g.textBaseline = 'alphabetic';
-  face(g, px);
-  let cx = x;
-  for (const ch of text) {
-    const adv = advance(g, ch, px);
-    const dy = (rng() - 0.5) * px * 0.055;
-    const rot = (rng() - 0.5) * 0.019; // ±0.55°, the placard's own
-    if (ch !== ' ') {
-      g.save();
-      g.translate(cx, y + dy);
-      g.rotate(rot);
-      g.fillText(ch, 0, 0);
-      g.restore();
-    }
-    cx += adv;
-  }
-  g.restore();
-}
-
-// Cut one turn into lines of the measure. Returns [{text, color, gapBefore}].
-function wrapTurn(g, turn, px, maxW) {
-  face(g, px);
-  const words = turn.text.toUpperCase().split(/\s+/).filter(Boolean);
+// Cut one turn into lines of the measure, in the case the hand holds. Returns
+// [{text, color, gapBefore}]. A visitor may have typed anything at all — the room answers in their
+// language now — so the words go through signFold before they are measured.
+function wrapTurn(turn, cap, maxW) {
   const color = turn.role === 'pepe' ? PEPE_GREEN : INK;
-  const out = [];
-  let line = '';
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (line && measureLine(g, next, px) > maxW) {
-      out.push({ text: line, color });
-      line = word;
-    } else line = next;
-  }
-  if (line) out.push({ text: line, color });
+  const out = wrapSign(signFold(turn.text), cap, maxW, TRACK).map((text) => ({ text, color }));
   if (out.length) out[0].gapBefore = true;
   return out;
 }
@@ -391,7 +363,7 @@ export async function renderPages(reading, { scale = SCALE } = {}) {
   for (const c of cards.slice(0, 3)) {
     drawCard(g, c.img, cx, top, cw, ch, rng);
     // the back has no name, and a sheet does not caption a card nobody drew
-    const lines = c.name ? wrapSign(c.name.toUpperCase(), nameCap, cw, 0.17) : [];
+    const lines = c.name ? wrapSign(signFold(c.name), nameCap, cw, 0.17) : [];
     nameRows = Math.max(nameRows, lines.length);
     lines.forEach((ln, i) => {
       signCaps(g, ln, cx + cw / 2, top + ch + 11 + i * nameCap * 1.7 + nameCap / 2, { capH: nameCap, tracking: 0.17, pen: Math.max(0.8, nameCap * 0.12), seed: 220 + i });
@@ -406,7 +378,7 @@ export async function renderPages(reading, { scale = SCALE } = {}) {
   // first line is at the foot of one sheet and whose second is at the head of the next is not a
   // sentence anybody reads twice. So the transcript is paginated in BLOCKS — one block per turn —
   // and a block that does not fit the room left goes over whole.
-  const blocks = turns.map((t) => wrapTurn(g, t, BODY_CAP, MEASURE)).filter((b) => b.length);
+  const blocks = turns.map((t) => wrapTurn(t, BODY_CAP, MEASURE)).filter((b) => b.length);
 
   let y = afterCards + 16 + BODY_CAP;
   // and if page one has no room left worth starting in, the transcript begins on page two rather
@@ -424,7 +396,6 @@ export async function renderPages(reading, { scale = SCALE } = {}) {
   // y is always the baseline the next line will be set on; a block's own depth is the span from
   // its first baseline to its last
   const pageRoom = BODY_BOTTOM - (BODY_TOP + BODY_CAP);
-  const jit = mulberry32(0x51a2e);
   let first = true;
   for (const block of blocks) {
     const deep = (block.length - 1) * BODY_LEAD;
@@ -436,7 +407,7 @@ export async function renderPages(reading, { scale = SCALE } = {}) {
     first = false;
     for (const ln of block) {
       if (y > BODY_BOTTOM) y = nextPage();
-      setType(page.g, ln.text, PAD, y, BODY_CAP, ln.color, jit);
+      setLine(page.g, ln.text, PAD, y, BODY_CAP, ln.color, 300 + (y | 0));
       y += BODY_LEAD;
     }
   }

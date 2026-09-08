@@ -16,7 +16,7 @@
 // the tap: a capturing click listener on window sets __inGesture and clears it on the next task, so
 // a share called after any await lands with __inGesture false.
 //
-//   node tools/_keep-r1-proof.mjs
+//   node tools/_keep-r1-proof.mjs           ROUND=r2  names the frames it saves (default r1)
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -25,6 +25,7 @@ import { execFileSync } from 'node:child_process';
 
 const ROOT = '/Users/workbook2024/Development/tarotpepe/.claude/worktrees/wes-tarot-theatre/theatre';
 const OUT = `${ROOT}/public/progress`;
+const R = process.env.ROUND ?? 'r1'; // which round's frames these are
 const PORT = 8711;
 const BASE = `http://127.0.0.1:${PORT}`;
 const CARDS = ['the-fool', 'the-house-of-god', 'the-star']; // the mind's own canned spread
@@ -144,7 +145,7 @@ async function pass({ label, viewport, phone }) {
   await page.waitForTimeout(400);
   const box = await page.evaluate(() => window.__theatre.pieces.help.controlBox('keep'));
   if (!box) throw new Error('no KEEP THIS READING control on the notice');
-  await page.screenshot({ path: `${OUT}/keep-r1-notice-${label}.png` });
+  await page.screenshot({ path: `${OUT}/keep-${R}-notice-${label}.png` });
 
   // The sheet is built while the notice comes up. Wait for it, because THAT IS THE DESIGN under
   // test: a tap that finds the blob already made is a tap that can hand it to the share sheet with
@@ -197,7 +198,7 @@ if (!desk.last) {
 const pngs = await desk.page.evaluate(() =>
   window.__theatre.pieces.help.keep.last.pages.map((c) => c.toDataURL('image/png')),
 );
-pngs.forEach((d, i) => writeFileSync(`${OUT}/keep-r1-page-${i + 1}.png`, Buffer.from(d.split(',')[1], 'base64')));
+pngs.forEach((d, i) => writeFileSync(`${OUT}/keep-${R}-page-${i + 1}.png`, Buffer.from(d.split(',')[1], 'base64')));
 const pdfB64 = await desk.page.evaluate(async () => {
   const buf = new Uint8Array(await window.__theatre.pieces.help.keep.last.blob.arrayBuffer());
   let s = '';
@@ -205,8 +206,8 @@ const pdfB64 = await desk.page.evaluate(async () => {
   return btoa(s);
 });
 const pdf = Buffer.from(pdfB64, 'base64');
-writeFileSync(`${OUT}/keep-r1.pdf`, pdf);
-console.log('wrote                :', pngs.map((_, i) => `keep-r1-page-${i + 1}.png`).join(', '), `and keep-r1.pdf (${(pdf.length / 1024).toFixed(0)} KB)`);
+writeFileSync(`${OUT}/keep-${R}.pdf`, pdf);
+console.log('wrote                :', pngs.map((_, i) => `keep-${R}-page-${i + 1}.png`).join(', '), `and keep-${R}.pdf (${(pdf.length / 1024).toFixed(0)} KB)`);
 
 // ---- 2. the phone ------------------------------------------------------------------------------
 console.log('\n— PHONE 390x844, touch, share stubbed —');
@@ -233,7 +234,7 @@ await coldPage.waitForTimeout(400);
 await coldPage.evaluate(() => window.__theatre.pieces.help.setState('open'));
 await coldPage.waitForTimeout(400);
 const coldBox = await coldPage.evaluate(() => window.__theatre.pieces.help.controlBox('keep'));
-await coldPage.screenshot({ path: `${OUT}/keep-r1-notice-cold.png` });
+await coldPage.screenshot({ path: `${OUT}/keep-${R}-notice-cold.png` });
 await coldPage.mouse.click(Math.round(coldBox.x + coldBox.w / 2), Math.round(coldBox.y + coldBox.h / 2));
 await coldPage.waitForTimeout(600);
 const coldAfter = await coldPage.evaluate(() => ({
@@ -249,8 +250,8 @@ console.log('\n— THE FILE —');
 let rendered = 0;
 try {
   // a fresh directory every run: a leftover page from a longer reading would be counted as this one's
-  const dir = mkdtempSync(`${tmpdir()}/keep-r1-`);
-  execFileSync('pdftoppm', ['-r', '72', '-png', `${OUT}/keep-r1.pdf`, `${dir}/p`], { stdio: 'pipe' });
+  const dir = mkdtempSync(`${tmpdir()}/keep-${R}-`);
+  execFileSync('pdftoppm', ['-r', '72', '-png', `${OUT}/keep-${R}.pdf`, `${dir}/p`], { stdio: 'pipe' });
   rendered = readdirSync(dir).filter((f) => f.endsWith('.png')).length;
   rmSync(dir, { recursive: true, force: true });
   console.log(`poppler rendered ${rendered} page(s)`);
