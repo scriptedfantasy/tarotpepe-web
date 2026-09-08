@@ -91,7 +91,14 @@ export const HAND = {
 const ARM = {
   w: 0.128, // the ribbon's width. The drawn arm inside it is 0.062–0.116, so the taper is a drawing
   texM: 1.40, // how much arm the canvas holds (the longest reach on the cloth is 1.31)
-  px: 800, // canvas pixels to the metre, the same across and along: the ribbon is a constant width
+  // Canvas pixels to the metre, the same across and along: the ribbon is a constant width.
+  // ROUND 12 raised this from 800. At 800 a millimetre of sleeve was 0.8 px, so the thinnest line
+  // that could be drawn at all was over a millimetre and the contour — the one this round takes
+  // from 4.0 mm to 1.5 — would have been two pixels of a texture magnified 2.4× on screen: a grey
+  // smear with a lattice in it. At 2000 a millimetre is two texels and the frame samples the
+  // canvas at about 1:1 at the wrist, which is where the arm is nearest and biggest. The canvas is
+  // 256 × 2800 px, which is a quarter of one card face.
+  px: 2000,
   head: 0.030, // how far the ribbon starts INSIDE the hand, so the cuff covers the cut wrist
   elbowAt: 0.39, // where the elbow falls along the arm, from the head of the ribbon
   bow: 0.115, // how far the elbow is pushed outboard of the straight line: the bend, in metres
@@ -102,6 +109,32 @@ const ARM = {
   // 0.315 puts the middle of the arm 28 mm clear of it. The same number on the other side keeps the
   // left arm inside a portrait frame, whose side edge falls at about 0.40 at that depth.
   past: 0.06, // how far the far end runs beyond his body's plane, so nothing ends in the picture
+};
+// ── THE ARM'S PEN (round 12), in MILLIMETRES of sleeve ─────────────────────────────────────────
+// The user, seeing the wash and the pick: "the lines on the arms are too fat". They were, and the
+// measurement says by how much. The sleeve's contour was drawn at 4.0 mm and measured 6.4–8.6 px
+// across on a 1280 laptop frame, beside cards whose own contours in the same frame measure
+// 2.0–2.4 px: three to four times the room's pen, on the one object in the picture that is nearest
+// the lens. The creases inside it were 2.9 mm and came out at 4 px — a second contour, not tone.
+//
+// So every mark here is in millimetres of cloth and the contour is 1.5 mm, which is the width that
+// MEASURES the same on screen as a card's contour lying beside it (1.5 mm × the ~1.9 px per mm the
+// fan's lens gives at the wrist ≈ 2.6 px; on a 390-wide phone the same lens gives 1.15 px per mm
+// and the two land near 1.5 px against a card's 1.2–1.4). Everything inside the silhouette is drawn
+// LIGHTER than the contour and at a lower alpha, because a fold is tone and only the edge is a
+// line: nothing in here may read as a second contour.
+//
+// They are millimetres and not pixels so that ARM.px can move again without redrawing the sleeve.
+const PEN = {
+  contour: 1.5, // the silhouette. The one line in the drawing.
+  cuff: 1.0, // the two rules across the turned-back cuff
+  crease: 0.95, // the folds where the cloth gathers
+  tick: 0.7, // …and the shorter stroke that answers each of them
+  elbow: 0.9, // the fan of creases in the crook of the bend
+  fold: 0.85, // the two long folds riding the arm
+  rain: 0.75, // the rain-strokes down the shaded edge
+  rainThin: 0.6, // …and the lighter run down the other one
+  tone: 0.7, // the hatched patches: the cuff's band, the crook
 };
 // The drawn half-width, in metres along the arm → metres across it. The two steps at 0.015 and
 // 0.055 are the turned-back cuff's lip: it stands out from the sleeve it is turned over. The
@@ -398,9 +431,16 @@ function drawArm(g, w, h) {
   const rng = mulberry32(77);
   g.clearRect(0, 0, w, h);
   const P = ARM.px;
+  const mm = (v) => (v * P) / 1000; // millimetres of sleeve → canvas px, whatever ARM.px is
   const cx = w / 2;
   const yOf = (s) => s * P; // metres along the arm → canvas y
   const half = (s) => armHalf(s) * P; // …and the drawn half-width there, in canvas px
+  // inkLine puts a wobble control point every 6 CANVAS px, so the same stroke on a finer canvas
+  // comes out with two or three times the wander per centimetre — fur, not a hand's line (ink.js
+  // on penWob: "anything with a period near the line's own width reads as fur"). The spacing is
+  // held at 7 mm of sleeve here, which is what it was at ARM.px 800.
+  const ink = (x1, y1, x2, y2, o = {}) =>
+    inkLine(g, x1, y1, x2, y2, { rng, segments: Math.max(2, Math.round(Math.hypot(x2 - x1, y2 - y1) / mm(7))), ...o });
 
   // The two edges. The samples are a 10 mm grid with the profile's own knots merged in, so the
   // cuff's lip comes out as a step and not as a ramp.
@@ -408,7 +448,9 @@ function drawArm(g, w, h) {
   for (let i = 0; i * 0.01 <= ARM.texM; i++) ss.push(i * 0.01);
   for (const [s] of ARM_PROF) if (s > 0 && s < ARM.texM) ss.push(s);
   ss.sort((a, b) => a - b);
-  const j = () => (rng() - 0.5) * 1.7;
+  // …with the sample jitter at ±0.45 mm. It was ±1.06 mm, which is most of the new pen's own
+  // width: a thin line shaken that far reads as a torn edge rather than as a drawn one.
+  const j = () => (rng() - 0.5) * mm(0.9);
   const L = [], R = [];
   for (const s of ss) {
     const y = yOf(s), hw = half(s);
@@ -426,16 +468,34 @@ function drawArm(g, w, h) {
   g.fillStyle = PAPER;
   outline();
   g.fill();
+  // …and the paper carried a hair OUTSIDE that outline. The mesh is alpha-cut (alphaTest 0.5), so
+  // the silhouette the frame sees is wherever the canvas is opaque, and half of a centred contour
+  // stroke lies outside the filled shape. At 4 mm that half was two texels and nothing showed; at
+  // 1.5 mm it is one and a half, and the mip chain a phone samples would eat that outer edge
+  // into a dashed grey. A 1.2 mm underlay of paper puts opaque canvas under the whole stroke.
+  g.lineJoin = 'round';
+  g.lineCap = 'round';
+  g.strokeStyle = PAPER;
+  g.lineWidth = mm(PEN.contour + 1.2);
+  outline();
+  g.stroke();
   g.restore();
-  const run = (pts, width, alpha = 1, wobble = 1.5) => {
-    for (let i = 1; i < pts.length; i++) inkLine(g, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], { width, wobble, rng, alpha });
+  const run = (pts, width, alpha = 1, wobble = mm(1.2)) => {
+    for (let i = 1; i < pts.length; i++) ink(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], { width, wobble, alpha });
   };
-  // the silhouette, at the hand's own pen: OUT is 11 px on a canvas of 2743 to the metre, which is
-  // 4.0 mm of contour, and 3.2 px here is the same 4.0 mm. Hand and arm are one drawing.
-  // (wobble 1.0, the entrance door's own range: at 1.6 the contour came out as a visible zigzag
-  // rather than as a hand's line — see BRIEF.md on the door being the benchmark for the pen)
-  run(L, 3.2, 1, 1.0);
-  run(R, 3.2, 1, 1.0);
+  // THE SILHOUETTE, and it is the only line in the drawing. 1.5 mm — see PEN at the head of the
+  // file for how that number was measured against a card's contour in the same frame.
+  //
+  // It is also the ONLY contour the sleeve gets: the mesh's material carries lineWeight 0 (see
+  // `mat` below), so the ink pass adds nothing of its own round it. That is Pepe's own answer to
+  // the same question — a cut-out's contour belongs on the paper — and here it is the only answer
+  // available, because at the wrist the sleeve floats a millimetre over the cloth and a
+  // screen-space pass has no depth step to find.
+  //
+  // (wobble 0.7 mm, half what it was: the wander has to stay under the pen's own width or the line
+  // reads as a zigzag — see BRIEF.md on the entrance door being the benchmark for the pen.)
+  run(L, mm(PEN.contour), 1, mm(0.7));
+  run(R, mm(PEN.contour), 1, mm(0.7));
 
   g.save();
   outline();
@@ -446,13 +506,17 @@ function drawArm(g, w, h) {
   // length like everything else here — it is the same 3.7 cm of cuff at every reach.
   const across = (s, k, width, alpha = 1) => {
     const hw = half(s) * k, y = yOf(s);
-    inkLine(g, cx - hw, y + (rng() - 0.5) * 2, cx + hw, y + (rng() - 0.5) * 2, { width, wobble: 2, rng, alpha });
+    ink(cx - hw, y + (rng() - 0.5) * mm(1.2), cx + hw, y + (rng() - 0.5) * mm(1.2), { width, wobble: mm(1.2), alpha });
   };
   // …the rules kept OFF the two steps in the profile: struck on the lip they landed on the corner
   // the contour turns there and the three marks together made a black bracket round the wrist.
-  across(0.0205, 0.99, 2.6);
-  across(0.0475, 0.99, 2.4);
-  hatch(g, cx - half(0.03) * 0.9, yOf(0.021), half(0.03) * 1.8, yOf(0.027), { angle: rad(84), spacing: 10, width: 1.8, wobble: 1.1, broken: 0.42, rng, alpha: 0.72 });
+  // (1.0 mm and 0.95, against the contour's 1.5: the cuff is the strongest mark inside the sleeve
+  // and it still has to sit under the line that bounds it.)
+  across(0.0205, 0.99, mm(PEN.cuff));
+  across(0.0475, 0.99, mm(PEN.cuff * 0.95));
+  // the band of tone between them — spacing tightened from 12.5 mm to 9 so the cuff keeps its
+  // weight as a PATCH now that each stroke in it is a third of the ink it was
+  hatch(g, cx - half(0.03) * 0.9, yOf(0.021), half(0.03) * 1.8, yOf(0.027), { angle: rad(84), spacing: mm(9), width: mm(PEN.tone), wobble: mm(0.5), jitter: mm(1.2), broken: 0.42, rng, alpha: 0.68 });
 
   // The cloth's FOLDS: creases across the sleeve, each a stroke that drops and flattens with a
   // shorter one answering it a few millimetres on — which is what a fold in cloth is, and what the
@@ -467,10 +531,10 @@ function drawArm(g, w, h) {
   ]) {
     if (s > ARM.texM) continue;
     const hw = half(s) * span, y = yOf(s), dy = d * P;
-    inkLine(g, cx - hw, y, cx - hw * 0.1, y + dy, { width: 2.3, wobble: 1.6, rng, alpha: 0.95 });
-    inkLine(g, cx - hw * 0.1, y + dy, cx + hw, y + dy * 0.25, { width: 2.3, wobble: 1.6, rng, alpha: 0.95 });
+    ink(cx - hw, y, cx - hw * 0.1, y + dy, { width: mm(PEN.crease), wobble: mm(1.1), alpha: 0.92 });
+    ink(cx - hw * 0.1, y + dy, cx + hw, y + dy * 0.25, { width: mm(PEN.crease), wobble: mm(1.1), alpha: 0.92 });
     // the answering tick, a few millimetres along and half as long
-    inkLine(g, cx - hw * 0.55, y + dy * 1.9 + 6, cx + hw * 0.2, y + dy * 1.5 + 7, { width: 1.7, wobble: 1.4, rng, alpha: 0.6 });
+    ink(cx - hw * 0.55, y + dy * 1.9 + mm(7.5), cx + hw * 0.2, y + dy * 1.5 + mm(8.75), { width: mm(PEN.tick), wobble: mm(1.0), alpha: 0.55 });
   }
 
   // THE ELBOW. The ribbon bows toward the canvas' RIGHT edge, so the INSIDE of the bend is the
@@ -479,11 +543,11 @@ function drawArm(g, w, h) {
   // the other way the drawing is flipped with it — see the uv in buildArm.)
   for (const [s, len, tilt] of [[0.328, 0.030, 0.015], [0.366, 0.062, 0.008], [0.404, 0.070, -0.001], [0.446, 0.044, -0.012]]) {
     const y = yOf(s), x0 = cx - half(s) * 0.97;
-    inkLine(g, x0, y, x0 + len * P, y + tilt * P, { width: 2.4, wobble: 1.6, rng, alpha: 0.95 });
+    ink(x0, y, x0 + len * P, y + tilt * P, { width: mm(PEN.elbow), wobble: mm(1.1), alpha: 0.9 });
   }
   // and one long fold riding the outside of the bend, where the sleeve is pulled tight
-  run([[cx + half(0.15) * 0.42, yOf(0.15)], [cx + half(0.30) * 0.52, yOf(0.30)], [cx + half(0.44) * 0.62, yOf(0.44)], [cx + half(0.62) * 0.50, yOf(0.62)]], 2.4, 0.62, 1.8);
-  run([[cx - half(0.62) * 0.30, yOf(0.62)], [cx - half(0.86) * 0.40, yOf(0.86)], [cx - half(1.10) * 0.34, yOf(1.10)]], 2.2, 0.5, 1.8);
+  run([[cx + half(0.15) * 0.42, yOf(0.15)], [cx + half(0.30) * 0.52, yOf(0.30)], [cx + half(0.44) * 0.62, yOf(0.44)], [cx + half(0.62) * 0.50, yOf(0.62)]], mm(PEN.fold), 0.6, mm(1.2));
+  run([[cx - half(0.62) * 0.30, yOf(0.62)], [cx - half(0.86) * 0.40, yOf(0.86)], [cx - half(1.10) * 0.34, yOf(1.10)]], mm(PEN.fold * 0.94), 0.48, mm(1.2));
 
   // Rain-strokes down the shaded edge — the outside of the bend — and a thinner run down the
   // inside. They keep OFF the contour: run up against it they thickened the silhouette into a
@@ -494,13 +558,16 @@ function drawArm(g, w, h) {
       const s = s0 + (k / n) * (ARM.texM - s0) + (rng() - 0.5) * 0.006;
       const hw = half(s);
       const x0 = cx + side * hw * (dense[0] + rng() * dense[1]);
-      inkLine(g, x0, yOf(s), x0 + (rng() - 0.5) * 3, yOf(s) + 5 + rng() * 5, { width, wobble: 0.8, rng, alpha });
+      ink(x0, yOf(s), x0 + (rng() - 0.5) * mm(3.75), yOf(s) + mm(6.25) + rng() * mm(6.25), { width, wobble: mm(0.6), alpha });
     }
   };
-  rain(0.06, 104, 1, [0.42, 0.44], 0.78, 2.0);
-  rain(0.06, 40, -1, [0.46, 0.34], 0.45, 1.7);
+  // …and there are MORE of them than there were (104 → 140, 40 → 56). Each stroke now carries a
+  // third of the ink it carried, and the shaded edge of a white sleeve on a white cloth is the
+  // whole of what makes it cloth: thinned without being multiplied it went from tone to nothing.
+  rain(0.06, 140, 1, [0.42, 0.44], 0.75, mm(PEN.rain));
+  rain(0.06, 56, -1, [0.46, 0.34], 0.44, mm(PEN.rainThin));
   // …and a denser patch in the crook of the elbow, where the cloth is doubled
-  hatch(g, cx - half(0.40) * 0.95, yOf(0.33), half(0.40) * 0.7, yOf(0.17), { angle: rad(72), spacing: 9, width: 2.0, wobble: 1.2, broken: 0.42, rng, alpha: 0.62 });
+  hatch(g, cx - half(0.40) * 0.95, yOf(0.33), half(0.40) * 0.7, yOf(0.17), { angle: rad(72), spacing: mm(8), width: mm(PEN.tone), wobble: mm(0.5), jitter: mm(1.2), broken: 0.42, rng, alpha: 0.6 });
   g.restore();
 }
 
@@ -535,10 +602,17 @@ export function buildHand(ctx, { onShown = null, name = 'reveal-hand', lockSide 
   // the puppet's own hand on that side steps out while this one is on the cloth (he never has three)
   const puppetHand = (side) => ctx.pieces.pepe?.parts?.['hand' + side] ?? null;
 
-  // lineWeight 0.25: the contour is DRAWN into the map, so the ink pass adds only a whisper of
-  // its own and never a second, heavier edge round the silhouette.
-  const mat = (map, colorful) => {
-    const m = inkMaterial({ color: '#ffffff', map, colorful, hatch: 0.3, lineWeight: 0.25, roughness: 1 });
+  // ONE CONTOUR, AND IT IS THE DRAWN ONE (round 12). The contour is drawn into the map — the
+  // sleeve's in drawArm, the hand's cut into the plate by tools/hand-cutout.mjs — and until now the
+  // pass was ALSO asked for a quarter of a line of its own on top of it. On the sleeve that was
+  // most of the reason a 4 mm silhouette measured 6.4–8.6 px: the drawn band, the pass's own edge
+  // wherever the arm had a card under it to make a depth step against, and the two never quite in
+  // register. `lineWeight` 0 on the sleeve, which is Pepe's answer to the same question and the
+  // only one available here — at the wrist the sleeve floats a millimetre over the cloth, and a
+  // screen-space pass has no depth step there to find the edge with at all.
+  // The HAND keeps 0.25: its contour is the user's own drawing and nothing in this round touches it.
+  const mat = (map, colorful, lineWeight = 0.25) => {
+    const m = inkMaterial({ color: '#ffffff', map, colorful, hatch: 0.3, lineWeight, roughness: 1 });
     m.alphaTest = 0.5;
     m.side = THREE.DoubleSide;
     return m;
@@ -571,7 +645,7 @@ export function buildHand(ctx, { onShown = null, name = 'reveal-hand', lockSide 
   armGeo.setAttribute('uv', new THREE.BufferAttribute(armUv, 2).setUsage(THREE.DynamicDrawUsage));
   armGeo.setIndex(armIdx);
   armGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, -0.7), 1.8); // the arm is rebuilt, never culled
-  const arm = new THREE.Mesh(armGeo, mat(tex(Math.round(ARM.w * ARM.px), Math.round(ARM.texM * ARM.px), drawArm), true));
+  const arm = new THREE.Mesh(armGeo, mat(tex(Math.round(ARM.w * ARM.px), Math.round(ARM.texM * ARM.px), drawArm), true, 0));
   arm.name = 'reveal-hand-sleeve';
   arm.frustumCulled = false;
   group.add(arm);
