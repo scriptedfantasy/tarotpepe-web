@@ -586,7 +586,7 @@ export async function build(ctx) {
     // right; the first is, the second is): three is all they are to hear before the cards. If
     // nothing of the turn is left after that, the wash beat is asked for its one line instead.
     let washLine = '';
-    const last = (k, s) => (washLine = s ?? washLine);
+    const last = (k, s) => (washLine += ' ' + (s ?? '')); // all of it: the ask is usually his FIRST sentence
     const over = await render(notWhere(sentences), { hold: 1.2, max: 2, each: last });
     if (!over.said && M?.available && M?.reply && alive(token) && !skipBeat) await render(M.reply({ beat: 'shuffle' }), { hold: 1.2, max: 2, first: WASH_LINE_S, each: last });
     await timeout(shuffling, 14);
