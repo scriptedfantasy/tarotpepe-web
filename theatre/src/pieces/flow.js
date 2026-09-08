@@ -388,7 +388,11 @@ export async function build(ctx) {
           await timeout(landed, 10);
           break;
         }
-        // The first card is in its slot. Once — after the first, and only the first (the user: "we
+        // The first card is in its slot, and the line that asked for it has done its work: it comes
+        // down before the cut and nothing goes up in its place (the user: "after the first card pick
+        // instruction we dont need this one anymore").
+        D.clear?.();
+        // Once — after the first, and only the first (the user: "we
         // only need the zoom out once after the first card. not three times") — we cut back to him
         // for a held beat: a start, the mouth open, a blink, then the deadpan again, with nothing
         // said over it. Then the overhead again for the other two, which run straight on.
