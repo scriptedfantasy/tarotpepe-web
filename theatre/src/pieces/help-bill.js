@@ -149,16 +149,14 @@ function layout(w, h, k) {
   // LINK, and with the last control stacked directly over it a thumb that overshoots «KEEP THIS
   // READING» by a few pixels used to land on x.com. A cap and a sixth of paper between the two,
   // and the link's own box started below that gap (see cred.box), is what stops it.
-  const wantTop = Math.max(14, cred.cap * 1.15);
-  const wantBot = in2 + Math.max(6, cred.cap * 0.55); // clear of the inner rule
-  const want = wantTop + cred.cap + wantBot;
-  const preCtrl = Math.max(pad * 0.28, pad * 0.72 - Math.max(0, want - pad));
-  // and if the foot is still short of what the signature asked for, the signature gives the
-  // difference up — half off the space above it, half off the space below. The sheet never grows a
-  // pixel to fit it: it is the last thing on the notice and the first to be told to move over.
-  const short = Math.max(0, want - (pad + (pad * 0.72 - preCtrl)));
-  const credTop = Math.max(4, wantTop - short * 0.5);
-  const credBot = Math.max(in2 + 2, wantBot - (short - (wantTop - credTop)));
+  // The signature gets its own band at the foot, and the sheet grows to hold it: a cap and a half
+  // of paper above the line, a cap below it before the inner rule. (The user, on the old sheet:
+  // "give conjured by @scrptdfntsy a bit more space - its squished into the bottom".) If the taller
+  // sheet does not fit the screen, the fit loop above takes the whole notice down a size; the
+  // signature is never the thing that gives.
+  const credTop = Math.max(18, cred.cap * 1.6);
+  const credBot = in2 + Math.max(12, cred.cap * 1.0); // clear of the inner rule
+  const preCtrl = pad * 0.72;
 
   const yHead = pad + capHead * 0.5;
   const yRule1 = yHead + capHead * 0.5 + pad * 0.62;
@@ -167,9 +165,7 @@ function layout(w, h, k) {
   const yFoot = yRule2 + pad * 0.5;
   const yCtrl = yFoot + foot.length * capFoot * 1.7 + preCtrl;
   const yCred = yCtrl + ctrlBlockH + credTop; // the credit's cap line
-  // the depth the sheet had before anybody signed it — the controls have moved up inside it, and
-  // that, and nothing else, is where the credit's room comes from
-  const sheetH = Math.round(yFoot + foot.length * capFoot * 1.7 + pad * 0.72 + ctrlBlockH + pad);
+  const sheetH = Math.round(yCred + cred.cap + credBot);
 
   // where it is lettered, and the box a thumb has to hit — the whole line, not only the handle
   cred.x = Math.round((sheetW - cred.w) / 2);
