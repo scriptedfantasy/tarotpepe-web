@@ -239,6 +239,21 @@ function styleOf() {
 //                way here. The farewell stays with the regex, on the visitor's own words.
 // ---------------------------------------------------------------------------------------------
 const dealtCount = (b) => (Array.isArray(b?.spread) ? b.spread.filter((c) => c && c.name).length : 0);
+// The deal lever is on the call only when the visitor's line asks for cards: in so many words, or
+// with a yes to an offer he made in his last line. Telling him what they came in with is not
+// asking, and a model with the lever in reach will pull it for that (the user: "he went directly
+// to drawing cards after i told him i'm bringing bass, 4 to the floor and screeching synths").
+// This is the offer, not the trigger: with the lever in reach he still judges whether they asked.
+const CARD_WORDS = /\b(cards?|reading|deck|fortune|spread|tarot|draw|pull|deal|shuffle|arcana)\b/i;
+const YES = /^\W*(yes|yeah|yep|ya|sure|ok|okay|fine|go on|go ahead|do it|please|lets|let's|why not|alright|absolutely|of course|deal)\b/i;
+function asksForCards(b) {
+  const said = String(b?.user ?? '').trim();
+  if (!said) return false;
+  if (CARD_WORDS.test(said)) return true;
+  const hist = Array.isArray(b?.history) ? b.history : [];
+  const last = [...hist].reverse().find((h) => h && h.role === 'pepe' && h.text);
+  return YES.test(said) && !!last && CARD_WORDS.test(String(last.text));
+}
 
 const TOOLS = {
   deal_cards: {
@@ -252,7 +267,7 @@ const TOOLS = {
       required: [],
       additionalProperties: false,
     },
-    allowed: () => true,
+    allowed: (b) => asksForCards(b),
     // the direction's own sentence for it, appended when the lever is on the call
     // Round 6: this sentence is now the ONLY thing said over the wash. The room used to come back
     // afterwards and ask for a shuffle line, and read two out of a script when none came; both are
