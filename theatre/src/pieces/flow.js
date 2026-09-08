@@ -75,6 +75,10 @@ const IDLE_S = 90; // the visitor's silence at the field: he says a line and ope
 const PICK_S = 75; // ... at the fan: Pepe chooses
 // His line over the wash counts as the ask when it asks for three, in any of his words for taking.
 const ASKS_THREE = /\b(take|pick|choose|pull|draw|tap|touch|lift|turn over|grab|select)\b[^.!?]{0,40}\b(three|3)\b/i;
+// ...and a sentence of it that says where, or what the positions mean, does not go up over the wash
+// (the user: "take three cards - the left right... overkill"). The positions are his to explain as
+// each card is turned.
+const SAYS_WHERE = /\b(left|right|middle|centre|center)\b|\bthe (first|second|third) (is|card|one|position)\b/i;
 // How long a line over the wash may take to start arriving. The wash is 3.7 s of hands in cards and
 // the mind takes about 2.7 s; past this the line would go up over a table his hands had already
 // left, so it is dropped and the beat stays silent. Nothing scripted takes its place — round 6.
@@ -194,6 +198,15 @@ export async function build(ctx) {
     })();
   }
 
+  // The turn's sentences without the ones that say where (SAYS_WHERE). A string or an array is
+  // filtered; a stream is passed through as it is, since it cannot be read ahead.
+  function notWhere(source) {
+    if (!source) return source;
+    const arr = typeof source === 'string' ? splitSentences(source) : Array.isArray(source) ? source : null;
+    if (!arr) return source;
+    const kept = arr.filter((s) => typeof s === 'string' && !SAYS_WHERE.test(s));
+    return kept.length ? kept : null;
+  }
   function iterate(source) {
     if (!source) return null;
     if (typeof source === 'string') return splitSentences(source)[Symbol.iterator]();
@@ -569,9 +582,12 @@ export async function build(ctx) {
     // and he is told to ask for three in it. When it does, it IS the ask — the room does not put
     // "Pick three cards." up after him (the user: "take three cards - the left right... - then
     // pick three cards... overkill"). Only when his line does not ask does the room's line go up.
+    // His turn's own sentences go up first — minus any that tell the visitor WHERE (left, middle,
+    // right; the first is, the second is): three is all they are to hear before the cards. If
+    // nothing of the turn is left after that, the wash beat is asked for its one line instead.
     let washLine = '';
     const last = (k, s) => (washLine = s ?? washLine);
-    const over = await render(sentences, { hold: 1.2, max: 2, each: last });
+    const over = await render(notWhere(sentences), { hold: 1.2, max: 2, each: last });
     if (!over.said && M?.available && M?.reply && alive(token) && !skipBeat) await render(M.reply({ beat: 'shuffle' }), { hold: 1.2, max: 2, first: WASH_LINE_S, each: last });
     await timeout(shuffling, 14);
     if (!alive(token)) return null;
