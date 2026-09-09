@@ -543,6 +543,13 @@ export async function build(ctx) {
     armTurns: 1.4,
     armReach: 0,
     armPhase: 0,
+    // …and the drain, which is the last four seconds of it (egg-vortex.js, "AND THEN THE ROOM GOES
+    // DOWN IT"): a pull with no falloff at all, and a shear that does not care how big the drawing
+    // has got. Zero is the wind-up on its own, to the pixel.
+    hole: 0, // css px: how much further out again EVERY pixel now samples
+    whirl: 0, // rad per e-fold of radius: the winding that turns the room's lines into arms
+    core: 24, // css px: inside this the whirl turns rigidly
+    norm: 1, // css px: the sheet's far corner from the dial, where the whirl is nothing
   };
   let vortexMat = null, vortexRT = null;
   function vortexPass(srcTex, dpr, seed) {
@@ -559,6 +566,7 @@ export async function build(ctx) {
           uCentre: { value: new THREE.Vector2() },
           uSwirl: { value: new THREE.Vector4() },
           uFall: { value: new THREE.Vector2() },
+          uDrain: { value: new THREE.Vector4() },
           uArms: { value: new THREE.Vector4() },
           uArmInk: { value: 0 },
           uLetterbox: { value: new THREE.Vector2() },
@@ -577,6 +585,7 @@ export async function build(ctx) {
     u.uCentre.value.set(vortex.centre[0] * size.x, vortex.centre[1] * size.y);
     u.uSwirl.value.set(vortex.reach * dpr, vortex.twist, vortex.pull, vortex.gather * dpr);
     u.uFall.value.set(vortex.twistFall, vortex.pullFall);
+    u.uDrain.value.set(vortex.hole * dpr, vortex.whirl, vortex.core * dpr, vortex.norm * dpr);
     u.uArms.value.set(vortex.armCount, vortex.armTurns, vortex.armReach * dpr, vortex.armPhase);
     u.uArmInk.value = vortex.arms;
     u.uLetterbox.value.copy(compMat.uniforms.uLetterbox.value);

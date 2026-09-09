@@ -67,7 +67,11 @@ export class ErrorOverlay {}`,
   }),
 );
 const t0 = Date.now();
-await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+// `load` waits for the last asset the page asked for, and on a machine carrying a dozen builders'
+// dev servers that can be two minutes; the app's own ready flag below is the real gate, and it has
+// its own generous timeout. Waiting for the document only means a busy machine costs a slow frame
+// instead of a false failure — check-views was reporting "✗" for pages that build perfectly.
+await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
 // Wait for the app's ready flag (set after the first frames render). Builds can be slow in software
 // WebGL; poll manually so a Vite reload mid-load does not abort the wait.
 const readyTimeout = +(args['ready-timeout'] ?? 150000);
