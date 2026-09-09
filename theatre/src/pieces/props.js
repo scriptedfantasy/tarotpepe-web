@@ -34,9 +34,11 @@ import { eggVase } from './egg-vase.js';
 
 import { eggRain, rainState } from './egg-rain.js';
 
+import { buildFine } from './egg-fine.js';
+
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
@@ -106,6 +108,7 @@ export async function build(ctx) {
     d.position.set(-0.44, top + 0.002, chest.position.z + 0.02);
     g.add(d);
     const lamp = O.mushroomLamp();
+    lamp.name = 'mushroom-lamp'; // egg-fine.js hangs the fire off it; nothing else about it changed
     lamp.position.set(-0.44, top, chest.position.z + 0.02);
     g.add(lamp);
     let y = top;
@@ -931,6 +934,11 @@ export async function build(ctx) {
   const VASE = eggVase(ctx, { object: vaseObj, switches: SWITCHES });
   // ---- THE WEATHER outside the window. The room's eighth switch (src/pieces/egg-rain.js). ------
   const RAIN = eggRain(ctx, { group: g, switches: SWITCHES, window: room.window ?? win });
+  // ---- THE FIRE. The room's seventh switch, and the only one worked by holding still --------------
+  // Rest the pointer on the mushroom lamp for three seconds and the shelves catch. Nothing in the
+  // room reacts to it — not the light, not Pepe, not the placard — which is the whole of the joke;
+  // src/pieces/egg-fine.js says so at length.
+  const FINE = buildFine(ctx, { group: g, switches: SWITCHES, lamp: g.getObjectByName('mushroom-lamp') });
 
   return {
     group: g,
@@ -965,6 +973,11 @@ export async function build(ctx) {
     // still, and hitBox/tapBox are the casement's glazed area on the glass and the box a thumb is
     // given. Pepe is not touched by any of it.
     rain: RAIN,
+    // THE FIRE ON THE SHELVES. `burning` is whether anything is alight, `lit` how many of the
+    // twelve, `set(on)` lights or douses the lot for a still with no hold and no cue, `held` how
+    // long the pointer has rested on the lamp, and hitBox/tapBox are the LAMP's box on the glass
+    // and the box a thumb is given — the lamp is the switch; the flames are not touchable.
+    fine: FINE,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -1036,6 +1049,8 @@ export async function build(ctx) {
       // `rain` is full rain behind the panes with the room one shade down; every other name is a dry
       // afternoon, which is where a reload always puts it
       rainState(RAIN, name);
+      // `fine-burning` is the dozen flames alight; every other name is a room that is fine
+      FINE.setState(name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -1053,6 +1068,7 @@ export async function build(ctx) {
       INSECTS?.update(ctx);
       VASE?.update(ctx);
       RAIN?.update(ctx);
+      FINE.update(ctx);
     },
   };
 }
