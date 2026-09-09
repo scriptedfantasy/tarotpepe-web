@@ -111,6 +111,7 @@ export async function build(ctx) {
   let recent = []; // fire times, for the voice budget
   let nextTick = 0; // audio time of the next escapement
   let tickIndex = 0;
+  let tickRate = 1; // ticks a second. 1 is the clock; egg-vortex.js winds it up to 8 and back.
   let lastCreak = -1e9;
   let streetTimer = null;
   let typeTimer = null;
@@ -337,10 +338,11 @@ export async function build(ctx) {
   function pumpClock() {
     if (!ac || !running || muted || state === 'silent' || state === 'room') return;
     const now = ac.currentTime;
+    const beat = 1 / tickRate;
     if (nextTick < now - 0.5) {
       // the tab was away: pick the grid up again rather than firing a hundred ticks
-      const skipped = Math.ceil(now - nextTick);
-      nextTick += skipped;
+      const skipped = Math.ceil((now - nextTick) / beat);
+      nextTick += skipped * beat;
       tickIndex += skipped;
     }
     const { pan, gain } = clockPlace();
@@ -348,14 +350,18 @@ export async function build(ctx) {
     // render loop, and a frame that takes a second (a laptop under load, a headless browser) would
     // otherwise leave holes in the only sound that has to be regular. The duck and the door reach
     // them anyway, because they are a level on clockBus and not a number baked into each tick.
-    while (nextTick < now + AHEAD) {
+    // …but only while the escapement is AT ITS RATE. A wound-up clock (egg-vortex.js) is changing
+    // rate every twelfth of a second, and two seconds of it laid ahead would be two seconds of the
+    // rate it had when the frame started. A quarter of a second of lookahead is still four frames.
+    const ahead = tickRate === 1 ? AHEAD : Math.max(0.2, beat * 1.5);
+    while (nextTick < now + ahead) {
       clockTick(ac, clockBus, nextTick, {
         level: LEVEL.clock * gain, // the duck and the door live on clockBus, not on the tick
         pan,
         tock: tickIndex % 2 === 1,
         seed: 900 + (tickIndex % 97),
       });
-      nextTick += 1;
+      nextTick += beat;
       tickIndex++;
       api.stats.ticks++;
     }
@@ -425,6 +431,26 @@ export async function build(ctx) {
       return { from: veilFrom, to: veilTo };
     },
     stats: { played: 0, dropped: 0, contexts: 0, ticks: 0, bars: 0 },
+
+    // THE ESCAPEMENT'S RATE, in ticks a second. 1 is the clock on the wall and it is what the room
+    // sounds like; egg-vortex.js winds it up to 8 while the hands run and hands it back. Coming
+    // home, the grid is re-laid on the pendulum's own turnover (armClock's phase) rather than
+    // wherever the fast one happened to stop, so the tick lands back where a real one would.
+    get tickRate() {
+      return tickRate;
+    },
+    setTickRate(r = 1) {
+      const next = Math.max(0.25, Math.min(24, +r || 1));
+      if (next === tickRate) return tickRate;
+      const wasFast = tickRate !== 1;
+      tickRate = next;
+      if (ac && tickRate === 1 && wasFast) {
+        const phase = ac.currentTime - (ctx.clock?.raw ?? 0) + 0.5;
+        tickIndex = Math.ceil(ac.currentTime + 0.2 - phase);
+        nextTick = phase + tickIndex;
+      }
+      return tickRate;
+    },
 
     // ---- the tune ---------------------------------------------------------------------------
     tunes: TUNES,

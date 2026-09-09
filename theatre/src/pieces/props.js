@@ -26,6 +26,7 @@ import { mulberry32 } from '../core/rng.js';
 import * as O from './props-objects.js';
 import { build as buildSwitchboard } from './egg-switchboard.js';
 import { eggFuse } from './egg-fuse.js';
+import { buildVortex } from './egg-vortex.js';
 
 export const meta = {
   name: 'props',
@@ -358,6 +359,7 @@ export async function build(ctx) {
     O.hangCords(g, 0, 2.06 + 0.185, 0.1, HOOK_Y, WALL + 0.012);
     g.userData.pendulum = clock.userData.pendulum;
     g.userData.setClockTime = clock.userData.setTime;
+    g.userData.wallClock = clock; // what a pointer is raycast against; see THE VORTEX below
   }
 
   // ---- the stage-left wall (no window there): one round picture and a small shelf of jars ------------
@@ -490,6 +492,7 @@ export async function build(ctx) {
       ray.setFromCamera(ndc, ctx.camera);
       let best = null, bestD = Infinity;
       for (const c of list) {
+        if (c.enabled && !c.enabled()) continue; // a switch that is busy is not a switch just now
         const o = c.object();
         if (!o) continue;
         const hit = ray.intersectObject(o, true)[0];
@@ -501,6 +504,7 @@ export async function build(ctx) {
       if (best) return best;
       // then the margins, which are what make either of them reachable on a phone
       for (const c of list) {
+        if (c.enabled && !c.enabled()) continue;
         const b = c.tapBox();
         if (!b || px < b.x || px > b.x + b.w || py < b.y || py > b.y + b.h) continue;
         const o = c.object();
@@ -840,8 +844,18 @@ export async function build(ctx) {
   // The room's fourth switch, all in src/pieces/egg-fuse.js; it registers with the arbiter above.
   const FUSE = eggFuse(ctx, { group: g, switches: SWITCHES });
 
+  // ---- THE CLOCK, WHICH IS A VORTEX. The room's fifth switch (src/pieces/egg-vortex.js). ---
+  const VORTEX = buildVortex(ctx, {
+    clock: g.userData.wallClock,
+    switches: SWITCHES,
+    dial: 0.185,
+    setTime: g.userData.setClockTime,
+  });
+
   return {
     group: g,
+    // the arbiter itself, for the tools (`hovered`) and for any piece that wants a switch of its own
+    switches: SWITCHES,
     // THE SWITCHBOARD, on the stage-left wall between the press door and the window. `plugged` is
     // which jacks have cords in them, `plug(i)` / `pull(i)` work one as a tap does, `set([i, j])`
     // puts them there for a still with no cue and no bell, and hitBox/tapBox take a jack's index
@@ -852,6 +866,9 @@ export async function build(ctx) {
     // cut on the next 12 fps drawing, with the clack on the click), `set(out, lit)` throws it with
     // no cue for a still, and hitBox/tapBox are its box on the glass and the box a thumb is given.
     fuse: FUSE,
+    // THE CLOCK: `start()` winds the room into it for ten seconds, `t`/`active` say where it is,
+    // `?vortex=<t>` and the `vortex-mid` state hold a frame of it for the tools.
+    vortex: VORTEX,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -905,6 +922,7 @@ export async function build(ctx) {
       // `fuse-out` is the lever down with the one lamp that is not on the mains still burning;
       // `fuse-dark` is the same room with that lamp out. Every other name puts the mains back.
       FUSE.set(name === 'fuse-out' || name === 'fuse-dark', name !== 'fuse-dark');
+      VORTEX.setState(name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -916,6 +934,7 @@ export async function build(ctx) {
       CAT.update();
       SWITCHBOARD.update();
       FUSE.update(ctx);
+      VORTEX.update(ctx); // last: while it runs, the hands and the bob are its own
     },
   };
 }
