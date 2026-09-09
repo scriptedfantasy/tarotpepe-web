@@ -38,9 +38,11 @@ import { buildFine } from './egg-fine.js';
 
 import { eggMirror } from './egg-mirror.js';
 
+import { eggNakamoto } from './egg-nakamoto.js';
+
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
@@ -363,10 +365,11 @@ export async function build(ctx) {
     // eight heavy horizontals, a dot at every crossing. It is a jack field on paper, it rhymes
     // with the position under it, and it reads at 78 px, which the hand never did. The persona
     // bans mysticism in his mouth; the set does not carry it either.
-    const rowA = [
-      [-0.46, 0.4, 0.46, 'operator', true],
-      [0.46, 0.4, 0.46, 'diagram', true],
-    ];
+    // …and the LEFT frame is the NAKAMOTO CARD now (src/pieces/egg-nakamoto.js). The user: "the
+    // framed image behind pepe should be a nakamoto card." Same nail, same 0.4 x 0.46 frame, same
+    // cords — only the sheet inside it changed, so the row against the clock is what it was. The
+    // egg hangs it itself, at the foot of this file, because it needs the pointer arbiter.
+    const rowA = [[0.46, 0.4, 0.46, 'diagram', true]];
     let seed = 100;
     const hang = (list, y) => {
       for (const [x, w, h, kind, ornate] of list) {
@@ -945,6 +948,10 @@ export async function build(ctx) {
   // The round frame hung above as a barometer is a MIRROR: same frame, same radius, same place on
   // the wall. Only what is inside it changes, and only when the visitor clicks it.
   const MIRROR = eggMirror(ctx, { object: g.getObjectByName('barometer'), switches: SWITCHES });
+  // ---- THE NAKAMOTO CARD in the left frame. The room's seventh switch (egg-nakamoto.js). ---
+  // The slot is the one the operator's photograph hung in, to the millimetre: the row against the
+  // clock is unchanged and only the sheet in the frame is new.
+  const NAKAMOTO = eggNakamoto(ctx, { group: g, switches: SWITCHES, slot: { x: -0.46, y: 2.04, w: 0.4, h: 0.46, z: WALL + 0.015, hookY: HOOK_Y } });
 
   return {
     group: g,
@@ -1004,6 +1011,12 @@ export async function build(ctx) {
     // whether it is still turning, and hitBox/tapBox are the sphere's box on the glass and the box
     // a thumb is actually given.
     globe: GLOBE,
+    // THE NAKAMOTO CARD in the left frame. `score` is the number printed on it (97 on a browser
+    // that has never seen it, and whatever this one was left on afterwards), `click()` runs the
+    // green code down the glass for three seconds and ticks the score by one as a tap does,
+    // `set(n)` prints a number with no rain and no cue, and hitBox/tapBox are the frame's box on
+    // the glass and the box a thumb is given.
+    nakamoto: NAKAMOTO,
     // the shop's board over Pepe's head. `mesh` is what a pointer is raycast against, `pivot` is
     // its hook line (rotate that and the board swings on its cord), and w/h are its size in metres.
     // help.js hangs its own tag under the pivot and tips it when the pointer is over the board.
@@ -1065,6 +1078,9 @@ export async function build(ctx) {
       // `mirror-sad` and `mirror-smug` are the two faces the piece is judged on; every other name
       // is plain glass, which is what a reload always shows.
       MIRROR?.setState(name);
+      // `nakamoto-rain` is the code halfway down the glass on a card printed 97; every other name
+      // is the card at rest on the number this browser was left on.
+      NAKAMOTO.setState(name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -1084,6 +1100,7 @@ export async function build(ctx) {
       RAIN?.update(ctx);
       FINE.update(ctx);
       MIRROR?.update(ctx);
+      NAKAMOTO.update(ctx);
     },
   };
 }

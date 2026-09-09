@@ -68,6 +68,10 @@ export const LEVEL = {
   // thinks it is worth mentioning. A visitor who is watching hears it; a visitor who is reading the
   // placard does not.
   crackle: 0.017,
+  // the Nakamoto card, touched (egg-nakamoto.js): one short electronic blip, which is the only
+  // sound in this room that was never made by wood, wire or a spring. Under the cat's tumbler and
+  // under the radio's crackle — the code falling down the glass is the answer, not the noise.
+  blip: 0.022,
   // the door, which is nearer the lens than anything else in the film and louder for it
   latch: 0.072,
   hinge: 0.058,
@@ -159,6 +163,10 @@ export const TRIM = {
   // through sound.render and prints the trim back): at 1.0 the rendered peak was 0.02006 against a
   // LEVEL of 0.026, so 0.026 / 0.02006 = 1.296
   chink: 1.296,
+  // measured the same way, with tools/_egg-nakamoto-proof.mjs --sound, which renders this one
+  // through the same OfflineAudioContext the probe uses and prints the trim back: rendered peak
+  // 0.0261 against a LEVEL of 0.022
+  blip: 0.843,
 };
 
 // how long each cue is allowed to be, in seconds; the probe asserts the rendered length against it
@@ -223,6 +231,10 @@ export const LENGTH = {
   // would read as four separate events. At 0.62 each one runs a fifth of a second into the next.
   rustle: 0.62,
   chink: 0.16,
+  // 0.09, and it is the shortest cue in the room after the camera's own tick. A blip is a machine
+  // acknowledging a keystroke; anything a visitor can hear the END of is a beep, and a beep is a
+  // menu screen.
+  blip: 0.09,
 };
 
 // ---- the two primitives --------------------------------------------------------------------------
@@ -941,12 +953,25 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.chink;
     }
 
+    // THE NAKAMOTO CARD, TOUCHED (egg-nakamoto.js). Every other cue in this room is a physical
+    // event — paper, a spring, a bell, a bottle. This one is not: it is a machine noticing, and it
+    // is the only sound in the film that has no wood in it. So it is a tone and not a burst: one
+    // short square-ish note with a fifth over it, struck and gone in ninety milliseconds, with the
+    // faintest tick of contact in front of it so it lands on a moment rather than swelling into
+    // one. Quiet on purpose — the answer to the click is the code coming down the glass; this only
+    // says the glass heard it.
+    case 'blip': {
+      burst(ac, dest, { t, dur: 0.006, level: L('blip') * 0.34, freq: 3100, q: 1.4, pan, seed });
+      struck(ac, dest, { t, dur: 0.075, level: L('blip'), freq: 1560, type: 'square', partials: [[1.5, 0.28, 0.5], [3.01, 0.09, 0.25]], pan });
+      return LENGTH.blip;
+    }
+
     default:
       return 0;
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink', 'blip'];
 // ---- THE WEATHER: a bed, not a cue (egg-rain.js) --------------------------------------------------
 // The room tone above is the only other thing in this piece that RUNS rather than happens, and this
 // is built the same way and for the same reason: rain does not have a beginning, a shape and an end
@@ -1037,5 +1062,6 @@ export function rainBed(ac, dest, { level: want = LEVEL.rain } = {}) {
     },
   };
 }
+
 
 
