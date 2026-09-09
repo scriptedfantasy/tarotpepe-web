@@ -85,6 +85,9 @@ export const LEVEL = {
   // at the far wall, it is one of his own small private acts, and nobody is meant to notice it —
   // but a hand that did something has to hear that it did.
   glug: 0.028,
+  // a fingernail on the mirror's glass (egg-mirror.js). Quieter than the pour and shorter than the
+  // switch: it happens on the far wall, and it is the sound of something small being touched.
+  chink: 0.026,
 };
 
 // A filter eats most of a noise burst, and how much depends on its Q, so LEVEL above is a wish and
@@ -129,6 +132,10 @@ export const TRIM = {
   // measured the same way as the rest, with tools/_egg-wine-proof.mjs (the probe above walks its
   // own list of cues and this one is not on it): rendered peak 0.0162 → LEVEL 0.028
   glug: 1.729,
+  // measured with tools/_egg-mirror-proof.mjs the same way as the rest (it renders the cue offline
+  // through sound.render and prints the trim back): at 1.0 the rendered peak was 0.02006 against a
+  // LEVEL of 0.026, so 0.026 / 0.02006 = 1.296
+  chink: 1.296,
 };
 
 // how long each cue is allowed to be, in seconds; the probe asserts the rendered length against it
@@ -181,6 +188,7 @@ export const LENGTH = {
   // three bubbles at about 110 ms apart with a tail on the last of them: a pour is the one thing
   // in this room that takes as long as it takes, and under half a second is a finger and not a glass
   glug: 0.4,
+  chink: 0.16,
 };
 
 // ---- the two primitives --------------------------------------------------------------------------
@@ -836,9 +844,21 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.glug;
     }
 
+    // A FINGERNAIL ON THE MIRROR'S GLASS (egg-mirror.js). A tap on glass is not a tap on wood: it
+    // is a thin high partial that RINGS for a moment over a dead click, and there is no body under
+    // it at all — the pane is 3 mm of glass screwed to plaster. So: one narrow burst near 5 kHz for
+    // the nail, one struck partial at 3.1 kHz with an inharmonic above it for the ring, and a
+    // little low click for the finger arriving. Short, quiet, and nothing like the cat's switch.
+    case 'chink': {
+      burst(ac, dest, { t, dur: 0.005, level: L('chink'), freq: 5100, q: 1.8, pan, seed });
+      burst(ac, dest, { t, dur: 0.014, level: L('chink') * 0.22, freq: 420, q: 1.1, type: 'lowpass', pan, seed: seed + 1 });
+      struck(ac, dest, { t, dur: 0.15, level: L('chink') * 0.5, freq: 3100 + rng() * 180, type: 'sine', partials: [[2.41, 0.3, 0.5], [4.13, 0.12, 0.35]], pan });
+      return LENGTH.chink;
+    }
+
     default:
       return 0;
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'chink'];
