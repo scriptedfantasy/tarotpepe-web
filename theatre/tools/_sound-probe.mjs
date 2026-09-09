@@ -21,7 +21,7 @@ const args = Object.fromEntries(
   }, []),
 );
 const PLOT = args.plot ?? '/tmp/sound-waveforms.png';
-const BASE = 'http://127.0.0.1:5173/';
+const BASE = process.env.BASE ?? 'http://127.0.0.1:5173/';
 const INK = '#0d0e0d';
 const PAPER = '#f8f9f4';
 const MUSTARD = '#c4c059';

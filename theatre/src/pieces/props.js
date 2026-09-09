@@ -21,6 +21,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import * as O from './props-objects.js';
+import { buildWine } from './egg-wine.js';
 
 export const meta = {
   name: 'props',
@@ -43,6 +44,7 @@ export async function build(ctx) {
 
   let signMesh = null, signPivot = null; // the wall board over Pepe's head; published below
   let radioObj = null; // the set on the cart; the visitor's one switch, wired up at the foot of this file
+  let wineObj = null; // the VIN bottle beside it; src/pieces/egg-wine.js does the rest
 
   const WALL = -D / 2; // back wall plane
   const FLUSH = WALL + 0.04; // furniture backs sit just in front of the skirting
@@ -166,6 +168,10 @@ export async function build(ctx) {
         ],
       }),
     );
+    // VIN, for egg-wine.js: the one bottle in the room that has a level in it
+    cart.traverse((o) => {
+      if (!wineObj && o.userData?.label?.recipe?.lines?.[0] === 'VIN') wineObj = o;
+    });
     // the lower board: the newspapers and the soda siphon (the ice bucket went; three things under
     // there read as clutter behind the cart's own rails)
     const news = O.newspaperStack({ n: 4, rng });
@@ -645,8 +651,15 @@ export async function build(ctx) {
     };
   })();
 
+  // ---- THE WINE, beside it. Nothing here announces it; see src/pieces/egg-wine.js. -------------
+  const WINE = buildWine(ctx, wineObj);
+
   return {
     group: g,
+    // THE WINE BOTTLE on the same board. `fingers` is what is left of five, `pour()` takes one as a
+    // click does, `drunk` is whether the room is currently under it, and hitBox/tapBox are the
+    // bottle's box on the glass and the box a thumb is given.
+    wine: WINE,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -682,6 +695,7 @@ export async function build(ctx) {
     setState(name = 'default') {
       const m = /^radio-(off|a|b|c)$/.exec(name ?? '');
       if (m) RADIO.set(m[1] === 'off' ? 0 : 'abc'.indexOf(m[1]) + 1);
+      WINE.setState(name); // `wine-drunk`; every other name puts the bottle back
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -689,6 +703,7 @@ export async function build(ctx) {
       if (p) p.rotation.z = 0.16 * Math.sin(ctx.clock.t * Math.PI);
       tellTheTime();
       RADIO.update(ctx);
+      WINE.update(ctx);
     },
   };
 }

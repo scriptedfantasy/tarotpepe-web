@@ -31,7 +31,8 @@ mkdirSync(dirname(out), { recursive: true });
 
 let url = args.url;
 if (!url) {
-  const u = new URL('http://127.0.0.1:5173/');
+  // BASE lets a builder in their own worktree shoot their own dev server (BASE=http://127.0.0.1:8702)
+  const u = new URL(process.env.BASE ?? 'http://127.0.0.1:5173/');
   if (args.view) u.searchParams.set('view', args.view);
   if (args.state) u.searchParams.set('state', args.state);
   if (args.seed) u.searchParams.set('seed', args.seed);

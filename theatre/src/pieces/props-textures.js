@@ -162,7 +162,13 @@ export function darkTexture(seed = 27) {
 // object and wrong for a row of them: at 13 px a side they became a picket of blots.
 //   dark:false → paper body, ink capsule down to `capsuleV`, an outlined label
 //   dark:true  → solid ink body, a big paper label, a paper collar rule at the shoulder
-export function labelTexture({ lines = ['VIN'], uRange = [0.3, 0.7], vRange = [0.3, 0.6], bodyV = null, seed = 1, w = 128, h = 256, dark = false, shape = 'rect', glassStroke = true, lidV = null, capsuleV = null, collarV = null }) {
+//
+// `fillV` is the WINE LEVEL, and it is the one thing on a bottle that is allowed to move
+// (egg-wine.js: each pour re-strikes this sheet a step lower). null is the bottle as it has always
+// been drawn — a dark one is filled to the top. With a level, the ink stops there and the glass
+// above it is paper with the two glass strokes on it, which is how the same pen draws an empty
+// bottle in the same row. Nothing else about the drawing changes: same seed, same label, same rule.
+export function labelTexture({ lines = ['VIN'], uRange = [0.3, 0.7], vRange = [0.3, 0.6], bodyV = null, seed = 1, w = 128, h = 256, dark = false, shape = 'rect', glassStroke = true, lidV = null, capsuleV = null, collarV = null, fillV = null }) {
   return drawTexture(
     w,
     h,
@@ -170,7 +176,29 @@ export function labelTexture({ lines = ['VIN'], uRange = [0.3, 0.7], vRange = [0
       paper(g, W, H, PAPER, { grain: 0, seed });
       if (dark) {
         g.fillStyle = INK;
-        g.fillRect(0, 0, W, H);
+        if (fillV == null) g.fillRect(0, 0, W, H);
+        else {
+          // the neck keeps its capsule whatever is left in the bottle, so the prop keeps its one
+          // solid black area (the round-1 rule) even when it is empty
+          if (collarV != null) g.fillRect(0, 0, W, (1 - collarV) * H + 1);
+          // …and the wine's own edge is a hand's line, not a ruled one
+          const y = (1 - fillV) * H, wob = Math.max(1.4, H * 0.007);
+          g.beginPath();
+          g.moveTo(-1, H + 1);
+          g.lineTo(-1, y);
+          for (let i = 0; i <= 12; i++) g.lineTo((i / 12) * W, y + (rng() - 0.5) * wob);
+          g.lineTo(W + 1, H + 1);
+          g.closePath();
+          g.fill();
+          if (bodyV) {
+            // the glass the wine has left behind: the same two strokes a paper bottle carries
+            const yt = (1 - bodyV[1]) * H, yb = Math.min(y, (1 - bodyV[0]) * H);
+            if (yb - yt > H * 0.05) {
+              inkLine(g, W * 0.38, yt + (yb - yt) * 0.08, W * 0.405, yb - (yb - yt) * 0.16, { width: Math.max(2.4, W * 0.022), wobble: 1.2, rng });
+              inkLine(g, W * 0.44, yt + (yb - yt) * 0.12, W * 0.455, yt + (yb - yt) * 0.38, { width: Math.max(2, W * 0.018), wobble: 1, rng });
+            }
+          }
+        }
         // the paper collar the film leaves where the shoulder turns into the neck: one bright
         // rule that keeps a filled bottle from reading as a rectangle
         if (collarV != null) {

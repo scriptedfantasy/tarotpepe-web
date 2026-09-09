@@ -57,6 +57,10 @@ export const LEVEL = {
   hinge: 0.058,
   knock: 0.122,
   footfall: 0.05,
+  // the pour (egg-wine.js). Between the street outside and the escapement: it happens on the cart
+  // at the far wall, it is one of his own small private acts, and nobody is meant to notice it —
+  // but a hand that did something has to hear that it did.
+  glug: 0.028,
 };
 
 // A filter eats most of a noise burst, and how much depends on its Q, so LEVEL above is a wish and
@@ -87,6 +91,9 @@ export const TRIM = {
   hinge: 29.544,
   knock: 1.569,
   footfall: 1.599,
+  // measured the same way as the rest, with tools/_egg-wine-proof.mjs (the probe above walks its
+  // own list of cues and this one is not on it): rendered peak 0.0162 → LEVEL 0.028
+  glug: 1.729,
 };
 
 // how long each cue is allowed to be, in seconds; the probe asserts the rendered length against it
@@ -120,6 +127,9 @@ export const LENGTH = {
   hinge: 0.42,
   knock: 0.14,
   footfall: 0.17,
+  // three bubbles at about 110 ms apart with a tail on the last of them: a pour is the one thing
+  // in this room that takes as long as it takes, and under half a second is a finger and not a glass
+  glug: 0.4,
 };
 
 // ---- the two primitives --------------------------------------------------------------------------
@@ -593,9 +603,33 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.type;
     }
 
+    // A FINGER OF WINE, poured across the room (egg-wine.js). A glug is not a splash: it is the
+    // bottle breathing in while the wine goes out, three bubbles, each a narrow resonance that
+    // RISES as the cavity closes behind it — so it is a tight band of noise swept upward, not a
+    // struck note. The spacing is uneven because a pour is not a rhythm, the bubbles get quieter
+    // as the neck clears, and under them there is a thin hiss of wine meeting glass. Nothing here
+    // is loud enough to interrupt a sentence; the cue exists so a hand that did something hears
+    // that it did.
+    case 'glug': {
+      // the neck letting go: a pour begins with a small pop, which is also what keeps this cue at
+      // its level on its first sample instead of ringing up into it — a high-Q band of noise takes
+      // a few milliseconds to reach amplitude, and the house rule is that nothing here fades in
+      burst(ac, dest, { t, dur: 0.014, level: L('glug') * 0.95, freq: 740, q: 1.1, pan, seed: seed + 30 });
+      const n = 3;
+      let at = t;
+      for (let i = 0; i < n; i++) {
+        const f = 285 + i * 62 + rng() * 60;
+        burst(ac, dest, { t: at, dur: 0.055 + rng() * 0.03, level: L('glug') * (1 - i * 0.16), freq: f, q: 8 + rng() * 5, sweep: 210 + rng() * 130, pan, seed: seed + i });
+        struck(ac, dest, { t: at, dur: 0.05, level: L('glug') * 0.26, freq: f * 1.94, type: 'sine', pan });
+        at += 0.075 + rng() * 0.055;
+      }
+      burst(ac, dest, { t, dur: 0.3, level: L('glug') * 0.2, freq: 2400, q: 0.7, type: 'highpass', pan, seed: seed + 20 });
+      return LENGTH.glug;
+    }
+
     default:
       return 0;
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'glug'];
