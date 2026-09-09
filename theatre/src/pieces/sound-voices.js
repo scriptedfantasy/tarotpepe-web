@@ -63,6 +63,11 @@ export const LEVEL = {
   // the radio's crackle: it is meant to be noticed only by someone who is already watching the
   // thing that makes it, the way a fly in a real room is.
   buzz: 0.021,
+  // the fire on the shelves (egg-fine.js). The quietest voice in the room bar the room itself, and
+  // under the fly, which is the whole joke: twelve things are burning and nobody in the picture
+  // thinks it is worth mentioning. A visitor who is watching hears it; a visitor who is reading the
+  // placard does not.
+  crackle: 0.017,
   // the door, which is nearer the lens than anything else in the film and louder for it
   latch: 0.072,
   hinge: 0.058,
@@ -117,6 +122,9 @@ export const TRIM = {
   clack: 1.218,
   // measured with tools/_egg-insects-buzz.mjs, the same offline render the probe uses
   buzz: 5.375,
+  // measured with tools/_egg-fine-proof.mjs, the same offline render the probe uses: rendered peak
+  // 0.0133 (-37.5 dBFS) against a wanted LEVEL of 0.017
+  crackle: 1.276,
   latch: 2.241,
   hinge: 29.544,
   knock: 1.569,
@@ -166,6 +174,12 @@ export const LENGTH = {
   // tools/_egg-insects-buzz.mjs), so each runs 90 ms into the next. Change the cadence there and
   // this number changes with it.
   buzz: 0.34,
+  // 0.42, and the number is arithmetic, not taste. egg-fine.js re-fires this every FOURTH drawing
+  // while the room is alight and the film runs at 12 fps: that is one crackle every 4/12 = 0.333 s.
+  // A cue shorter than the gap would leave bare room tone between them and a fire would read as a
+  // row of separate little noises. Each runs about 90 ms into the next, which is the buzz's own
+  // arithmetic. Change the cadence there and this number changes with it.
+  crackle: 0.42,
   clock: 0.055,
   latch: 0.06,
   hinge: 0.42,
@@ -623,6 +637,30 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.buzz;
     }
 
+    // THE FIRE ON THE SHELVES (egg-fine.js). A burning thing has no beginning and no note in it:
+    // what you hear is a low bed of air with dry grains going off in it, irregularly. So it is a
+    // wide, soft band down at 600 Hz with a thin hiss over the top — both with the wash's attack,
+    // which is this piece's one exception to "nothing fades in" and holds for the same reason:
+    // a cue re-fired three times a second would click on every one of them — and six pops thrown
+    // through it, none of them on the first sample. No pitch anywhere: this plays under whatever
+    // Pepe happens to be saying, and it must never argue with him.
+    case 'crackle': {
+      burst(ac, dest, { t, dur: LENGTH.crackle, level: L('crackle'), freq: 600, q: 0.55, hold: LENGTH.crackle * 0.42, attack: 0.05, pan, seed });
+      burst(ac, dest, { t, dur: LENGTH.crackle * 0.9, level: L('crackle') * 0.26, freq: 3400, q: 0.5, type: 'highpass', hold: LENGTH.crackle * 0.3, attack: 0.06, pan, seed: seed + 1 });
+      for (let i = 0; i < 6; i++) {
+        burst(ac, dest, {
+          t: t + 0.025 + rng() * (LENGTH.crackle - 0.07),
+          dur: 0.003 + rng() * 0.008,
+          level: L('crackle') * (0.45 + rng() * 0.5),
+          freq: 1300 + rng() * 2700,
+          q: 1.6 + rng() * 2.4,
+          pan,
+          seed: seed + 10 + i,
+        });
+      }
+      return LENGTH.crackle;
+    }
+
     // ---- the door the film opens on. It is a foot from the lens, so it is the nearest, driest,
     // loudest thing in the picture, and it is all wood and one small piece of brass.
 
@@ -841,4 +879,4 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'crackle'];
