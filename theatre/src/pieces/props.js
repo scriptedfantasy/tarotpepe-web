@@ -30,10 +30,11 @@ import { buildVortex } from './egg-vortex.js';
 import { buildWine } from './egg-wine.js';
 import { eggGlobe } from './egg-globe.js';
 import { buildInsects, insectState } from './egg-insects.js';
+import { eggVase } from './egg-vase.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
@@ -55,6 +56,7 @@ export async function build(ctx) {
   let catObj = null; //  the visitor may work. Both are wired up at the foot of this file.
   let wineObj = null; // the VIN bottle on the cart; src/pieces/egg-wine.js does the rest
   let globeObj = null; // the globe on the left bookcase; egg-globe.js turns it
+  let vaseObj = null; //  the vase of dried stems on the operator's position; egg-vase.js wilts it
 
   const WALL = -D / 2; // back wall plane
   const FLUSH = WALL + 0.04; // furniture backs sit just in front of the skirting
@@ -118,7 +120,9 @@ export async function build(ctx) {
     g.add(cs);
     const v = O.vase({ rng, spread: 0.78 });
     v.position.set(0.45, top, chest.position.z + 0.02);
+    v.name = 'vase';
     g.add(v);
+    vaseObj = v; // egg-vase.js reads its seven stems back off this drawing
   }
   for (const side of [-1, 1]) {
     const bc = O.shelfUnit({ w: caseW, h: caseH, d: 0.28, boards: CASE_BOARDS, plinth: 0.07, back: true });
@@ -920,6 +924,10 @@ export async function build(ctx) {
   // ---- THE INSECTS on the back wall, and the honey jar they gather at (src/pieces/egg-insects.js). --
   const INSECTS = buildInsects(ctx, { group: g, switches: SWITCHES, jar: g.getObjectByName('miel-jar'), wallZ: WALL });
 
+  // ---- THE VASE OF DRIED STEMS on the operator's position (src/pieces/egg-vase.js). ---------
+  // The room's eighth switch, and the only one that puts colour anywhere but on Pepe and the cards.
+  const VASE = eggVase(ctx, { object: vaseObj, switches: SWITCHES });
+
   return {
     group: g,
     // the arbiter itself, for the tools (`hovered`) and for any piece that wants a switch of its own
@@ -944,6 +952,10 @@ export async function build(ctx) {
     // THE INSECTS. `state` is where each one is (wall, air, jar), `fly(i)` sends one off as a click
     // does, and hitBox(i)/tapBox(i) are a sheet's box on the glass and the box a thumb is given.
     insects: INSECTS,
+    // THE VASE. `state` is dried / wilting / empty / leaf, `click()` starts the nine drawings as a
+    // pointer does (cue, events and all), `set(state)` puts it there for a still with neither, and
+    // hitBox/tapBox are the vase's box on the glass and the box a thumb is given.
+    vase: VASE,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -1009,6 +1021,9 @@ export async function build(ctx) {
       // `insects-gathered` is the six of them round the jar; every other name is the wall, which
       // is where a reload always puts them
       insectState(INSECTS, name);
+      // `vase-empty` and `vase-leaf` are the middle and the end of the egg; every other name is the
+      // dried stems, which is what a reload always finds in that vase.
+      VASE?.setState(name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -1024,6 +1039,7 @@ export async function build(ctx) {
       WINE.update(ctx);
       GLOBE.update(ctx);
       INSECTS?.update(ctx);
+      VASE?.update(ctx);
     },
   };
 }
