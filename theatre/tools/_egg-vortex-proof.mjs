@@ -3,9 +3,13 @@
 //
 //   BASE=http://127.0.0.1:8706 node tools/_egg-vortex-proof.mjs [--part frames|crop|phone|cost|click|strip]
 //
-// frames  the home plate at 1280x800 at vortex t = 0, 2, 4, 6, 8, 9.5, 10.3, 11, and a pixel
-//         comparison of t = 11 (settled) against t = 0 (nothing has happened yet)
-// crop    a 2x crop at t = 6: are the spiral strokes drawn, and are the lines still lines
+// frames  the home plate at 1280x800 at vortex t = 0, 2, 4, 6, 8, 9, 9.5, 9.8, 10.0, 10.3, 11 —
+//         a pixel comparison of t = 11 (settled) against t = 0 (nothing has happened yet), and a
+//         count of the dark pixels on the canvas at every instant, which is how "and then there is
+//         nothing on the paper at all" is checked rather than admired: at t = 10.0 it is zero.
+//         ONE PAGE, ELEVEN INSTANTS: the vortex's own api.at(t) sits it anywhere without a reload,
+//         and the reload — a whole scene built in software WebGL — was the entire cost of this tool.
+// crop    a 2x crop at t = 9: are the room's own lines arcs of the vortex, and are they still lines
 // phone   390x760 at t = 6
 // cost    ms per rendered frame of ink.render(), the pass active and idle, on the laptop frame
 // click   a real pointer click on the dial: does it start, what phases are emitted, what the
@@ -25,7 +29,8 @@ const args = Object.fromEntries(
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5173';
 const OUT = args.out ?? '/tmp/egg-vortex';
 const part = args.part ?? 'all';
-const has = (p) => part === 'all' || part === p;
+// --part frames,crop,strip: the three that share one page's eleven screenshots, in one run
+const has = (p) => part === 'all' || part.split(',').includes(p);
 mkdirSync(OUT, { recursive: true });
 
 // every still is taken with the scene clock frozen and the dial pinned, so two frames differ only
@@ -49,42 +54,64 @@ const viteStub = (route) =>
 export function updateStyle(){} export function removeStyle(){} export function injectQuery(u){ return u; } export class ErrorOverlay {}`,
   });
 
+// `load` waits for every last asset and this machine often has a dozen dev servers on it; the app's
+// own ready flag is the honest signal, so the navigation only waits for the document.
 async function open(width, height, q) {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.route('**/@vite/client', viteStub);
-  await page.goto(url(q), { waitUntil: 'load', timeout: 60000 });
+  await page.goto(url(q), { waitUntil: 'domcontentloaded', timeout: 300000 });
   const t0 = Date.now();
-  while (Date.now() - t0 < 150000) {
+  while (Date.now() - t0 < 420000) {
     if (await page.evaluate(() => window.__theatreReady === true).catch(() => false)) break;
     await page.waitForTimeout(200);
   }
   return { page, errors };
+}
+// the drawing itself, not the page: the placard and the notice are DOM above the canvas and the
+// vortex never touches them, so the sheet is what has to be empty at ten seconds
+const plate = (page) => page.locator('#stage canvas');
+async function darkPixels(buf) {
+  const { data, info } = await sharp(buf).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  let dark = 0;
+  for (let i = 0; i < data.length; i += 3) {
+    if (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2] < 140) dark++;
+  }
+  return { dark, of: info.width * info.height };
 }
 
 const log = [];
 const say = (s) => { log.push(s); console.log(s); };
 
 // ── frames ────────────────────────────────────────────────────────────────────────────────────
-const TS = [0, 2, 4, 6, 8, 9.5, 10.3, 11];
+const TS = [0, 2, 4, 6, 8, 9, 9.5, 9.8, 10.0, 10.3, 11];
 if (has('frames') || has('strip') || has('crop')) {
   const shots = new Map();
+  const { page, errors } = await open(1280, 800, `vortex=0&${FREEZE}`);
+  await page.waitForTimeout(1200);
   for (const t of TS) {
-    const { page, errors } = await open(1280, 800, `vortex=${t}&${FREEZE}`);
-    await page.waitForTimeout(900);
-    const state = await page.evaluate(() => {
+    const state = await page.evaluate((tt) => {
+      window.__theatre.pieces.props.vortex.at(tt);
       const v = window.__theatre.pieces.props.vortex, i = window.__theatre.pieces.ink.vortex;
-      return { t: v.t, active: v.active, reach: i.reach, twist: i.twist, pull: i.pull, arms: i.arms, inkActive: i.active };
-    });
-    const buf = await page.screenshot();
+      return { t: v.t, active: v.active, reach: i.reach, twist: i.twist, pull: i.pull, hole: i.hole, whirl: i.whirl, armReach: i.armReach, arms: i.arms, inkActive: i.active };
+    }, t);
+    await page.waitForTimeout(500);
+    const buf = await plate(page).screenshot({ timeout: 240000 });
     shots.set(t, buf);
+    const { dark, of } = await darkPixels(buf);
     if (has('frames')) writeFileSync(`${OUT}/t${String(t).replace('.', '_')}.png`, buf);
-    say(`t=${t}  active=${state.active}  pass=${state.inkActive}  reach=${state.reach.toFixed(0)}px twist=${state.twist.toFixed(2)}rad pull=${state.pull.toFixed(2)} arms=${state.arms.toFixed(2)}${errors.length ? '  ERRORS: ' + errors.join(' | ') : ''}`);
-    await page.close();
+    say(
+      `t=${t}  active=${state.active} pass=${state.inkActive}  reach=${state.reach.toFixed(0)} twist=${state.twist.toFixed(2)} pull=${state.pull.toFixed(2)}` +
+      `  hole=${state.hole.toFixed(0)}px whirl=${state.whirl.toFixed(2)} arm=${state.armReach.toFixed(0)}px` +
+      `  ink on the sheet: ${dark} of ${of} px (${((dark / of) * 100).toFixed(3)}%)${errors.length ? '  ERRORS: ' + errors.join(' | ') : ''}`,
+    );
   }
+  await page.close();
   if (has('frames')) {
+    const bare = await darkPixels(shots.get(10.0));
+    say(`bare: at t=10.0 the sheet carries ${bare.dark} dark pixels of ${bare.of} — nothing is drawn, and nothing is faded: every pixel asks for drawing from past the edge of the sheet and is handed paper`);
     // settled == untouched? t = 11 against t = 0, same boil, same dial
     const a = await sharp(shots.get(0)).raw().toBuffer();
     const b = await sharp(shots.get(11)).raw().toBuffer();
@@ -97,22 +124,24 @@ if (has('frames') || has('strip') || has('crop')) {
     say(`settled: t=11 vs t=0 — ${diff} of ${a.length} subpixels differ by more than 2/255 (${((diff / a.length) * 100).toFixed(4)}%), worst ${worst}/255`);
   }
   if (has('strip')) {
-    const w = 320, h = 200;
+    const w = 320, h = 200, cols = 4, rows = Math.ceil(TS.length / cols);
     const tiles = await Promise.all(TS.map((t) => sharp(shots.get(t)).resize(w, h).png().toBuffer()));
-    await sharp({ create: { width: w * 4, height: h * 2, channels: 3, background: '#888' } })
-      .composite(tiles.map((input, i) => ({ input, left: (i % 4) * w, top: Math.floor(i / 4) * h })))
+    await sharp({ create: { width: w * cols, height: h * rows, channels: 3, background: '#888' } })
+      .composite(tiles.map((input, i) => ({ input, left: (i % cols) * w, top: Math.floor(i / cols) * h })))
       .png()
       .toFile(`${OUT}/strip.png`);
     say(`strip: ${OUT}/strip.png (${TS.join(', ')})`);
   }
   if (has('crop')) {
     // 2x, about the clock, where the arms and the wound-up room are both in the frame
-    await sharp(shots.get(6))
-      .extract({ left: 340, top: 40, width: 600, height: 400 })
-      .resize(1200, 800, { kernel: 'nearest' })
-      .png()
-      .toFile(`${OUT}/crop-t6-2x.png`);
-    say(`crop: ${OUT}/crop-t6-2x.png (2x of 600x400 at 340,40 of the t=6 frame)`);
+    for (const [t, box] of [[6, { left: 340, top: 40, width: 600, height: 400 }], [9, { left: 420, top: 0, width: 600, height: 400 }]]) {
+      await sharp(shots.get(t))
+        .extract(box)
+        .resize(box.width * 2, box.height * 2, { kernel: 'nearest' })
+        .png()
+        .toFile(`${OUT}/crop-t${t}-2x.png`);
+      say(`crop: ${OUT}/crop-t${t}-2x.png (2x of ${box.width}x${box.height} at ${box.left},${box.top} of the t=${t} frame)`);
+    }
   }
 }
 
@@ -145,7 +174,9 @@ if (has('cost')) {
     };
     // the pass at its most expensive: the reach past the corners, the gather at full stretch, four
     // arms — which is the frame at t ≈ 9
-    const ON = { active: true, centre: [0.5, 0.69], reach: 1400, twist: 3.3, pull: 1.8, twistFall: 1.8, pullFall: 1.9, gather: 3.2, arms: 1, armCount: 4, armTurns: 1.25, armReach: 830, armPhase: 3.1 };
+    // …which since the drain is the frame at t ≈ 9.5: the gather's footprint is at its widest
+    // there (eight taps over an ellipse a dozen pixels long) and the whirl's log is in every pixel
+    const ON = { active: true, centre: [0.5, 0.69], reach: 1988, twist: 7.05, pull: 3.92, twistFall: 1.65, pullFall: 1.75, gather: 3.2, arms: 1, armCount: 4, armTurns: 1.33, armReach: 335, armPhase: 4.2, hole: 252, whirl: 3.1, core: 29, norm: 847 };
     const was = { ...v, centre: [...v.centre] };
     // A/B/A/B, not all of A then all of B: the machine's own load drifts by 3 ms over a few seconds
     // and a block measurement charges that drift to whichever half it fell in.

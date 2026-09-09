@@ -7,8 +7,9 @@
 // drawing is a smear: bilinear taps hand back the average of ink and paper, which is a grey, which
 // is the one thing this world does not have (BRIEF.md, "no grey" is a rule about TONE). So:
 //   · the source is sampled NEAREST — a mark is moved, never mixed;
-//   · where the swirl COMPRESSES the drawing (and it compresses hard: at ten seconds the room is
-//     wound down to a fifth of its size) the pass takes the DARKEST tap in the footprint, not the
+//   · where the swirl COMPRESSES the drawing (and it compresses hard: by nine seconds one pixel of
+//     the frame stands for four or five of the room, and by ten there is no room left to stand
+//     for) the pass takes the DARKEST tap in the footprint, not the
 //     mean. A pen dragged over a shrinking drawing keeps every line it had at full pressure and
 //     lets them crowd; an averaging filter would turn the same lines into a wash. Darkest-of-N is
 //     the drawn answer and it is what keeps a line a line at t = 8.
@@ -18,6 +19,13 @@
 // The spiral arms are DRAWN, not filtered: four strokes in the room's ink, wobbled and skipping,
 // re-cut on the same strike as the boil (uSeed = frame/2). Without them the effect is a filter over
 // a drawing; with them the vortex is another thing the pen did.
+//
+// EVERYTHING TURNS THE WAY THE HANDS DO, and the mapping's sign is the whole of that: `ang = th +`
+// hands this pixel a mark from ANTICLOCKWISE of it, which puts the mark down clockwise of where it
+// was. It matters twice over. It is the clock's own direction, and it is the direction the drawn
+// arms below are cut in (r = A·θ climbs with θ, so an arm leaves the boss anticlockwise) — which
+// means a straight line of the room's, wound by the whirl, lies ALONG an arm instead of across it.
+// The room's lines and the vortex's lines are the same lines.
 export const VORTEX_FRAG = /* glsl */ `
 precision highp float;
 uniform sampler2D tSrc;
@@ -27,6 +35,7 @@ uniform float uSeed;      // the strike: floor(frame / 2), the same one the pen 
 uniform vec2 uCentre;     // the clock's face, in drawing-buffer px
 uniform vec4 uSwirl;      // reach px | twist rad | pull | gather cap px
 uniform vec2 uFall;       // twist falloff exponent | pull falloff exponent
+uniform vec4 uDrain;      // hole px | whirl rad per e-fold | core px | the sheet's far corner px
 uniform vec4 uArms;       // count | turns | reach px | phase rad
 uniform float uArmInk;    // 0..1: how present the drawn spiral is
 uniform vec2 uLetterbox;
@@ -63,8 +72,32 @@ void main() {
   float x = clamp(d / R, 0.0, 1.0);
   float fT = pow(1.0 - x, uFall.x);
   float fP = pow(1.0 - x, uFall.y);
-  float ang = th + uSwirl.y * fT;         // the twist, the way the hands go: clockwise (the user: "the room should turn right as well")
-  float s = d * (1.0 + uSwirl.z * fP);    // the pull: this pixel shows what stood further out
+  float mag = 1.0 + uSwirl.z * fP;        // the pull: this pixel shows what stood further out
+  float s0 = d * mag;
+
+  // ── THE DRAIN, which is the last four seconds ──
+  // Two numbers, and between them the room stops being a room.
+  //
+  // uDrain.x, THE HOLE. The wind-up alone leaves the drawing a rectangle: near the middle its
+  // falloffs are flat, so the map there is one rotation and one scale — the room shrank and turned
+  // and stayed square, which is exactly what the user saw and did not want. The hole is a total
+  // pull: every pixel now shows what stood a further uDrain.x out AGAIN, without any falloff at
+  // all, so as it opens past the far corner of the sheet every last pixel asks for drawing that
+  // was never there and is handed paper. The room does not fade and is not covered: it goes down
+  // the middle, innermost first, and the far corners — which have the furthest to travel — are the
+  // last four things left, four wound tails, and then nothing.
+  float s = s0 + uDrain.x;
+  // uDrain.y, THE WHIRL: this many radians for every e-fold of radius, at every radius. A twist
+  // that falls off over a fixed reach has almost no shear left once the drawing is small, so it
+  // turns the room as a body; this one has the same shear at every scale, and so it keeps winding
+  // the drawing into arms right down to the last twelfth of a second. A straight line of the
+  // room's comes out a logarithmic spiral. The four drawn arms below are Archimedean, which over
+  // the turn or two ever on the sheet is the same sweep to the eye, and — this is the part that
+  // matters — the same HAND: both climb anticlockwise out of the boss, so the walls' edges and the
+  // picture's own edge arrive lying ALONG the arms and not across them. Inside uDrain.z the hub
+  // turns rigidly: a pen cannot draw what spins faster than a pixel, and past that limit the mark
+  // is noise and not a line.
+  float ang = th + uSwirl.y * fT + uDrain.y * log(max(uDrain.w, 1.0) / (d + max(uDrain.z, 1.0)));
   vec2 dir = vec2(cos(ang), sin(ang));
   vec2 sp = uCentre + dir * s;
 
@@ -72,10 +105,27 @@ void main() {
   // THE DARKEST TAP, NOT THE MEAN (see the note at the head of this file). The footprint is how
   // much drawing this one pixel now has to speak for; below half a pixel there is nothing to
   // gather and the single nearest tap is the honest answer.
-  float foot = clamp((s / max(d, 1.0) - 1.0) * 0.5, 0.0, uSwirl.w);
+  //
+  // AND IT IS NOT A DISC. Along the radius the drawing is squeezed by ds/dd and across it by s/d
+  // and by the whirl's shear, and by the last second those two differ by ten to one: a line laid
+  // across the pull is thinned to a thread and drops into single pixels, while the same line laid
+  // along it is dragged out into an arc. So the footprint is an ellipse with the map's own axes —
+  // long where the squeeze is, short where it is not — and the darkest tap in it keeps every line
+  // at the width of the nib that drew it while the vortex stretches it along its tangent. A round
+  // footprint big enough to hold the first would blacken the second.
+  float dm = -uSwirl.z * uFall.y * x * pow(max(1.0 - x, 0.0), max(uFall.y - 1.0, 0.0));
+  float dsdd = max(mag + dm, 0.05);                      // px of drawing per px of frame, radially
+  float tang = max(s / max(d, 1.0), uDrain.y * s / (d + max(uDrain.z, 1.0)));  // …and tangentially
+  // …and how far either is allowed to reach. With no drain running these are the gather cap and
+  // half of it, which is the wind-up's own footprint to the pixel.
+  float capR = uSwirl.w * (1.0 + 0.60 * uDrain.y);
+  float capT = uSwirl.w * (0.5 + 0.35 * uDrain.y);
+  float footR = clamp((dsdd - 1.0) * 0.5, 0.0, capR);
+  float footT = clamp((tang - 1.0) * 0.5, 0.0, capT);
+  float foot = max(footR, footT);
   if (foot > 0.45) {
-    vec2 t1 = dir * foot;                                       // along the pull
-    vec2 t2 = vec2(-dir.y, dir.x) * min(foot, uSwirl.w * 0.5);  // across it
+    vec2 t1 = dir * footR;                    // along the pull
+    vec2 t2 = vec2(-dir.y, dir.x) * footT;    // across it
     // four taps until the footprint is wider than a nib; eight only where the drawing is being
     // squeezed by more than three to one, which is the last second and a half of the ten
     float n = foot > 1.3 ? 8.0 : 4.0;

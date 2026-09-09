@@ -12,10 +12,18 @@
 //         centre in screen space, with a radial pull along it, and its reach is a disc that starts
 //         at the size of the dial and ends past the corners of the sheet — which is why the far
 //         corners of the room are the last thing to come in.
-//  10.0   the room is all in the clock.
-//  10.0→10.72  it pops back out: a damped spring, e^-6.5t·cos(11t), which crosses zero at 10.14,
-//         overshoots to -0.155 at about 10.28 (the room a little larger than life and counter-
-//         twisted a few degrees), and is home and still by 10.72. The hands ride the same spring
+//   5.6   THE ROOM STOPS BEING A ROOM. Until here it is a rectangle being turned and squeezed; from
+//         here the drain runs (see `whirl` and `hole` below) and its own lines are wound into the
+//         spiral's arms — the walls' edges, the pictures' edges and the edge of the drawing itself
+//         leave the vertical and the horizontal and arrive as arcs.
+//   9.6   nothing of it is left outside the vortex.
+//  10.0   the sheet is BARE. Not faded, not covered: every pixel of the frame is now asking for
+//         drawing from beyond the edge of the sheet, and there was never any there.
+//  10.0→10.25  and it stays bare. Three twelfths of nothing at all, which is the beat the pop
+//         needs to be a pop.
+//  10.25→10.97  it pops back out: a damped spring, e^-6.5t·cos(11t), which crosses zero at 10.39,
+//         overshoots to -0.155 at about 10.53 (the room a little larger than life and counter-
+//         twisted a few degrees), and is home and still by 10.97. The hands ride the same spring
 //         back through the real time and settle on it.
 //   after  everything is exactly as it was. props' own tellTheTime has the dial again, the tick is
 //         back at one a second, and ink's final pass is switched off, which means not compiled,
@@ -34,20 +42,33 @@ import * as THREE from 'three';
 export const T = {
   wind: 0.0,     // the click: the hands let go
   swirl: 1.6,    // the swirl starts out of the face
-  peak: 10.0,    // the room is in the clock
-  pop: 10.143,   // the spring's first zero crossing: the room is back out and going past itself
-  done: 10.72,   // home, still, and switched off
+  drain: 5.6,    // the room stops being a room: its own lines start flowing into the arms
+  peak: 10.0,    // the room is all the way in, and the sheet is bare
+  bare: 10.25,   // …and it stays bare. Three twelfths of nothing at all, and then the pop
+  pop: 10.393,   // the spring's first zero crossing: the room is back out and going past itself
+  done: 10.97,   // home, still, and switched off
 };
 const SPRING = (tau) => Math.exp(-6.5 * tau) * Math.cos(11 * tau);
 const mix25_6 = (u) => 0.55 * Math.pow(u, 2.5) + 0.45 * Math.pow(u, 6);
+const sat = (u) => Math.max(0, Math.min(1, u));
+// where in the wind-up the drain starts, as a fraction of it: t = 5.6 s of the 1.6 → 10.0 climb
+const DRAIN0 = (T.drain - T.swirl) / (T.peak - T.swirl);
 
 // The whole effect in one signed number k(t): 0 before the swirl, 1 at the peak, and the spring's
 // small negative tail on the way home. Everything the pass is given is a function of it.
 export function vortexAt(t) {
   if (t < 0 || t >= T.done) return null;
   const spin = Math.min(t, T.peak) / T.peak; // the hands and the tick run from the click, not the swirl
-  const k = t < T.peak ? Math.pow(Math.max(0, (t - T.swirl) / (T.peak - T.swirl)), 1.0) : SPRING(t - T.peak);
+  // …and the quarter second of nothing sits INSIDE k, between the peak and the spring, so that
+  // every number below holds at its wound-up value while the sheet is empty and the spring, when
+  // it comes, starts from a room that is genuinely gone.
+  const k = t < T.peak ? Math.pow(Math.max(0, (t - T.swirl) / (T.peak - T.swirl)), 1.0)
+    : t < T.bare ? 1
+    : SPRING(t - T.bare);
   const fwd = Math.max(0, k), back = Math.min(0, k);
+  // the drain's own phase: 0 until the sixth second, 1 at the peak — and, because it is a function
+  // of k and not of t, it un-drains on the spring's way home without a curve of its own.
+  const drain = sat((fwd - DRAIN0) / (1 - DRAIN0));
   return {
     t,
     k,
@@ -83,6 +104,34 @@ export function vortexAt(t) {
     // room is disturbed), falling as the swirl takes the frame: the far corners come in last.
     twistFall: 2.4 - 0.8 * fwd,
     pullFall: 2.6 - 0.9 * fwd,
+    // ── AND THEN THE ROOM GOES DOWN IT ───────────────────────────────────────────────────────
+    // The user, on the wind-up above: "you're now keeping the room drawing square but morphing its
+    // outlines. what if all the lines would actually turn into the actual vortex and the room would
+    // vortex out of existence entirely? only to pop back once everything has been imploded." They
+    // are describing what the falloffs cannot do. `twist` dies off over `reach`, so by the time the
+    // drawing is small it sits where the falloff is flat: one angle for the whole of it, which is a
+    // rotation, which is why the room stayed a rectangle to the end. These two numbers are the
+    // answer and they are handed to the pass, not to the room:
+    //   whirl — radians per e-fold of radius. Shear that does not care how big the thing is, so the
+    //           room's own lines are wound into arms of the spiral at every scale, and go on being
+    //           wound as the last of it shrinks past a nib's width.
+    //   hole  — how far past the sheet's far corner the pull now reaches, 0..1 of it. It is a pull
+    //           with NO falloff: at 1 every pixel of the frame asks for drawing from beyond the
+    //           edge of the sheet and is given paper. That is the whole of "out of existence" —
+    //           nothing dissolves, nothing fades; the lines leave by the middle, innermost first,
+    //           and the corners, having furthest to go, are the last four things on the paper.
+    // Both hold at full through the bare quarter second, and both are gone by the second frame of
+    // the pop, because both are functions of k.
+    //
+    // 3.5 AND NOT MORE, AND THE LIMIT IS THE PAPER'S, NOT THE EYE'S. Shear is measured against the
+    // squeeze it is added to: by nine seconds a pixel already stands for four or five of drawing,
+    // and a whirl of five and a half then drags what is left more than twenty pixels of the room
+    // sideways between one pixel of the frame and the next. Nothing survives that but a black
+    // knot — the mark stops being a line and becomes a count of how much ink was nearby. At three
+    // and a half the arcs stay arcs: the hatching on the far wall is still hatching at t = 9.
+    whirl: 3.5 * Math.pow(drain, 0.9),
+    hole: Math.pow(sat((drain - 0.80) / 0.20), 1.6),
+    drain,
     arms: Math.max(0, Math.min(1, (fwd - 0.02) / 0.16)),
     // FEWER WINDINGS THAN LOOKS RIGHT ON PAPER. Three arms at 2.2 turns each puts six or seven
     // crossings on every radius, each winding 100 px inside the last, and the eye reads a target,
@@ -245,6 +294,25 @@ export function buildVortex(ctx, { clock, switches, dial = 0.185, setTime = null
       step(ctx); // the first drawing of it lands on the frame of the click, not the one after
       return true;
     },
+    // …and the same thing from a tool: any instant, no reload. tools/_egg-vortex-proof.mjs takes
+    // eleven frames of a ten-second thing and the headless build is the whole of the cost.
+    at(v) {
+      hold = v == null ? null : Math.max(0, +v);
+      frame0 = -1;
+      phase = null;
+      step(ctx);
+      // …and then the two things on the dial that this piece borrows and props owns: the hands and
+      // the bob. props.update puts both back where the room's own time says every stepped frame and
+      // lets this piece override them; a tool freezes the scene clock, so props.update is not
+      // running, and a still taken AFTER the ten seconds would otherwise keep the hands at fifteen
+      // hours past and the bob at whatever angle the last instant left. Between them they are the
+      // whole of the difference between a t = 11 frame and a t = 0 one.
+      if (!api.active) {
+        setTime?.(now());
+        const p = clock?.userData?.pendulum;
+        if (p) p.rotation.z = 0.16 * Math.sin(ctx.clock.t * Math.PI);
+      }
+    },
     // for a still: sit at one instant of the effect (the `vortex-mid` judging state is t = 6)
     setState(name = 'default') {
       const m = /^vortex(?:-(mid|start|peak|back|out))?$/.exec(name ?? '');
@@ -331,6 +399,43 @@ export function buildVortex(ctx, { clock, switches, dial = 0.185, setTime = null
       // across a part of the room nothing has happened to yet reads as a decal over a photograph
       target.armReach = Math.min(target.reach * 0.72, diag * 0.55);
       target.armPhase = v.armPhase;
+
+      // ── the drain ──
+      // The far corner of the sheet from the dial: the furthest any pixel of the drawing is from
+      // the middle, and so the distance the hole has to reach before there is nothing left to ask
+      // for. Measured, not guessed — the clock hangs high on the wall and the corners below it are
+      // half as far again as the ones above.
+      const px = cx * W, py = cy * H;
+      const rmax = Math.max(
+        Math.hypot(px, py), Math.hypot(W - px, py),
+        Math.hypot(px, H - py), Math.hypot(W - px, H - py),
+      );
+      target.norm = rmax;
+      target.whirl = v.whirl;
+      target.hole = rmax * 1.08 * v.hole; // 1.08: past the corner, so the last frame is bare paper
+      // …and where the drawing has got to. The pass's own radial map, solved backwards for the
+      // radius at which it is already asking for the far corner: outside that circle every pixel
+      // reads paper, so that circle IS the drawing now. The arms are held to it (the spiral and the
+      // wound-up room are one object, not a decal over one) and the hub is cut from it.
+      const sAt = (r) => r * (1 + target.pull * Math.pow(Math.max(0, 1 - Math.min(1, r / Math.max(target.reach, 1))), target.pullFall)) + target.hole;
+      let disc = 0;
+      if (sAt(0) < rmax) {
+        let lo = 0, hi = rmax;
+        for (let i = 0; i < 22; i++) {
+          const mid = (lo + hi) / 2;
+          if (sAt(mid) < rmax) lo = mid; else hi = mid;
+        }
+        disc = lo;
+      }
+      // …and the arms come in with it. Not before: for eight of the ten seconds the four strokes
+      // reach out past the wound-up drawing, which is the composition the whole effect has had
+      // since it was built — a wide spiral with the room being drawn down its middle. It is only
+      // when the hole opens that they contract, and they stay a little wider than what is left of
+      // the room, so the vortex is always the thing swallowing it and never a decal inside it.
+      target.armReach = Math.min(target.armReach, Math.max(target.armReach * Math.pow(1 - v.hole, 3), disc * 1.05));
+      // the hub: inside it the whirl turns as a body. A fifth of what is left, and never less than
+      // the width of a few nibs — a turn that runs faster than a pixel is not a line any more.
+      target.core = Math.max(9, disc * 0.20);
     }
 
     // …and what it tells the rest of the evening. The phases go one way and only one way: the
