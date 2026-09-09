@@ -72,7 +72,9 @@ export const STORIES = [
     name: 'the photograph',
     where: 'the left frame on the back wall, over the switchboard',
     fact: 'It was on the wall when he took the room; he did not hang it and has not taken it down. It shows a woman seated at this switchboard, who worked it for thirty years, and he does not know her name. His own mother was a systems operator at DARPA and rarely spoke about the work. Nobody photographed his mother. He never says the two facts are connected and they are the reason the room is what it is. Visitors assume the woman is his mother; she is not, and he corrects them flatly.',
-    keys: /\bphotograph\b|\bphoto\b|\bportrait\b|\bwoman\b|\blady\b|\byour (?:mum|mom|mother)\b|^(?:mum|mom|mother)$|\bwho is she\b|\bwho'?s she\b/,
+    // RETIRED (round 10): the photograph came off the wall when the left frame became the
+    // Nakamoto card (egg-nakamoto.js). No key, so nothing asks for it; the entry stays for the record.
+    keys: /$^/,
     lines: [
       'That was on the wall when I took the room. She worked this board for thirty years. I do not know her name. My mother did the same job in another country, and nobody took a picture of her.',
       'I did not hang it. It is an operator at this board and I never learned who. My mother sat at one like it, somewhere else. There is no photograph of my mother.',
@@ -116,15 +118,15 @@ export const STORIES = [
     ],
   },
   {
-    id: 'barometer',
-    name: 'the barometer',
+    id: 'mirror',
+    name: 'the mirror',
     where: 'the round frame on the stage-left wall',
-    fact: 'He spent a year as a physicist at CERN and left because the particles were too predictable: everything they measured did exactly what was expected of it. The barometer claims to tell you what is coming and is wrong about twice a month, which is why he keeps it, hanging in a room where a man is paid to do the same thing.',
-    keys: /\bbarometer\b|\bweather glass\b|\bround (?:frame|dial|thing|instrument)\b|\bdial on the wall\b/,
+    fact: 'He spent a year as a physicist at CERN and left because the particles were too predictable: everything they measured did exactly what was expected of it. The round mirror on the stage-left wall is the one instrument in the room that predicts nothing, and he likes it for that.',
+    keys: /\bmirror\b|\blooking[- ]glass\b|\bround (?:frame|glass|thing)\b|\bglass on the wall\b/,
     lines: [
-      'I worked for a year among physicists. Everything they measured did exactly what they expected of it. That barometer is wrong about twice a month, and that is why it is on the wall.',
-      'A barometer. I was at CERN for a year and left; the particles were too obedient. This one is mistaken twice a month, which I find restful.',
-      'It claims to know what is coming and it is frequently wrong. I spent a year somewhere nothing was. I prefer the barometer.',
+      'I worked for a year among physicists. Everything they measured did exactly what they expected of it. That mirror has never once shown me what I expected, and that is why it is on the wall.',
+      'A mirror. I was at CERN for a year and left; the particles were too obedient. The glass predicts nothing at all, which I find restful.',
+      'It shows whoever looks and keeps no record. I spent a year somewhere everything was recorded. I prefer the mirror.',
     ],
   },
   {
@@ -264,7 +266,7 @@ const PLAIN = [
   [/\bsiphon\b|\bsoda\b/, ['A soda siphon on a workbench. I did not put it there and I have not moved it.']],
   [
     /\bnewspapers?\b|\ble soir\b|\bpaper on the\b|\bcourrier\b/,
-    ['Newspapers. I keep them for the weather page, which is wrong about as often as the barometer is.'],
+    ['Newspapers. I keep them for the weather page, which is wrong about as often as I am.'],
   ],
   [
     /\bhat ?stand\b|\bcoat\b|\bscarf\b|\bumbrella\b|\bcane\b|\bboater\b|\bhat\b|\bheadset\b|\bearpieces?\b/,
