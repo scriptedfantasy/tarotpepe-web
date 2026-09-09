@@ -563,6 +563,12 @@ function situation(b, names = []) {
         : ' They asked for all three, and each has just been shown in turn with its printed name beside it.';
       return `The room has taken the camera in on the cards already lying face up; nothing is being dealt and nothing is being shuffled.${table}${one}`;
     }
+    // THE PHONE. The visitor found the two jacks on the wall board that make a circuit — nobody
+    // told them there were two and nothing in the room says which — and something on the other end
+    // of the dead exchange rang. He cannot get up: the note says he has already picked up, so that
+    // there is nothing here for him to do but talk and put it down.
+    case 'phone':
+      return 'The exchange on the wall has just rung and you have picked up the receiver without moving from your chair. Say who it was and what they wanted, in two sentences, then put it down.';
     case 'followup':
       return `The reading is done and the three cards are lying face up.${table} The visitor has asked something.${levers}`;
     case 'farewell':

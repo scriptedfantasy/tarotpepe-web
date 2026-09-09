@@ -1340,6 +1340,7 @@ export function operatorPosition({ w = 1.04, h = 0.82, d = 0.38 }) {
   jack.castShadow = true;
   jack.position.set(0, 0.88, -d / 2 + 0.03);
   g.add(jack);
+  g.userData.jackStrip = jack; // egg-switchboard.js takes it off the back and hangs it on the wall
   // the cord well: four weights on their pulleys, at four heights, behind the shelf
   const wellZ = F - FRONT + 0.03;
   [0.2, 0.28, 0.16, 0.245].forEach((wy, i) => {

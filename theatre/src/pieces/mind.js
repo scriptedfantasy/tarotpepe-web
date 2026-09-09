@@ -134,6 +134,13 @@ function scripted({ beat, user, slug, position, question, spread = [], focus = n
       return { text: followupScript(said, spread, talk.stance), offered: false };
     case 'farewell':
       return { text: farewellScript(talk), offered: false };
+    // THE PHONE, and the empty string is the whole answer. The board on the wall rang because the
+    // visitor found the pair (egg-switchboard.js); with no live voice there is nothing written for
+    // it and nothing is going to be. A bell in a room where nobody says anything afterwards is a
+    // better event than a canned sentence, and a canned sentence would be the same one every time
+    // a visitor found the pair — which is exactly the thing the user ruled out for the shuffle.
+    case 'phone':
+      return { text: '', offered: false };
     default:
       return { text: beatText(beat), offered: false };
   }

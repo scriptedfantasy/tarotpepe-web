@@ -24,11 +24,12 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import * as O from './props-objects.js';
+import { build as buildSwitchboard } from './egg-switchboard.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit'] },
-  files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js'],
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged'] },
+  files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
 export async function build(ctx) {
@@ -366,6 +367,7 @@ export async function build(ctx) {
     // instrument that claims to tell you what is coming and is wrong about twice a month, on the
     // wall of a room where a man is paid to do the same thing.
     const rf = O.roundFrame({ r: 0.17, kind: 'barometer', seed: 7 });
+    rf.name = 'barometer'; // egg-switchboard.js moves it downstage: the board hangs where it hung
     rf.position.set(x, 1.95, -1.75);
     rf.rotation.y = rot;
     g.add(rf);
@@ -818,8 +820,28 @@ export async function build(ctx) {
     };
   })();
 
+  // ---- THE SWITCHBOARD ON THE LEFT-HAND WALL. The room's third switch. -------------------------
+  // The user: "the switchboard is too hidden behind him. what if we placed the switchboard on the
+  // lefthand wall?" It is all in src/pieces/egg-switchboard.js — the board, its six jacks, its two
+  // cords, the pair that rings — because it is a piece of business and not set dressing, and
+  // because everything it needs from this file is the group to stand in and the arbiter above.
+  const SWITCHBOARD = buildSwitchboard(ctx, {
+    group: g,
+    switches: SWITCHES,
+    chest, // its jack strip came off the back of the position and is on the wall now
+    barometer: g.getObjectByName('barometer'),
+  });
+  // While he is answering the phone the cords stay in: dialogue says how long each line of his is,
+  // and the board holds them until the last one has been read.
+  ctx.on?.('dialogue:say', ({ seconds }) => SWITCHBOARD.holdFor(seconds ?? 1.5));
+
   return {
     group: g,
+    // THE SWITCHBOARD, on the stage-left wall between the press door and the window. `plugged` is
+    // which jacks have cords in them, `plug(i)` / `pull(i)` work one as a tap does, `set([i, j])`
+    // puts them there for a still with no cue and no bell, and hitBox/tapBox take a jack's index
+    // (or none, for the whole board).
+    switchboard: SWITCHBOARD,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -868,6 +890,8 @@ export async function build(ctx) {
       const m = /^radio-(off|a|b|c)$/.exec(name ?? '');
       if (m) RADIO.set(m[1] === 'off' ? 0 : 'abc'.indexOf(m[1]) + 1);
       CAT.set(name === 'cat-lit');
+      // `switchboard-plugged` puts both cords in the pair, silently: the board at work, for a still.
+      SWITCHBOARD.set(name === 'switchboard-plugged' ? SWITCHBOARD._pair : []);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -877,6 +901,7 @@ export async function build(ctx) {
       SWITCHES.update();
       RADIO.update(ctx);
       CAT.update();
+      SWITCHBOARD.update();
     },
   };
 }

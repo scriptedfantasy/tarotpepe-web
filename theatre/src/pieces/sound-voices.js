@@ -60,6 +60,19 @@ export const LEVEL = {
   hinge: 0.058,
   knock: 0.122,
   footfall: 0.05,
+  // THE SWITCHBOARD ON THE LEFT-HAND WALL (egg-switchboard.js). Three voices, in the order the
+  // visitor meets them and at three different distances from being an event:
+  //   plug      a jack sleeve going home. The same manners as the cat's switch — under the
+  //             escapement, over the room tone, gone before anyone can consider it.
+  //   dialtone  the exchange's own 440, one second of it, and it is not heard in the ROOM: it
+  //             comes out of the radio's loudspeaker (sound.js `through: 'set'`), so it is a
+  //             small voice in a wooden box and is levelled like the record and not like a bell.
+  //   bell      the one loud thing this board does, and it happens perhaps once an evening. Over
+  //             the door's latch, under the knock: a telephone bell in the next room, which is
+  //             where the wall is from the lens.
+  plug: 0.03,
+  dialtone: 0.05,
+  bell: 0.094,
 };
 
 // A filter eats most of a noise burst, and how much depends on its Q, so LEVEL above is a wish and
@@ -93,6 +106,11 @@ export const TRIM = {
   hinge: 29.544,
   knock: 1.569,
   footfall: 1.599,
+  // measured with tools/_egg-switchboard-proof.mjs --sound, which renders these three through the
+  // same OfflineAudioContext tools/_sound-probe.mjs uses and prints the trims back
+  plug: 2.318,
+  dialtone: 0.784,
+  bell: 0.523,
 };
 
 // how long each cue is allowed to be, in seconds; the probe asserts the rendered length against it
@@ -127,6 +145,13 @@ export const LENGTH = {
   hinge: 0.42,
   knock: 0.14,
   footfall: 0.17,
+  plug: 0.07,
+  // one second, and it is the user's own number: "the exchange's dial tone hums through the
+  // radio's speaker for a second". egg-switchboard.js reads it back as DIAL_S.
+  dialtone: 1.0,
+  // two seconds, and it is one ring and not a ringing telephone: a French bell rings for about
+  // that and then there is a pause of four, and the pause is where he picks up.
+  bell: 2.0,
 };
 
 // ---- the two primitives --------------------------------------------------------------------------
@@ -615,9 +640,122 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.type;
     }
 
+    // ---- the switchboard on the left-hand wall (egg-switchboard.js) ----------------------------
+
+    // A PLUG GOING HOME. A brass sleeve into a brass jack: one short scrape as the shank goes in,
+    // and then the click of the springs closing behind it 25 ms later. Brighter than the cat's
+    // switch (brass, not bakelite) and half the length of the door's latch, which is the same
+    // family of noise made by a much bigger piece of metal.
+    case 'plug': {
+      burst(ac, dest, { t, dur: 0.022, level: L('plug') * 0.5, freq: 1650, q: 1.3, sweep: 700, pan, seed });
+      burst(ac, dest, { t: t + 0.025, dur: 0.005, level: L('plug'), freq: 3150, q: 1.5, pan, seed: seed + 1 });
+      burst(ac, dest, { t: t + 0.025, dur: 0.024, level: L('plug') * 0.34, freq: 420, q: 1.1, type: 'lowpass', pan, seed: seed + 2 });
+      struck(ac, dest, { t: t + 0.025, dur: 0.04, level: L('plug') * 0.2, freq: 1870, type: 'triangle', partials: [[1.71, 0.4, 0.35]], pan });
+      return LENGTH.plug;
+    }
+
+    // THE FRENCH DIAL TONE. A continuous 440 — the same tone that sits under tune b as its tonic
+    // (sound-tune.js: "the dial tone IS the tonic") — with the exchange's 50 Hz mains under it and
+    // the hiss of an open pair over it. It does not fade in and it does not fade out: it stands at
+    // its level for the whole second and is CUT, because that is what a tone off a line does when
+    // the cord comes out. It is played through the radio's own loudspeaker, so everything above
+    // 3.6 kHz and below 240 is gone by the time anyone hears it — which is exactly the band a
+    // telephone had, and the reason it sounds like one.
+    case 'dialtone': {
+      const dur = LENGTH.dialtone;
+      const g = ac.createGain();
+      decay(g, t, dur, L('dialtone'), dur - 0.05);
+      g.connect(out(ac, dest, pan));
+      for (const [f, a, ty] of [[440, 1, 'sine'], [880, 0.1, 'sine'], [50, 0.16, 'sine']]) {
+        const o = ac.createOscillator();
+        o.type = ty;
+        o.frequency.setValueAtTime(f, t);
+        const og = ac.createGain();
+        og.gain.value = 0; // see decay(): a gain node's default is 1, and one sample of it is a click
+        og.gain.setValueAtTime(a, t);
+        o.connect(og);
+        og.connect(g);
+        o.start(t);
+        o.stop(t + dur + 0.01);
+      }
+      // the pair itself: a thin band of noise, so the tone is on a LINE and not in a synthesiser
+      const n = ac.createBufferSource();
+      n.buffer = noiseBuffer(ac);
+      const bp = ac.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 1700;
+      bp.Q.value = 0.9;
+      const ng = ac.createGain();
+      ng.gain.value = 0;
+      ng.gain.setValueAtTime(0.05, t);
+      n.connect(bp);
+      bp.connect(ng);
+      ng.connect(g);
+      n.start(t, rng() * (NOISE_S - dur - 0.05));
+      n.stop(t + dur + 0.01);
+      return dur;
+    }
+
+    // AN EXCHANGE BELL, RUNG ONCE. Two cup gongs and a clapper trembling between them: the tone is
+    // a pair of struck pitches a minor third apart and the RING is the clapper, seventeen strikes a
+    // second, which is an amplitude and not a note. So it is built the way the thing is built — the
+    // gongs standing, the clapper as a square wave on their gain — rather than as forty separate
+    // strikes, which would be forty times the oscillators for a sound nobody could tell apart.
+    // Two seconds, at level from the first sample, and the last half of it is the gongs running
+    // down after the clapper stops.
+    case 'bell': {
+      const dur = LENGTH.bell;
+      const env = ac.createGain();
+      decay(env, t, dur, L('bell'), dur - 0.55);
+      env.connect(out(ac, dest, pan));
+      const trem = ac.createGain();
+      trem.gain.value = 0.5; // ...and the clapper swings it between 0 and 1
+      trem.connect(env);
+      const lfo = ac.createOscillator();
+      lfo.type = 'square';
+      lfo.frequency.setValueAtTime(17.5, t);
+      const lg = ac.createGain();
+      lg.gain.value = 0.46;
+      lfo.connect(lg);
+      lg.connect(trem.gain);
+      lfo.start(t);
+      lfo.stop(t + dur - 0.35); // the clapper stops before the gongs do
+      for (const [f, a] of [[1042, 1], [1247, 0.7], [2090, 0.26], [3130, 0.1]]) {
+        const o = ac.createOscillator();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(f, t);
+        const og = ac.createGain();
+        og.gain.value = 0;
+        og.gain.setValueAtTime(a, t);
+        o.connect(og);
+        og.connect(trem);
+        o.start(t);
+        o.stop(t + dur + 0.01);
+      }
+      // the clapper itself, dry, on the same tremble: brass hitting brass
+      const n = ac.createBufferSource();
+      n.buffer = noiseBuffer(ac);
+      const bp = ac.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 4200;
+      bp.Q.value = 1.4;
+      const ng = ac.createGain();
+      ng.gain.value = 0;
+      ng.gain.setValueAtTime(0.22, t);
+      n.connect(bp);
+      bp.connect(ng);
+      ng.connect(trem);
+      // from the top of the buffer, and not from a random point in it: the bell is as long as the
+      // noise buffer is, and a source started at a NEGATIVE offset throws — which is a bell that
+      // never rings, silently, inside at()'s own catch
+      n.start(t, 0);
+      n.stop(t + dur - 0.3);
+      return dur;
+    }
+
     default:
       return 0;
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell'];
