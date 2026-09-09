@@ -55,6 +55,10 @@ export const LEVEL = {
   // the cat lamp's tumbler, thrown. The same job as the static and the same manners: under the
   // clock, over the room tone, and gone before anyone can consider it.
   switch: 0.028,
+  // the mains lever in the fuse box: a spring, two contacts and an iron carcase. The heaviest and
+  // lowest thing any switch in this room does, and above the knock, because it takes the light
+  // with it.
+  clack: 0.138,
   // the door, which is nearer the lens than anything else in the film and louder for it
   latch: 0.072,
   hinge: 0.058,
@@ -102,6 +106,7 @@ export const TRIM = {
   // measured with tools/_props-r9-switch.mjs, which reproduces the probe's own figures for static,
   // latch and clock to the third decimal before it reports this one
   switch: 2.645,
+  clack: 1.218,
   latch: 2.241,
   hinge: 29.544,
   knock: 1.569,
@@ -140,6 +145,7 @@ export const LENGTH = {
   type: 0.03,
   static: 0.3,
   switch: 0.05,
+  clack: 0.2,
   clock: 0.055,
   latch: 0.06,
   hinge: 0.42,
@@ -753,9 +759,23 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return dur;
     }
 
+    // THE MAINS. A cast-iron box screwed to a plaster wall, and a lever with a spring in it. The
+    // contacts part with one hard grain, the box rings low under it, and 34 ms later the quadrant
+    // arrives against its stop and the whole thing lands a second time — which is what makes it a
+    // mains switch and not a light switch. Lower and heavier than anything else in the room: it
+    // takes the chandelier with it, and it should sound like it.
+    case 'clack': {
+      burst(ac, dest, { t, dur: 0.005, level: L('clack') * 0.3, freq: 1350, q: 1.6, pan, seed });
+      burst(ac, dest, { t, dur: 0.1, level: L('clack'), freq: 132, q: 0.8, type: 'lowpass', pan, seed: seed + 1 });
+      struck(ac, dest, { t, dur: 0.19, level: L('clack') * 0.62, freq: 78 + rng() * 8, type: 'sine', partials: [[2.74, 0.24, 0.3], [4.1, 0.1, 0.2]], pan });
+      burst(ac, dest, { t: t + 0.034, dur: 0.01, level: L('clack') * 0.34, freq: 720, q: 2.4, pan, seed: seed + 2 });
+      burst(ac, dest, { t: t + 0.034, dur: 0.07, level: L('clack') * 0.66, freq: 168, q: 0.9, type: 'lowpass', pan, seed: seed + 3 });
+      return LENGTH.clack;
+    }
+
     default:
       return 0;
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack'];

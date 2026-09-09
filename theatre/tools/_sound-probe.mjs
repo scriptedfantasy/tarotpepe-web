@@ -21,7 +21,7 @@ const args = Object.fromEntries(
   }, []),
 );
 const PLOT = args.plot ?? '/tmp/sound-waveforms.png';
-const BASE = 'http://127.0.0.1:5173/';
+const BASE = process.env.BASE ?? 'http://127.0.0.1:5173/';
 const INK = '#0d0e0d';
 const PAPER = '#f8f9f4';
 const MUSTARD = '#c4c059';
@@ -241,7 +241,7 @@ export class ErrorOverlay {}`,
   return page;
 }
 
-const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall'];
+const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'clack'];
 const SECONDS = (n) => (n === 'title' || n === 'closing' ? 2.0 : n === 'street' ? 1.0 : n === 'riffle' || n === 'creak' || n === 'hinge' ? 0.8 : 0.4);
 // the door's five cues and where they belong across the 2.6 s swing (src/pieces/entrance.js:
 // LATCH 1/12, SHUT_AFTER_LATCH 2/12, eight drawings on twos, a beat's rest, then the walk in)
@@ -440,7 +440,7 @@ console.log(`\nTRIM (measured; worst cue is ${(offBy * 100).toFixed(0)}% off its
 console.log('export const TRIM = {\n' + Object.entries(suggest).map(([k, v]) => `  ${k}: ${v},`).join('\n') + '\n};\n');
 
 // ---- assertions -------------------------------------------------------------------------------------
-const MAXLEN = { cut: 0.03, snap: 0.13, deal: 0.11, settle: 0.15, pick: 0.15, flip: 0.09, riffle: 0.47, tap: 0.12, title: 1.5, closing: 1.5, creak: 0.44, street: 0.62, type: 0.03, clock: 0.055, latch: 0.06, hinge: 0.42, knock: 0.14, footfall: 0.17 };
+const MAXLEN = { cut: 0.03, snap: 0.13, deal: 0.11, settle: 0.15, pick: 0.15, flip: 0.09, riffle: 0.47, tap: 0.12, title: 1.5, closing: 1.5, creak: 0.44, street: 0.62, type: 0.03, clock: 0.055, latch: 0.06, hinge: 0.42, knock: 0.14, footfall: 0.17, clack: 0.2 };
 const fails = [];
 const ok = (cond, msg) => {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`);

@@ -25,6 +25,7 @@ import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import * as O from './props-objects.js';
 import { build as buildSwitchboard } from './egg-switchboard.js';
+import { eggFuse } from './egg-fuse.js';
 
 export const meta = {
   name: 'props',
@@ -835,6 +836,10 @@ export async function build(ctx) {
   // and the board holds them until the last one has been read.
   ctx.on?.('dialogue:say', ({ seconds }) => SWITCHBOARD.holdFor(seconds ?? 1.5));
 
+  // ---- THE FUSE BOX'S LEVER, and the night the room drops to without it. ------------------
+  // The room's fourth switch, all in src/pieces/egg-fuse.js; it registers with the arbiter above.
+  const FUSE = eggFuse(ctx, { group: g, switches: SWITCHES });
+
   return {
     group: g,
     // THE SWITCHBOARD, on the stage-left wall between the press door and the window. `plugged` is
@@ -842,6 +847,11 @@ export async function build(ctx) {
     // puts them there for a still with no cue and no bell, and hitBox/tapBox take a jack's index
     // (or none, for the whole board).
     switchboard: SWITCHBOARD,
+    // THE MAINS LEVER on the terminal box, stage right. `out` is true when the lever is down and
+    // the room is on the one lamp that is not on the mains, `pull()` throws it as a click does (a
+    // cut on the next 12 fps drawing, with the clack on the click), `set(out, lit)` throws it with
+    // no cue for a still, and hitBox/tapBox are its box on the glass and the box a thumb is given.
+    fuse: FUSE,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -892,6 +902,9 @@ export async function build(ctx) {
       CAT.set(name === 'cat-lit');
       // `switchboard-plugged` puts both cords in the pair, silently: the board at work, for a still.
       SWITCHBOARD.set(name === 'switchboard-plugged' ? SWITCHBOARD._pair : []);
+      // `fuse-out` is the lever down with the one lamp that is not on the mains still burning;
+      // `fuse-dark` is the same room with that lamp out. Every other name puts the mains back.
+      FUSE.set(name === 'fuse-out' || name === 'fuse-dark', name !== 'fuse-dark');
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -902,6 +915,7 @@ export async function build(ctx) {
       RADIO.update(ctx);
       CAT.update();
       SWITCHBOARD.update();
+      FUSE.update(ctx);
     },
   };
 }
