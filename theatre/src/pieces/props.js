@@ -21,6 +21,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import * as O from './props-objects.js';
+import { makeSwitches, buildVortex } from './egg-vortex.js';
 
 export const meta = {
   name: 'props',
@@ -349,6 +350,7 @@ export async function build(ctx) {
     O.hangCords(g, 0, 2.06 + 0.185, 0.1, HOOK_Y, WALL + 0.012);
     g.userData.pendulum = clock.userData.pendulum;
     g.userData.setClockTime = clock.userData.setTime;
+    g.userData.wallClock = clock; // what a pointer is raycast against; see THE VORTEX below
   }
 
   // ---- the stage-left wall (no window there): one round picture and a small shelf of jars ------------
@@ -645,8 +647,28 @@ export async function build(ctx) {
     };
   })();
 
+  // ---- THE SWITCHES, and the clock among them ---------------------------------------------------
+  // The arbiter (egg-vortex.js) is one listener on the glass and one cursor for every object in the
+  // room a pointer can work; the first switch whose box the pointer is in gets the click. The clock
+  // is the second one: click the dial and the room is wound into it for ten seconds and popped back
+  // out (the user's easter egg). Nothing announces it — the cursor over the dial is the affordance.
+  const SWITCHES = makeSwitches(ctx);
+  const VORTEX = buildVortex(ctx, {
+    clock: g.userData.wallClock,
+    switches: SWITCHES,
+    dial: 0.185,
+    setTime: g.userData.setClockTime,
+  });
+
   return {
     group: g,
+    // the arbiter above: `names` is the order the switches are asked in, `hovered` the one under
+    // the pointer. The radio still keeps its own listeners; it predates this.
+    switches: SWITCHES,
+    // THE CLOCK'S TEN SECONDS (egg-vortex.js): `start()` sets it off, `t` is where in them we are,
+    // `active` whether it is running, hitBox/tapBox the dial's box on the glass and the box a thumb
+    // is actually given. `?vortex=<t>` and the `vortex-mid` state show one instant of it.
+    vortex: VORTEX,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -682,6 +704,7 @@ export async function build(ctx) {
     setState(name = 'default') {
       const m = /^radio-(off|a|b|c)$/.exec(name ?? '');
       if (m) RADIO.set(m[1] === 'off' ? 0 : 'abc'.indexOf(m[1]) + 1);
+      VORTEX.setState(name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -689,6 +712,7 @@ export async function build(ctx) {
       if (p) p.rotation.z = 0.16 * Math.sin(ctx.clock.t * Math.PI);
       tellTheTime();
       RADIO.update(ctx);
+      VORTEX.update(ctx); // last: while it runs, the hands and the bob are its own
     },
   };
 }

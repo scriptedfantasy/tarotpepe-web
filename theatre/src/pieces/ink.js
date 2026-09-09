@@ -56,6 +56,7 @@ const PAPER = '#f8f9f4';
 const INK = '#0d0e0d';
 import { makeTiles, makePaperGrain } from './ink-tiles.js';
 import { GBUF_VERT, GBUF_FRAG, QUAD_VERT, EDGE_FRAG, EXTEND_FRAG, COMPOSITE_FRAG, DESPECKLE_FRAG } from './ink-shaders.js';
+import { VORTEX_FRAG } from './egg-vortex-shader.js';
 
 export const meta = {
   name: 'ink',
@@ -523,6 +524,78 @@ export async function build(ctx) {
   const _clear = new THREE.Color();
   let mode = MODES[debugMode] ?? 0;
 
+  // ── THE VORTEX: the only thing that ever draws after the ink is composed ────────────────────────
+  // egg-vortex.js (the clock's ten seconds) writes these numbers on the 12 fps step and this pass
+  // reads them; nothing else in the room touches them. While `active` is false the pass costs
+  // NOTHING: its material is never compiled, its buffer is never allocated, and render() ends on
+  // the canvas exactly where it always did.
+  const vortex = {
+    active: false,
+    centre: [0.5, 0.5], // the clock's face, in uv (y up)
+    reach: 0, // css px: the radius the swirl has taken so far
+    twist: 0, // rad at the centre, falling off to nothing at `reach`
+    pull: 0, // how much further out this pixel's drawing came from
+    twistFall: 1.4,
+    pullFall: 1.6,
+    gather: 3.2, // css px: the widest footprint the darkest-tap gather will look over
+    arms: 0, // 0..1: how present the drawn spiral is
+    armCount: 4,
+    armTurns: 1.4,
+    armReach: 0,
+    armPhase: 0,
+  };
+  let vortexMat = null, vortexRT = null;
+  function vortexPass(srcTex, dpr, seed) {
+    if (!vortexMat) {
+      vortexMat = new THREE.ShaderMaterial({
+        glslVersion: THREE.GLSL3,
+        vertexShader: QUAD_VERT,
+        fragmentShader: VORTEX_FRAG,
+        uniforms: {
+          tSrc: { value: null },
+          uRes: { value: new THREE.Vector2() },
+          uDpr: { value: 1 },
+          uSeed: { value: 0 },
+          uCentre: { value: new THREE.Vector2() },
+          uSwirl: { value: new THREE.Vector4() },
+          uFall: { value: new THREE.Vector2() },
+          uArms: { value: new THREE.Vector4() },
+          uArmInk: { value: 0 },
+          uLetterbox: { value: new THREE.Vector2() },
+          uPaper: { value: compMat.uniforms.uPaper.value },
+          uInk: { value: compMat.uniforms.uInk.value },
+        },
+        depthTest: false,
+        depthWrite: false,
+      });
+    }
+    const u = vortexMat.uniforms;
+    u.tSrc.value = srcTex;
+    u.uRes.value.copy(size);
+    u.uDpr.value = dpr;
+    u.uSeed.value = seed;
+    u.uCentre.value.set(vortex.centre[0] * size.x, vortex.centre[1] * size.y);
+    u.uSwirl.value.set(vortex.reach * dpr, vortex.twist, vortex.pull, vortex.gather * dpr);
+    u.uFall.value.set(vortex.twistFall, vortex.pullFall);
+    u.uArms.value.set(vortex.armCount, vortex.armTurns, vortex.armReach * dpr, vortex.armPhase);
+    u.uArmInk.value = vortex.arms;
+    u.uLetterbox.value.copy(compMat.uniforms.uLetterbox.value);
+    fullscreen(vortexMat, null);
+  }
+  // the buffer the composed frame lands in while the swirl is running, and only then
+  function vortexTarget(w, h) {
+    if (vortexRT && (vortexRT.width !== w || vortexRT.height !== h)) {
+      vortexRT.dispose();
+      vortexRT = null;
+    }
+    if (!vortexRT) {
+      vortexRT = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false, stencilBuffer: false });
+      vortexRT.texture.minFilter = vortexRT.texture.magFilter = THREE.NearestFilter;
+      vortexRT.texture.generateMipmaps = false;
+    }
+    return vortexRT;
+  }
+
   function render(ctx) {
     const cam = ctx.camera;
     renderer.getDrawingBufferSize(_size);
@@ -642,6 +715,8 @@ export async function build(ctx) {
     // 6. despeckle. The probe buffers (3..8, 11) are raw readouts and are shown untouched; the
     // three judged states and the two halves that add up to lines-only all go through the sieve,
     // so what is measured is what is shown.
+    // …and where the sieve puts the finished frame: the canvas, unless the vortex is running
+    const last = vortex.active ? vortexTarget(_size.x, _size.y) : null;
     const sieve = mode < 3 || mode === 9 || mode === 10;
     if (sieve) {
       fullscreen(compMat, rt.comp);
@@ -649,8 +724,11 @@ export async function build(ctx) {
       du.tSrc.value = rt.comp.texture;
       du.uRes.value.copy(size);
       du.uDpr.value = dpr;
-      fullscreen(despeckleMat, null);
-    } else fullscreen(compMat, null);
+      fullscreen(despeckleMat, last);
+    } else fullscreen(compMat, last);
+    // 7. the vortex, if the clock has been clicked (egg-vortex.js). While it is idle there is no
+    // seventh pass at all: the sieve wrote straight to the canvas and render() is over.
+    if (last) vortexPass(last.texture, dpr, seed);
 
     renderer.setRenderTarget(prevRT);
     renderer.setClearColor(_clear, prevAlpha);
@@ -660,6 +738,8 @@ export async function build(ctx) {
   const api = {
     params,
     render,
+    // the uniform block egg-vortex.js drives; `active` false is the whole of the off switch
+    vortex,
     tiles: { wall: wallTiles, floor: floorTiles, paper: paperGrain },
     setLetterbox(ratio) {
       params.letterbox = ratio || null;

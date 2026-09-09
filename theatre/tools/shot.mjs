@@ -31,7 +31,8 @@ mkdirSync(dirname(out), { recursive: true });
 
 let url = args.url;
 if (!url) {
-  const u = new URL('http://127.0.0.1:5173/');
+  // BASE lets a builder point every tool at their own dev server's port (BRIEF: never 5173 twice)
+  const u = new URL(process.env.BASE ?? 'http://127.0.0.1:5173/');
   if (args.view) u.searchParams.set('view', args.view);
   if (args.state) u.searchParams.set('state', args.state);
   if (args.seed) u.searchParams.set('seed', args.seed);
