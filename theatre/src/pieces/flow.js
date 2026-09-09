@@ -150,7 +150,19 @@ export async function build(ctx) {
   let picking = false; // the fan is armed: clicks belong to the cards
   let tapped = null; // a laid card the visitor put a finger on, waiting to be shown
   let askAbort = null; // the open field's controller, so a tap can cut it short
+  let rang = false; // the board on the wall rang and he has picked up: one turn owed
   const alive = (token) => token === run;
+
+  // THE PHONE ON THE LEFT-HAND WALL (props.switchboard / egg-switchboard.js). The visitor found
+  // the two jacks that make a circuit, the bell rang, and the board says so. It is handled exactly
+  // as a finger on a card lying on the table is: the open field is cut short, the digression is
+  // played, and the field opens again under whatever he was left holding. It is not a silence —
+  // the quiet counter does not move and no waiting line is spent on it.
+  ctx.on?.('props:switchboard', ({ rang: r } = {}) => {
+    if (!r) return;
+    rang = true;
+    askAbort?.abort();
+  });
 
   // ---- small waits ------------------------------------------------------------------------------
   function wait(seconds, { skippable = false } = {}) {
@@ -649,6 +661,23 @@ export async function build(ctx) {
       const said = await D.ask(prompt, { timeout: patient ? 0 : IDLE_S, hold: 0.35, signal: ac.signal });
       askAbort = null;
       if (!alive(token)) return { spoke: false };
+      // The board on the wall rang. He answers it WITHOUT MOVING — there is nothing on that wall
+      // for him to reach and he never leaves the bench; the reaction is his face and the line is
+      // his mouth, and the room does the rest. The beat is `phone` (server/pepe.mjs) and it has no
+      // scripted twin on purpose: with no live voice `mind.reply` yields nothing, the placard
+      // never comes up, and the bell was the whole event. `speak()` is deliberately not used —
+      // its fallback would read a greeting out of script.js into an answered telephone.
+      if (rang) {
+        rang = false;
+        api.beat = 'phone';
+        // (the look on his face belongs to the board, which fires react() on the ring itself, so
+        // that it happens in a judging view as well, where nothing is listening for this event)
+        const r = await render(M?.reply ? M.reply({ beat: 'phone' }) : null, { hold: 1.3, keepLast: true, each: closer });
+        if (!alive(token)) return { spoke: false };
+        frame = 'home';
+        prompt = r.held ?? prompt;
+        continue;
+      }
       // A card was touched. It is the same digression the words ask for, and it is not a silence:
       // the quiet counter does not move and no line is spent on it.
       if (tapped != null) {

@@ -262,6 +262,32 @@ export async function build(ctx) {
       tune = null;
     }
   }
+  // ---- THE SET'S OWN LOUDSPEAKER ------------------------------------------------------------
+  // A cue played `through: 'set'` comes out of the radio on the cart instead of out of the room:
+  // the same pair of filters the record is played through (RECORD.hp/lp — a small speaker in a
+  // wooden box), built once and left standing WHETHER OR NOT THE SET IS SWITCHED ON. The
+  // exchange's dial tone uses it (egg-switchboard.js): the board on the wall and the radio are
+  // wired to the same building, and a tone off a dead exchange arriving out of the one live
+  // loudspeaker in the room is the whole of the joke. It hangs on `master`, not on the tune bus,
+  // so nothing it plays is stopped, ducked or veiled with the music.
+  let setSpk = null;
+  function speakerBus() {
+    if (!ac || !master) return null;
+    if (setSpk) return setSpk;
+    const hp = ac.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = RECORD.hp;
+    hp.Q.value = 0.7;
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = RECORD.lp;
+    lp.Q.value = 0.8;
+    hp.connect(lp);
+    lp.connect(master);
+    setSpk = hp;
+    return setSpk;
+  }
+
   function startTune() {
     if (!ac || tune || !tuneId) return;
     if (tuneId === RECORD.id) return startRecord();
@@ -449,7 +475,9 @@ export async function build(ctx) {
     // CLOCK — the only clock in a browser that does not stutter — so a figure with a shape in time
     // (the door's five cues across its 2.6 s swing, a round of deals) is laid down whole at the
     // moment it begins and cannot be collapsed into one click by a slow frame. play() is at(0).
-    at(seconds = 0, name, { gain = 1, pan } = {}) {
+    // `through: 'set'` puts the cue out of the radio's loudspeaker instead of into the room (see
+    // speakerBus, above); anything else is the room, as it always was.
+    at(seconds = 0, name, { gain = 1, pan, through = null } = {}) {
       if (silent || muted || !name) return 0;
       if (!running) return 0; // no gesture yet: the world has not opened
       try {
@@ -481,9 +509,10 @@ export async function build(ctx) {
           const cp = clockPlace();
           len = clockTick(ac, clockBus, when, { level: LEVEL.clock * cp.gain * gain, pan: pan ?? cp.pan });
         } else {
-          len = voice(ac, master, name, when, { seed: ++seed, gain, pan: pan ?? 0 });
+          const dest = (through === 'set' && speakerBus()) || master;
+          len = voice(ac, dest, name, when, { seed: ++seed, gain, pan: pan ?? 0 });
         }
-        timeline.push({ name, at: +when.toFixed(4), wall: +wall.toFixed(4) });
+        timeline.push({ name, at: +when.toFixed(4), wall: +wall.toFixed(4), ...(through ? { through } : null) });
         if (timeline.length > 128) timeline.shift();
         return len;
       } catch (e) {
