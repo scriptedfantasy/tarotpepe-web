@@ -468,7 +468,10 @@ export async function build(ctx) {
   // tunes and silence, and the needle FOLLOWS it (see update): whoever changed the station, the
   // dial shows the station.
   const RADIO = (() => {
-    const IDS = [null, 'a', 'b', 'c']; // stop 0 is off; the other three are sound.js's own names
+    // Stop 0 is off; stop 1 is THE RECORD (sound.js RECORD, its own name 'r'). Round 9: the three
+    // written tunes came off the dial — the user: "rather than the generated melodies, i'd like it
+    // to play a specific song" — and stay reachable by ear on the `t` key and `?tune=a|b|c`.
+    const IDS = [null, 'r'];
     // The needle is thrown at its mark and comes back onto it: three drawings on twos, half a
     // second, the same 12 fps grid the pendulum and the boil are on. A needle that slid would be
     // the only continuous movement in the film.
@@ -546,7 +549,7 @@ export async function build(ctx) {
       return !!b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
     }
 
-    // one stop on, and round again at the end: off → a → b → c → off
+    // one stop on, and round again at the end: off → the record → off
     function turn(next = (station + 1) % IDS.length) {
       from = station;
       to = next;
@@ -644,7 +647,7 @@ export async function build(ctx) {
 
   return {
     group: g,
-    // THE RADIO on the cart, round 8. `station` is 0..3 (0 is off), `tune` the sound piece's own
+    // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
     // is actually given (which is bigger, on a phone).

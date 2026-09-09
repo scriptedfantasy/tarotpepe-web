@@ -66,6 +66,14 @@ const DUCK_CLOCK = 0.55;
 // The tune steps back further than either, because it is the only thing here with pitch in it and
 // a spoken voice has to sit on top of it, not beside it.
 const DUCK_TUNE = 0.34;
+// THE RECORD (round 9). The radio's one station: a recording off the shelf, on a loop. It is not a
+// tune the room writes; it is a file at RECORD.src, and it plays THROUGH THE SET — a high pass and
+// a low pass for a small speaker in a wooden box — into the tune bus, so the door and the dialogue
+// duck it as they duck the tunes. Nothing in the room announces it (the user: "its an easter egg,
+// so i want the users to stumble across it without it being advertised anywhere"), and the file's
+// own name says nothing either. Switched off, it pauses; switched on again it carries on where it
+// was, as a station would have.
+const RECORD = { id: 'r', src: '/radio/record.mp3', level: 0.42, hp: 240, lp: 3600 };
 const CREAK_GAP = 18; // seconds between chair creaks, at the least
 // The street, through the shutters. The evening is a conversation now and runs as long as the
 // visitor likes, so it is not a list of two moments: it is one horn a minute or two, for ever.
@@ -96,7 +104,7 @@ export async function build(ctx) {
   // than to nothing, so a typo is audible instead of mysterious.
   const tuneParam = (params.get('tune') ?? '').toLowerCase();
   const OFF = ['0', 'off', 'none', 'no'];
-  let tuneId = OFF.includes(tuneParam) ? null : TUNE_IDS.includes(tuneParam) ? tuneParam : DEFAULT_TUNE;
+  let tuneId = OFF.includes(tuneParam) ? null : TUNE_IDS.includes(tuneParam) || tuneParam === RECORD.id ? tuneParam : DEFAULT_TUNE;
   let ducked = false;
   let typingOn = true;
   let seed = 1;
@@ -202,8 +210,61 @@ export async function build(ctx) {
   // anywhere inside start() therefore takes the DOOR with it, and the film opens on a door. The
   // music is the least important thing in this piece and it is not allowed to cost the most
   // important one; if it cannot be built, the parlour is simply quiet.
+  let rec = null; // the record on the set, made once: { el, gain }
+  function startRecord() {
+    if (!ac || !tuneBus) return;
+    try {
+      if (!rec) {
+        const el = new Audio(RECORD.src);
+        el.loop = true;
+        el.preload = 'auto';
+        el.addEventListener('error', () => console.warn('[sound] nothing on the shelf at', RECORD.src));
+        const node = ac.createMediaElementSource(el);
+        const hp = ac.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = RECORD.hp;
+        hp.Q.value = 0.7;
+        const lp = ac.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = RECORD.lp;
+        lp.Q.value = 0.8;
+        const gain = ac.createGain();
+        gain.gain.value = RECORD.level;
+        node.connect(hp);
+        hp.connect(lp);
+        lp.connect(gain);
+        gain.connect(tuneBus);
+        rec = { el, gain };
+      }
+      // play() is called inside the click on the set, which is the gesture a browser wants for it
+      const p = rec.el.play();
+      p?.catch?.((e) => console.warn('[sound] the record did not start:', e?.message ?? e));
+      // the same object a written tune is to the rest of the piece: nothing to lay ahead, a veil
+      // that is half level behind the door, and where the needle is on the record for the tools
+      tune = {
+        stop: () => rec.el.pause(),
+        pump: () => 0,
+        veil: (on, when) => rec.gain.gain.setValueAtTime(on ? RECORD.level * 0.5 : RECORD.level, Math.max(when ?? 0, ac.currentTime)),
+        bar: 0,
+        get time() {
+          return rec.el.currentTime;
+        },
+        get paused() {
+          return rec.el.paused;
+        },
+        get el() {
+          return rec.el; // for the tools
+        },
+      };
+      tuneLevel();
+    } catch (e) {
+      console.warn('[sound] the record did not start:', e?.message ?? e);
+      tune = null;
+    }
+  }
   function startTune() {
     if (!ac || tune || !tuneId) return;
+    if (tuneId === RECORD.id) return startRecord();
     try {
       const now = ac.currentTime;
       tune = makeTune(ac, tuneBus, { which: tuneId, level: TUNE_LEVEL, veiled: now < veilTo, veil: VEIL });
@@ -344,12 +405,13 @@ export async function build(ctx) {
     get tune() {
       if (!tuneId) return null;
       const m = TUNES[tuneId];
+      if (!m) return { id: tuneId, title: 'the record', playing: !!tune && !tune.paused, time: tune?.time ?? 0, bar: 0, el: tune?.el ?? null };
       return { id: tuneId, title: m.title, key: m.key, metre: m.metre, bpm: m.bpm, bars: m.bars, loop: m.loop, playing: !!tune, bar: tune?.bar ?? 0 };
     },
     // switch tunes without reloading: the running one is dropped and the next begins on the next
     // bar of the audio clock. `null` / '0' is silence.
     setTune(id) {
-      const next = id == null || OFF.includes(String(id).toLowerCase()) ? null : TUNE_IDS.includes(id) ? id : tuneId;
+      const next = id == null || OFF.includes(String(id).toLowerCase()) ? null : TUNE_IDS.includes(id) || id === RECORD.id ? id : tuneId;
       if (next === tuneId) return tuneId;
       stopTune();
       tuneId = next;
@@ -549,10 +611,10 @@ export async function build(ctx) {
     // `t` walks the three tunes and then silence, without reloading — the user is meant to choose
     // between them by ear and a page reload puts them back on the landing behind a shut door.
     if (e.key === 't' || e.key === 'T') {
-      const order = [...TUNE_IDS, null];
+      const order = [...TUNE_IDS, RECORD.id, null];
       const next = order[(order.indexOf(tuneId) + 1) % order.length];
       api.setTune(next);
-      console.log('[sound] tune:', next ? `${next} — ${TUNES[next].title}` : 'none');
+      console.log('[sound] tune:', next ? `${next} — ${TUNES[next]?.title ?? 'the record'}` : 'none');
     }
   });
 
