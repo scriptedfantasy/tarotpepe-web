@@ -21,6 +21,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import * as O from './props-objects.js';
+import { eggFuse } from './egg-fuse.js';
 
 export const meta = {
   name: 'props',
@@ -645,8 +646,58 @@ export async function build(ctx) {
     };
   })();
 
+  // ---- SWITCHES. The arbiter for the things in this room the visitor is allowed to work. --------
+  // The radio grew its own pointer handlers when it was the only one; it is not the only one any
+  // more. Everything after it registers here, so there is one pair of listeners on the glass, one
+  // cursor to hand back, and one rule about who owns a click. A switch is { name, over(x,y), pull }.
+  const SWITCHES = (() => {
+    const glass = ctx.renderer?.domElement ?? null;
+    const list = [];
+    let hot = null, cursorMine = false;
+    const find = (ev) => {
+      const r = glass?.getBoundingClientRect();
+      if (!r?.width || !r?.height) return null;
+      for (const s of list) if (s.over(ev.clientX - r.left, ev.clientY - r.top)) return s;
+      return null;
+    };
+    const setHot = (s) => {
+      if (hot === s) return;
+      hot = s;
+      if (!glass) return;
+      if (s) {
+        glass.style.cursor = 'pointer';
+        cursorMine = true;
+      } else if (cursorMine) {
+        glass.style.cursor = ''; // only ever put back what this piece put there
+        cursorMine = false;
+      }
+    };
+    glass?.addEventListener('pointermove', (ev) => { if (ev.pointerType !== 'touch') setHot(find(ev)); });
+    glass?.addEventListener('pointerleave', (ev) => { if (ev.pointerType !== 'touch') setHot(null); });
+    glass?.addEventListener('pointerdown', (ev) => {
+      const s = find(ev);
+      if (!s) return;
+      // flow.js reads any pointerdown on the window as the visitor skipping ahead through Pepe's
+      // line, which a hand reaching for a switch did not mean. So it stops here — and sound's own
+      // "first gesture" unlock, which lives on that same window, is called by hand.
+      ctx.pieces.sound?.start?.();
+      ev.stopPropagation();
+      s.pull();
+    });
+    return { add: (s) => (list.push(s), s), get hot() { return hot; } };
+  })();
+
+  // THE FUSE BOX'S LEVER, and the night the room drops to without it (src/pieces/egg-fuse.js).
+  const FUSE = eggFuse(ctx, { group: g, switches: SWITCHES });
+
   return {
     group: g,
+    switches: SWITCHES,
+    // THE MAINS LEVER on the terminal box, stage right. `out` is true when the lever is down and
+    // the room is on the one lamp that is not on the mains, `pull()` throws it as a click does (a
+    // cut on the next 12 fps drawing, with the clack on the click), `set(out, lit)` throws it with
+    // no cue for a still, and hitBox/tapBox are its box on the glass and the box a thumb is given.
+    fuse: FUSE,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -682,6 +733,9 @@ export async function build(ctx) {
     setState(name = 'default') {
       const m = /^radio-(off|a|b|c)$/.exec(name ?? '');
       if (m) RADIO.set(m[1] === 'off' ? 0 : 'abc'.indexOf(m[1]) + 1);
+      // `fuse-out` is the lever down with the one lamp that is not on the mains still burning;
+      // `fuse-dark` is the same room with that lamp out. Every other name puts the mains back.
+      FUSE.set(name === 'fuse-out' || name === 'fuse-dark', name !== 'fuse-dark');
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -689,6 +743,7 @@ export async function build(ctx) {
       if (p) p.rotation.z = 0.16 * Math.sin(ctx.clock.t * Math.PI);
       tellTheTime();
       RADIO.update(ctx);
+      FUSE.update(ctx);
     },
   };
 }
