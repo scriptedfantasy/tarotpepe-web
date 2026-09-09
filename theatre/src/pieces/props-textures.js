@@ -1219,26 +1219,35 @@ export function coatCutTexture(seed = 30) {
 
 // ---- the cat's head: solid ink, two paper eye slits and whiskers where the sphere faces the room
 // (a SphereGeometry's u = 0.25 faces +z), drawn in the texture so no outline swallows them.
-export function catHeadTexture(seed = 31) {
+//
+// ROUND 9 — THE SAME DRAWING, THE TONE INVERTED. The cat is a lamp (props.js, THE CAT), and
+// switched on it is bare paper with its features in ink. That is ONE sheet drawn twice and not two
+// drawings: the same field, the same crescents at the same radii, the same three whiskers at the
+// same angles, the same nose. `lit` swaps which of the two inks is the ground and which is the
+// mark, and nothing else moves — if the marks wandered by a pixel between the two the switch would
+// read as the cat being replaced rather than lit.
+export function catHeadTexture(seed = 31, { lit = false } = {}) {
+  const FIELD = lit ? PAPER : INK; // lit: the head is paper, like the rest of a lamp that is on
+  const MARK = lit ? INK : LABEL_PAPER; // and every mark that was left in paper is now pen
   return drawTexture(
     256,
     128,
     (g, W, H, rng) => {
-      g.fillStyle = INK;
+      g.fillStyle = FIELD;
       g.fillRect(0, 0, W, H);
       const cx = W * 0.25, cy = H * 0.47;
       for (const s of [-1, 1]) {
-        // a closed eye: a paper crescent
+        // a closed eye: a crescent
         g.save();
-        g.fillStyle = LABEL_PAPER;
+        g.fillStyle = MARK;
         g.beginPath();
         g.ellipse(cx + s * 17, cy, 11, 4.5, s * 0.18, 0, Math.PI * 2);
         g.fill();
         g.restore();
         // three whiskers
-        for (let i = 0; i < 3; i++) inkLine(g, cx + s * 22, cy + 12 + i * 5, cx + s * 58, cy + 6 + i * 9, { width: 2.2, wobble: 0.6, rng, color: LABEL_PAPER });
+        for (let i = 0; i < 3; i++) inkLine(g, cx + s * 22, cy + 12 + i * 5, cx + s * 58, cy + 6 + i * 9, { width: 2.2, wobble: 0.6, rng, color: MARK });
       }
-      dot(g, cx, cy + 10, 3, LABEL_PAPER);
+      dot(g, cx, cy + 10, 3, MARK);
     },
     { seed },
   );

@@ -36,7 +36,9 @@
 //                the floor lamp, a cone at the pendant (a three-petal shade IS a cone, and it is
 //                the only caster at night, where the key's shadow budget is free). Never a glow,
 //                never a halo: the lamp is drawn as an object; its light is only where the
-//                strokes stop.
+//                strokes stop. Round 9 adds a fourth, and it is the odd one: the CAT LAMP on the
+//                right-hand bookcase has a switch on it, so its level is this piece's decision but
+//                whether it burns at all is the visitor's (props.cat.lit — see catLampLevel).
 //   - NIGHT      a cross-hatched pane inside every window, so at night the glass goes solid the
 //                way the arch of La Brique Rouge does.
 //
@@ -58,6 +60,7 @@ const LAMPS_FALLBACK = {
   floor: new THREE.Vector3(-2.1, 1.45, -0.2),
   table: new THREE.Vector3(-0.36, 1.02, -2.29),
   pendant: new THREE.Vector3(0, 2.5, 0),
+  cat: new THREE.Vector3(0.85, 1.16, -2.4),
 };
 const WIN_FALLBACK = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.16 };
 
@@ -89,6 +92,12 @@ const STATES = {
     pendant: 0,
     table: 0,
     floor: 0,
+    // The cat's lamp, when the visitor has switched it on. In the afternoon it is switched on and
+    // it does NOTHING, and that is the correct answer rather than a fault: the plaster behind the
+    // cat is already bare paper at L 0.90 and there is no tone there for a 3 W bulb to remove. A
+    // lamp that "reads" against daylight in an ink film is a halo, and this film does not draw
+    // halos. It is carried anyway so that the room is consistent when the light goes.
+    catLamp: 1.1,
     night: false,
     // The one nudge to the ink pass's own numbers, and the only reason the tone design is
     // visible at all. The pass scales the light term by the material's own appetite for hatch
@@ -119,6 +128,9 @@ const STATES = {
     pendantDistance: 4.6,
     table: 1.5,
     floor: 2.6,
+    // and at night it is a lamp: it clears a hand's width of the rain-strokes off the plaster
+    // behind the cat, which is the whole of the effect and as much as it is allowed
+    catLamp: 1.7,
     night: true,
     ink: { tone: [0.0, 0.34, 0.9, 0.5], levels: [0.24, 0.46, 0.68, 0.95] },
   },
@@ -136,6 +148,7 @@ const STATES = {
     pendantAngle: 0.78,
     table: 1.7,
     floor: 0,
+    catLamp: 1.7,
     night: true,
     ink: { tone: [0.0, 0.34, 1.02, 0.5], levels: [0.24, 0.46, 0.68, 1.05] },
   },
@@ -271,10 +284,21 @@ export async function build(ctx) {
   // is six depth passes for nothing, so it stays a plain point light.
   const tableLamp = new THREE.PointLight('#ffe0a8', 0, 1.55, 2);
   const floorLamp = new THREE.PointLight('#ffe6b8', 0, 3.4, 2);
-  for (const l of [pendant, tableLamp, floorLamp]) g.add(l);
+  // THE CAT LAMP (props round 9). The only practical in the room the visitor can switch, and the
+  // only one whose intensity is not a state but an answer: it follows ctx.pieces.props.cat.lit and
+  // is doused with the rest when the state says so. Deliberately tiny — 0.55 m of reach, no
+  // shadow — because all it has to do is clear a hand's width of plaster behind the cat back to
+  // bare paper. A practical in this film is never a glow; it is where the strokes stop.
+  const catLamp = new THREE.PointLight('#ffdda0', 0, 0.55, 2);
+  for (const l of [pendant, tableLamp, floorLamp, catLamp]) g.add(l);
   g.add(pendant.target);
-  let lampsPlaced = false;
+  let lampsPlaced = false, catPlaced = false;
   function placeLamps(L) {
+    // The cat lamp is optional in exactly the way the floor lamp is: no drawn cat, no light.
+    catPlaced = !!L.cat;
+    catLamp.visible = false;
+    catLamp.intensity = 0;
+    if (L.cat) catLamp.position.set(L.cat.x, L.cat.y, L.cat.z);
     pendant.position.set(L.pendant.x, L.pendant.y - 0.24, L.pendant.z);
     pendant.target.position.set(L.pendant.x, 0, L.pendant.z);
     tableLamp.position.set(L.table.x, L.table.y - 0.02, L.table.z);
@@ -362,8 +386,22 @@ export async function build(ctx) {
     tableLamp.visible = S.table > 0;
     floorLamp.intensity = S.floor;
     floorLamp.visible = S.floor > 0;
+    catLampLevel();
     night.visible = !!S.night;
     applyInk(S.ink);
+  }
+
+  // The one light in the room with a switch on it. Its LEVEL is the state's; whether it is burning
+  // at all is the visitor's (props.cat.lit), so this is called from apply() and again from update()
+  // — it is the only thing update() does per frame, and it does nothing on the frames where the
+  // answer has not changed.
+  function catLampLevel() {
+    if (!catPlaced) return;
+    const S = STATES[current] ?? STATES.default;
+    const want = ctx.pieces.props?.cat?.lit ? (S.catLamp ?? 0) : 0;
+    if (catLamp.intensity === want) return;
+    catLamp.intensity = want;
+    catLamp.visible = want > 0;
   }
 
   // Things that need the pieces built after this one (props, room, ink).
@@ -391,7 +429,7 @@ export async function build(ctx) {
     floorBounce,
     corners,
     pools,
-    practicals: { pendant, table: tableLamp, floor: floorLamp },
+    practicals: { pendant, table: tableLamp, floor: floorLamp, cat: catLamp },
     night,
     states: STATES,
     get state() {
@@ -403,6 +441,7 @@ export async function build(ctx) {
     },
     update() {
       if (!lampsPlaced || !nightBuilt || !inkDefaults) lazy();
+      catLampLevel();
     },
   };
 }

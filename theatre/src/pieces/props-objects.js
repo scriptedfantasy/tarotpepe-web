@@ -1127,24 +1127,71 @@ export function plant({ rng, leaves = 11, kind = 'palm', scale = 1 }) {
 // ---- cat: a solid black cat sitting up, facing the room, the way the film puts a cat on a ledge:
 // two paper eye slits, paper whiskers, the tail curled round the front as a solid tube with a
 // paper line along it.
+//
+// ROUND 9 — IT IS A LAMP, AND IT HAS A SWITCH. The user: "the black cat on the right behind
+// tarotpepe, it could be a lamp - when the user clicks it, it could turn white." So the object
+// carries two states and `userData.setLit(on)` cuts between them. Nothing about the cat MOVES —
+// same spheres, same tail, same coordinates, same seed on the head sheet — only which side of the
+// ink/paper line each surface is on:
+//   OFF  the mass is solid ink (M.solid) and its marks are left in paper: two eye crescents, six
+//        whiskers and a nose.
+//   ON   the body, chest, head and paws are bare paper inside the room's own contour, and the face
+//        that was paper is pen.
+// Both material sets and both head sheets are made once, at build, so the switch is an assignment
+// and not a redraw: the change can then land whole on a single 12 fps drawing, which is what a
+// light does.
+//
+// WHAT DOES NOT CHANGE, AND WHY — three things, all measured on the frame rather than reasoned
+// about, and all of them one line to undo if the user wants a cat that goes white to the tip:
+//   the TAIL (and its tip and the paper rule along it) stays solid ink. It is what makes the lit
+//     cat the SAME cat: a white mass with a head on it is a shape; a white mass with a black tail
+//     curled round its feet is the animal that was sitting there a second ago. It is also the
+//     round-1 rule — every prop shows one solid black area and one bare white area — which the
+//     lit cat would otherwise fail outright, having no black left in it at all.
+//   the EARS stay solid ink, for the same reason at the other end: they answer the tail, and a
+//     paper cone 3 px tall against a paper head prints no contour anyone can see.
+//   the CHEST keeps its mass and gives up its pen (litQuiet, lineWeight 0 — ink.js calls that a
+//     cut-out). It is a second sphere inside the body and while the cat is black nobody can tell;
+//     turn the mass to paper and its intersection prints a full circle across the cat's front,
+//     which reads as a hoop on a snowman. It is a modelling volume, not a drawn edge.
 export function cat() {
   const M = materials();
   const g = new THREE.Group();
+  // the lamp, switched on: paper inside the room's own contour, and a heavier pen round it. 0.12
+  // is the shade of a lamp with a bulb in it — the mushroom lamp's own shade is 0.1 — so the pale
+  // thing in the room does not fill with strokes down its shadow side.
+  const litMat = inkMaterial({ hatch: 0.12, lineWeight: 1.1 });
+  const litQuiet = inkMaterial({ hatch: 0.12, lineWeight: 0 }); // the chest: mass, no pen
+  const headOff = inkMaterial({ map: T.catHeadTexture(31), hatch: 0.5, lineWeight: 1.1 });
+  // THE LIT HEAD ASKS FOR 0.8 AND NOT 0.12, AND THAT NUMBER IS THE FACE. The ink pass scales its
+  // stroke ramp by the material's own appetite (soak = hatch / 0.45), so a surface asking for 0.12
+  // comes out bare whatever is printed on it. Swept at the home plate (tools/_r9-sweep.mjs):
+  //     0.12  a blank white head. No eyes, no whiskers, nothing.
+  //     0.50  one eye, on the shadow side only. The lit half of the face never crosses the ramp.
+  //     0.80  eyes, whiskers and nose, all six strokes, and the head itself still bare paper.
+  //     0.95  the head goes solid black — a lamp with its face painted out.
+  // So 0.8: the face is DRAWN and the head is not SHADED, which is the distinction the whole tone
+  // design rests on.
+  const headOn = inkMaterial({ map: T.catHeadTexture(31, { lit: true }), hatch: 0.8, lineWeight: 1.1 });
+  const mass = []; // every surface that changes side when the lamp is switched
+
   const body = sphere(0.07, M.solid, 18, 14);
   body.scale.set(1.0, 1.45, 0.95);
   body.position.set(0, 0.1, 0);
   g.add(body);
+  mass.push(body);
   const chest = sphere(0.058, M.solid, 16, 12);
   chest.scale.set(1, 1.1, 0.9);
   chest.position.set(0, 0.11, 0.03);
   g.add(chest);
   // the head carries its eye slits and whiskers in its texture (a separate eye object would be
   // swallowed by its own outline at this size)
-  const head = sphere(0.054, inkMaterial({ map: T.catHeadTexture(), hatch: 0.5, lineWeight: 1.1 }), 20, 14);
+  const head = sphere(0.054, headOff, 20, 14);
   head.scale.set(1.08, 0.95, 0.95);
   head.position.set(0, 0.235, 0.035);
   g.add(head);
   for (const s of [-1, 1]) {
+    // the ears: ink in both states (see the head of this block)
     const ear = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.04, 6), M.solid);
     ear.position.set(s * 0.034, 0.28, 0.03);
     ear.rotation.z = -s * 0.3;
@@ -1154,18 +1201,34 @@ export function cat() {
     paw.scale.set(1, 0.7, 1.3);
     paw.position.set(s * 0.028, 0.014, 0.06);
     g.add(paw);
+    mass.push(paw);
   }
-  // tail from the back, round the right side, along the front
+  // the tail from the back, round the right side, along the front — ink in both states
   const pts = [new THREE.Vector3(-0.02, 0.03, -0.05), new THREE.Vector3(0.075, 0.02, -0.03), new THREE.Vector3(0.09, 0.016, 0.05), new THREE.Vector3(0.03, 0.014, 0.1), new THREE.Vector3(-0.05, 0.016, 0.1)];
   const curve = new THREE.CatmullRomCurve3(pts);
   const tail = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.016, 8, false), M.solid);
   g.add(tail);
   const line = new THREE.CatmullRomCurve3(pts.map((p) => p.clone().add(new THREE.Vector3(0, 0.012, 0.011))));
+  // the paper rule along the top of the tail, which stays where it is for the same reason
   g.add(new THREE.Mesh(new THREE.TubeGeometry(line, 24, 0.0024, 5, false), M.paper));
   const tip = sphere(0.016, M.solid, 8, 6);
   tip.position.copy(pts[pts.length - 1]);
   g.add(tip);
   g.userData.noShadow = true;
+
+  // The cat's own box, in its own frame: props.js projects these eight corners onto the glass to
+  // know where a pointer has to be. Taken off the geometry rather than written down, so it cannot
+  // drift from the drawing.
+  g.updateMatrixWorld(true);
+  g.userData.box = new THREE.Box3().setFromObject(g);
+  g.userData.lit = false;
+  g.userData.setLit = (on) => {
+    on = !!on;
+    g.userData.lit = on;
+    for (const m of mass) m.material = on ? litMat : M.solid;
+    chest.material = on ? litQuiet : M.solid;
+    head.material = on ? headOn : headOff;
+  };
   return g;
 }
 

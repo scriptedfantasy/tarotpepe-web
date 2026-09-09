@@ -7,6 +7,9 @@
 // headset and three bottles, curtains, a floor lamp, a hat stand with a black overcoat, a potted
 // palm, hand-lettered signs, a rug, a doormat, a cat on the right bookcase, the three-petal pendant
 // of the kitchen frame.
+// TWO OF THESE WORK. The radio on the cart plays (round 8) and the cat is a lamp (round 9): click
+// it and the black mass goes white. Both are at the foot of this file, under THE SWITCHES, THE
+// RADIO and THE CAT. Neither announces itself — the cursor over the object is the whole affordance.
 // ROUND 6 — THE ROOM IS THE TOWN'S OLD MANUAL TELEPHONE EXCHANGE (PROPS.md). It reads in three
 // layers: the flat that was here (the paper, the cornice, the doily), the exchange (the position,
 // the press, the jack field, the diagram), and his own nine or ten things (the rug, the table, the
@@ -24,7 +27,7 @@ import * as O from './props-objects.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js'],
 };
 
@@ -42,7 +45,8 @@ export async function build(ctx) {
   const railY = room.bands?.rail?.[0] ?? 2.6;
 
   let signMesh = null, signPivot = null; // the wall board over Pepe's head; published below
-  let radioObj = null; // the set on the cart; the visitor's one switch, wired up at the foot of this file
+  let radioObj = null; // the set on the cart, and the cat on the right-hand bookcase: the two things
+  let catObj = null; //  the visitor may work. Both are wired up at the foot of this file.
 
   const WALL = -D / 2; // back wall plane
   const FLUSH = WALL + 0.04; // furniture backs sit just in front of the skirting
@@ -119,11 +123,14 @@ export async function build(ctx) {
       gl.position.set(0, caseH, 0.02);
       bc.add(gl);
     } else {
-      // the cat, asleep on top of the bookcase, facing the room
+      // the cat, asleep on top of the bookcase, facing the room. Round 9: it is a lamp, and the
+      // switch is at the foot of this file under THE CAT. Nothing about where it stands changed.
       const cat = O.cat();
       cat.position.set(0.0, caseH, 0.0);
       cat.rotation.y = -0.2;
+      cat.name = 'cat';
       bc.add(cat);
+      catObj = cat;
     }
   }
 
@@ -446,6 +453,118 @@ export async function build(ctx) {
   }
   tellTheTime();
 
+  // ---- THE SWITCHES. What in this room answers a pointer, and which one answers it. -------------
+  // Round 8 gave the visitor the radio. Round 9 gives them the cat, which turns out to be a lamp.
+  // Both are worked the same way — a pointer on the object's own drawing, or inside a 44 px box
+  // round it so a thumb has something to hit — so the pointer is handled ONCE, here, and not twice.
+  //
+  // WHY IT IS SHARED AND NOT COPIED. Two controls with their own listeners are two controls that
+  // can both answer the same tap: the margins are grown boxes and boxes can overlap, and on a
+  // phone they are grown a good deal. The rule is the room's own: whichever object the ray strikes
+  // is the one the visitor pointed AT, and if the ray strikes neither (a thumb inside a margin,
+  // which is the only way both can be true at once) the object NEARER THE CAMERA takes it — the
+  // thing in front is the thing you meant to touch.
+  //
+  // AND IT COSTS ONE HIT TEST A FRAME. A pointermove fires far faster than the film draws, so a
+  // move only parks the event; the test itself runs from update(), on the same 12 fps step the
+  // knob turns and the boil re-strikes. A pointerdown is resolved on the spot — a click cannot
+  // wait 83 ms for an answer — and that is one raycast per click, which is nothing.
+  const SWITCHES = (() => {
+    const glass = ctx.renderer?.domElement ?? null;
+    const ray = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    const at = new THREE.Vector3();
+    const list = [];
+    let hovered = null, cursorMine = false, pending = null;
+
+    function pick(ev) {
+      if (!glass || !list.length) return null;
+      const r = glass.getBoundingClientRect();
+      if (!r.width || !r.height) return null;
+      const px = ev.clientX - r.left, py = ev.clientY - r.top;
+      // the drawing first: a pointer actually on one of them, wherever it is on screen
+      ndc.set((px / r.width) * 2 - 1, -(py / r.height) * 2 + 1);
+      ray.setFromCamera(ndc, ctx.camera);
+      let best = null, bestD = Infinity;
+      for (const c of list) {
+        const o = c.object();
+        if (!o) continue;
+        const hit = ray.intersectObject(o, true)[0];
+        if (hit && hit.distance < bestD) {
+          best = c;
+          bestD = hit.distance;
+        }
+      }
+      if (best) return best;
+      // then the margins, which are what make either of them reachable on a phone
+      for (const c of list) {
+        const b = c.tapBox();
+        if (!b || px < b.x || px > b.x + b.w || py < b.y || py > b.y + b.h) continue;
+        const o = c.object();
+        if (!o) continue;
+        const d = o.getWorldPosition(at).distanceTo(ctx.camera.position);
+        if (d < bestD) {
+          best = c;
+          bestD = d;
+        }
+      }
+      return best;
+    }
+
+    function setHover(c) {
+      if (hovered === c) return;
+      hovered?.onHover?.(false);
+      hovered = c;
+      hovered?.onHover?.(true);
+      if (!glass) return;
+      if (c) {
+        glass.style.cursor = 'pointer';
+        cursorMine = true;
+      } else if (cursorMine) {
+        // only ever put back what this piece put there: reveal-fan.js and help.js share the cursor
+        glass.style.cursor = '';
+        cursorMine = false;
+      }
+    }
+
+    glass?.addEventListener('pointermove', (ev) => {
+      if (ev.pointerType === 'touch') return;
+      pending = ev; // parked; the hit test runs once a frame, from update()
+    });
+    glass?.addEventListener('pointerleave', (ev) => {
+      if (ev.pointerType === 'touch') return;
+      pending = null;
+      setHover(null);
+    });
+    glass?.addEventListener('pointerdown', (ev) => {
+      const c = pick(ev);
+      if (!c) return;
+      // flow.js reads any pointerdown on the window as the visitor skipping ahead through Pepe's
+      // line, which a visitor reaching for a switch did not mean. So the event stops here — and
+      // sound's own "first gesture" unlock, which lives on that same window, is called by hand.
+      ctx.pieces.sound?.start?.();
+      ev.stopPropagation();
+      c.onDown();
+    });
+
+    return {
+      add(c) {
+        list.push(c);
+        return c;
+      },
+      // for the tools: which switch the pointer is on, by name
+      get hovered() {
+        return hovered?.name ?? null;
+      },
+      update() {
+        if (!pending) return;
+        const ev = pending;
+        pending = null;
+        setHover(pick(ev));
+      },
+    };
+  })();
+
   // ---- THE RADIO. The one thing in this room the visitor is allowed to work. ---------------------
   // The user, round 8: "would be cool if we could turn the tune on and off and switch through them
   // via the radio receiver." And his own persona, about this very prop: "The radio on the cart. It
@@ -487,11 +606,8 @@ export async function build(ctx) {
     const asked = (param ?? '').toLowerCase();
     let station = param == null || OFFWORDS.includes(asked) ? 0 : Math.max(1, IDS.indexOf(asked));
     let from = station, to = station, frame0 = -1e9;
-    let hover = false, cursorMine = false, told = false;
+    let hover = false, told = false;
 
-    const glass = ctx.renderer?.domElement ?? null;
-    const ray = new THREE.Raycaster();
-    const ndc = new THREE.Vector2();
     const sound = () => ctx.pieces.sound; // built after this piece: never cached
     const point = () => radioObj?.userData?.setStation?.(station);
     point();
@@ -535,19 +651,6 @@ export async function build(ctx) {
       const w = Math.max(b.w, MIN_TAP), h = Math.max(b.h, MIN_TAP);
       return { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h, grown: w > b.w || h > b.h };
     }
-    function onRadio(ev) {
-      if (!glass || !radioObj) return false;
-      const r = glass.getBoundingClientRect();
-      if (!r.width || !r.height) return false;
-      const px = ev.clientX - r.left, py = ev.clientY - r.top;
-      // the drawing first: a pointer actually on the set, wherever it is on screen
-      ndc.set((px / r.width) * 2 - 1, -(py / r.height) * 2 + 1);
-      ray.setFromCamera(ndc, ctx.camera);
-      if (ray.intersectObject(radioObj, true).length) return true;
-      // then the margin, which is what makes it reachable on a phone
-      const b = tapBox();
-      return !!b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
-    }
 
     // one stop on, and round again at the end: off → the record → off
     function turn(next = (station + 1) % IDS.length) {
@@ -562,34 +665,16 @@ export async function build(ctx) {
       sound()?.play?.('static');
       ctx.emit?.('props:radio', { station: next, tune: IDS[next] });
     }
-    function setHover(on) {
-      if (hover === on) return;
-      hover = on;
-      if (!glass) return;
-      if (on) {
-        glass.style.cursor = 'pointer';
-        cursorMine = true;
-      } else if (cursorMine) {
-        // only ever put back what this piece put there: reveal-fan.js and help.js share the cursor
-        glass.style.cursor = '';
-        cursorMine = false;
-      }
-    }
-    glass?.addEventListener('pointermove', (ev) => {
-      if (ev.pointerType === 'touch') return;
-      setHover(onRadio(ev));
-    });
-    glass?.addEventListener('pointerleave', (ev) => {
-      if (ev.pointerType !== 'touch') setHover(false);
-    });
-    glass?.addEventListener('pointerdown', (ev) => {
-      if (!onRadio(ev)) return;
-      // flow.js reads any pointerdown on the window as the visitor skipping ahead through Pepe's
-      // line, which a visitor reaching for the radio did not mean. So the event stops here — and
-      // sound's own "first gesture" unlock, which lives on that same window, is called by hand.
-      ctx.pieces.sound?.start?.();
-      ev.stopPropagation();
-      turn();
+    // the pointer itself belongs to SWITCHES above, which is what keeps the set and the cat from
+    // both answering one tap; all this control has to say is where it is and what to do about it
+    SWITCHES.add({
+      name: 'radio',
+      object: () => radioObj,
+      tapBox,
+      onHover: (on) => {
+        hover = on;
+      },
+      onDown: () => turn(),
     });
 
     return {
@@ -645,6 +730,94 @@ export async function build(ctx) {
     };
   })();
 
+  // ---- THE CAT, WHICH IS A LAMP. The room's second switch. ---------------------------------------
+  // The user, having been given the radio: "now lets make some other objects interactive - for
+  // example the black cat on the right behind tarotpepe, it could be a lamp - when the user clicks
+  // it, it could turn white."
+  //
+  // So it is a cat-shaped lamp — the kind a provincial household buys once, in 1954, and never
+  // replaces — and switched OFF it is exactly the cat that has sat on that bookcase since round 3:
+  // a solid ink mass with its eyes, whiskers, nose and the rule along its tail left in paper.
+  // Switched ON it is bare paper inside the room's own contour and every one of those marks is
+  // pen. Nothing is added and nothing moves. In a world with no grey that inversion is the whole
+  // of what "lit" can mean, and it is the reason the object still reads as the same cat: it is the
+  // same drawing with the ink on the other side of it.
+  //
+  // IT IS A CUT, NOT A FADE. The click is answered on the next 12 fps drawing and the change lands
+  // whole — a light does not ramp, and a ramp here would be the only continuous thing in the film.
+  // A short dry click from the mechanism goes with it ('switch', sound-voices.js), fired on the
+  // pointer and not on the drawing, because the visitor's thumb is on the switch NOW.
+  //
+  // NOTHING ANNOUNCES IT. No label, no halo, no outline, no glow before it is touched. The cursor
+  // becomes a pointer over it and that is the entire affordance, exactly as it is for the radio.
+  // The room does not explain itself; it rewards a visitor who tries something.
+  const CAT = (() => {
+    const MIN_TAP = 44; // px: what a thumb needs, whatever the cat measures on the glass
+    let lit = false, want = false;
+
+    // the cat's box on the glass, in px: its own eight corners (taken off the geometry in
+    // props-objects.js, so they cannot drift from the drawing), projected
+    function hitBox() {
+      const b = catObj?.userData?.box;
+      if (!b) return null;
+      catObj.updateMatrixWorld(true);
+      const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
+      const xs = [], ys = [];
+      const v = new THREE.Vector3();
+      for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
+        v.set(x, y, z);
+        catObj.localToWorld(v).project(ctx.camera);
+        xs.push(((v.x + 1) / 2) * W);
+        ys.push(((1 - v.y) / 2) * H);
+      }
+      return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+    }
+    // grown about its centre to at least a thumb's 44 px. The extra falls on the top board of the
+    // bookcase and on bare plaster, where there is nothing else to hit — measured in
+    // tools/_props-r9-cat.mjs, which also reports whether the cat is in the picture at all on a
+    // phone (the radio is not, and that is a framing problem, not a control's).
+    function tapBox() {
+      const b = hitBox();
+      if (!b) return null;
+      const w = Math.max(b.w, MIN_TAP), h = Math.max(b.h, MIN_TAP);
+      return { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h, grown: w > b.w || h > b.h };
+    }
+    function paint() {
+      catObj?.userData?.setLit?.(lit);
+    }
+    // the switch thrown: the sound and the news go now, the drawing changes on the next step
+    function toggle(next = !want) {
+      want = !!next;
+      ctx.pieces.sound?.play?.('switch');
+      ctx.emit?.('props:cat', { lit: want });
+    }
+    SWITCHES.add({
+      name: 'cat',
+      object: () => catObj,
+      tapBox,
+      onDown: () => toggle(),
+    });
+
+    return {
+      get lit() {
+        return lit;
+      },
+      hitBox,
+      tapBox,
+      toggle,
+      // for the tools and for setState: throw it with no cue and no waiting for the clock
+      set(on) {
+        lit = want = !!on;
+        paint();
+      },
+      update() {
+        if (want === lit) return;
+        lit = want;
+        paint();
+      },
+    };
+  })();
+
   return {
     group: g,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
@@ -652,6 +825,11 @@ export async function build(ctx) {
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
     // is actually given (which is bigger, on a phone).
     radio: RADIO,
+    // THE CAT'S LAMP, round 9. `lit` is what is DRAWN (the cut lands on the next 12 fps step, so a
+    // click and the drawing are one frame apart on purpose), `toggle()` throws the switch as a
+    // click does — cue, event and all — `set(on)` puts it there for a still with neither, and
+    // hitBox/tapBox are the cat's box on the glass and the box a thumb is actually given.
+    cat: CAT,
     // the shop's board over Pepe's head. `mesh` is what a pointer is raycast against, `pivot` is
     // its hook line (rotate that and the board swings on its cord), and w/h are its size in metres.
     // help.js hangs its own tag under the pivot and tips it when the pointer is over the board.
@@ -676,19 +854,29 @@ export async function build(ctx) {
     lamps: {
       table: new THREE.Vector3(-0.36, 0.82 + 0.2, chest.position.z + 0.02),
       pendant: new THREE.Vector3(0, 2.5, 0),
+      // The cat's lamp, round 9, and it is the only practical in the room with a switch on it. The
+      // bulb is inside the cat, on the right-hand bookcase top (0.85, 1.02 + the cat's own body) —
+      // put a hand's width behind its centre, in the 10 cm between its back and the plaster, so
+      // what the light has to work with is the wall and not the room. lighting.js douses it with
+      // the rest and follows `cat.lit`.
+      cat: new THREE.Vector3(0.85, caseH + 0.14, FLUSH + 0.14 - 0.08),
     },
-    // `radio-off` / `radio-a` / `radio-b` / `radio-c` put the needle on a stop for a still. Every
-    // other name is the room as it stands, which is what the judging shot wants.
+    // `radio-off` / `radio-a` / `radio-b` / `radio-c` put the needle on a stop for a still, and
+    // `cat-lit` is the cat's lamp switched on. Every other name is the room as it stands — which
+    // for the cat means OFF, because the room as it stands is a lamp nobody has touched.
     setState(name = 'default') {
       const m = /^radio-(off|a|b|c)$/.exec(name ?? '');
       if (m) RADIO.set(m[1] === 'off' ? 0 : 'abc'.indexOf(m[1]) + 1);
+      CAT.set(name === 'cat-lit');
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
       const p = g.userData.pendulum;
       if (p) p.rotation.z = 0.16 * Math.sin(ctx.clock.t * Math.PI);
       tellTheTime();
+      SWITCHES.update();
       RADIO.update(ctx);
+      CAT.update();
     },
   };
 }

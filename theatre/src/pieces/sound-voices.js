@@ -52,6 +52,9 @@ export const LEVEL = {
   // the radio's knob, between two stations. Under the escapement's own level: the visitor has just
   // touched something and must hear that they did, and nothing more than that.
   static: 0.03,
+  // the cat lamp's tumbler, thrown. The same job as the static and the same manners: under the
+  // clock, over the room tone, and gone before anyone can consider it.
+  switch: 0.028,
   // the door, which is nearer the lens than anything else in the film and louder for it
   latch: 0.072,
   hinge: 0.058,
@@ -83,6 +86,9 @@ export const TRIM = {
   street: 1.3,
   type: 4.621,
   static: 1.697,
+  // measured with tools/_props-r9-switch.mjs, which reproduces the probe's own figures for static,
+  // latch and clock to the third decimal before it reports this one
+  switch: 2.645,
   latch: 2.241,
   hinge: 29.544,
   knock: 1.569,
@@ -115,6 +121,7 @@ export const LENGTH = {
   street: 0.62,
   type: 0.03,
   static: 0.3,
+  switch: 0.05,
   clock: 0.055,
   latch: 0.06,
   hinge: 0.42,
@@ -531,6 +538,21 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.static;
     }
 
+    // THE CAT LAMP'S SWITCH, thrown. A tumbler in a bakelite base, and the whole event is two hard
+    // little grains 14 ms apart: the thumb loading the spring, then the spring going over. Under
+    // them a short dry body, because the thing the switch is screwed to is a hollow china cat.
+    // Drier and shorter than the door's latch — brass rings, bakelite does not — and quieter than
+    // the escapement, because switching a lamp on is not an event a room notices. Measured at 34 ms
+    // end to end (tools/_props-r9-switch.mjs) and there is no pitch in it anyone could hum: this
+    // fires while Pepe may be talking.
+    case 'switch': {
+      burst(ac, dest, { t, dur: 0.004, level: L('switch'), freq: 2950, q: 1.6, pan, seed });
+      burst(ac, dest, { t, dur: 0.017, level: L('switch') * 0.32, freq: 380, q: 1.2, type: 'lowpass', pan, seed: seed + 1 });
+      burst(ac, dest, { t: t + 0.014, dur: 0.006, level: L('switch') * 0.76, freq: 2050, q: 1.4, pan, seed: seed + 2 });
+      struck(ac, dest, { t: t + 0.014, dur: 0.03, level: L('switch') * 0.18, freq: 930, type: 'triangle', partials: [[1.87, 0.34, 0.3]], pan });
+      return LENGTH.switch;
+    }
+
     // ---- the door the film opens on. It is a foot from the lens, so it is the nearest, driest,
     // loudest thing in the picture, and it is all wood and one small piece of brass.
 
@@ -598,4 +620,4 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch'];
