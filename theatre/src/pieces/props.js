@@ -27,6 +27,7 @@ import * as O from './props-objects.js';
 import { build as buildSwitchboard } from './egg-switchboard.js';
 import { eggFuse } from './egg-fuse.js';
 import { buildVortex } from './egg-vortex.js';
+import { buildWine } from './egg-wine.js';
 
 export const meta = {
   name: 'props',
@@ -50,6 +51,7 @@ export async function build(ctx) {
   let signMesh = null, signPivot = null; // the wall board over Pepe's head; published below
   let radioObj = null; // the set on the cart, and the cat on the right-hand bookcase: the two things
   let catObj = null; //  the visitor may work. Both are wired up at the foot of this file.
+  let wineObj = null; // the VIN bottle on the cart; src/pieces/egg-wine.js does the rest
 
   const WALL = -D / 2; // back wall plane
   const FLUSH = WALL + 0.04; // furniture backs sit just in front of the skirting
@@ -176,6 +178,10 @@ export async function build(ctx) {
         ],
       }),
     );
+    // VIN, for egg-wine.js: the one bottle in the room that has a level in it
+    cart.traverse((o) => {
+      if (!wineObj && o.userData?.label?.recipe?.lines?.[0] === 'VIN') wineObj = o;
+    });
     // the lower board: the newspapers and the soda siphon (the ice bucket went; three things under
     // there read as clutter behind the cart's own rails)
     const news = O.newspaperStack({ n: 4, rng });
@@ -852,6 +858,9 @@ export async function build(ctx) {
     setTime: g.userData.setClockTime,
   });
 
+  // ---- THE WINE on the cart. The room's sixth switch (src/pieces/egg-wine.js). -------------
+  const WINE = buildWine(ctx, wineObj, { switches: SWITCHES });
+
   return {
     group: g,
     // the arbiter itself, for the tools (`hovered`) and for any piece that wants a switch of its own
@@ -869,6 +878,10 @@ export async function build(ctx) {
     // THE CLOCK: `start()` winds the room into it for ten seconds, `t`/`active` say where it is,
     // `?vortex=<t>` and the `vortex-mid` state hold a frame of it for the tools.
     vortex: VORTEX,
+    // THE WINE BOTTLE on the cart. `fingers` is what is left of five, `pour()` takes one as a
+    // click does, `drunk` is whether the room is currently under it, and hitBox/tapBox are the
+    // bottle's box on the glass and the box a thumb is given.
+    wine: WINE,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -923,6 +936,7 @@ export async function build(ctx) {
       // `fuse-dark` is the same room with that lamp out. Every other name puts the mains back.
       FUSE.set(name === 'fuse-out' || name === 'fuse-dark', name !== 'fuse-dark');
       VORTEX.setState(name);
+      WINE.setState(name); // `wine-drunk`; every other name puts the bottle back
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -935,6 +949,7 @@ export async function build(ctx) {
       SWITCHBOARD.update();
       FUSE.update(ctx);
       VORTEX.update(ctx); // last: while it runs, the hands and the bob are its own
+      WINE.update(ctx);
     },
   };
 }

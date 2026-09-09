@@ -161,7 +161,7 @@ export function bottle({ kind = 'tall', r = null, bodyH = null, neckH = null, li
   const tmp = lathe(profile, materials().paper, carafe ? 22 : 18);
   const v0 = tmp.userData.vAt(iFoot), v1 = tmp.userData.vAt(iBody);
   const halfU = dark ? LABEL_HALF_U_DARK : LABEL_HALF_U;
-  const tex = T.labelTexture({
+  const recipe = {
     lines,
     shape,
     uRange: [0.5 - halfU, 0.5 + halfU],
@@ -175,10 +175,14 @@ export function bottle({ kind = 'tall', r = null, bodyH = null, neckH = null, li
     w: 128,
     h: 256,
     dark,
-  });
+  };
+  const tex = T.labelTexture(recipe);
   tmp.material = bottleMaterial(tex, dark);
   const g = new THREE.Group();
   g.add(tmp);
+  // What it would take to draw this bottle again. egg-wine.js re-strikes the VIN bottle at a lower
+  // `fillV` on every pour: the same recipe, the same seed, the same pen, one number different.
+  g.userData.label = { mesh: tmp, recipe, tex };
   if (corked) {
     const c = cyl(neckR * 1.5, neckR * 1.25, 0.026, materials().solid, 10);
     c.position.y = top + 0.008;
