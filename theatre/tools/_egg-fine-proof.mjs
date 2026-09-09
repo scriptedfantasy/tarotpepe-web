@@ -5,9 +5,13 @@
 // it thinks that worked; every claim is put to a witness that is not the piece:
 //
 //   the DRAWING    frames at the home plate at 2.92 s (a room that is fine), 3.00 s (the first
-//                  flame, alone), 3.50 s (the second), 8.00 s (eleven) and 8.50 s (the dozen), a 2x
-//                  crop of the lot and a 4x of the lamp, then the pointer taken away and the six
-//                  drawings of the going-out
+//                  tongue, alone), 3.50 s (the second), 8.00 s (eleven) and 8.50 s (the dozen), a
+//                  2x crop of the lot, a 2x of ONE tongue with its three pigments counted, the
+//                  `pepe` plate at 8.50 s to show his face is clear of all of it, and then the
+//                  pointer taken away and the six drawings of the going-out
+//   the COLOUR     the yellow, the orange and the ink contour, counted as pixels inside one
+//                  tongue's own box and matched against the two hexes the piece publishes. This is
+//                  the round's change and it is measured, not looked at
 //   the ROOM       the same frame with the fire and without it, struck at the SAME instant of the
 //                  drawing (?t=2.5 freezes the boil) and differenced: the only pixels that changed
 //                  are inside the twelve flames. Pepe's own region is counted separately, which is
@@ -17,17 +21,25 @@
 //                  pepeAnim's blink and breath run on the absolute frame count and never stop — so
 //                  what is asked of him live is that he is doing the same thing and that nothing of
 //                  him went further than that breath; the pixel claim is the ROOM's, above
-//   the PLACARD    the dialogue layer's own text, same three moments
 //   the LIGHT      lighting.state and every practical's intensity, same three moments
-//   the EVENTS     what came out of ctx.emit('props:fine', …) on the page's own bus
+//   the EVENTS     what came out of ctx.emit('props:fine', …) on the page's own bus: caught, the
+//                  last tongue caught, out
 //   the SOUND      sound.timeline, which is what the audio graph was actually given, and the cue
 //                  rendered offline through the code the room plays it with
+//   the LINE       a WHOLE EVENING, run for real with no ?view and no ?shot: the door is clicked,
+//                  the greeting is waited out, and the fire is taken up under an open field. What
+//                  is asked is that `This is fine.` went up on the placard EXACTLY ONCE (dialogue's
+//                  own `ask` is wrapped and every prompt it is handed is written down), that the
+//                  field is open underneath it, and that when the same visitor asks for the cards
+//                  and the fire is taken up again OVER THE READING the line does not go up at all
+//                  and the room burns in silence
 //
 // It also measures the framing on a 390x844 phone, where the lamp is worked by a held touch and
 // not by a hover, and drives one.
 //
 //   BASE=http://127.0.0.1:8713/ node tools/_egg-fine-proof.mjs
 //   BASE=… node tools/_egg-fine-proof.mjs --out /abs/dir
+//   BASE=… node tools/_egg-fine-proof.mjs --only line
 import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { mkdirSync } from 'node:fs';
@@ -89,6 +101,54 @@ async function open(w, h, query = '') {
   page.__errors = errors;
   return page;
 }
+
+// …and the same page with NO ?view and NO ?shot: the whole evening, which is the only way the
+// placard says anything at all (main.js starts the flow only when nothing is being judged).
+async function evening(w, h, query = '') {
+  const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1, hasTouch: true });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e).slice(0, 300)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text().slice(0, 300));
+  });
+  await page.route('**/@vite/client', stub);
+  await page.goto(`${BASE}/?now=21:12${query}`, { waitUntil: 'load', timeout: 180000 });
+  await page.waitForFunction('window.__theatreReady === true', null, { timeout: 300000 });
+  page.__errors = errors;
+  return page;
+}
+
+// what the placard is actually carrying, in words. The letters are cut on canvases by the sign
+// hand, so the text lives in the `.sr` spans dialogue.js writes for a screen reader.
+const placardText = (p) => p.evaluate(() => (document.querySelector('#dialogue')?.innerText ?? '').replace(/\s+/g, ' ').trim());
+
+// THE GATE. Software WebGL renders this room at rather less than a frame a second, so three
+// seconds of film is three seconds of nothing followed by the whole fire at once. props.update is
+// put behind a gate and released a counted number of drawings at a time, in ONE rendered frame:
+// it is the piece's own update, called by main's own loop on the piece's own stepped clock, and
+// the drawings that are skipped are skipped by the RENDERER and not by the fire.
+const gate = (page, trace = false) =>
+  page.evaluate((wantTrace) => {
+    const p = window.__theatre.pieces.props;
+    const real = p.update.bind(p);
+    window.__go = 0;
+    window.__trace = [];
+    p.update = (c) => {
+      if (window.__go > 0 && c.clock.stepped) {
+        while (window.__go > 0) {
+          window.__go--;
+          real(c);
+          if (wantTrace) window.__trace.push([p.fine.steps, p.fine.lit]);
+        }
+      }
+    };
+  }, trace);
+const release = async (page, n) => {
+  await page.evaluate((k) => {
+    window.__go = k;
+  }, n);
+  await page.waitForFunction(() => window.__go === 0, null, { timeout: 1500000, polling: 500 });
+};
 
 // everything that is NOT the fire, asked of the pieces that own it and never of the egg
 const world = (p) =>
@@ -195,52 +255,16 @@ console.log('\nTHE HOLD  (1280x800, home, a real pointer put on the lamp and lef
   const before = await world(page);
   const cuesBefore = await page.evaluate(() => (window.__theatre.pieces.sound.timeline ?? []).length);
 
-  // THE HOLD IS TAKEN A DRAWING AT A TIME, and it has to be: this headless browser renders at
-  // something under a frame a second, so three seconds of film is three seconds of nothing and then
-  // the whole fire at once, and a screenshot in the middle of it takes four seconds of its own. So
-  // props.update is put behind a gate and released once per drawing wanted. It is the piece's own
-  // update, called by main's own loop, on the piece's own stepped clock — nothing about the hold is
-  // simulated, it is only let through one drawing at a time. This is also why the piece counts
-  // DRAWINGS and not wall seconds (egg-fine.js, HOLD_F): thirty-six of them is three seconds of
-  // film wherever the film is played.
-  // THE HOLD IS TAKEN A DRAWING AT A TIME, and it has to be: this headless browser renders at
-  // something under a frame a second, so three seconds of film is three seconds of nothing followed
-  // by the whole fire at once, and a screenshot in the middle of it takes four seconds of its own.
-  // So props.update is put behind a gate, released a counted number of drawings at a time, and made
-  // to write down what the fire looked like after each one. It is the piece's own update, called by
-  // main's own loop, on the piece's own stepped clock — nothing about the hold is simulated, it is
-  // only let through one drawing at a time and written down. This is also why the piece counts
-  // DRAWINGS and not wall seconds (egg-fine.js, HOLD_F): thirty-six of them is three seconds of
-  // film wherever the film is played.
-  await page.evaluate(() => {
-    const p = window.__theatre.pieces.props;
-    const real = p.update.bind(p);
-    window.__go = 0;
-    window.__trace = [];
-    p.update = (c) => {
-      // THE COUNTED DRAWINGS ARE TAKEN IN ONE RENDERED FRAME. `real(c)` is the props piece's own
-      // update, called the piece's own number of times, each on a stepped clock — the drawings that
-      // are skipped are skipped by the RENDERER, not by the fire. Releasing one a frame was the
-      // first cut of this and it is honest too, but it needs a hundred rendered frames of a room
-      // that takes several seconds each on software WebGL, and a chromium sharing this Mac with
-      // five other builders' proofs fell over in the middle of it three times running. The frames
-      // that are looked at are drawn; the ones in between were only ever counted.
-      if (window.__go > 0 && c.clock.stepped) {
-        while (window.__go > 0) {
-          window.__go--;
-          real(c);
-          window.__trace.push([p.fine.steps, p.fine.lit]);
-        }
-      }
-    };
-  });
+  // THE HOLD IS TAKEN A DRAWING AT A TIME, through the gate at the head of this file: this headless
+  // browser renders at something under a frame a second, so three seconds of film would be three
+  // seconds of nothing followed by the whole fire at once, and a screenshot in the middle of it
+  // takes four seconds of its own. Nothing about the hold is simulated — it is the piece's own
+  // update, on the piece's own stepped clock, only let through a counted number of drawings at a
+  // time and written down. This is also why the piece counts DRAWINGS and not wall seconds
+  // (egg-fine.js, HOLD_F): thirty-six of them is three seconds of film wherever the film is played.
+  await gate(page, true);
   await page.mouse.move(cx, cy);
-  const run = async (n) => {
-    await page.evaluate((k) => {
-      window.__go = k;
-    }, n);
-    await page.waitForFunction(() => window.__go === 0, null, { timeout: 1500000, polling: 500 });
-  };
+  const run = (n) => release(page, n);
   const read = () =>
     page.evaluate(() => {
       const F = window.__theatre.pieces.props.fine;
@@ -305,18 +329,86 @@ console.log('\nTHE HOLD  (1280x800, home, a real pointer put on the lamp and lef
   ok(frames['hold-8s50'].lit === 12, 'and at 8.50 s the whole dozen is burning');
   const f90 = frames['hold-8s50'];
 
-  // the crops: the whole fire at 2x, and the lamp — the smallest flames in the room — at 4x
+  // the crops: the whole fire at 2x, ONE great tongue at 2x with its pigments counted, and the
+  // lamp — the smallest flame in the room — at 4x
   boxesAt8 = await page.evaluate(() => {
     const F = window.__theatre.pieces.props.fine;
-    return { boxes: Array.from({ length: F.count }, (_, i) => F.flameBox(i)), where: F.where, seats: F.seats, lamp: F.hitBox() };
+    return {
+      boxes: Array.from({ length: F.count }, (_, i) => F.flameBox(i)),
+      where: F.where,
+      seats: F.seats,
+      metres: F.metres,
+      lamp: F.hitBox(),
+      colours: F.colours,
+    };
   });
   await crop(f90.buf, union(boxesAt8.boxes), `${OUT}/egg-fine-all-2x.png`, { pad: 20, scale: 2 });
-  await crop(f90.buf, union(boxesAt8.boxes.slice(0, 3)), `${OUT}/egg-fine-lamp-4x.png`, { pad: 22, scale: 4 });
-  console.log(`  ${OUT}/egg-fine-all-2x.png · egg-fine-lamp-4x.png`);
+  await crop(f90.buf, boxesAt8.boxes[9], `${OUT}/egg-fine-tongue-2x.png`, { pad: 10, scale: 2 });
+  await crop(f90.buf, boxesAt8.boxes[0], `${OUT}/egg-fine-lamp-4x.png`, { pad: 22, scale: 4 });
+  console.log(`  ${OUT}/egg-fine-all-2x.png · egg-fine-tongue-2x.png · egg-fine-lamp-4x.png`);
   console.log('  where the twelve stand (metres → glass px):');
   boxesAt8.boxes.forEach((b, i) =>
-    console.log(`    ${String(i).padStart(2)} ${boxesAt8.where[i].padEnd(6)} ${JSON.stringify(boxesAt8.seats[i])}  →  ${b.w.toFixed(1)} px at ${(b.x + b.w / 2).toFixed(0)}, ${(b.y + b.h / 2).toFixed(0)}`),
+    console.log(
+      `    ${String(i).padStart(2)} ${boxesAt8.where[i].padEnd(6)} ${JSON.stringify(boxesAt8.seats[i])} ${String(boxesAt8.metres[i]).padStart(5)} m  →  ` +
+        `${b.w.toFixed(0)} x ${b.h.toFixed(0)} px, x ${b.x.toFixed(0)}–${(b.x + b.w).toFixed(0)}, top y ${b.y.toFixed(0)}`,
+    ),
   );
+  const tall = Math.max(...boxesAt8.boxes.map((b) => b.h));
+  ok(tall > 380, `the biggest tongue is a fire and not an ornament: ${tall.toFixed(0)} px of the plate's 800 (round 1's was 32)`);
+  ok(Math.min(...boxesAt8.boxes.map((b) => b.h)) > 45, `and the smallest, on the lampshade, is still ${Math.min(...boxesAt8.boxes.map((b) => b.h)).toFixed(0)} px`);
+
+  // ---- THE COLOUR, COUNTED ---------------------------------------------------------------------
+  // The round's second change, put as pixels rather than as a look. Inside one tongue's own box
+  // there must be three things and no fourth: the yellow plate, the orange one inside it and the
+  // ink contour round the lot — and the yellow must be the body and the orange the smaller dark
+  // area, which is the room's rule for a prop (one solid dark, one bare light).
+  {
+    const raw = await sharp(f90.buf).raw().toBuffer({ resolveWithObject: true });
+    const { width: PW, channels: ch } = raw.info;
+    const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const Y = hex(boxesAt8.colours.yellow), O = hex(boxesAt8.colours.orange);
+    const off = (o, c) => Math.max(Math.abs(raw.data[o] - c[0]), Math.abs(raw.data[o + 1] - c[1]), Math.abs(raw.data[o + 2] - c[2]));
+    const b = boxesAt8.boxes[9];
+    // TIGHT is "the plate exactly as painted"; LOOSE is "anywhere near that pigment". A flat fill
+    // has almost nothing between the two; a shaded or gradient one has a great deal, and so would
+    // a fill the lit pass had got hold of. That ratio is the flatness claim, and it is asked of the
+    // pigment itself rather than of the whole box, most of which is the room behind the tongue.
+    const TIGHT = 8, LOOSE = 46;
+    let yel = 0, ora = 0, yelNear = 0, oraNear = 0, ink = 0, pale = 0;
+    for (let y = Math.round(b.y); y < Math.round(b.y + b.h); y++)
+      for (let x = Math.round(b.x); x < Math.round(b.x + b.w); x++) {
+        const o = (y * PW + x) * ch;
+        const dy = off(o, Y), doo = off(o, O);
+        if (dy < LOOSE) {
+          yelNear++;
+          if (dy < TIGHT) yel++;
+        } else if (doo < LOOSE) {
+          oraNear++;
+          if (doo < TIGHT) ora++;
+        } else if (raw.data[o] < 60 && raw.data[o + 1] < 60 && raw.data[o + 2] < 60) ink++;
+        else if (raw.data[o] > 225 && raw.data[o + 1] > 225) pale++;
+      }
+    const flat = (yel + ora) / (yelNear + oraNear);
+    console.log(`\n  inside tongue 9's box (${b.w.toFixed(0)} x ${b.h.toFixed(0)} px):`);
+    console.log(`    ${boxesAt8.colours.yellow} yellow ${yel} px · ${boxesAt8.colours.orange} orange ${ora} px · ink ${ink} px · paper ${pale} px`);
+    console.log(`    …and of the ${yelNear + oraNear} px anywhere near either pigment, ${(100 * flat).toFixed(1)}% are the plate value EXACTLY`);
+    ok(yel > 8000 && ora > 3000, `the tongue is yellow with an orange tongue inside it: ${yel} px of ${boxesAt8.colours.yellow} and ${ora} of ${boxesAt8.colours.orange}`);
+    ok(yel > ora, `and the yellow is the BODY, the orange the smaller dark area inside it (${(yel / ora).toFixed(2)}:1)`);
+    ok(ink > 600, `it is drawn round in the room's own ink and not in a coloured line (${ink} px of contour)`);
+    ok(flat > 0.96, `both plates are FLAT — no shading, no gradient, no light on them: ${(100 * flat).toFixed(1)}% of the pigment is the hex exactly`);
+  }
+
+  // ---- HIS FACE, AT THE HEIGHT OF IT -----------------------------------------------------------
+  // The `pepe` plate with the dozen alight. The camera is moved and moved back with the gate shut,
+  // so not one drawing of the fire passes while it is somewhere else and the hold is not disturbed.
+  await page.evaluate(() => window.__theatre.pieces.camera.cut('pepe'));
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await page.screenshot({ path: `${OUT}/egg-fine-pepe-8s50.png`, timeout: 400000 });
+  await page.evaluate(() => window.__theatre.pieces.camera.cut('home'));
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  const stillOn = await read();
+  console.log(`  the pepe plate at 8.50 s  →  ${OUT}/egg-fine-pepe-8s50.png   (${stillOn.lit} still alight, drawing ${stillOn.steps})`);
+  ok(stillOn.lit === 12 && stillOn.steps >= 102, 'and moving the camera to his face and back cost the hold nothing');
 
   // ---- and the pointer taken away -------------------------------------------------------------
   // Six drawings — half a second — and the sheets shrink to a last wisp and are gone. The first of
@@ -375,7 +467,11 @@ console.log('\nTHE HOLD  (1280x800, home, a real pointer put on the lamp and lef
   // ---- the events and the cue ------------------------------------------------------------------
   const events = await page.evaluate(() => window.__fine);
   console.log('\nprops:fine                ', JSON.stringify(events));
-  ok(events.length === 2 && events[0].burning === true && events[1].burning === false, 'the bus carried exactly two: it caught, and it went out');
+  ok(
+    events.length === 3 && events[0].burning === true && !events[0].full && events[1].full === true && events[1].n === 12 && events[2].burning === false,
+    'the bus carried exactly three: it caught, the LAST tongue caught (full), and it went out',
+  );
+  ok(events.filter((e) => e.full).length === 1, `and the full flag went up once for the whole burning (${events.filter((e) => e.full).length})`);
   const cues = await page.evaluate(() => (window.__theatre.pieces.sound.timeline ?? []).map((c) => ({ n: c.name, at: c.at })));
   // The cue is fired every FOURTH drawing (egg-fine.js, CRACKLE_EVERY), so the count is arithmetic:
   // 66 drawings from the first flame to the twelfth, plus the six the fire spends going out, is
@@ -473,7 +569,13 @@ console.log('\nTHE ROOM, ALIGHT AND NOT  (1280x800, home, ?t=2.5 frozen; the sam
   // A FLAME'S BOX PLUS THE PEN'S OWN REACH. The ink pass derives a contour from its neighbours, so
   // a sheet standing in front of the cloth moves the cloth's line by a nib on the way past. Three
   // pixels of margin is that nib; anything outside it is a mark that was not there before.
-  const PEN = 3;
+  // ROUND 2 WIDENED IT FROM 3 TO 5, and the reason is the round: the tongues are now up to 242 px
+  // of flat pigment, and a line lying alongside an area that large has its own contour re-derived
+  // from a neighbourhood that includes it. At 3 px this came back with nine loose pixels in four
+  // overlapping blocks, all of them within a nib and a half of a flame's own edge; at the pass's
+  // full 3.7 px reach plus a pixel of anti-aliasing there is nothing at all. Anything outside THAT
+  // is a mark the fire put somewhere it has no business being, and its coordinates are printed.
+  const PEN = 5;
   const inBox = (b, x, y, m = PEN) => x >= b.x - m && x <= b.x + b.w + m && y >= b.y - m && y <= b.y + b.h + m;
   const per = geom.flames.map(() => 0);
   let inside = 0, onPepe = 0, elsewhere = 0;
@@ -496,13 +598,17 @@ console.log('\nTHE ROOM, ALIGHT AND NOT  (1280x800, home, ?t=2.5 frozen; the sam
   // that was already there is a scatter of single ones. Counting 2x2 blocks tells the two apart,
   // and it is the test egg-insects.js's proof settled on for the same question.
   let blocks = 0, pepeBlocks = 0;
+  const where = [];
   for (let y = 0; y < PH - 1; y++)
     for (let x = 0; x < PW - 1; x++) {
       const i = y * PW + x;
       if (!changed[i] || !changed[i + 1] || !changed[i + PW] || !changed[i + PW + 1]) continue;
       if (geom.flames.some((b) => inBox(b, x, y))) continue;
       if (inBox(geom.pepe, x, y, 0)) pepeBlocks++;
-      else blocks++;
+      else {
+        blocks++;
+        if (where.length < 12) where.push(`${x},${y}`);
+      }
     }
   console.log(`  Pepe's own region on the glass         ${geom.pepe.w.toFixed(0)} x ${geom.pepe.h.toFixed(0)} px at ${geom.pepe.x.toFixed(0)},${geom.pepe.y.toFixed(0)}`);
   console.log(`  pixels changed inside the twelve       ${inside}   (${per.join(' ')})`);
@@ -513,7 +619,7 @@ console.log('\nTHE ROOM, ALIGHT AND NOT  (1280x800, home, ?t=2.5 frozen; the sam
     `every one of the twelve actually drew something where the table of seats says it is (least: ${Math.min(...per)})`,
   );
   ok(pepeBlocks === 0, `HE DOES NOT REACT AT ALL: not one MARK of Pepe is different with the room alight (${onPepe} loose pixels, 0 blocks)`);
-  ok(blocks === 0, `and the rest of the room is the same drawing: ${elsewhere} loose pixels, not one solid block of new mark`);
+  ok(blocks === 0, `and the rest of the room is the same drawing: ${elsewhere} loose pixels, not one solid block of new mark${where.length ? ' — at ' + where.join(' ') : ''}`);
   await crop(lit, union(geom.flames), `${OUT}/egg-fine-frozen-2x.png`, { pad: 24, scale: 2 });
   ok(page.__errors.length === 0, 'the frozen frames threw nothing');
   await page.close();
@@ -534,27 +640,8 @@ console.log('\nA PHONE  (390x844, home, a finger held on the lamp)');
   const cx = tap.x + tap.w / 2, cy = tap.y + tap.h / 2;
   console.log(`  the target on the glass  x ${cx.toFixed(0)} y ${cy.toFixed(0)}  (${tap.w.toFixed(0)} x ${tap.h.toFixed(0)} px, a thumb's own box)`);
   await page.screenshot({ path: `${OUT}/egg-fine-phone-fine.png`, timeout: 400000 });
-  await page.evaluate(() => {
-    const p = window.__theatre.pieces.props;
-    const real = p.update.bind(p);
-    window.__go = 0;
-    p.update = (c) => {
-      // the same gate as the hold's, and for the same reason: the counted drawings are taken in one
-      // rendered frame, and the frames that are looked at are drawn
-      if (window.__go > 0 && c.clock.stepped) {
-        while (window.__go > 0) {
-          window.__go--;
-          real(c);
-        }
-      }
-    };
-  });
-  const run = async (n) => {
-    await page.evaluate((k) => {
-      window.__go = k;
-    }, n);
-    await page.waitForFunction(() => window.__go === 0, null, { timeout: 1500000, polling: 500 });
-  };
+  await gate(page); // the same gate as the hold's, and for the same reason
+  const run = (n) => release(page, n);
   const lit = () => page.evaluate(() => ({ lit: window.__theatre.pieces.props.fine.lit, steps: window.__theatre.pieces.props.fine.steps }));
   // a HELD touch: down, hold, up — which is the only way a phone has of resting on something
   const cdp = await page.context().newCDPSession(page);
@@ -580,6 +667,146 @@ console.log('\nA PHONE  (390x844, home, a finger held on the lamp)');
   ok(world2.placard === '', 'the placard on a phone says nothing either');
   console.log('  props:fine on the phone  ', JSON.stringify(await page.evaluate(() => window.__fine)));
   ok(page.__errors.length === 0, `the phone threw nothing${page.__errors.length ? ': ' + page.__errors[0] : ''}`);
+  await page.close();
+}
+
+// ---- 5. HIS LINE, in a whole evening ----------------------------------------------------------------
+// The only section that runs the film rather than a judging state: main.js starts the flow when
+// there is no ?view and no ?shot, and the placard says nothing until it does. The visitor clicks
+// the door, is greeted, and then — with the field open under his last sentence — rests the pointer
+// on the lamp. There is no API key in this run, so his greeting comes from script.js and the mind
+// says nothing at all; the line under test is scripted (flow-lines.js, PROMPTS.fine) and is
+// therefore exactly as available to a keyless visitor as to a paying one.
+//
+// dialogue.ask is wrapped before anything is lit, so every prompt the placard is handed all evening
+// is written down. That is what "exactly once" is asked of, and it is asked of dialogue and not of
+// the flow or the egg.
+if (doing('line')) {
+console.log('\nHIS LINE  (1280x800, a whole evening, no ?view: the door, the greeting, then the lamp)');
+  await fresh();
+  const [W, H] = PLATE;
+  const page = await evening(W, H);
+  await page.evaluate(() => {
+    window.__fine = [];
+    window.__theatre.on('props:fine', (d) => window.__fine.push({ ...d, beat: window.__theatre.pieces.flow.beat }));
+    // every prompt the placard is handed, all evening
+    const D = window.__theatre.pieces.dialogue;
+    window.__asks = [];
+    const realAsk = D.ask.bind(D);
+    D.ask = (p, o) => {
+      window.__asks.push(String(p ?? ''));
+      return realAsk(p, o);
+    };
+    const realSay = D.say.bind(D);
+    window.__says = [];
+    D.say = (t, o) => {
+      window.__says.push(String(t ?? ''));
+      return realSay(t, o);
+    };
+  });
+  await page.mouse.click(W / 2, H / 2); // the door
+  await page.waitForFunction(() => window.__theatre.pieces.dialogue.asking === true, null, { timeout: 300000 });
+  const beforeLine = await placardText(page);
+  console.log(`  the field is open under his greeting: "${beforeLine.slice(0, 90)}"`);
+
+  await gate(page);
+  const run = (n) => release(page, n);
+  const lamp = await page.evaluate(() => window.__theatre.pieces.props.fine.tapBox());
+  const lx = lamp.x + lamp.w / 2, ly = lamp.y + lamp.h / 2;
+  await page.mouse.move(lx - 420, ly + 160);
+  await run(2);
+  await page.mouse.move(lx, ly);
+  await run(101); // one short of the dozen
+  const at11 = { lit: await page.evaluate(() => window.__theatre.pieces.props.fine.lit), text: await placardText(page) };
+  ok(at11.lit === 11 && !at11.text.includes('This is fine.'), `eleven tongues and he has said nothing: the line waits for the LAST one (${at11.lit} alight)`);
+  await run(1); // …and the twelfth
+  // the flow takes the event, cuts the field short and hands the line to dialogue.ask; that is a
+  // frame or two of the page's own loop
+  await page.waitForFunction(() => (window.__asks ?? []).includes('This is fine.'), null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.__theatre.pieces.dialogue.asking === true, null, { timeout: 120000 }).catch(() => {});
+  const said = await placardText(page);
+  const state = await page.evaluate(() => ({
+    asking: window.__theatre.pieces.dialogue.asking,
+    field: !!document.querySelector('#dialogue input'),
+    asks: window.__asks,
+    says: window.__says,
+    beat: window.__theatre.pieces.flow.beat,
+    shot: window.__theatre.pieces.camera.current,
+    lit: window.__theatre.pieces.props.fine.lit,
+  }));
+  await page.screenshot({ path: `${OUT}/egg-fine-said.png`, timeout: 400000 });
+  console.log(`  the placard, with the dozen alight: "${said}"`);
+  console.log(`  every prompt the placard was handed all evening: ${JSON.stringify(state.asks)}`);
+  console.log(`  …and everything dialogue.say was told to cut: ${JSON.stringify(state.says)}`);
+  console.log(`  →  ${OUT}/egg-fine-said.png`);
+  // the sign hand sets the card in small caps, so the placard's own text comes back shouted
+  ok(said.toUpperCase().includes('THIS IS FINE.'), `the placard says it, in those words (${JSON.stringify(said.slice(0, 60))})`);
+  ok(state.asking && state.field, 'and the field is open UNDERNEATH it: the visitor can answer a burning room');
+  ok(state.shot === 'home' || state.shot === 'wide', `the camera did not cut to the fire — nobody has noticed it (${state.shot})`);
+  ok(
+    state.asks[state.asks.length - 1] === 'This is fine.',
+    'it was handed to dialogue.ask and not to dialogue.say: the LINE OVER an open field, which is what keepLast makes it',
+  );
+
+  // …and it is not said again while the same fire goes on burning
+  await run(40);
+  const again = await page.evaluate(() => window.__asks.filter((a) => a === 'This is fine.').length);
+  ok(again === 1, `forty more drawings of the same fire and he says it once and not twice (${again})`);
+
+  // ---- AND NOW THE SAME EVENT, OVER A READING --------------------------------------------------
+  // The pointer comes off, the room goes out, and the visitor asks for the cards. Once the wash is
+  // on the cloth the FIELD IS OPEN AGAIN — the room asks for three — and that is the hardest case
+  // for the guard in flow.js: an open field, a placard the visitor is answering, and a fire that
+  // must not be allowed to interrupt it.
+  //
+  // The event is put on the bus BY HAND here, and the reason is measured two lines below: at every
+  // plate a reading is played in, the mushroom lamp is not in the picture at all, so a visitor
+  // cannot reach it and the fire cannot be started from there. What is under test is the flow's
+  // rule, not the egg's arithmetic — the egg's is proved above, twelve tongues at a time — so the
+  // event it would emit is emitted, at the real beat, with the real field open.
+  await page.mouse.move(lx - 420, ly + 160);
+  await run(8);
+  ok((await page.evaluate(() => window.__theatre.pieces.props.fine.lit)) === 0, 'the pointer comes off and the room is fine again');
+  await page.evaluate(() => {
+    const i = document.querySelector('#dialogue input');
+    i.value = 'read my cards';
+    i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  });
+  const gotToCards = await page
+    .waitForFunction(() => window.__theatre.pieces.flow.beat === 'fan' && window.__theatre.pieces.dialogue.asking === true, null, { timeout: 400000, polling: 400 })
+    .then(() => true)
+    .catch(() => false);
+  const beat = await page.evaluate(() => window.__theatre.pieces.flow.beat);
+  console.log(`  the visitor asked for the cards; the beat is now "${beat}" with the field open for the picking`);
+  ok(gotToCards, `and the cloth is out with three to choose, which is what this half of the test needs (${beat})`);
+  const reach = await page.evaluate(
+    ({ W, H }) => {
+      const b = window.__theatre.pieces.props.fine.tapBox();
+      return { shot: window.__theatre.pieces.camera.current, box: b, inShot: b.x + b.w > 0 && b.x < W && b.y + b.h > 0 && b.y < H };
+    },
+    { W, H },
+  );
+  console.log(`  the lamp at the "${reach.shot}" plate: ${reach.box.w.toFixed(0)} x ${reach.box.h.toFixed(0)} px at ${reach.box.x.toFixed(0)},${reach.box.y.toFixed(0)} — ${reach.inShot ? 'IN SHOT' : 'not in the picture'}`);
+  const before2 = { asks: await page.evaluate(() => window.__asks.length), text: await placardText(page) };
+  await page.evaluate(() => window.__theatre.emit('props:fine', { burning: true, n: 12, full: true }));
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await page.waitForTimeout(1500);
+  const during2 = await page.evaluate(() => ({
+    beat: window.__theatre.pieces.flow.beat,
+    asking: window.__theatre.pieces.dialogue.asking,
+    asks: window.__asks.length,
+    fine: window.__asks.filter((a) => a === 'This is fine.').length,
+  }));
+  await page.screenshot({ path: `${OUT}/egg-fine-silent-reading.png`, timeout: 400000 });
+  const text2 = await placardText(page);
+  console.log(`  the last tongue "catches" over the reading: beat "${during2.beat}", field open ${during2.asking}, placard "${text2.slice(0, 70)}"`);
+  console.log(`  →  ${OUT}/egg-fine-silent-reading.png`);
+  ok(during2.fine === 1, `he does NOT say it: the room burns silently through the cards (${during2.fine} in all, and that one was the first fire)`);
+  ok(during2.asks === before2.asks, `and the visitor's own field was not cut short for it — the placard was handed nothing (${during2.asks - before2.asks} new prompts)`);
+  ok(text2.toUpperCase() === before2.text.toUpperCase() && !text2.toUpperCase().includes('THIS IS FINE.'), `the placard is still the reading's (${JSON.stringify(text2.slice(0, 50))})`);
+  ok(during2.asking === true, 'and the field the visitor was typing into is still open');
+  console.log(`  props:fine across the evening  ${JSON.stringify(await page.evaluate(() => window.__fine))}`);
+  ok(page.__errors.length === 0, `the evening threw nothing${page.__errors.length ? ': ' + page.__errors[0] : ''}`);
   await page.close();
 }
 

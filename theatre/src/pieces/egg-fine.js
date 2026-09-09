@@ -1,22 +1,41 @@
-// AN EGG, inside props: THE ROOM CATCHES FIRE AND NOBODY MENTIONS IT.
+// AN EGG, inside props: THE ROOM CATCHES FIRE AND NOBODY MINDS.
 //
 // The user: "Hold the pointer on the mushroom lamp beside him for three seconds: small drawn flames
 // start along the shelves, he does not react at all, and the placard says nothing. Move the pointer
 // and they go out."
 //
-// It is the dog in the burning kitchen, played straight. Everything that would normally be the
-// point of a fire is deliberately withheld:
+// ROUND 2, AND IT IS THE PANEL NOW. The user, with the "this is fine" panel in front of him: "the
+// flames on this is fine should be much larger. they should also be orange yellow - and pepe should
+// say this is fine." Three changes and nothing else:
+//
+//   THE FLAMES ARE THE PANEL'S. Not small drawn flames along a shelf edge — great tongues as tall
+//   as a seated frog and taller, standing on the floor either side of the frame, along the cabinets
+//   left and right of him, in the doorway, off the near edge of the table. Twelve, and the two on
+//   the floor are 485 px of the home plate's 800.
+//
+//   THEY ARE YELLOW WITH AN ORANGE TONGUE INSIDE. Until this round the room had one colour, his
+//   green, and this file's own comment said a fire in orange would be the second-loudest thing in
+//   the film. It is now the second colour, because the user asked for it: PLATE_Y #f2b829 and
+//   PLATE_O #e0561d, laid flat under the line and printed a hair out of register the way his skin
+//   is (pepe.js; STYLE §1.4, the mustard suit in fd-anim-courtyard-three-figures). The contour is
+//   the room's own pen at the room's own width, in ink, never a coloured line.
+//
+//   AND HE SAYS ONE THING. When the last tongue catches, `props:fine` goes up with `full`, flow.js
+//   takes it exactly where it takes the globe's country, and the placard says `This is fine.` —
+//   once per burning, and never while a reading is on, when the room burns silently. That is the
+//   whole of his reaction: he does not look up, he does not move, the light does not change.
+//
+// Everything that would normally be the point of a fire is still withheld:
 //
 //   THE LIGHT DOES NOT CHANGE. Not one lamp is added, moved or brightened. A fire that lit the room
-//   would be a fire the room had noticed, and the whole joke is that the room has not. The flames
-//   are DRAWN — paper cut-outs standing on the shade, on the shelf boards and on the cloth — and
-//   drawing is all they are. This is also why they are ink only: the room has one green (Pepe) and
-//   the card faces, and a fire in orange would be the second-loudest thing in the film.
+//   would be a fire the room had noticed. The flames are DRAWN — paper cut-outs standing on the
+//   floor, on the shelf boards and on the cloth — and drawing is all they are. The colour is
+//   pigment on the plate, not light in the room: `noShadow`, no emissive, no practical.
 //
-//   PEPE DOES NOTHING WHATSOEVER. This file never touches pepe, pepeAnim, flow or dialogue. It does
-//   not call `say`, it does not set a mood, it does not so much as read his state. The placard says
-//   nothing because nothing has been said to it. tools/_egg-fine-proof.mjs pixel-compares his own
-//   region across the fire going up and puts the number in the report.
+//   PEPE DOES NOTHING WHATSOEVER. This file never touches pepe or pepeAnim. It emits one event and
+//   the flow decides what to do with it; nothing here reads his state, sets a mood or moves a bone.
+//   tools/_egg-fine-proof.mjs pixel-compares his own region across the fire going up and puts the
+//   number in the report, and it is nought.
 //
 //   NOTHING ANNOUNCES IT. No label, no glow, no outline, no tag. The cursor becomes a pointer over
 //   the lamp and that is the entire affordance — the radio's manners, the cat's manners, the
@@ -27,33 +46,46 @@
 // goes wrong. Three seconds of the pointer resting on the mushroom lamp; then one flame every half
 // second until a dozen are burning, in the order a fire would actually take the room —
 //
-//   the lamp's own shade (three), because that is where the hand was;
-//   the shelf boards either side of him (six, alternating left and right), because that is what is
-//     nearest and it is full of paper;
-//   the near edge of the table (three), which is the last thing between the fire and the lens.
+//   the lamp's own shade, because that is where the hand was;
+//   the shelf boards either side of him, because that is what is nearest and it is full of paper;
+//   the cabinets outboard of those, then the curtain and the doorway, which are the room's two
+//     openings and the two tallest paper things in it;
+//   the floor either side of the table, which is where a fire this size actually stands;
+//   and the near edge of the cloth, the last thing between the fire and the lens.
 //
 // The moment the pointer leaves the lamp — or, on a phone, the moment the finger lifts or slides
 // off it — every flame shrinks over half a second to a last wisp and is gone, and the cue stops.
 //
 // HOW A FLAME IS DRAWN. Two sheets each, and exactly one of them is shown at a time, swapped on
 // every 12 fps step: that is the room's own boil doing the flickering, so a flame is alive for the
-// same reason a held line is. Each sheet is a closed teardrop FILLED WITH PAPER — a flame in front
-// of a bookcase hides the bookcase — with the contour struck round it at the room's nib and a solid
-// ink lobe at its root. That is the round-1 critic's rule for every prop in this room (one solid
-// black area, one bare white area) applied to a fire, and it is the reason a 24-pixel flame reads
-// as one: black root, white body, one line round it. Three hands are cut, not one, and the twelve
-// flames are dealt shapes and PHASES off a seeded table, so no two of them lick together.
+// same reason a held line is. Each sheet is FOUR MARKS and no more —
+//
+//   the paper the contour encloses (a tongue in front of a bookcase hides the bookcase);
+//   the YELLOW plate over it, and the ORANGE tongue inside that, both shifted by a fraction of a
+//     nib: colour under the line, off register, flat, no shading anywhere in it;
+//   the contour struck round the lot at the room's nib, in ink;
+//   and one stroke along the foot, which is the thing the flame is standing on.
+//
+// The orange is the dark area the round-1 critic asks of every prop in this room; the yellow body
+// is its bare white one. Three hands are cut, not one, each with a second drawing that throws its
+// tip the other way and grows its side lick, and the twelve are dealt hands and PHASES off the
+// table below, so no two of them lick together.
 //
 // api (published as props.fine):
 //   burning        true while anything is alight (the flag `props:fine` carries)
+//   full           the LAST tongue has caught — what flow.js's one line hangs off
 //   lit            how many of the twelve are alight just now
 //   count          twelve
+//   colours        { yellow, orange }: the two plates, for a proof that wants to name them
+//   metres         how tall each of the twelve is, for the same reason
 //   set(on)        for a still: all of them, or none, with no hold, no cue and nothing to wait for
 //   hitBox()       the lamp's box on the glass, in px
 //   tapBox()       the box a thumb is actually given (≥ 44 px, grown about the same centre)
 //   held           how long the pointer has rested on the lamp, in seconds
 //   setState(name) `fine-burning` is the dozen alight; every other name is a room that is fine
 //   update(ctx)    called from props.update on the stepped clock
+// events:
+//   props:fine { burning, n, full }   caught · the last tongue caught (full) · out
 import * as THREE from 'three';
 import { INK, PAPER, makeCanvas, canvasTexture, inkLine } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
@@ -72,21 +104,48 @@ const OUT_F = 6; // drawings to shrink the lot to nothing (0.5 s)
 const CRACKLE_EVERY = 4; // drawings between one firing of the cue and the next (see LENGTH.crackle)
 const MIN_TAP = 44; // px: what a thumb needs, whatever the lamp measures on the glass
 
-// ---- the drawing --------------------------------------------------------------------------------
-// THE SHEET, AND WHY IT IS THIS SIZE. A flame stands about 0.12 m tall on the back wall, which is
-// 181 px to the metre at the home plate: 22 screen pixels. The room's pen on that wall is 0.013 m,
-// or 2.4 px. So the whole drawing is nine or ten pen widths tall and there is room in it for three
-// marks and no more — a contour, the paper it encloses, and one black root. A first pass had an
-// inner tongue line as well and at this size the tongue and the contour merged into a blot, which
-// is the same lesson egg-insects.js learnt about outlining a wing.
-const S = 80; // canvas px a side
-const BASE_V = 0.93; // where the foot of the flame sits in the sheet, top-down
-const TIP_V = 0.1; // …and the tip. The drawing is (BASE_V - TIP_V) of the sheet tall.
-const TALL = BASE_V - TIP_V;
+// ---- THE SECOND COLOUR IN THE ROOM ---------------------------------------------------------------
+// Until this round there was one: his skin, SKIN #69b964 in pepe.js, with the card faces beside it.
+// The user has asked for the fire's, so here are two, and they are chosen to stand with the other
+// two and not to shout over them.
+//
+//   PLATE_Y #f2b829 is a printer's yellow with ochre in it, not a lemon. Against the paper #f8f9f4
+//   it is a clear step down in value (74% to 97%), so a tongue reads as a shape and not as a glow;
+//   beside his green it is the warm quarter of the wheel and the two never sit on the same object.
+//   PLATE_O #e0561d is a red-orange at 47% — the DARK AREA of the drawing. Every prop in this room
+//   owes the round-1 critic one solid dark and one bare light; a flame's orange tongue is its dark
+//   and its yellow body is its light, which is why there is no ink lobe in a flame any more.
+//
+// Both are far off the grey axis (saturation 0.79 and 0.76 against the ink pass's 0.42 gate), so
+// the pass leaves them exactly as painted and inks only the black contour drawn over them — see
+// ink-shaders.js, the `colorful && uColorInk` branch. Neither is emissive and neither is a light.
+const PLATE_Y = '#f2b829';
+const PLATE_O = '#e0561d';
+// how far the colour plate slips under the line, as a fraction of the nib. A hair: about a pen's
+// width and a half on the canvas, which is 1.4 screen px wherever a flame stands, since the nib is
+// solved to arrive at the room's own width on the glass.
+const SLIP = [0.62, -0.42];
 
-// a closed wobbly loop, filled and then stroked: the flame's own silhouette
-function loop(g, pts, { width = 6, wobble = 0.5, rng = Math.random, fill = null }) {
+// ---- the drawing --------------------------------------------------------------------------------
+// THE SHEET IS CUT TO THE FLAME, NOT TO A CONSTANT. Round 1 drew every flame on one 80 px square
+// whatever it measured in metres, which was right when the biggest of them was 22 screen pixels.
+// The two on the floor are 485 px now — six times the sheet they would have been drawn on — and a
+// tongue magnified six times is a blur with a soft yellow edge. So the sheet is sized off what the
+// flame actually measures at the home plate, rounded to one of four heights, and the nib is solved
+// per sheet to come out at the room's own 2.4 px on the glass. Four buckets is nine or ten canvases
+// for the twelve flames and their two drawings each, which is a few milliseconds of pen.
+const TIP_V = 0.035, BASE_V = 0.965; // where the foot and the tip sit in the sheet, top-down
+const TALL = BASE_V - TIP_V;
+const ASPECT = 0.5; // the sheet is twice as tall as it is wide; a slender hand uses 0.7 of the width
+const PEN_PX = 2.4; // the room's own contour on the glass (egg-insects.js's measurement)
+const SHEET_OVER = 1.35; // canvas px per screen px before rounding: a sheet is drawn a third over size
+const CH_STEP = 64, CH_MIN = 128, CH_MAX = 448;
+const sheetH = (px) => Math.max(CH_MIN, Math.min(CH_MAX, Math.round((px * SHEET_OVER) / CH_STEP) * CH_STEP));
+
+// a closed wobbly loop through the points, filled and/or stroked: a flame's own silhouette
+function loop(g, pts, { width = 0, wobble = 0.5, rng = Math.random, fill = null, dx = 0, dy = 0 }) {
   g.save();
+  g.translate(dx, dy);
   g.beginPath();
   const n = pts.length;
   for (let i = 0; i <= n; i++) {
@@ -111,134 +170,203 @@ function loop(g, pts, { width = 6, wobble = 0.5, rng = Math.random, fill = null 
   g.restore();
 }
 
-// THE THREE HANDS. A flame is a base, a shoulder, a waist and a tip, and the only things that make
-// one flame a different flame from the next are where the tip leans, how high it goes and how fat
-// the shoulder is. `lean` is the tip's throw off centre as a fraction of the sheet; `pose` 1 is the
-// same flame a twelfth of a second later, and it leans the OTHER way and stands a little shorter,
-// so a pair alternating at 6 Hz reads as licking rather than as a wobble.
+// ---- THE THREE HANDS, WHICH ARE LOBES AND NOT A LIST OF POINTS -------------------------------------
+// A tongue this size cannot be a base, a shoulder, a waist and a tip any more: at 485 px those four
+// numbers draw a cone, and the first pass of this round was twelve traffic cones standing in a
+// parlour. A flame is LOBES — one tall one and one or two shorter ones beside it, each a rounded
+// tongue that swells low, pinches at the neck and throws its tip over, and each pair of them joined
+// at a NOTCH that cuts most of the way back down to the foot. That is what the eye reads as fire
+// and it is the one thing a triangle cannot do.
+//
+// A lobe is { c: where it stands across the sheet, w: its half-width, h: how high it reaches, l:
+// how far its tip is thrown off its own centre }, and `n` is how deep the notches between them cut.
+// u runs ±1 across the sheet and v 0 (the foot) to 1 (the tip); a slender hand simply does not use
+// the whole width, which is how three drawings of one sheet size come out three different widths.
+//
+// Pose 1 is the same flame a twelfth of a second later, and the rule for it is round 1's rule for
+// the small ones: the tip throws the OTHER way and drops a little, and the side lick grows into the
+// space it left. A pair alternating at 6 Hz licks; a pair that only wobbles flickers.
 const HANDS = [
-  { lean: [-0.07, 0.075], tip: [0.0, 0.055], base: 0.165, shoulder: 0.215, root: 0.6 },
-  { lean: [0.055, -0.085], tip: [0.02, 0.075], base: 0.185, shoulder: 0.235, root: 0.56 },
-  { lean: [-0.03, 0.045], tip: [0.045, 0.0], base: 0.15, shoulder: 0.2, root: 0.64 },
+  // 0 — three lobes: a small lick, the tall one just left of centre, a middling one on the right
+  [
+    { n: [0.3, 0.38], lobes: [{ c: -0.62, w: 0.38, h: 0.42, l: -0.08 }, { c: -0.05, w: 0.52, h: 1, l: 0.12 }, { c: 0.62, w: 0.38, h: 0.56, l: 0.1 }] },
+    { n: [0.26, 0.44], lobes: [{ c: -0.64, w: 0.36, h: 0.35, l: -0.12 }, { c: -0.08, w: 0.5, h: 0.9, l: 0.26 }, { c: 0.6, w: 0.4, h: 0.68, l: 0.14 }] },
+  ],
+  // 1 — two lobes, the tall one on the right, and a deep notch between them
+  [
+    { n: [0.42], lobes: [{ c: -0.44, w: 0.5, h: 0.6, l: -0.14 }, { c: 0.36, w: 0.6, h: 1, l: 0.16 }] },
+    { n: [0.5], lobes: [{ c: -0.46, w: 0.48, h: 0.74, l: -0.22 }, { c: 0.34, w: 0.58, h: 0.88, l: 0.02 }] },
+  ],
+  // 2 — one slender tongue with a small lick low on its right: the narrowest of the three
+  [
+    { n: [0.22], lobes: [{ c: -0.02, w: 0.72, h: 1, l: -0.14 }, { c: 0.66, w: 0.3, h: 0.33, l: 0.1 }] },
+    { n: [0.3], lobes: [{ c: 0, w: 0.7, h: 0.92, l: 0.18 }, { c: 0.64, w: 0.32, h: 0.46, l: 0.04 }] },
+  ],
 ];
+// THE TONGUE INSIDE is the same drawing at 0.6 across and 0.55 up, so a three-lobed flame has three
+// orange licks in it and not one blob in the middle of three. Nested, never drawn on its own.
+const INNER_W = 0.54, INNER_H = 0.58;
 
-// One sheet. `hand` is which of the three, `pose` is 0 or 1, `pen` the nib in canvas px (the table's
-// flames are nearer the lens than the wall's, so they are drawn with a finer one — see SEATS).
-export function drawFlame(hand, pose, pen) {
-  const H = HANDS[hand % HANDS.length];
-  const c = makeCanvas(S, S);
+// ONE SIDE OF ONE LOBE, as a cubic sampled into points: from an anchor at (x0, v0) up to the tip
+// at (xt, vt). `out` throws the low control point OUTBOARD — the swell just above the foot — and
+// the high one back INBOARD, past the tip's own line, which is the neck and the hook at the top.
+// Those two together are the whole S of a flame's edge, and the reason a flame is not a triangle.
+const K = 8; // samples a side. Enough that loop()'s own smoothing keeps the curve and not the chord
+function side(pts, x0, v0, xt, vt, out, lean) {
+  const dv = vt - v0;
+  const p1 = [x0 + out, v0 + dv * 0.3];
+  const p2 = [xt - out * 0.3 + lean * 0.85, v0 + dv * 0.76];
+  for (let i = 1; i <= K; i++) {
+    const t = i / K, m = 1 - t;
+    pts.push([
+      m * m * m * x0 + 3 * m * m * t * p1[0] + 3 * m * t * t * p2[0] + t * t * t * xt,
+      m * m * m * v0 + 3 * m * m * t * p1[1] + 3 * m * t * t * p2[1] + t * t * t * vt,
+    ]);
+  }
+}
+const FOOT = 0.78; // a lobe's foot is narrower than its swell: a tongue stands, it does not squat
+const SWELL = 0.34; // …and the swell above it, as a fraction of the lobe's half-width
+// …and the whole silhouette: out of the foot, up the outside of the first lobe, over its tip, down
+// into the NOTCH IT SHARES WITH THE NEXT — one point, walked into and out of, or the two lobes
+// overlap and the contour ties itself in a knot on the way past (it did) — up the next, and down to
+// the foot on the far side. Scaled by (sx, sy) about the foot, so the orange inside is this same
+// drawing and not a second one standing behind it.
+function tongue({ lobes, n }, sx = 1, sy = 1) {
+  const joint = [];
+  for (let i = 0; i < lobes.length - 1; i++) {
+    joint.push([((lobes[i].c + lobes[i].w + (lobes[i + 1].c - lobes[i + 1].w)) / 2) * sx, n[i] * sy]);
+  }
+  const first = [(lobes[0].c - lobes[0].w * FOOT) * sx, 0];
+  const last = [(lobes[lobes.length - 1].c + lobes[lobes.length - 1].w * FOOT) * sx, 0];
+  const pts = [first];
+  for (let i = 0; i < lobes.length; i++) {
+    const L = lobes[i];
+    const a = i === 0 ? first : joint[i - 1];
+    const b = i === lobes.length - 1 ? last : joint[i];
+    const tx = (L.c + L.l) * sx, ty = L.h * sy, lean = L.l * sx;
+    side(pts, a[0], a[1], tx, ty, -L.w * sx * SWELL, lean);
+    const down = [];
+    side(down, b[0], b[1], tx, ty, L.w * sx * SWELL, lean);
+    down.pop(); // the tip is already in: the right side is walked back down from it
+    for (let k = down.length - 1; k >= 0; k--) pts.push(down[k]);
+    pts.push(b);
+  }
+  return pts;
+}
+
+// One sheet. `hand` is which of the three, `pose` is 0 or 1, `ch` the canvas height in px and `pen`
+// the nib in canvas px (both solved from what the flame measures on the glass — see `buildFine`).
+export function drawFlame(hand, pose, ch, pen) {
+  const H = HANDS[hand % HANDS.length][pose % 2];
+  const cw = Math.round(ch * ASPECT);
+  const c = makeCanvas(cw, ch);
   const g = c.getContext('2d');
-  const rng = mulberry32(hand * 7717 + pose * 613 + Math.round(pen * 100) * 31 + 5);
-  const cx = S / 2;
-  const by = BASE_V * S; // the foot
-  const ty = (TIP_V + H.tip[pose]) * S; // …and the tip, which is lower on the second drawing
-  const lean = H.lean[pose] * S;
-  const bw = H.base * S * (0.94 + rng() * 0.12);
-  const sw = H.shoulder * S * (0.94 + rng() * 0.12);
-  const sy = by - (by - ty) * 0.28; // the shoulder: the widest part, low down
-  const wy = by - (by - ty) * 0.62; // the waist, where it starts to gather to the tip
+  const rng = mulberry32(hand * 7717 + pose * 613 + ch * 17 + Math.round(pen * 100) * 31 + 5);
+  const cx = cw / 2;
+  const by = BASE_V * ch, ty = TIP_V * ch;
+  const hw = cw * 0.5 - pen * 0.7; // the widest the drawing goes, with the nib kept inside the sheet
+  const up = by - ty;
+  const at = ([u, v]) => [cx + u * hw, by - v * up];
+  const pts = tongue(H).map(at);
+  const wob = Math.max(0.4, pen * 0.3);
 
-  // THE SILHOUETTE, filled with paper first. A flame in front of a bookcase hides the bookcase, so
-  // this is a cut-out with a white body and not an outline you can read the spines through.
-  const pts = [
-    [cx - bw, by],
-    [cx - sw, sy],
-    [cx - sw * 0.42 + lean * 0.45, wy],
-    [cx + lean, ty],
-    [cx + sw * 0.34 + lean * 0.45, wy],
-    [cx + sw * 0.92, sy],
-    [cx + bw, by],
-  ];
-  loop(g, pts, { width: pen, wobble: pen * 0.22, rng, fill: PAPER });
+  // 1. THE PAPER INSIDE THE CONTOUR. A tongue standing in front of a bookcase hides the bookcase,
+  // and it is what shows on the side the colour plate falls short of.
+  loop(g, pts, { width: 0, wobble: wob, rng, fill: PAPER });
 
-  // THE ROOT: the solid black area the room asks every drawn thing for, and the one place in a
-  // flame where a pen would really be dense. It stops well short of the contour on both sides, so
-  // there is bare paper between the two and the flame does not close up into a blot.
-  // THE ROOT IS MEASURED OFF THE PAPER LEFT INSIDE THE CONTOUR, not off the silhouette, and that is
-  // the whole reason a 22-pixel flame on the lampshade reads the same as a 32-pixel one on the
-  // cloth. The nib is solved per flame to come out at 2.4 px on the glass whatever the flame
-  // measures, so a small flame carries a proportionally FATTER line and has less white inside it;
-  // a root cut as a fraction of the outline swelled to fill that white and the three on the shade
-  // came out as black triangles. Cut as a fraction of what is actually left — 45% of it — every
-  // flame in the room has the same amount of paper between its root and its contour.
-  const rh = (by - ty) * H.root * 0.46;
-  const rw = (bw - pen * 0.5) * 0.45;
-  const root = [
-    [cx - rw, by - pen * 0.35],
-    [cx - rw * 0.72, by - rh * 0.5],
-    [cx + lean * 0.4, by - rh],
-    [cx + rw * 0.72, by - rh * 0.5],
-    [cx + rw, by - pen * 0.35],
-  ];
-  loop(g, root, { width: 0, wobble: pen * 0.18, rng, fill: INK });
+  // 2. THE COLOUR, OFF REGISTER. Both plates move together and by the same hair — a press slips
+  // once, not twice — so the orange keeps its place inside the yellow and the pair together sit a
+  // little up and to the right of the line drawn over them.
+  const dx = pen * SLIP[0], dy = pen * SLIP[1];
+  loop(g, pts, { width: 0, wobble: wob, rng, fill: PLATE_Y, dx, dy });
+  const inner = tongue(H, INNER_W, INNER_H).map(at);
+  loop(g, inner, { width: 0, wobble: wob * 0.8, rng, fill: PLATE_O, dx, dy });
 
-  // and the foot: one stroke along the bottom, which is what the flame is standing on. It is the
+  // 3. THE CONTOUR, in the room's pen and at the room's width, drawn over the lot and never
+  // coloured. This is the mark the ink pass re-states at its own nib (ink-shaders.js): it is
+  // achromatic and it stands clear of its field, which is the two things that branch asks for.
+  loop(g, pts, { width: pen, wobble: wob, rng });
+
+  // 4. and the foot: one stroke along the bottom, which is what the flame is standing on. It is the
   // mark that stops a cut-out floating a pixel above its board.
-  inkLine(g, cx - bw * 0.92, by, cx + bw * 0.92, by, { width: pen * 0.8, wobble: pen * 0.16, rng, segments: 3 });
+  // The foot is where the drawing itself comes down to v = 0, not the width of the sheet: a
+  // slender hand stands on a slender foot.
+  const l0 = H.lobes[0], ln = H.lobes[H.lobes.length - 1];
+  const fx0 = at([l0.c - l0.w, 0])[0], fx1 = at([ln.c + ln.w, 0])[0];
+  inkLine(g, fx0 + pen * 0.4, by, fx1 - pen * 0.4, by, { width: pen * 0.8, wobble: pen * 0.2, rng, segments: 4 });
   return c;
 }
 
-// ---- where the twelve stand ---------------------------------------------------------------------
-// THE ORDER IS THE FIRE'S OWN, and it starts under the hand. `at` says which thing it stands on,
-// `p` is where in metres (the lamp's three are offsets from the lamp's own origin, so they follow
-// the lamp; the rest are room coordinates), `h` how tall the flame is and `hand`/`phase` which of
-// the three drawings it was dealt and which of the two it starts on.
+// ---- where the twelve stand -----------------------------------------------------------------------
+// THE ORDER IS THE FIRE'S OWN, and it starts under the hand. `at` says which frame the position is
+// in ('lamp' is an offset from the lamp's own origin, so those follow it; the rest are room
+// coordinates), `h` how tall the tongue is IN METRES, `ppm` how many pixels a metre measures at
+// that depth on the home plate (measured off the plate itself; the sheet and the nib are solved
+// off it and nothing else, and tools/_egg-fine-proof.mjs prints the same table back), and `hand`/`phase` which of the three drawings it was dealt and
+// which of the two it starts on.
 //
-// The shelf and table numbers are READ from the objects that carry them and never written:
-//   · the cases. props.js: `O.shelfUnit({ w: 0.34, h: 1.02, d: 0.28, boards: [0.15, 0.57] })` at
-//     x = ±0.85, z = FLUSH + 0.14 = -2.32. A board is `box(w - 2t, t, d - 0.01)` at y - t/2, so its
-//     TOP is exactly 0.15 / 0.57; the case's own top board is 0.02 deeper and its face is at 1.02.
-//     Front edges therefore at z = -2.185 (boards) and -2.16 (the top). The two on the top boards
-//     stand OUTBOARD of the globe and the cat, which live on the middle of those same boards.
-//   · the table. layout.js: top 0.76, radius 0.62, and table.js bends the cloth over the rim at
-//     R - 0.012. All three sit inside 0.60 m of the axis, and the gap in the middle of them is
-//     where the deck stands (layout `deck.pos` [0, 0.7625, 0.44]): a flame drawn on top of the
-//     cards would be two drawings in one place.
+// THE SIZES ARE THE PANEL'S, and they are the round's whole point. A seated frog is 1.37 m of this
+// room; the two on the floor are 1.95 and stand a head above him, the doorway's is 1.7, the
+// curtain's 1.15. Nothing here is a shelf ornament any more: the smallest of the twelve is the one
+// on the lampshade at 0.30 m, and even that is 60 px of the home plate.
+//
+// WHAT THEY MAY NOT DO. Not one of them comes near his face. He measures px 535–745 across and
+// 307–623 down on the home plate and his HEAD is about 590–700; the two floor tongues measure 242 px
+// across and stop at 548 and start again at 736, so there is 42 px of clear paper between the
+// nearest tongue and his head on either side and nothing at all over it. They stand in FRONT of the
+// furniture and BEHIND the table (the cloth's rim is at z 0.62 and the floor pair at z −0.55, so
+// the table crops their feet, which is what a table does); the one on the cloth is the only thing
+// in the room downstage of it. The placard is DOM and is over all of it whatever happens.
 const SEATS = [
-  // THE LAMP'S OWN SHADE — offsets from the lamp's origin, standing on the dome's CROWN (a
-  // hemisphere of r 0.115 about y 0.19) and not on its face. That is a measurement, not a
-  // composition: the shade is 43 x 23 px at the home plate and a flame that reads at all is 22 px
-  // tall, so three of them planted across the front of it erase the lamp altogether — the first
-  // pass did, and the drawing came out as one white lump with three dark wicks in it. Put on the
-  // crown and spread to ±0.092 m they stand ABOVE the shade's contour, which stays whole, and the
-  // gap of bare dome between each pair is 7 px wide on the glass. Each foot is on the dome's own
-  // PROFILE — y = 0.19 + sqrt(0.115² - x²) at z = 0, the highest the shade gets at that x — so the
-  // flame stands tangent to the shade's contour instead of in front of it: the arc comes out
-  // unbroken and the fire sits on it, which is how it would be drawn by hand. Upstage of that the
-  // dome swallows the flames' feet and three of them come out as ears; downstage, the white bodies
-  // eat the crown. Both were drawn and looked at; this is the one that is a lamp on fire.
-  { at: 'lamp', p: [-0.088, 0.2636, 0.0], h: 0.1, hand: 0, phase: 0 },
-  { at: 'lamp', p: [0.0, 0.3046, 0.0], h: 0.115, hand: 1, phase: 1 },
-  { at: 'lamp', p: [0.088, 0.2636, 0.0], h: 0.095, hand: 2, phase: 0 },
+  // THE LAMP'S OWN SHADE — an offset from the lamp's origin, standing on the dome's CROWN (a
+  // hemisphere of r 0.115 about y 0.19) and not on its face, so the shade's arc comes out unbroken
+  // and the fire sits on it. Round 1 stood three here and they erased a 43 x 23 px lamp; one tongue
+  // twice the height of the shade is the same joke with the lamp still in the drawing, and it is
+  // the one the hand is actually resting on.
+  { at: 'lamp', p: [-0.01, 0.3046, 0.0], h: 0.3, ppm: 187, hand: 1, phase: 0 },
   // THE SHELF BOARDS, left and right and left and right: a fire crosses a room, it does not finish
-  // one bookcase before it starts the other. It starts on the top boards at the ends NEAREST the
-  // lamp, works outboard past the globe and the cat, and only then drops to the middle board.
+  // one bookcase before it starts the other. The top boards run -1.035 to -0.665 and 0.665 to
+  // 1.035; the globe's own box on the left one is -0.972 to -0.745 and the cat's on the right is
+  // 0.762 to 0.970 (read off the objects with tools/_egg-fine-where.mjs), so the inboard tongue
+  // stands between each of them and Pepe and the outboard one past it, and neither is planted in a
+  // sleeping cat.
+  { at: 'room', p: [-0.7, 1.02, -2.17], h: 0.52, ppm: 187, hand: 2, phase: 1 },
+  { at: 'room', p: [0.72, 1.02, -2.17], h: 0.52, ppm: 187, hand: 0, phase: 0 },
+  { at: 'room', p: [-1.02, 1.02, -2.17], h: 0.62, ppm: 187, hand: 0, phase: 1 },
+  { at: 'room', p: [1.02, 1.02, -2.17], h: 0.62, ppm: 187, hand: 1, phase: 0 },
+  // THE TWO CABINETS OUTBOARD OF THEM. The bar cart on the window side (props.js: 0.96 x 0.42,
+  // top 0.8, at the window's own centre x -1.5, z WALL + 0.48, so it runs -1.98 to -1.02) and the
+  // PTT's spares press on the door side (0.54 wide, 1.5 tall, at x W/2 - 0.31 = 2.29, running 2.02
+  // to 2.56). The cart's tongue stands at its far left end, well clear of the radio at cart-local
+  // x 0.25; the press's stands on its top board inboard of the jar the insects use, which is at
+  // unit-local 0.13. Both are set as far out as their furniture goes, because those two thirds of
+  // the home plate are the only ones the floor pair does not already fill.
+  { at: 'room', p: [-1.9, 0.8, -2.02], h: 1.0, ppm: 191, hand: 2, phase: 0 },
+  { at: 'room', p: [2.32, 1.5, -2.34], h: 0.9, ppm: 184, hand: 1, phase: 1 },
+  // THE ROOM'S TWO OPENINGS, which are the two tallest paper things in it. The curtain inside the
+  // window architrave (x -1.95 to -1.05, sill 1.04) stands above the cart, which is the only reason
+  // it can be seen at all; the doorway's is the whole height of a person and stands in the opening
+  // (x 1.05 to 1.95), set to the far side of it so the floor tongue in front does not swallow it.
+  { at: 'room', p: [-1.58, 1.04, -2.44], h: 1.15, ppm: 186, hand: 0, phase: 1 },
+  { at: 'room', p: [1.72, 0.0, -2.42], h: 1.7, ppm: 183, hand: 2, phase: 0 },
+  // THE FLOOR, EITHER SIDE OF THE TABLE, and these are the panel. 1.95 m of tongue standing on the
+  // rug at z -0.55, which is 485 px of the home plate's 800 and reaches to y 160 — a head above him
+  // and a third of the frame above the table.
   //
-  // THE TWO GAPS ON THE TOP BOARDS ARE MEASURED, not chosen. The board runs -1.035 to -0.665; the
-  // globe's own box on it is -0.972 to -0.745 and the cat's is 0.762 to 0.970 (both read off the
-  // objects with tools/_egg-fine-where.mjs). A flame is 56 mm across at its foot, so there is one
-  // slot outboard of each and one inboard, and no third.
-  //
-  // AND NOTHING BELOW THE MIDDLE BOARD, which is the one measurement in this file that had to be
-  // taken off a rendered frame rather than off the set. The bottom board at y 0.15 lands at 517 px
-  // on the home plate; the tablecloth's own skirt, three metres nearer the lens, runs across that
-  // band from 476 to 804 px, and two flames put there were behind it entirely — 21 and 35 changed
-  // pixels against 150 for every other one, which is what a flame nobody can see is worth. The
-  // middle board's inboard end is out too, for the same kind of reason at a tenth the scale: the
-  // case's own stile stands at -0.702, a flame centred at -0.72 reaches -0.694, and eight
-  // millimetres of it came out sliced off down a straight white edge.
-  { at: 'room', p: [-0.705, 1.02, -2.17], h: 0.115, hand: 2, phase: 1 },
-  { at: 'room', p: [0.71, 1.02, -2.17], h: 0.125, hand: 0, phase: 0 },
-  { at: 'room', p: [-1.0, 1.02, -2.17], h: 0.13, hand: 0, phase: 1 },
-  { at: 'room', p: [1.0, 1.02, -2.17], h: 0.115, hand: 1, phase: 0 },
-  { at: 'room', p: [-0.94, 0.57, -2.19], h: 0.125, hand: 1, phase: 0 },
-  { at: 'room', p: [0.94, 0.57, -2.19], h: 0.12, hand: 2, phase: 1 },
-  // and the cloth's near edge, which is the last thing between the fire and the lens. Nearer the
-  // camera, so smaller in metres and drawn with a finer nib, and the two come to the same width on
-  // the glass: one pen for the whole room, which is the house rule.
-  { at: 'table', p: [-0.4, 0.762, 0.42], h: 0.1, hand: 2, phase: 0, near: true },
-  { at: 'table', p: [-0.13, 0.762, 0.575], h: 0.09, hand: 0, phase: 1, near: true },
-  { at: 'table', p: [0.33, 0.762, 0.5], h: 0.105, hand: 1, phase: 0, near: true },
+  // WHY NOT FURTHER OUT, WHICH IS WHAT "EITHER SIDE OF THE FRAME" WOULD MEAN ON A LAPTOP. The two
+  // frames this film is judged in do not agree about where the sides are. At this depth 1280x800
+  // holds 5.5 m of room and 390x844 holds 1.47, so a tongue at the laptop's own edge (x ±2.4) is
+  // three metres outside the phone's picture and a tongue at the phone's edge (±0.74) stands over
+  // his shoulder on the laptop. These two are put at the PHONE's edges, where they are cut in half
+  // by the frame and read as a fire bigger than the picture; on the laptop they flank the table
+  // instead, and the cart, the press and the doorway carry the outer thirds. A fire that fits
+  // reads as a candle, and that is the frame that had to be chosen for.
+  { at: 'room', p: [-0.92, 0.0, -0.55], h: 1.95, ppm: 231, hand: 1, phase: 0 },
+  { at: 'room', p: [0.94, 0.0, -0.55], h: 1.95, ppm: 231, hand: 0, phase: 1 },
+  // and the cloth's near edge, the last thing between the fire and the lens. Set left of the axis:
+  // the deck stands at layout `deck.pos` [0, 0.7625, 0.44] and a tongue drawn on top of the cards
+  // would be two drawings in one place, and dead centre it would stand under his chin.
+  { at: 'table', p: [-0.4, 0.762, 0.57], h: 0.5, ppm: 267, hand: 2, phase: 1 },
 ];
 
 // The lamp's own box, in its own frame, off props-objects.js `mushroomLamp`: a lathed base under a
@@ -251,35 +379,28 @@ export function buildFine(ctx, { group, switches, lamp }) {
   root.name = 'fine';
   root.userData.noShadow = true; // a drawn flame throws nothing: the light does not change
 
-  // ONE PEN FOR THE WHOLE ROOM, WHICH IS TWO NIBS ON THE CANVAS. Every sheet is 80 px square
-  // whatever it measures in metres, so a flame that is 0.095 m tall carries the same canvas as one
-  // that is 0.13 m and would be drawn a quarter finer if the nib were shared. The nib is therefore
-  // solved per flame from the width the mark has to come out at ON THE GLASS: 0.013 m of pen (the
-  // room's own contour on the back wall, egg-insects.js's measurement) at 181 px to the metre is
-  // 2.4 screen pixels, and the table's near edge runs 270 px to the metre, so a flame down there is
-  // drawn with a nib scaled by 181/270 to arrive at the same 2.4. Rounded to a tenth of a canvas
-  // pixel, twelve flames fall on five distinct nibs.
-  const nibFor = (h, near) => (0.013 * (near ? 181 / 270 : 1) * S * TALL) / h;
-
-  // three hands x two drawings x however many nibs the twelve seats ask for: ten canvases as the
-  // table above stands. A sheet is a dozen strokes on an 80 px canvas, so the lot costs a handful
-  // of milliseconds; there is nothing here worth baking and nothing worth building lazily.
+  // ONE PEN FOR THE WHOLE ROOM, WHICH IS A DIFFERENT NIB ON EVERY SHEET. A sheet is cut to the size
+  // its flame comes out at on the glass, so the canvas is 1.35 screen pixels to the pixel wherever
+  // the flame stands and the nib is the same 2.4 screen px everywhere — the room's own contour.
+  // Both fall out of one number, the flame's projected height, and that is the only reason a 56 px
+  // tongue on the lampshade and a 485 px one on the floor are drawn by the same hand.
   const geo = new THREE.PlaneGeometry(1, 1);
   const cache = new Map();
-  const sheetMat = (hand, pose, nib) => {
-    const key = `${hand}-${pose}-${nib.toFixed(1)}`;
+  const sheetMat = (hand, pose, ch, nib) => {
+    const key = `${hand}-${pose}-${ch}-${nib.toFixed(1)}`;
     let m = cache.get(key);
     if (m) return m;
     // pepe.js's three numbers, for pepe.js's three reasons: `colorful` so the ink pass shows the
-    // drawing verbatim and re-states its achromatic marks at the room's nib, `lineWeight` 0 so the
-    // pass draws no second contour round a card, `hatch` 0.02 so a flat sheet facing the visitor
-    // takes no wash. A flame is a cut-out exactly as he is.
+    // drawing verbatim — which is what keeps the yellow and the orange pigment and not paper — and
+    // re-states its achromatic marks at the room's nib; `lineWeight` 0 so the pass draws no second
+    // contour round a card; `hatch` 0.02 so a flat sheet facing the visitor takes no wash. A flame
+    // is a coloured cut-out exactly as he is.
     m = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, metalness: 0 });
     m.userData.ink = { hatch: 0.02, lineWeight: 0, colorful: true };
     m.alphaTest = 0.5;
     m.transparent = false;
     m.name = `flame-${key}`;
-    const tex = canvasTexture(drawFlame(hand, pose, +nib.toFixed(1)));
+    const tex = canvasTexture(drawFlame(hand, pose, ch, +nib.toFixed(1)));
     tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.anisotropy = Math.max(tex.anisotropy || 1, ctx.renderer?.capabilities?.getMaxAnisotropy?.() ?? 1);
     m.map = tex;
@@ -296,9 +417,11 @@ export function buildFine(ctx, { group, switches, lamp }) {
   const flames = SEATS.map((s, i) => {
     const g = new THREE.Group();
     g.name = `flame-${i}`;
-    const nib = nibFor(s.h, !!s.near);
+    const px = s.h * s.ppm; // what the tongue measures on the home plate
+    const ch = sheetH(px);
+    const nib = (PEN_PX * ch * TALL) / px; // …so the contour comes out at the room's own width
     const sheets = [0, 1].map((pose) => {
-      const m = new THREE.Mesh(geo, sheetMat(s.hand, pose, nib));
+      const m = new THREE.Mesh(geo, sheetMat(s.hand, pose, ch, nib));
       m.castShadow = false;
       m.receiveShadow = false;
       m.visible = false;
@@ -322,6 +445,7 @@ export function buildFine(ctx, { group, switches, lamp }) {
   let lit = 0; // how many are alight
   let outFrom = -1; // the drawing they started going out on, -1 while nothing is going out
   let burning = false;
+  let full = false; // the LAST tongue has caught: the one thing he is told about (see `say`)
   let crackleAt = -99;
   // LIT BY HAND, WHICH IS NOT THE SAME AS BURNING. `set(true)` is for a still — the `fine-burning`
   // judging state, a tool's control frame — and a still has to HOLD. Without this latch the very
@@ -332,8 +456,9 @@ export function buildFine(ctx, { group, switches, lamp }) {
 
   const setSize = (f, u) => {
     // scaled about its FOOT, not its middle: a flame shrinking to a wisp keeps standing on the
-    // board it is standing on
-    f.group.scale.set(f.sheet * u, f.sheet * u, 1);
+    // board it is standing on. The sheet is a tall rectangle now, not a square, so x carries the
+    // drawing's own aspect.
+    f.group.scale.set(f.sheet * u * ASPECT, f.sheet * u, 1);
     f.group.position.set(f.foot.x, f.foot.y + f.sheet * u * (BASE_V - 0.5), f.foot.z);
   };
   const show = (f, which) => {
@@ -346,11 +471,18 @@ export function buildFine(ctx, { group, switches, lamp }) {
     }
     lit = 0;
     outFrom = -1;
+    full = false;
   };
+  // WHAT GOES ON THE BUS, AND IT IS THREE THINGS AND NOT TWO. It caught; the LAST tongue caught;
+  // it went out. The middle one is the round's addition and it is the only one anybody acts on:
+  // flow.js takes `full` where it takes the globe's country and puts `This is fine.` on the
+  // placard. It is fired once per burning — a pointer that leaves at eleven and comes back does not
+  // fire it again, because the fire never went out and `full` is only cleared by `douse` — and the
+  // fire itself does not care whether anybody is listening.
   function say(next) {
     if (next === burning) return;
     burning = next;
-    ctx.emit?.('props:fine', { burning, n: lit });
+    ctx.emit?.('props:fine', { burning, n: lit, full: false });
   }
   // where the fire is on the glass, as a pan: the shelf on the right of the room crackles on the
   // right. Taken off the flames that are actually alight, so it walks across as the fire spreads.
@@ -447,6 +579,11 @@ export function buildFine(ctx, { group, switches, lamp }) {
     get lit() {
       return lit;
     },
+    // the last tongue has caught. What flow.js's line hangs off, and what a tool asks instead of
+    // counting flames itself.
+    get full() {
+      return full;
+    },
     // how long the pointer has rested on the lamp — in drawings, and in the seconds those drawings
     // are worth at 12 fps. What a tool needs to say the hold is three seconds and not two or four.
     get steps() {
@@ -459,9 +596,12 @@ export function buildFine(ctx, { group, switches, lamp }) {
     get drawn() {
       return drawn;
     },
+    // the two plates, for a proof that wants to say what colour it is looking at
+    colours: { yellow: PLATE_Y, orange: PLATE_O },
     // where each of the twelve stands, for the tools
     seats: flames.map((f) => f.foot.toArray().map((n) => +n.toFixed(3))),
     where: flames.map((f, i) => SEATS[i].at),
+    metres: SEATS.map((s) => s.h),
     hitBox,
     tapBox,
     // a flame's own box on the glass, so a proof can look at one at 2x instead of hunting for it
@@ -480,7 +620,9 @@ export function buildFine(ctx, { group, switches, lamp }) {
       }
       return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
     },
-    // for the tools and for setState: the whole dozen, or none of them, with no hold and no cue
+    // for the tools and for setState: the whole dozen, or none of them, with no hold and no cue.
+    // It says nothing on the bus either — a still is not an event, and the line on the placard
+    // belongs to a visitor who held the lamp, not to a screenshot.
     set(on = true) {
       hovering = pressing = want = false;
       steps = 0;
@@ -498,6 +640,7 @@ export function buildFine(ctx, { group, switches, lamp }) {
         }
       } else douse();
       burning = !!on;
+      full = !!on;
     },
     // `fine-burning` is the dozen alight for a still; every other name is a room that is fine
     setState(name = 'default') {
@@ -519,6 +662,12 @@ export function buildFine(ctx, { group, switches, lamp }) {
         }
         if (n > lit) lit = n;
         if (lit > 0) say(true);
+        // …and the one drawing anybody else in the building is told about: the last tongue has
+        // caught, the room is entirely alight, and somebody may now have something to say.
+        if (lit >= flames.length && !full) {
+          full = true;
+          ctx.emit?.('props:fine', { burning: true, n: lit, full: true });
+        }
       } else if (!byHand) {
         steps = 0;
         if (lit > 0) {

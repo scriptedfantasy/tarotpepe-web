@@ -33,6 +33,10 @@ export const PROMPTS = {
   ],
   // the mind gave nothing back at all
   lost: 'Say that again. The radio was loud.',
+  // the room is entirely on fire (egg-fine.js, `props:fine` with `full`). Exactly these words, and
+  // no others: it is the panel's line and the user asked for it verbatim. It is scripted rather
+  // than written by the mind because a model asked to remark on a fire remarks on a fire.
+  fine: 'This is fine.',
   // the third card has been read and the evening goes on: the field opens under this. It says out
   // loud that the cards can be gone back to, because the one thing the visitor cannot see from the
   // conversation's framing is that the three are still lying there.

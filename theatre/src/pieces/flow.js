@@ -189,6 +189,40 @@ export async function build(ctx) {
     cutField(); // the visitor's turn gives way; nothing they typed is sent, and none of it is lost
   });
 
+  // ---- THE ROOM IS ON FIRE AND HE HAS ONE REMARK ------------------------------------------------
+  // The other object in the evening that starts a turn with nobody having said anything, and the
+  // quietest of them: the visitor rests the pointer on the mushroom lamp, the room takes light one
+  // tongue at a time (src/pieces/egg-fine.js), and when the LAST of the twelve has caught he says
+  // `This is fine.` — those four words, from PROMPTS.fine, and nothing else about it ever.
+  //
+  // It is taken exactly where the globe's country is taken: the open field is cut short, the line
+  // is played with `keepLast` so it stands ON the placard with the field open underneath it, and
+  // the conversation carries on from there. The differences from the globe are all subtractions,
+  // and each of them is the joke: NO react(), because he does not look at it; no cut, because the
+  // camera has not noticed either; no mind, because the line is fixed and a model asked about a
+  // fire would write about the fire.
+  //
+  // ONCE PER BURNING (egg-fine.js fires `full` once and clears it only when the last wisp goes),
+  // and NEVER OVER A READING. The fan is why the beat is checked and not just the field: while the
+  // visitor is choosing three cards the field IS open — the room has asked them to pick — and a
+  // remark about the furniture there would cut the placard they are answering. So the reading
+  // beats are named, and through all of them the room burns in silence. Same rule while he is
+  // mid-turn: the visitor's own open field is the only place this line is allowed to appear.
+  const READING = new Set(['shuffle', 'fan', 'dealt', 'reading', 'recall']);
+  let onFire = false; // the last tongue caught while the field was open: one line owed
+  ctx.on?.('props:fine', ({ burning, full } = {}) => {
+    // the pointer left and the last wisp went out. If he had not got round to saying it yet he
+    // never does: a remark about a fire that is over is a remark about nothing.
+    if (!burning) {
+      onFire = false;
+      return;
+    }
+    if (!full || onFire) return;
+    if (!D?.asking || picking || READING.has(api.beat)) return; // a reading: it burns silently
+    onFire = true;
+    cutField();
+  });
+
   // ---- small waits ------------------------------------------------------------------------------
   function wait(seconds, { skippable = false } = {}) {
     const token = run, s0 = skips, end = ctx.clock.raw + seconds;
@@ -731,6 +765,19 @@ export async function build(ctx) {
         prompt = g2.held ?? prompt;
         continue;
       }
+      // The last tongue caught while the field was open. His remark goes up on the placard and the
+      // field opens again under it — `keepLast` on a turn of one sentence hands the whole of it
+      // back unsaid, which is exactly what a line said OVER an open field is. It is not a silence:
+      // the quiet counter does not move and no waiting line is spent on it. The frame is left
+      // alone on purpose — nobody cuts to a fire nobody has noticed — and `!said` for the globe's
+      // reason: the visitor's own words always win the tie.
+      if (onFire && !said) {
+        onFire = false;
+        const f = await render([PROMPTS.fine], { hold: 1.3, keepLast: true });
+        if (!alive(token)) return { spoke: false };
+        prompt = f.held ?? PROMPTS.fine;
+        continue;
+      }
       if (!said) {
         // nothing typed (a silence, an Escape, an empty Return): he says one thing and waits again
         prompt = PROMPTS.quiet[Math.min(quiet++, PROMPTS.quiet.length - 1)];
@@ -968,6 +1015,7 @@ export async function build(ctx) {
       picking = false;
       tapped = null;
       roomSays = null; // a country the globe found in the last visit is not told in the next one
+      onFire = false; // …nor a fire the last visitor left burning
       askAbort = null;
       api.intent = null;
       api.readings = 0;
