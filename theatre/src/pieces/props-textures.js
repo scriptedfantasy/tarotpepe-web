@@ -1237,13 +1237,25 @@ export function catHeadTexture(seed = 31, { lit = false } = {}) {
       g.fillRect(0, 0, W, H);
       const cx = W * 0.25, cy = H * 0.47;
       for (const s of [-1, 1]) {
-        // a closed eye: a crescent
-        g.save();
-        g.fillStyle = MARK;
-        g.beginPath();
-        g.ellipse(cx + s * 17, cy, 11, 4.5, s * 0.18, 0, Math.PI * 2);
-        g.fill();
-        g.restore();
+        if (lit) {
+          // the lamp is on and so is the cat: an open eye, an almond in pen with the pupil in it
+          g.save();
+          g.strokeStyle = MARK;
+          g.lineWidth = 2.2;
+          g.beginPath();
+          g.ellipse(cx + s * 17, cy, 11, 6.5, s * 0.18, 0, Math.PI * 2);
+          g.stroke();
+          g.restore();
+          dot(g, cx + s * 17, cy + 0.5, 3.4, MARK);
+        } else {
+          // a closed eye: a crescent
+          g.save();
+          g.fillStyle = MARK;
+          g.beginPath();
+          g.ellipse(cx + s * 17, cy, 11, 4.5, s * 0.18, 0, Math.PI * 2);
+          g.fill();
+          g.restore();
+        }
         // three whiskers
         for (let i = 0; i < 3; i++) inkLine(g, cx + s * 22, cy + 12 + i * 5, cx + s * 58, cy + 6 + i * 9, { width: 2.2, wobble: 0.6, rng, color: MARK });
       }
