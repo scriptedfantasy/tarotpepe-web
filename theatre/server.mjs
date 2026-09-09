@@ -30,6 +30,10 @@ const MIME = {
   '.woff2': 'font/woff2',
   '.woff': 'font/woff',
   '.ico': 'image/x-icon',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg',
 };
 
 const api = pepeMiddleware(ROOT);
@@ -58,11 +62,27 @@ function serve(req, res) {
   }
   const ext = extname(file).toLowerCase();
   const hashed = /-[A-Za-z0-9_]{8,}\.(js|css)$/.test(file); // Vite's content-hashed bundles never change
-  res.writeHead(200, {
+  const headers = {
     'content-type': MIME[ext] ?? 'application/octet-stream',
-    'content-length': st.size,
+    'accept-ranges': 'bytes',
     'cache-control': hashed ? 'public, max-age=31536000, immutable' : ext === '.html' ? 'no-cache' : 'public, max-age=86400',
-  });
+  };
+  // A byte range, answered as one: a phone's media player asks for the record in pieces and will
+  // not play a file whose server cannot do that (iOS Safari: "byte-range requests required").
+  const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
+  if (m && (m[1] || m[2])) {
+    let start = m[1] ? Number(m[1]) : Math.max(0, st.size - Number(m[2]));
+    let end = m[1] && m[2] ? Math.min(Number(m[2]), st.size - 1) : st.size - 1;
+    if (!(start >= 0) || start > end || start >= st.size) {
+      res.writeHead(416, { 'content-range': `bytes */${st.size}` });
+      return res.end();
+    }
+    res.writeHead(206, { ...headers, 'content-range': `bytes ${start}-${end}/${st.size}`, 'content-length': end - start + 1 });
+    if (req.method === 'HEAD') return res.end();
+    return createReadStream(file, { start, end }).pipe(res);
+  }
+  res.writeHead(200, { ...headers, 'content-length': st.size });
+  if (req.method === 'HEAD') return res.end();
   createReadStream(file).pipe(res);
 }
 
