@@ -105,6 +105,13 @@ export const LEVEL = {
   // a fingernail on the mirror's glass (egg-mirror.js). Quieter than the pour and shorter than the
   // switch: it happens on the far wall, and it is the sound of something small being touched.
   chink: 0.026,
+  // PEEP THE TOAD (egg-peep.js). A pressed-plastic novelty with a chip in it, and it is the one
+  // sound in this room that is not made of air: it sits a hair over the pour, because a toy is
+  // always a little louder than the thing it is standing next to.
+  croak: 0.031,
+  // …and the toad hitting the boards. Between the mains lever and a card landing: it is small and
+  // it is a foot off the floor, so it is a knock and not a crash.
+  thud: 0.096,
 };
 
 // A filter eats most of a noise burst, and how much depends on its Q, so LEVEL above is a wish and
@@ -167,6 +174,11 @@ export const TRIM = {
   // through the same OfflineAudioContext the probe uses and prints the trim back: rendered peak
   // 0.0261 against a LEVEL of 0.022
   blip: 0.843,
+  // measured the same way, with tools/_egg-peep-proof.mjs --sound, which renders both through the
+  // same OfflineAudioContext tools/_sound-probe.mjs uses and prints the trims back. The croak is
+  // two square waves and nothing filters them, so its trim is very nearly 1 by construction.
+  croak: 1.002,
+  thud: 2.032,
 };
 
 // how long each cue is allowed to be, in seconds; the probe asserts the rendered length against it
@@ -235,6 +247,14 @@ export const LENGTH = {
   // acknowledging a keystroke; anything a visitor can hear the END of is a beep, and a beep is a
   // menu screen.
   blip: 0.09,
+  // two notes and a gap, and the whole of it inside a fifth of a second: a novelty croaker is
+  // over before you have finished pressing it. egg-peep.js fires it on the pointer, so it has to
+  // be shorter than the four-drawing rock it goes with (0.333 s) or the toy is still talking after
+  // the figurine has stopped moving.
+  croak: 0.19,
+  // 0.12, and it is short on purpose: a hundred grams of moulded plastic on a boarded floor is two
+  // contacts and no ring. Rendered, it is audible for 0.084 s (tools/_egg-peep-proof.mjs --sound).
+  thud: 0.12,
 };
 
 // ---- the two primitives --------------------------------------------------------------------------
@@ -966,12 +986,55 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.blip;
     }
 
+    // PEEP THE TOAD, PRESSED (egg-peep.js). Everything else in this piece is filtered noise,
+    // because everything else in this room is air being moved by wood, brass, paper or a fly.
+    // This is a CHIP: two square waves, a whole tone apart, falling, each one flat for its whole
+    // length and then gone. Nothing filters them, nothing rings after them, and there is no noise
+    // anywhere in it — which is exactly why it sounds cheap beside the escapement, and why a
+    // visitor who presses it knows at once that the toad is not from here.
+    // The croak of an actual toad is two pulses; so is this. That is the only thing they share.
+    case 'croak': {
+      const notes = [
+        [196, 0.07, 0], // G3
+        [174.6, 0.085, 0.095], // F3, a whole tone down, after a gap you can hear
+      ];
+      for (const [f, dur, at] of notes) {
+        const gN = ac.createGain();
+        // flat for its whole length and then cut: a chip has no envelope. decay()'s `hold` is what
+        // gives it one — the ramp at the end is 6 ms of anti-click and nothing more.
+        decay(gN, t + at, dur, L('croak'), dur - 0.006);
+        gN.connect(out(ac, dest, pan));
+        const o = ac.createOscillator();
+        o.type = 'square';
+        // a cheap oscillator is a little flat and does not care: a few cents off, and no two
+        // presses the same, because the battery is not what it was
+        o.frequency.setValueAtTime(f * (0.995 + rng() * 0.012), t + at);
+        o.connect(gN);
+        o.start(t + at);
+        o.stop(t + at + dur + 0.01);
+      }
+      return LENGTH.croak;
+    }
+
+    // …AND THE TOAD ARRIVING ON THE BOARDS. A hundred grams of moulded plastic off a shelf: one
+    // hard grain of the shell, a short low knock of the board under it, and 55 ms later the second
+    // contact as it goes over onto its side, quieter and lower. Drier and much smaller than the
+    // mains ('clack'), which is a cast-iron box; nothing here rings, because nothing here is metal.
+    case 'thud': {
+      burst(ac, dest, { t, dur: 0.006, level: L('thud') * 0.5, freq: 1900, q: 1.5, pan, seed });
+      burst(ac, dest, { t, dur: 0.07, level: L('thud'), freq: 172, q: 0.85, type: 'lowpass', pan, seed: seed + 1 });
+      struck(ac, dest, { t, dur: 0.1, level: L('thud') * 0.4, freq: 104 + rng() * 10, type: 'sine', partials: [[3.1, 0.16, 0.25]], pan });
+      burst(ac, dest, { t: t + 0.055, dur: 0.05, level: L('thud') * 0.36, freq: 138, q: 0.9, type: 'lowpass', pan, seed: seed + 2 });
+      burst(ac, dest, { t: t + 0.055, dur: 0.008, level: L('thud') * 0.2, freq: 1450, q: 1.4, pan, seed: seed + 3 });
+      return LENGTH.thud;
+    }
+
     default:
       return 0;
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink', 'blip'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink', 'blip', 'croak', 'thud'];
 // ---- THE WEATHER: a bed, not a cue (egg-rain.js) --------------------------------------------------
 // The room tone above is the only other thing in this piece that RUNS rather than happens, and this
 // is built the same way and for the same reason: rain does not have a beginning, a shape and an end
@@ -1062,6 +1125,7 @@ export function rainBed(ac, dest, { level: want = LEVEL.rain } = {}) {
     },
   };
 }
+
 
 
 

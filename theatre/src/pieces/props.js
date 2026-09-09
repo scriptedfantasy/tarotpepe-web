@@ -40,9 +40,11 @@ import { eggMirror } from './egg-mirror.js';
 
 import { eggNakamoto } from './egg-nakamoto.js';
 
+import { eggPeep } from './egg-peep.js';
+
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain', 'peep-fallen'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
@@ -952,6 +954,8 @@ export async function build(ctx) {
   // The slot is the one the operator's photograph hung in, to the millimetre: the row against the
   // clock is unchanged and only the sheet in the frame is new.
   const NAKAMOTO = eggNakamoto(ctx, { group: g, switches: SWITCHES, slot: { x: -0.46, y: 2.04, w: 0.4, h: 0.46, z: WALL + 0.015, hookY: HOOK_Y } });
+  // ---- PEEP THE TOAD on the press's middle bay, and the floor he ends up on (src/pieces/egg-peep.js). --
+  const PEEP = eggPeep(ctx, { group: g, switches: SWITCHES, jar: g.getObjectByName('miel-jar') });
 
   return {
     group: g,
@@ -996,6 +1000,12 @@ export async function build(ctx) {
     // event and all — `set(face)` puts one there for a still with neither, and hitBox/tapBox are
     // the glass's box on the glass and the box a thumb is actually given (which is bigger, always).
     mirror: MIRROR,
+    // PEEP THE TOAD, the knock-off on the press's middle bay. `clicks` is how many times he has
+    // been pressed, `fallen` whether he is on the floor, `click()` presses him as a visitor does
+    // (croak, rock, and on the fifth the fall), `set(fallen)` puts him on the shelf or the floor
+    // for a still with no take and no cue, and hitBox/tapBox are his box on the glass and the box
+    // a thumb is given — both of which follow him down.
+    peep: PEEP,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -1081,6 +1091,9 @@ export async function build(ctx) {
       // `nakamoto-rain` is the code halfway down the glass on a card printed 97; every other name
       // is the card at rest on the number this browser was left on.
       NAKAMOTO.setState(name);
+      // `peep-fallen` is the toad on the boards in front of the press; every other name has him
+      // standing on the shelf, which is where a reload always puts him
+      PEEP.setState(name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -1101,6 +1114,7 @@ export async function build(ctx) {
       FINE.update(ctx);
       MIRROR?.update(ctx);
       NAKAMOTO.update(ctx);
+      PEEP.update(ctx);
     },
   };
 }
