@@ -85,6 +85,10 @@ export const LEVEL = {
   // at the far wall, it is one of his own small private acts, and nobody is meant to notice it —
   // but a hand that did something has to hear that it did.
   glug: 0.028,
+  // the weather outside the window (egg-rain.js). It is not a cue, it is a BED — see rainBed at the
+  // foot of this file — and it is the quietest thing in the piece: under the room tone itself,
+  // because rain is on the far side of two panes of glass and the room tone is in the room.
+  rain: 0.006,
 };
 
 // A filter eats most of a noise burst, and how much depends on its Q, so LEVEL above is a wish and
@@ -129,6 +133,9 @@ export const TRIM = {
   // measured the same way as the rest, with tools/_egg-wine-proof.mjs (the probe above walks its
   // own list of cues and this one is not on it): rendered peak 0.0162 → LEVEL 0.028
   glug: 1.729,
+  // measured the same way, with tools/_egg-rain-proof.mjs --sound: it renders the bed through an
+  // OfflineAudioContext and prints the trim that makes the rendered peak match LEVEL.rain
+  rain: 0.592,
 };
 
 // how long each cue is allowed to be, in seconds; the probe asserts the rendered length against it
@@ -842,3 +849,94 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
 }
 
 export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz'];
+
+// ---- THE WEATHER: a bed, not a cue (egg-rain.js) --------------------------------------------------
+// The room tone above is the only other thing in this piece that RUNS rather than happens, and this
+// is built the same way and for the same reason: rain does not have a beginning, a shape and an end
+// the way a card landing does, so it cannot be a figure laid on the audio clock. It is a level, held
+// for as long as it is raining.
+//
+// WHAT IT IS MADE OF, AND WHY IT IS SO DARK. The rain is on the far side of a closed casement and
+// two sheets of glass, and glass is a lowpass. So: noise, the bottom taken off at 170 Hz (below that
+// is the room's own tone and the two would sum into mud rather than into weather), the top taken off
+// at 1500 with a second pole at 2600 to round it, and one narrow lift at 900 which is the only thing
+// in it that says WATER rather than AIR — without it this is a ventilation duct. Nothing patters:
+// a drop hitting a pane is a transient and there are no transients in a sound heard through a wall,
+// which is what the street cue already established about this room.
+//
+// TWO SLOW DRIFTS, as the room tone has, and for the same reason: a held noise with no movement in
+// it stops being weather within about fifteen seconds and becomes a fault in the playback. The
+// filter opens and closes over 23 s and the level breathes over 37 s — both prime-ish against the
+// room tone's 40 and 90, so the two beds never come into step and pump together.
+//
+// It is cut in at level on its first sample and cut dead when it stops. Nothing here fades.
+export function rainBed(ac, dest, { level: want = LEVEL.rain } = {}) {
+  const level = want * (TRIM.rain ?? 1);
+  const t = ac.currentTime;
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuffer(ac);
+  src.loop = true;
+  const hp = ac.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 170;
+  hp.Q.value = 0.6;
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 1500;
+  lp.Q.value = 0.6;
+  const lp2 = ac.createBiquadFilter();
+  lp2.type = 'lowpass';
+  lp2.frequency.value = 2600;
+  const wet = ac.createBiquadFilter(); // the one lift that makes it water and not air
+  wet.type = 'peaking';
+  wet.frequency.value = 900;
+  wet.Q.value = 1.1;
+  wet.gain.value = 4.5;
+  const g = ac.createGain();
+  g.gain.value = 0; // never let the default 1 reach a sample
+  g.gain.setValueAtTime(level, t); // cut in, no fade
+  src.connect(hp);
+  hp.connect(lp);
+  lp.connect(lp2);
+  lp2.connect(wet);
+  wet.connect(g);
+  g.connect(dest);
+  src.start(t);
+
+  const drift = ac.createOscillator();
+  drift.frequency.value = 1 / 23;
+  const dg = ac.createGain();
+  dg.gain.value = 260;
+  drift.connect(dg);
+  dg.connect(lp.frequency);
+  drift.start(t);
+  const breath = ac.createOscillator();
+  breath.frequency.value = 1 / 37;
+  const bg = ac.createGain();
+  bg.gain.value = level * 0.2;
+  breath.connect(bg);
+  bg.connect(g.gain);
+  breath.start(t);
+
+  return {
+    gain: g,
+    base: level,
+    stop(when = ac.currentTime) {
+      const at = Math.max(when, ac.currentTime);
+      try {
+        g.gain.cancelScheduledValues(at);
+        g.gain.setValueAtTime(0, at); // cut, not faded
+        src.stop(at);
+        drift.stop(at);
+        breath.stop(at);
+      } catch {
+        /* already stopped */
+      }
+      try {
+        g.disconnect();
+      } catch {
+        /* already gone */
+      }
+    },
+  };
+}

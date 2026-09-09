@@ -67,7 +67,10 @@ export class ErrorOverlay {}`,
   }),
 );
 const t0 = Date.now();
-await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+// 60 s, unless SHOT_GOTO_TIMEOUT says otherwise. On a machine shared with several builders' headless
+// browsers the load average reaches three hundred and chromium can take minutes just to reach `load`,
+// which is not the page's fault and is not a fault this tool should report as one.
+await page.goto(url, { waitUntil: 'load', timeout: +(process.env.SHOT_GOTO_TIMEOUT ?? 60000) });
 // Wait for the app's ready flag (set after the first frames render). Builds can be slow in software
 // WebGL; poll manually so a Vite reload mid-load does not abort the wait.
 const readyTimeout = +(args['ready-timeout'] ?? 150000);

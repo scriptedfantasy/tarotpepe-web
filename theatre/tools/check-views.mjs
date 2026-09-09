@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 const VIEWS = {
   ink: ['default', 'lines-only', 'tone-only'],
   room: ['default'],
-  props: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered'],
+  props: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'rain'],
   table: ['default'],
   pepe: ['default'],
   pepeAnim: ['idle', 'talk', 'gesture', 'consider'],
@@ -35,7 +35,12 @@ for (const [view, states] of Object.entries(VIEWS)) {
   if (only.length && !only.includes(view)) continue;
   for (const state of states) {
     const out = `${outDir}/${view}-${state}.png`;
-    const r = spawnSync('node', ['tools/shot.mjs', '--view', view, '--state', state, '--out', out, '--wait', '1200'], { encoding: 'utf8' });
+    // CHECK_READY_TIMEOUT lengthens shot.mjs's own wait for `window.__theatreReady`. Default
+    // behaviour is unchanged (the flag is simply not passed): it is here because this machine is
+    // shared with several builders' headless browsers and a page that takes 150 s to be ready under
+    // a load average of two hundred has not thrown anything, it has been waiting for a CPU.
+    const readyArg = process.env.CHECK_READY_TIMEOUT ? ['--ready-timeout', process.env.CHECK_READY_TIMEOUT] : [];
+    const r = spawnSync('node', ['tools/shot.mjs', '--view', view, '--state', state, '--out', out, '--wait', '1200', ...readyArg], { encoding: 'utf8' });
     const text = (r.stdout + '\n' + r.stderr).split('\n').filter((l) => l && !l.includes('GL Driver'));
     const ready = text.find((l) => l.startsWith('ready in')) ?? '';
     const slow = text.find((l) => l.startsWith('SLOW BUILDS')) ?? '';
