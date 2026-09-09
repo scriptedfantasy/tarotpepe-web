@@ -152,6 +152,23 @@ export async function build(ctx) {
   let askAbort = null; // the open field's controller, so a tap can cut it short
   const alive = (token) => token === run;
 
+  // ---- AN OBJECT IN THE ROOM ASKS HIM TO SPEAK -------------------------------------------------
+  // The globe on the cabinet (src/pieces/egg-globe.js) is the only thing in the evening that starts
+  // a turn with nobody having said anything: the visitor spins it, it stops on a country, and he
+  // tells what happened to him there. It arrives as one event, it is taken exactly where a typed
+  // line would be taken, and the field opens again under his last sentence.
+  //
+  // The globe itself holds the country back until the field is open, so this never lands mid-line.
+  // WITH NO LIVE VOICE nothing happens at all: there is no written affair and there is not going to
+  // be one, so the sphere simply stops turning, which is the honest version of the joke.
+  let roomSays = null;
+  ctx.on?.('props:globe', ({ country } = {}) => {
+    if (!country || roomSays || !M?.available || !M?.reply) return;
+    roomSays = { beat: 'globe', country };
+    P.pepeAnim?.react?.(); // he looks up at it before he says a word
+    askAbort?.abort(); // the visitor's turn gives way; nothing they typed is sent
+  });
+
   // ---- small waits ------------------------------------------------------------------------------
   function wait(seconds, { skippable = false } = {}) {
     const token = run, s0 = skips, end = ctx.clock.raw + seconds;
@@ -659,6 +676,22 @@ export async function build(ctx) {
         prompt = back ?? prompt;
         continue;
       }
+      // The globe came to rest while the field was open. His line goes up on the placard and the
+      // field opens again under it, exactly as a talk turn ends — so it is a digression and not a
+      // silence: the quiet counter does not move and no waiting line is spent on it. There is no
+      // script behind this one, so `render` is asked directly and a dead call leaves the room as
+      // it was. `!said` because the visitor's own words always win the tie: if they pressed return
+      // in the same millisecond the globe came to rest, their line is answered and the country is
+      // still in hand for the turn after.
+      if (roomSays && !said) {
+        const args = roomSays;
+        roomSays = null;
+        const g2 = await render(M.reply(args), { hold: 1.3, keepLast: true, each: closer });
+        if (!alive(token)) return { spoke: false };
+        frame = 'home';
+        prompt = g2.held ?? prompt;
+        continue;
+      }
       if (!said) {
         // nothing typed (a silence, an Escape, an empty Return): he says one thing and waits again
         prompt = PROMPTS.quiet[Math.min(quiet++, PROMPTS.quiet.length - 1)];
@@ -895,6 +928,7 @@ export async function build(ctx) {
       skipBeat = false;
       picking = false;
       tapped = null;
+      roomSays = null; // a country the globe found in the last visit is not told in the next one
       askAbort = null;
       api.intent = null;
       api.readings = 0;

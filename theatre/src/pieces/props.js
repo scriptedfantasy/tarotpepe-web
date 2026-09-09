@@ -21,11 +21,12 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import * as O from './props-objects.js';
+import { switchboard, eggGlobe } from './egg-globe.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default'] },
-  files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js'],
+  judge: { shot: 'wide', states: ['default', 'globe-spinning'] },
+  files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-globe.js'],
 };
 
 export async function build(ctx) {
@@ -43,6 +44,7 @@ export async function build(ctx) {
 
   let signMesh = null, signPivot = null; // the wall board over Pepe's head; published below
   let radioObj = null; // the set on the cart; the visitor's one switch, wired up at the foot of this file
+  let globeObj = null; // the globe on the left bookcase; egg-globe.js turns it (THE GLOBE, at the foot)
 
   const WALL = -D / 2; // back wall plane
   const FLUSH = WALL + 0.04; // furniture backs sit just in front of the skirting
@@ -118,6 +120,7 @@ export async function build(ctx) {
       const gl = O.globe();
       gl.position.set(0, caseH, 0.02);
       bc.add(gl);
+      globeObj = gl;
     } else {
       // the cat, asleep on top of the bookcase, facing the room
       const cat = O.cat();
@@ -446,7 +449,15 @@ export async function build(ctx) {
   }
   tellTheTime();
 
-  // ---- THE RADIO. The one thing in this room the visitor is allowed to work. ---------------------
+  // ---- THE SWITCHES. One arbiter for the props the visitor is allowed to work. -------------------
+  // Two of them now — the radio and the globe — so a pointer has to be given to ONE of them: two
+  // pieces each putting a cursor on the glass and each calling stopPropagation is how a drag begun
+  // on one gets stolen by the other. It lives in egg-globe.js with the globe, which is the first
+  // thing registered with it; the radio below keeps the listeners it has had since round 8 and only
+  // lodges a prior CLAIM on its own pixels, so the globe declines any pointer the radio would take.
+  const SWITCHES = switchboard(ctx);
+
+  // ---- THE RADIO. The first thing in this room the visitor was allowed to work. -------------------
   // The user, round 8: "would be cool if we could turn the tune on and off and switch through them
   // via the radio receiver." And his own persona, about this very prop: "The radio on the cart. It
   // works and you do not switch it on." So the visitor does, and the set has to be honest about it.
@@ -601,6 +612,7 @@ export async function build(ctx) {
       },
       hitBox,
       tapBox,
+      onRadio, // for the SWITCHES claim below: is this pointer the radio's?
       turn,
       // for the tools and for setState: put the needle on a stop with no throw and no crackle
       set(next) {
@@ -644,6 +656,14 @@ export async function build(ctx) {
       },
     };
   })();
+  SWITCHES.claim('radio', (px, py, ev) => RADIO.onRadio(ev));
+
+  // ---- THE GLOBE. The one thing in this room that asks HIM a question. --------------------------
+  // The user: "Spin it with a drag; where it stops, he tells a story about an affair he had during
+  // a vacation in that specific country." All of it is in src/pieces/egg-globe.js — the drawn map,
+  // the table of countries, the throw and the wait. Here it is only given the object off the left
+  // bookcase and a place in the switchboard.
+  const GLOBE = eggGlobe(ctx, { object: globeObj, switches: SWITCHES });
 
   return {
     group: g,
@@ -652,6 +672,11 @@ export async function build(ctx) {
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
     // is actually given (which is bigger, on a phone).
     radio: RADIO,
+    // THE GLOBE on the left bookcase. `spin(v, tilt)` throws it (v is -1..1, the sign the
+    // direction; 0 is a tap's own throw), `country` is the last one it handed over, `spinning` says
+    // whether it is still turning, and hitBox/tapBox are the sphere's box on the glass and the box
+    // a thumb is actually given.
+    globe: GLOBE,
     // the shop's board over Pepe's head. `mesh` is what a pointer is raycast against, `pivot` is
     // its hook line (rotate that and the board swings on its cord), and w/h are its size in metres.
     // help.js hangs its own tag under the pivot and tips it when the pointer is over the board.
@@ -682,6 +707,10 @@ export async function build(ctx) {
     setState(name = 'default') {
       const m = /^radio-(off|a|b|c)$/.exec(name ?? '');
       if (m) RADIO.set(m[1] === 'off' ? 0 : 'abc'.indexOf(m[1]) + 1);
+      // `globe-spinning` pins the sphere a third of the way through a definite throw, so the still
+      // is the same drawing every time it is taken. Every other name is the room as it stands.
+      else if (name === 'globe-spinning') GLOBE.showSpinning();
+      else GLOBE.reset();
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -689,6 +718,7 @@ export async function build(ctx) {
       if (p) p.rotation.z = 0.16 * Math.sin(ctx.clock.t * Math.PI);
       tellTheTime();
       RADIO.update(ctx);
+      GLOBE.update(ctx);
     },
   };
 }
