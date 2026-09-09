@@ -85,6 +85,10 @@ export const LEVEL = {
   // at the far wall, it is one of his own small private acts, and nobody is meant to notice it —
   // but a hand that did something has to hear that it did.
   glug: 0.028,
+  // the vase of dried stems, wilting (egg-vase.js). Dead flowers are the lightest thing anybody in
+  // this room could disturb, so it sits with the insect and the pour, at the quiet end: it happens
+  // on the sideboard at the far wall and it is meant to be heard only by whoever is watching it.
+  rustle: 0.023,
 };
 
 // A filter eats most of a noise burst, and how much depends on its Q, so LEVEL above is a wish and
@@ -129,6 +133,10 @@ export const TRIM = {
   // measured the same way as the rest, with tools/_egg-wine-proof.mjs (the probe above walks its
   // own list of cues and this one is not on it): rendered peak 0.0162 → LEVEL 0.028
   glug: 1.729,
+  // measured with tools/_egg-vase-proof.mjs, the same offline render the probe uses (the probe's
+  // own CUES list is the struck family and does not walk this one, for the same reason it does not
+  // walk the wash: a rustle is soft-topped and would fail its "not faded in" assertion by design)
+  rustle: 0.914,
 };
 
 // how long each cue is allowed to be, in seconds; the probe asserts the rendered length against it
@@ -181,6 +189,11 @@ export const LENGTH = {
   // three bubbles at about 110 ms apart with a tail on the last of them: a pour is the one thing
   // in this room that takes as long as it takes, and under half a second is a finger and not a glass
   glug: 0.4,
+  // 0.62, and like the buzz and the smoosh the number is arithmetic. egg-vase.js fires this on the
+  // pointer and then on each of the three cuts after it, and the wilt cuts every 0.5 s: a cue
+  // shorter than the gap would leave bare room tone between them and two seconds of dying flowers
+  // would read as four separate events. At 0.62 each one runs a fifth of a second into the next.
+  rustle: 0.62,
 };
 
 // ---- the two primitives --------------------------------------------------------------------------
@@ -623,6 +636,33 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.buzz;
     }
 
+    // A VASE OF DRIED STEMS GIVING WAY (egg-vase.js). The dry is the whole cue: there is NO body
+    // under this one — no lowpass rumble, no struck note — because a dead flower has no weight and
+    // the moment a rustle gets a bottom to it, it is a bag of shopping. What is left is two things:
+    // a thin band of paper up where husk is (a stem sliding on a stem, soft-topped so it has no
+    // moment of beginning, exactly as the wash has none), and above it a scatter of tiny brittle
+    // grains — the heads letting go — crowded at the front and thinning out, at no rhythm at all.
+    case 'rustle': {
+      burst(ac, dest, { t, dur: 0.44 + rng() * 0.1, level: L('rustle'), freq: 2400 + rng() * 700, q: 0.8, sweep: -(600 + rng() * 500), attack: 0.035, hold: 0.06, pan, seed });
+      burst(ac, dest, { t: t + 0.02, dur: 0.36, level: L('rustle') * 0.5, freq: 4600 + rng() * 900, q: 0.9, sweep: -1400, attack: 0.03, pan, seed: seed + 1 });
+      const n = 9;
+      for (let i = 0; i < n; i++) {
+        const u = i / (n - 1);
+        // they crowd the first third, where the stems actually give, and straggle after it
+        const at = t + 0.5 * Math.pow(u, 1.7) + (rng() - 0.5) * 0.03;
+        burst(ac, dest, {
+          t: Math.max(t, at),
+          dur: 0.004 + rng() * 0.008,
+          level: L('rustle') * (0.3 + 0.55 * (1 - u)) * (0.5 + rng()),
+          freq: 3200 + rng() * 3400,
+          q: 2.2 + rng() * 3,
+          pan,
+          seed: seed + 5 + i,
+        });
+      }
+      return LENGTH.rustle;
+    }
+
     // ---- the door the film opens on. It is a foot from the lens, so it is the nearest, driest,
     // loudest thing in the picture, and it is all wood and one small piece of brass.
 
@@ -841,4 +881,4 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle'];
