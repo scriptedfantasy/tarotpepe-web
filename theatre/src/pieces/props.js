@@ -30,11 +30,12 @@ import { buildVortex } from './egg-vortex.js';
 import { buildWine } from './egg-wine.js';
 import { eggGlobe } from './egg-globe.js';
 import { buildInsects, insectState } from './egg-insects.js';
+import { buildKonami } from './egg-konami.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered'] },
-  files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'konami-house'] },
+  files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js', 'src/pieces/egg-konami.js'],
 };
 
 export async function build(ctx) {
@@ -920,6 +921,10 @@ export async function build(ctx) {
   // ---- THE INSECTS on the back wall, and the honey jar they gather at (src/pieces/egg-insects.js). --
   const INSECTS = buildInsects(ctx, { group: g, switches: SWITCHES, jar: g.getObjectByName('miel-jar'), wallZ: WALL });
 
+  // ---- THE HOUSE OF CARDS. The room's seventh switch, and it has no object: ↑↑↓↓←→←→BA on the
+  // keyboard, in six seconds, with the room idle (src/pieces/egg-konami.js). ------------------
+  const KONAMI = buildKonami(ctx);
+
   return {
     group: g,
     // the arbiter itself, for the tools (`hovered`) and for any piece that wants a switch of its own
@@ -944,6 +949,10 @@ export async function build(ctx) {
     // THE INSECTS. `state` is where each one is (wall, air, jar), `fly(i)` sends one off as a click
     // does, and hitBox(i)/tapBox(i) are a sheet's box on the glass and the box a thumb is given.
     insects: INSECTS,
+    // THE HOUSE OF CARDS, on the keyboard. `start()` runs the eight seconds as the code does (and
+    // returns false if the room is busy), `active` says whether it is running, `idle` whether it
+    // would be allowed to, and `?konami=<t>` / the `konami-house` state hold a frame of it.
+    konami: KONAMI,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -1009,6 +1018,9 @@ export async function build(ctx) {
       // `insects-gathered` is the six of them round the jar; every other name is the wall, which
       // is where a reload always puts them
       insectState(INSECTS, name);
+      // `konami-house` is the house of cards standing on the cloth; every other name puts the deck
+      // back exactly as it was
+      KONAMI.setState(name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -1024,6 +1036,7 @@ export async function build(ctx) {
       WINE.update(ctx);
       GLOBE.update(ctx);
       INSECTS?.update(ctx);
+      KONAMI.update(ctx);
     },
   };
 }
