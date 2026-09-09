@@ -24,11 +24,12 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import * as O from './props-objects.js';
+import { buildInsects, insectState } from './egg-insects.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit'] },
-  files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js'],
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'insects-gathered'] },
+  files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-insects.js'],
 };
 
 export async function build(ctx) {
@@ -243,6 +244,9 @@ export async function build(ctx) {
       unit.add(b);
       const j = O.shelfItem({ kind: 'jar', name: 'MIEL', h: 0.13, scale: 1.3, seed: 72 }, rng);
       j.position.set(0.13, CABH, 0.0);
+      // named, because the insects gather round it and take their six landing places off its own
+      // bounding box rather than off a written-down coordinate (egg-insects.js)
+      j.name = 'miel-jar';
       unit.add(j);
     }
     // Three a shelf, no two the same silhouette or the same height, and exactly ONE of them
@@ -818,8 +822,20 @@ export async function build(ctx) {
     };
   })();
 
+  // ---- THE INSECTS. The room's third switch, and there are six of it. ----------------------------
+  // The user: "Click one and it flies off and lands somewhere else; the honey jar is where they
+  // gather." Six paper cut-outs on the bare plaster round and under the clock; clicked, one flies
+  // on the 12 fps clock and lands at its own place round the MIEL jar on the press. The whole of it
+  // — the drawing, the flight, the places, the buzz — is in egg-insects.js, which registers each
+  // one with SWITCHES above so the pointer stays arbitrated in one place.
+  const INSECTS = buildInsects(ctx, { group: g, switches: SWITCHES, jar: g.getObjectByName('miel-jar'), wallZ: WALL });
+
   return {
     group: g,
+    // THE INSECTS, and the honey jar they go to. `state` is one of 'wall' | 'air' | 'jar' per
+    // insect, `fly(i)` sends one off as a click does, `set('jar'|'wall')` puts them there for a
+    // still, and hitBox/tapBox are a sheet's box on the glass and the box a thumb is given.
+    insects: INSECTS,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -868,6 +884,9 @@ export async function build(ctx) {
       const m = /^radio-(off|a|b|c)$/.exec(name ?? '');
       if (m) RADIO.set(m[1] === 'off' ? 0 : 'abc'.indexOf(m[1]) + 1);
       CAT.set(name === 'cat-lit');
+      // `insects-gathered` is the six of them round the jar; every other name is the wall, which
+      // is where a reload always puts them
+      insectState(INSECTS, name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -877,6 +896,7 @@ export async function build(ctx) {
       SWITCHES.update();
       RADIO.update(ctx);
       CAT.update();
+      INSECTS?.update(ctx);
     },
   };
 }
