@@ -98,6 +98,9 @@ export const LEVEL = {
   // foot of this file — and it is the quietest thing in the piece: under the room tone itself,
   // because rain is on the far side of two panes of glass and the room tone is in the room.
   rain: 0.006,
+  // a fingernail on the mirror's glass (egg-mirror.js). Quieter than the pour and shorter than the
+  // switch: it happens on the far wall, and it is the sound of something small being touched.
+  chink: 0.026,
 };
 
 // A filter eats most of a noise burst, and how much depends on its Q, so LEVEL above is a wish and
@@ -152,6 +155,10 @@ export const TRIM = {
   // measured the same way, with tools/_egg-rain-proof.mjs --sound: it renders the bed through an
   // OfflineAudioContext and prints the trim that makes the rendered peak match LEVEL.rain
   rain: 0.592,
+  // measured with tools/_egg-mirror-proof.mjs the same way as the rest (it renders the cue offline
+  // through sound.render and prints the trim back): at 1.0 the rendered peak was 0.02006 against a
+  // LEVEL of 0.026, so 0.026 / 0.02006 = 1.296
+  chink: 1.296,
 };
 
 // how long each cue is allowed to be, in seconds; the probe asserts the rendered length against it
@@ -215,6 +222,7 @@ export const LENGTH = {
   // shorter than the gap would leave bare room tone between them and two seconds of dying flowers
   // would read as four separate events. At 0.62 each one runs a fifth of a second into the next.
   rustle: 0.62,
+  chink: 0.16,
 };
 
 // ---- the two primitives --------------------------------------------------------------------------
@@ -921,12 +929,24 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.glug;
     }
 
+    // A FINGERNAIL ON THE MIRROR'S GLASS (egg-mirror.js). A tap on glass is not a tap on wood: it
+    // is a thin high partial that RINGS for a moment over a dead click, and there is no body under
+    // it at all — the pane is 3 mm of glass screwed to plaster. So: one narrow burst near 5 kHz for
+    // the nail, one struck partial at 3.1 kHz with an inharmonic above it for the ring, and a
+    // little low click for the finger arriving. Short, quiet, and nothing like the cat's switch.
+    case 'chink': {
+      burst(ac, dest, { t, dur: 0.005, level: L('chink'), freq: 5100, q: 1.8, pan, seed });
+      burst(ac, dest, { t, dur: 0.014, level: L('chink') * 0.22, freq: 420, q: 1.1, type: 'lowpass', pan, seed: seed + 1 });
+      struck(ac, dest, { t, dur: 0.15, level: L('chink') * 0.5, freq: 3100 + rng() * 180, type: 'sine', partials: [[2.41, 0.3, 0.5], [4.13, 0.12, 0.35]], pan });
+      return LENGTH.chink;
+    }
+
     default:
       return 0;
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink'];
 // ---- THE WEATHER: a bed, not a cue (egg-rain.js) --------------------------------------------------
 // The room tone above is the only other thing in this piece that RUNS rather than happens, and this
 // is built the same way and for the same reason: rain does not have a beginning, a shape and an end
@@ -1017,4 +1037,5 @@ export function rainBed(ac, dest, { level: want = LEVEL.rain } = {}) {
     },
   };
 }
+
 

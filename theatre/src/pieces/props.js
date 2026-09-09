@@ -36,9 +36,11 @@ import { eggRain, rainState } from './egg-rain.js';
 
 import { buildFine } from './egg-fine.js';
 
+import { eggMirror } from './egg-mirror.js';
+
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
@@ -939,6 +941,10 @@ export async function build(ctx) {
   // room reacts to it — not the light, not Pepe, not the placard — which is the whole of the joke;
   // src/pieces/egg-fine.js says so at length.
   const FINE = buildFine(ctx, { group: g, switches: SWITCHES, lamp: g.getObjectByName('mushroom-lamp') });
+  // ---- THE MIRROR on the stage-left wall. The room's eighth switch (src/pieces/egg-mirror.js). ---
+  // The round frame hung above as a barometer is a MIRROR: same frame, same radius, same place on
+  // the wall. Only what is inside it changes, and only when the visitor clicks it.
+  const MIRROR = eggMirror(ctx, { object: g.getObjectByName('barometer'), switches: SWITCHES });
 
   return {
     group: g,
@@ -978,6 +984,11 @@ export async function build(ctx) {
     // long the pointer has rested on the lamp, and hitBox/tapBox are the LAMP's box on the glass
     // and the box a thumb is given — the lamp is the switch; the flames are not touchable.
     fine: FINE,
+    // THE MIRROR on the stage-left wall. `face` is which of the six is in the glass ('glass',
+    // 'feels-good', 'sad', 'smug', 'angry', 'nu'), `next()` cycles it as a click does — cue and
+    // event and all — `set(face)` puts one there for a still with neither, and hitBox/tapBox are
+    // the glass's box on the glass and the box a thumb is actually given (which is bigger, always).
+    mirror: MIRROR,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -1051,6 +1062,9 @@ export async function build(ctx) {
       rainState(RAIN, name);
       // `fine-burning` is the dozen flames alight; every other name is a room that is fine
       FINE.setState(name);
+      // `mirror-sad` and `mirror-smug` are the two faces the piece is judged on; every other name
+      // is plain glass, which is what a reload always shows.
+      MIRROR?.setState(name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -1069,6 +1083,7 @@ export async function build(ctx) {
       VASE?.update(ctx);
       RAIN?.update(ctx);
       FINE.update(ctx);
+      MIRROR?.update(ctx);
     },
   };
 }
