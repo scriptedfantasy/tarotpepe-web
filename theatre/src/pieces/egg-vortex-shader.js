@@ -63,7 +63,7 @@ void main() {
   float x = clamp(d / R, 0.0, 1.0);
   float fT = pow(1.0 - x, uFall.x);
   float fP = pow(1.0 - x, uFall.y);
-  float ang = th - uSwirl.y * fT;         // the twist
+  float ang = th + uSwirl.y * fT;         // the twist, the way the hands go: clockwise (the user: "the room should turn right as well")
   float s = d * (1.0 + uSwirl.z * fP);    // the pull: this pixel shows what stood further out
   vec2 dir = vec2(cos(ang), sin(ang));
   vec2 sp = uCentre + dir * s;
