@@ -150,6 +150,14 @@ export async function build(ctx) {
   let picking = false; // the fan is armed: clicks belong to the cards
   let tapped = null; // a laid card the visitor put a finger on, waiting to be shown
   let askAbort = null; // the open field's controller, so a tap can cut it short
+  // What the visitor had typed when the room cut their field short (a ring, a globe): it is put
+  // back in the field when it opens again, so nothing they wrote is lost to a bell.
+  let heldText = '';
+  function cutField() {
+    const el = ctx.dom?.dialogue?.querySelector?.('input');
+    if (el && el.value) heldText = el.value;
+    askAbort?.abort();
+  }
   let rang = false; // the board on the wall rang and he has picked up: one turn owed
   const alive = (token) => token === run;
 
@@ -161,7 +169,7 @@ export async function build(ctx) {
   ctx.on?.('props:switchboard', ({ rang: r } = {}) => {
     if (!r) return;
     rang = true;
-    askAbort?.abort();
+    cutField();
   });
 
   // ---- AN OBJECT IN THE ROOM ASKS HIM TO SPEAK -------------------------------------------------
@@ -178,7 +186,7 @@ export async function build(ctx) {
     if (!country || roomSays || !M?.available || !M?.reply) return;
     roomSays = { beat: 'globe', country };
     P.pepeAnim?.react?.(); // he looks up at it before he says a word
-    askAbort?.abort(); // the visitor's turn gives way; nothing they typed is sent
+    cutField(); // the visitor's turn gives way; nothing they typed is sent, and none of it is lost
   });
 
   // ---- small waits ------------------------------------------------------------------------------
@@ -675,7 +683,9 @@ export async function build(ctx) {
       // handler puts the card's number in `tapped` and cuts the field short with this signal.
       const ac = (askAbort = new AbortController());
       tapped = null;
-      const said = await D.ask(prompt, { timeout: patient ? 0 : IDLE_S, hold: 0.35, signal: ac.signal });
+      const back = heldText;
+      heldText = '';
+      const said = await D.ask(prompt, { timeout: patient ? 0 : IDLE_S, hold: 0.35, signal: ac.signal, ...(back ? { value: back } : {}) });
       askAbort = null;
       if (!alive(token)) return { spoke: false };
       // The board on the wall rang. He answers it WITHOUT MOVING — there is nothing on that wall

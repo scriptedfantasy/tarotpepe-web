@@ -331,6 +331,15 @@ export function build(ctx, { group, switches, chest = null, barometer = null } =
   let hovered = -1, lifted = -1;
   let ringAt = 0, bellAt = 0, dropAt = 0; // frames on the 12 fps clock; 0 is "not armed"
   let ringing = false;
+  // THE BELL WAITS FOR A QUIET FIELD. A ring cuts the open field short the way a tap on a card
+  // does, so it must not land on a line the visitor is writing: while their block is up and a key
+  // has gone down inside the last three seconds, the bell holds — the cords stay in, the circuit is
+  // made, the exchange is simply slow. If they never stop, after a minute the cords fall out on
+  // their own, silently, and nothing rang.
+  const HOLD_MS = 3000, GIVE_UP_F = 60 * 12;
+  let lastKey = 0, armedAt = 0;
+  ctx.dom?.dialogue?.addEventListener?.('input', () => (lastKey = performance.now()));
+  const fieldBusy = () => !!ctx.pieces.dialogue?.asking && performance.now() - lastKey < HOLD_MS;
   const sound = () => ctx.pieces.sound;
   const plugged = () => cords.map((c) => c.into).filter((i) => i != null).sort((a, b) => a - b);
   const isPair = () => {
@@ -391,6 +400,7 @@ export function build(ctx, { group, switches, chest = null, barometer = null } =
     if (isPair() && !ringing && !quiet) {
       ringing = true;
       ringAt = ctx.clock.frame + RING_AT; // the tone finishes, and then the bell
+      armedAt = ctx.clock.frame;
     }
     tell();
     return true;
@@ -473,7 +483,14 @@ export function build(ctx, { group, switches, chest = null, barometer = null } =
       const f = ctx.clock.frame;
       // the ring: two seconds of bell, and then he picks it up. He does not move to do it — there
       // is nothing on this board for him to reach and he never leaves the bench.
-      if (ringAt && f >= ringAt) {
+      if (ringAt && f >= ringAt && fieldBusy()) {
+        if (f - armedAt >= GIVE_UP_F) {
+          // a minute of typing: the exchange gives up on the call and the cords fall out, quietly
+          ringAt = 0;
+          ringing = false;
+          for (const c of cords) if (c.into != null) pull(c.into, { quiet: true });
+        }
+      } else if (ringAt && f >= ringAt) {
         ringAt = 0;
         bellAt = f;
         sound()?.play?.('bell', { pan: -0.4 });
