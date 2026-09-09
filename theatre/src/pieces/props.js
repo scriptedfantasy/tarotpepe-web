@@ -29,10 +29,11 @@ import { eggFuse } from './egg-fuse.js';
 import { buildVortex } from './egg-vortex.js';
 import { buildWine } from './egg-wine.js';
 import { eggGlobe } from './egg-globe.js';
+import { buildInsects, insectState } from './egg-insects.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
@@ -255,6 +256,9 @@ export async function build(ctx) {
       unit.add(b);
       const j = O.shelfItem({ kind: 'jar', name: 'MIEL', h: 0.13, scale: 1.3, seed: 72 }, rng);
       j.position.set(0.13, CABH, 0.0);
+      // named, because the insects gather round it and take their six landing places off its own
+      // bounding box rather than off a written-down coordinate (egg-insects.js)
+      j.name = 'miel-jar';
       unit.add(j);
     }
     // Three a shelf, no two the same silhouette or the same height, and exactly ONE of them
@@ -913,6 +917,9 @@ export async function build(ctx) {
   // ---- THE WINE on the cart. The room's sixth switch (src/pieces/egg-wine.js). -------------
   const WINE = buildWine(ctx, wineObj, { switches: SWITCHES });
 
+  // ---- THE INSECTS on the back wall, and the honey jar they gather at (src/pieces/egg-insects.js). --
+  const INSECTS = buildInsects(ctx, { group: g, switches: SWITCHES, jar: g.getObjectByName('miel-jar'), wallZ: WALL });
+
   return {
     group: g,
     // the arbiter itself, for the tools (`hovered`) and for any piece that wants a switch of its own
@@ -934,6 +941,9 @@ export async function build(ctx) {
     // click does, `drunk` is whether the room is currently under it, and hitBox/tapBox are the
     // bottle's box on the glass and the box a thumb is given.
     wine: WINE,
+    // THE INSECTS. `state` is where each one is (wall, air, jar), `fly(i)` sends one off as a click
+    // does, and hitBox(i)/tapBox(i) are a sheet's box on the glass and the box a thumb is given.
+    insects: INSECTS,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -996,6 +1006,9 @@ export async function build(ctx) {
       WINE.setState(name); // `wine-drunk`; every other name puts the bottle back
       if (name === 'globe-spinning') GLOBE.showSpinning();
       else GLOBE.reset();
+      // `insects-gathered` is the six of them round the jar; every other name is the wall, which
+      // is where a reload always puts them
+      insectState(INSECTS, name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -1010,6 +1023,7 @@ export async function build(ctx) {
       VORTEX.update(ctx); // last: while it runs, the hands and the bob are its own
       WINE.update(ctx);
       GLOBE.update(ctx);
+      INSECTS?.update(ctx);
     },
   };
 }

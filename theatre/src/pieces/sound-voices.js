@@ -59,6 +59,10 @@ export const LEVEL = {
   // lowest thing any switch in this room does, and above the knock, because it takes the light
   // with it.
   clack: 0.138,
+  // an insect crossing the room (egg-insects.js). Quieter than the lamp's tumbler and quieter than
+  // the radio's crackle: it is meant to be noticed only by someone who is already watching the
+  // thing that makes it, the way a fly in a real room is.
+  buzz: 0.021,
   // the door, which is nearer the lens than anything else in the film and louder for it
   latch: 0.072,
   hinge: 0.058,
@@ -111,6 +115,8 @@ export const TRIM = {
   // latch and clock to the third decimal before it reports this one
   switch: 2.645,
   clack: 1.218,
+  // measured with tools/_egg-insects-buzz.mjs, the same offline render the probe uses
+  buzz: 5.375,
   latch: 2.241,
   hinge: 29.544,
   knock: 1.569,
@@ -153,6 +159,13 @@ export const LENGTH = {
   static: 0.3,
   switch: 0.05,
   clack: 0.2,
+  // 0.34, and the number is arithmetic, not taste. egg-insects.js re-fires this every SECOND
+  // drawing of a flight and a flight runs at 12 fps: that is one buzz every 2/12 = 0.167 s. A cue
+  // shorter than the gap would leave bare room tone between them and a single crossing of the room
+  // would read as five separate insects. Rendered, this one is audible for 0.257 s (measured with
+  // tools/_egg-insects-buzz.mjs), so each runs 90 ms into the next. Change the cadence there and
+  // this number changes with it.
+  buzz: 0.34,
   clock: 0.055,
   latch: 0.06,
   hinge: 0.42,
@@ -594,6 +607,22 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.switch;
     }
 
+    // AN INSECT CROSSING THE ROOM (egg-insects.js). A wingbeat is not a note and it must not be
+    // hummable: a housefly runs about 200 beats a second and what you actually hear is a band of
+    // noise round that, not a tone. So it is built the way every other paper sound in this piece is
+    // — filtered noise — with the Q high enough that the band rings at a pitch and rough enough
+    // that it never becomes an oscillator. Three of them: the beat, its octave, and a thin hiss of
+    // air well above both, which is the half of a buzz that tells you where it is in the room.
+    // It fades in over 25 ms and out over the tail, which is the wash's exception to "nothing fades
+    // in" and holds for the same reason: there is no moment at which a fly starts.
+    case 'buzz': {
+      const f = 196 + rng() * 26; // no two crossings at quite the same beat
+      burst(ac, dest, { t, dur: LENGTH.buzz, level: L('buzz'), freq: f, q: 9, hold: LENGTH.buzz * 0.42, attack: 0.025, pan, seed });
+      burst(ac, dest, { t, dur: LENGTH.buzz * 0.92, level: L('buzz') * 0.44, freq: f * 2.02, q: 7, hold: LENGTH.buzz * 0.3, attack: 0.03, pan, seed: seed + 1 });
+      burst(ac, dest, { t, dur: LENGTH.buzz * 0.8, level: L('buzz') * 0.14, freq: 2600, q: 0.7, hold: LENGTH.buzz * 0.22, attack: 0.04, pan, seed: seed + 2 });
+      return LENGTH.buzz;
+    }
+
     // ---- the door the film opens on. It is a foot from the lens, so it is the nearest, driest,
     // loudest thing in the picture, and it is all wood and one small piece of brass.
 
@@ -812,4 +841,4 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz'];
