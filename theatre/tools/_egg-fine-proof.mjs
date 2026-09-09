@@ -220,7 +220,9 @@ for (const [W, H] of [PLATE, [1600, 900], PHONE, [360, 800]]) {
 // ---- 2. the hold, driven with a real pointer -------------------------------------------------------
 // No ?shot=1: the sound piece is live, so the crackle can be caught on the graph's own timeline.
 let boxesAt8 = null;
-if (doing('hold')) {
+// The lamp is a CLICK since round 2 (tools/_egg-fine-click.mjs proves it); the hold section below
+// drove a hover and is kept only for the record, behind FINE_HOLD=1.
+if (doing('hold') && process.env.FINE_HOLD) {
 console.log('\nTHE HOLD  (1280x800, home, a real pointer put on the lamp and left there)');
   await fresh();
   const [W, H] = PLATE;

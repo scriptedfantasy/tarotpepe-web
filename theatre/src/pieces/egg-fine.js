@@ -41,7 +41,7 @@
 //   the lamp and that is the entire affordance — the radio's manners, the cat's manners, the
 //   lever's manners. A visitor who never holds still on the lamp never finds out.
 //
-// HOW IT IS WORKED. The lamp is a HOVER-AND-HOLD, which no other switch in this room is, and the
+// HOW IT IS WORKED. The lamp is a CLICK, like every other switch in this room (it was a hover-and-hold until the user said the hover sucks), and the
 // difference is the point: you do not click a lamp into flames, you linger on it until something
 // goes wrong. Three seconds of the pointer resting on the mushroom lamp; then one flame every half
 // second until a dozen are burning, in the order a fire would actually take the room —
@@ -528,47 +528,25 @@ export function buildFine(ctx, { group, switches, lamp }) {
     const b = tapBox();
     return !!b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
   };
-  const arrive = () => {
-    const next = hovering || pressing;
-    if (next === want) return;
-    want = next;
-    byHand = false; // a hand on the glass takes the fire off a tool and puts it back on the hold
-    if (want) steps = 0; // the hold starts counting on the next drawing, not on this pointer event
+  // A CLICK ON THE LAMP, like every other switch in the room (round 2 of this egg; the user: "the
+  // hover sucks, lets make it a click on the lamp — if the user clicks on the lamp, the fire
+  // starts"). One click and the first tongue catches on the next drawing, the rest one every half
+  // second; a second click puts them out. The old three-second hold is kept as the number the
+  // catching counts from, so nothing else here had to move.
+  const toggle = () => {
+    want = !want;
+    byHand = false; // a hand on the glass takes the fire off a tool and puts it back on the clock
+    steps = want ? HOLD_F : 0; // no hold: the first tongue is on the next drawing
+    hovering = pressing = want;
   };
-
-  // THE ONLY HOVER-AND-HOLD IN THE ROOM, and it is registered like every other switch so the
-  // arbiter can still say which object a thumb inside two margins meant. `onHover` is the mouse;
-  // `down`/`move`/`up` are the finger, which has no hover to give — it presses, and it holds, and
-  // sliding off the lamp is the finger leaving it just as much as lifting is.
   switches?.add?.({
     name: 'fine',
     object: () => lamp,
     tapBox,
-    onHover: (on) => {
-      hovering = !!on;
-      arrive();
-    },
-    // no `onDown`: a CLICK on the lamp is not how this works, and the arbiter has already done the
-    // two things a press has to do — stopped the event reaching flow.js, which would read it as the
-    // visitor skipping Pepe's line, and opened the audio context by hand, which is the only reason
+    // the arbiter has already stopped the event reaching flow.js (which would read it as the
+    // visitor skipping Pepe's line) and opened the audio context by hand, which is the only reason
     // a phone hears the crackle at all
-    down: (px, py, ev) => {
-      if (ev?.pointerType !== 'touch') return;
-      pressing = true;
-      arrive();
-    },
-    move: (px, py, ev) => {
-      if (ev?.pointerType !== 'touch' || !pressing) return;
-      if (!inside(px, py)) {
-        pressing = false;
-        arrive();
-      }
-    },
-    up: (px, py, ev) => {
-      if (ev?.pointerType !== 'touch') return;
-      pressing = false;
-      arrive();
-    },
+    onDown: () => toggle(),
   });
 
   const api = {
