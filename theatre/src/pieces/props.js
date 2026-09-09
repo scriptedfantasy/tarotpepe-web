@@ -30,11 +30,12 @@ import { buildVortex } from './egg-vortex.js';
 import { buildWine } from './egg-wine.js';
 import { eggGlobe } from './egg-globe.js';
 import { buildInsects, insectState } from './egg-insects.js';
+import { eggPeep } from './egg-peep.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered'] },
-  files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'peep-fallen'] },
+  files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js', 'src/pieces/egg-peep.js'],
 };
 
 export async function build(ctx) {
@@ -920,6 +921,9 @@ export async function build(ctx) {
   // ---- THE INSECTS on the back wall, and the honey jar they gather at (src/pieces/egg-insects.js). --
   const INSECTS = buildInsects(ctx, { group: g, switches: SWITCHES, jar: g.getObjectByName('miel-jar'), wallZ: WALL });
 
+  // ---- PEEP THE TOAD on the press's middle bay, and the floor he ends up on (src/pieces/egg-peep.js). --
+  const PEEP = eggPeep(ctx, { group: g, switches: SWITCHES, jar: g.getObjectByName('miel-jar') });
+
   return {
     group: g,
     // the arbiter itself, for the tools (`hovered`) and for any piece that wants a switch of its own
@@ -944,6 +948,12 @@ export async function build(ctx) {
     // THE INSECTS. `state` is where each one is (wall, air, jar), `fly(i)` sends one off as a click
     // does, and hitBox(i)/tapBox(i) are a sheet's box on the glass and the box a thumb is given.
     insects: INSECTS,
+    // PEEP THE TOAD, the knock-off on the press's middle bay. `clicks` is how many times he has
+    // been pressed, `fallen` whether he is on the floor, `click()` presses him as a visitor does
+    // (croak, rock, and on the fifth the fall), `set(fallen)` puts him on the shelf or the floor
+    // for a still with no take and no cue, and hitBox/tapBox are his box on the glass and the box
+    // a thumb is given — both of which follow him down.
+    peep: PEEP,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -1009,6 +1019,9 @@ export async function build(ctx) {
       // `insects-gathered` is the six of them round the jar; every other name is the wall, which
       // is where a reload always puts them
       insectState(INSECTS, name);
+      // `peep-fallen` is the toad on the boards in front of the press; every other name has him
+      // standing on the shelf, which is where a reload always puts him
+      PEEP.setState(name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -1024,6 +1037,7 @@ export async function build(ctx) {
       WINE.update(ctx);
       GLOBE.update(ctx);
       INSECTS?.update(ctx);
+      PEEP.update(ctx);
     },
   };
 }
