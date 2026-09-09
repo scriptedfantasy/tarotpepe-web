@@ -28,10 +28,11 @@ import { build as buildSwitchboard } from './egg-switchboard.js';
 import { eggFuse } from './egg-fuse.js';
 import { buildVortex } from './egg-vortex.js';
 import { buildWine } from './egg-wine.js';
+import { eggGlobe } from './egg-globe.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
@@ -52,6 +53,7 @@ export async function build(ctx) {
   let radioObj = null; // the set on the cart, and the cat on the right-hand bookcase: the two things
   let catObj = null; //  the visitor may work. Both are wired up at the foot of this file.
   let wineObj = null; // the VIN bottle on the cart; src/pieces/egg-wine.js does the rest
+  let globeObj = null; // the globe on the left bookcase; egg-globe.js turns it
 
   const WALL = -D / 2; // back wall plane
   const FLUSH = WALL + 0.04; // furniture backs sit just in front of the skirting
@@ -127,6 +129,7 @@ export async function build(ctx) {
       const gl = O.globe();
       gl.position.set(0, caseH, 0.02);
       bc.add(gl);
+      globeObj = gl;
     } else {
       // the cat, asleep on top of the bookcase, facing the room. Round 9: it is a lamp, and the
       // switch is at the foot of this file under THE CAT. Nothing about where it stands changed.
@@ -501,6 +504,16 @@ export async function build(ctx) {
         if (c.enabled && !c.enabled()) continue; // a switch that is busy is not a switch just now
         const o = c.object();
         if (!o) continue;
+        // a switch with a hit test of its own (the globe: a sphere, not a box) is asked directly
+        if (c.hit) {
+          if (!c.hit(px, py)) continue;
+          const d = o.getWorldPosition(at).distanceTo(ctx.camera.position);
+          if (d < bestD) {
+            best = c;
+            bestD = d;
+          }
+          continue;
+        }
         const hit = ray.intersectObject(o, true)[0];
         if (hit && hit.distance < bestD) {
           best = c;
@@ -511,6 +524,7 @@ export async function build(ctx) {
       // then the margins, which are what make either of them reachable on a phone
       for (const c of list) {
         if (c.enabled && !c.enabled()) continue;
+        if (c.hit) continue; // its own test already said no
         const b = c.tapBox();
         if (!b || px < b.x || px > b.x + b.w || py < b.y || py > b.y + b.h) continue;
         const o = c.object();
@@ -531,7 +545,7 @@ export async function build(ctx) {
       hovered?.onHover?.(true);
       if (!glass) return;
       if (c) {
-        glass.style.cursor = 'pointer';
+        glass.style.cursor = c.cursor ?? 'pointer';
         cursorMine = true;
       } else if (cursorMine) {
         // only ever put back what this piece put there: reveal-fan.js and help.js share the cursor
@@ -549,6 +563,13 @@ export async function build(ctx) {
       pending = null;
       setHover(null);
     });
+    // A DRAG. A switch with `down/move/up` (the globe) owns the pointer from its pointerdown to the
+    // pointerup, wherever that lands, and may ask for a `grab` cursor while it holds it.
+    let held = null;
+    const local = (ev) => {
+      const r = glass?.getBoundingClientRect();
+      return r ? [ev.clientX - r.left, ev.clientY - r.top] : [0, 0];
+    };
     glass?.addEventListener('pointerdown', (ev) => {
       const c = pick(ev);
       if (!c) return;
@@ -557,8 +578,32 @@ export async function build(ctx) {
       // sound's own "first gesture" unlock, which lives on that same window, is called by hand.
       ctx.pieces.sound?.start?.();
       ev.stopPropagation();
-      c.onDown();
+      c.onDown?.(ev);
+      if (c.down) {
+        held = c;
+        const [px, py] = local(ev);
+        c.down(px, py, ev);
+        if (c.grab && glass) {
+          glass.style.cursor = c.grab;
+          cursorMine = true;
+        }
+      }
     });
+    window.addEventListener('pointermove', (ev) => {
+      if (!held?.move) return;
+      const [px, py] = local(ev);
+      held.move(px, py, ev);
+    });
+    const release = (ev) => {
+      if (!held) return;
+      const c = held;
+      held = null;
+      const [px, py] = local(ev);
+      c.up?.(px, py, ev);
+      if (glass && cursorMine) glass.style.cursor = ev.pointerType === 'touch' ? '' : (c.cursor ?? 'pointer');
+    };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
 
     return {
       add(c) {
@@ -743,6 +788,13 @@ export async function build(ctx) {
     };
   })();
 
+  // ---- THE GLOBE. The one thing in this room that asks HIM a question. --------------------------
+  // The user: "Spin it with a drag; where it stops, he tells a story about an affair he had during
+  // a vacation in that specific country." All of it is in src/pieces/egg-globe.js — the drawn map,
+  // the table of countries, the throw and the wait. Here it is only given the object off the left
+  // bookcase and a place in the switchboard.
+  const GLOBE = eggGlobe(ctx, { object: globeObj, switches: SWITCHES });
+
   // ---- THE CAT, WHICH IS A LAMP. The room's second switch. ---------------------------------------
   // The user, having been given the radio: "now lets make some other objects interactive - for
   // example the black cat on the right behind tarotpepe, it could be a lamp - when the user clicks
@@ -892,6 +944,11 @@ export async function build(ctx) {
     // click does — cue, event and all — `set(on)` puts it there for a still with neither, and
     // hitBox/tapBox are the cat's box on the glass and the box a thumb is actually given.
     cat: CAT,
+    // THE GLOBE on the left bookcase. `spin(v, tilt)` throws it (v is -1..1, the sign the
+    // direction; 0 is a tap's own throw), `country` is the last one it handed over, `spinning` says
+    // whether it is still turning, and hitBox/tapBox are the sphere's box on the glass and the box
+    // a thumb is actually given.
+    globe: GLOBE,
     // the shop's board over Pepe's head. `mesh` is what a pointer is raycast against, `pivot` is
     // its hook line (rotate that and the board swings on its cord), and w/h are its size in metres.
     // help.js hangs its own tag under the pivot and tips it when the pointer is over the board.
@@ -937,6 +994,8 @@ export async function build(ctx) {
       FUSE.set(name === 'fuse-out' || name === 'fuse-dark', name !== 'fuse-dark');
       VORTEX.setState(name);
       WINE.setState(name); // `wine-drunk`; every other name puts the bottle back
+      if (name === 'globe-spinning') GLOBE.showSpinning();
+      else GLOBE.reset();
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -950,6 +1009,7 @@ export async function build(ctx) {
       FUSE.update(ctx);
       VORTEX.update(ctx); // last: while it runs, the hands and the bob are its own
       WINE.update(ctx);
+      GLOBE.update(ctx);
     },
   };
 }

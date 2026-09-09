@@ -263,7 +263,7 @@ export async function build(ctx) {
     //             electricity goes off mid-turn, without the visitor's line being recorded twice.
     //   report    filled in for the caller: {live, tool}. `live` is true when these sentences came
     //             from the model; `tool` is the lever he pulled, if he pulled one.
-    async *reply({ beat = 'greeting', user = '', slug = null, position = 0, question = '', intent = null, focus = null, object = null, tools = null, fallback = null, report = null } = {}) {
+    async *reply({ beat = 'greeting', user = '', slug = null, position = 0, question = '', intent = null, focus = null, object = null, country = null, tools = null, fallback = null, report = null } = {}) {
       const said = String(user || question || '').trim();
       if (report) {
         report.live = false;
@@ -298,6 +298,8 @@ export async function build(ctx) {
         // of voice — the same arrangement a card gets, and for the same reason. The lines are
         // nowhere in the persona, so there is no set speech for him to recite.
         object: objectBody(obj, talk),
+        // where the globe stopped, for the `globe` beat and nothing else (src/pieces/egg-globe.js)
+        country: beat === 'globe' && country ? String(country) : undefined,
         // the conversation's own facts, so the live voice knows what the room knows
         intent: intent ?? null,
         offered: talk.offered,

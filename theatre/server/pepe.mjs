@@ -6,7 +6,7 @@
 //                                                              or  data: {"error":"…"}
 //
 // Body: {beat, history, user, question, slug, position, cardName, numeral, positionLabel, hint, facts, spread, object, tools}
-//   beat      greeting | question | answer | shuffle | fan | reading | recall | followup | farewell |
+//   beat      greeting | question | answer | shuffle | fan | reading | recall | followup | farewell | globe |
 //             talk | object
 //   history   [{role:'visitor'|'pepe', text}]  the conversation so far (not including `user`)
 //   user      what the visitor just said, if anything (for followup, the question)
@@ -538,6 +538,13 @@ function situation(b, names = []) {
         return `The visitor has asked about a thing in the room: "${clip(o.name, 80) || 'that'}". It is not one of yours and it has no story: it came with the room, or it is simply what it is.${hint}`;
       const again = o.told ? ' You have already told them about this once tonight, in words of your own.' : '';
       return `The visitor has asked about ${clip(o.name, 80)}${o.where ? `, ${clip(o.where, 90)}` : ''}, and this one is yours.${table} What is true of it, written down by the house so that none of it is in your words yet: ${clip(o.fact, 900)}${again}${hint}`;
+    }
+    // THE GLOBE, spun by the visitor. The only turn in the evening the ROOM starts: nothing was
+    // said, a thing on the cabinet moved, and it landed somewhere. The country is the whole of the
+    // state; the affair is his and he has never told this one before.
+    case 'globe': {
+      const c = clip(b.country, 60) || 'somewhere';
+      return `The globe on the cabinet has just stopped turning, under the visitor's finger, on ${c}. You once had an affair there, on a holiday, years ago. Tell it in three sentences: where, what it was like, how it ended. Do not name the person.`;
     }
     case 'shuffle': {
       const about = b.about ? ` You took the reading to be about "${clip(b.about, 80)}".` : '';
