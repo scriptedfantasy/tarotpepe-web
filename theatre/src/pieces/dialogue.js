@@ -1401,10 +1401,16 @@ export async function build(ctx) {
     return input;
   }
 
+  // A CARD NAMED OUT OF A READING. `position === false` says there is no position — the card was
+  // not drawn for anybody, it is one of the seventy-eight lying face up on the cloth and the
+  // visitor has touched it (egg-deck.js). script.js's `positionKey` falls back to 'brought' for
+  // anything it does not recognise, which printed "What you brought" under a card nobody drew, so
+  // the bare case is asked for explicitly and the bottom register is simply left empty. Every
+  // caller in a reading passes a number and is untouched.
   function interLines(slug, position) {
     const card = bySlug[slug];
     const key = positionKey(position);
-    const idx = ['brought', 'going', 'do'].indexOf(key);
+    const idx = position === false ? -1 : ['brought', 'going', 'do'].indexOf(key);
     const label = POSITIONS[idx] ?? '';
     const name = card?.name ?? slug;
     const head = card?.numeral ?? ORDINAL[idx] ?? '';
@@ -1465,21 +1471,20 @@ export async function build(ctx) {
       // like everything else on the card. It is the SAME card as every caption's, the same measure
       // and the same height — but a title is not a conversation, so it stands across the whole
       // inner block rather than in the two registers.
-      frame(
-        `<div class="title">` +
-          `<div class="row n"><canvas aria-hidden="true"></canvas><span class="sr">${esc(n)}</span></div>` +
-          `<div class="row name"><canvas aria-hidden="true"></canvas><span class="sr">${esc(name)}</span></div>` +
-          `<div class="row pos"><canvas aria-hidden="true"></canvas><span class="sr">${esc(label)}</span></div>` +
-        `</div>`,
-      );
+      // A REGISTER WITH NOTHING IN IT IS NOT CUT. In a reading all three rows have words — the
+      // numeral or the ordinal, the name, the position — but a card named on its own has no
+      // position (egg-deck.js), and an empty row still took its own height and left a third of the
+      // placard blank paper under the name. The row is only laid when there is something to print.
+      const row = (cls, text) => (text ? `<div class="row ${cls}"><canvas aria-hidden="true"></canvas><span class="sr">${esc(text)}</span></div>` : '');
+      frame(`<div class="title">` + row('n', n) + row('name', name) + row('pos', label) + `</div>`);
       // the name is half again the card's own cap; the numeral and the position are set back to a
       // small hand, and never under the 13 px the world's rules put on lettering
       const small = Math.max(13, hand.capH * 0.82);
-      const rows = [...cap.querySelectorAll('.title .row')];
+      const q = (cls) => cap.querySelector(`.title .row.${cls} canvas`);
       titleInk = [
-        { canvas: rows[0].querySelector('canvas'), text: n, cap: small, track: 0.34, seed: 1 },
-        { canvas: rows[1].querySelector('canvas'), text: name, cap: hand.capH * 1.5, track: 0.2, seed: 2 + name.length },
-        { canvas: rows[2].querySelector('canvas'), text: label, cap: small, track: 0.22, seed: 3 },
+        { canvas: q('n'), text: n, cap: small, track: 0.34, seed: 1 },
+        { canvas: q('name'), text: name, cap: hand.capH * 1.5, track: 0.2, seed: 2 + name.length },
+        { canvas: q('pos'), text: label, cap: small, track: 0.22, seed: 3 },
       ].filter((r) => r.canvas && r.text);
       paintTitle();
       cap.hidden = false;

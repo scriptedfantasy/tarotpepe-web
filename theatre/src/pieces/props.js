@@ -43,12 +43,14 @@ import { eggNakamoto } from './egg-nakamoto.js';
 import { eggPeep } from './egg-peep.js';
 
 import { buildKonami } from './egg-konami.js';
+// THE DECK ITSELF, laid out face up on the cloth (src/pieces/egg-deck.js).
+import { eggDeck } from './egg-deck.js';
 // THE CROSS on the frieze over the door, and the storm behind it (src/pieces/egg-cross.js).
 import { eggCross } from './egg-cross.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain', 'peep-fallen', 'konami-house', 'cross-storm', 'cross-out', 'cross-dark'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
@@ -963,6 +965,12 @@ export async function build(ctx) {
   // ---- THE HOUSE OF CARDS. The room's seventh switch, and it has no object: ↑↑↓↓←→←→BA on the
   // keyboard, in six seconds, with the room idle (src/pieces/egg-konami.js). ------------------
   const KONAMI = buildKonami(ctx);
+  // ---- THE DECK, LAID OUT. The room's switch that IS an object of the film's own: the squared
+  // deck on the cloth. The user: "something should also happen to the cards if the user clicks on
+  // the full stack on the table. that may be a good place to reveal all the tarot cards." Click it
+  // with the room idle and the seventy-eight come off the pile face up into five bows; a tap on one
+  // brings it to the lens; a tap anywhere else rakes them home. src/pieces/egg-deck.js.
+  const DECK_OUT = eggDeck(ctx, { switches: SWITCHES, konami: KONAMI });
   // ---- THE CROSS over the door, and the storm it lets in (src/pieces/egg-cross.js). ------------
   // It is given the pendant (which it lifts into a pivot at the rose so that it can swing) and the
   // room's own door rectangle; the rain, the light and the sound it asks for by their own apis.
@@ -1021,6 +1029,13 @@ export async function build(ctx) {
     // returns false if the room is busy), `active` says whether it is running, `idle` whether it
     // would be allowed to, and `?konami=<t>` / the `konami-house` state hold a frame of it.
     konami: KONAMI,
+    // THE DECK LAID OUT FACE UP. `out` is whether it is (the lay-out, the hold or the rake),
+    // `open()` lays it as a click on the stack does — returns false if the room is busy — `close()`
+    // rakes it home, `show(slug)` brings that card to the lens with its name on the placard and
+    // `hide()` puts it back, `poses` is where the seventy-eight lie in world metres, `?deck=<t>`
+    // and the `deck-out` state hold a frame of it, and hitBox/tapBox are the squared deck's box on
+    // the glass and the box a thumb is given.
+    deck: DECK_OUT,
     // THE CROSS on the frieze over the door. `phase` is shut / storm / open / closing / dark,
     // `path` what the visitor chose at the fork (null until they do), `click()` works the cross as
     // a pointer does — rain, lightning, thunder, the swing and all — `choose('light'|'dark')` takes
@@ -1125,6 +1140,11 @@ export async function build(ctx) {
       // crossroads itself, the room having cut through the door and out to the plate; `cross-dark`
       // the storm that stayed. Every other name is a cross on a wall nobody has touched.
       CROSS.setState(name);
+      // `deck-out` is the whole deck laid face up on the cloth, seen from the plan view; every
+      // other name puts the deck back exactly as it was standing. LAST of the eggs, because it is
+      // the only one besides the cross that takes the camera, and the cross's own `shut` sends the
+      // lens home — a state that cut the plate before it would be shown from the parlour.
+      DECK_OUT.setState(name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -1147,6 +1167,7 @@ export async function build(ctx) {
       NAKAMOTO.update(ctx);
       PEEP.update(ctx);
       KONAMI.update(ctx);
+      DECK_OUT.update(ctx);
       CROSS.update(ctx); // after RAIN: the weather sets its own light and the storm sits over it
     },
   };
