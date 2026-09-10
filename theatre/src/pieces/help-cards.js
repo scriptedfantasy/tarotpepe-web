@@ -28,6 +28,17 @@
 // THE PLATE IS PRELOADED EITHER SIDE. Stepping must be instant — a card that fades in through a
 // decode is a card the visitor waits for — so the neighbour in each direction is fetched the moment
 // a card is shown, and the browser's cache hands it over on the step.
+//
+// AND THE PAPER LEAVES THE PLACARD'S BAND FREE. The user, on the lay-out: "whenever a user clicks a
+// card, pepe could explain the suit and the individual cards." So he teaches it, and he teaches it
+// the only way anybody in this room says anything — on the caption card at the foot of the frame.
+// Two pieces of paper cannot have the same band, and the caption's place is the user's settled
+// decision (BRIEF.md: centred at the bottom, where a film puts its subtitles), so the one that
+// moves is this one: `place()` is given the height of the frame that is actually FREE — everything
+// above the placard's top edge, bleed included — and the sheet is solved and centred inside that
+// rather than inside the window. The plate is the free number in the cut (see `shape`), so it is
+// the plate that pays: about a third smaller than a sheet with the whole window to itself. That is
+// the price of reading the lesson under the card instead of beside it.
 import { mulberry32 } from '../core/rng.js';
 import { signCaps, signCapsFit, signWidth, signFold } from './titles-sign.js';
 import { BLEED, rule, sheetEdge, doubleBorder } from './help-bill.js';
@@ -49,7 +60,9 @@ const BACK = 'BACK';
 // name, the rule, the three controls, the margins — is a fixed overhead, and what is left of the
 // frame's height goes to the picture. Then the sheet is narrowed to the plate, so a laptop gets a
 // portrait card standing in the middle of a landscape frame and not a letterbox with a stamp in it.
-function shape(cardW, w, h, pen) {
+// `free` is the height of the frame the sheet may stand in — the whole window, less whatever the
+// placard has taken at the foot. Everything below is solved against it and not against `h`.
+function shape(cardW, w, h, pen, free) {
   const in1 = Math.max(6, cardW * 0.018);
   const in2 = in1 + Math.max(3.5, pen * 2.4);
   // the paper between the inner rule and the plate. Wider than the reading's, because this sheet
@@ -92,7 +105,7 @@ function shape(cardW, w, h, pen) {
   const ruleGap = Math.max(10, capCtrl * 0.75);
   const foot = Math.max(10, capCtrl * 0.75);
   const overhead = 2 * inset + gapPlate + nameH + ruleGap * 2 + ctrlBlockH + foot;
-  const availH = Math.min(h * 0.96, 1240) - overhead;
+  const availH = Math.min(free * 0.96, 1240) - overhead;
   let plateW = Math.round(Math.max(60, Math.min(colW, (Math.max(70, availH) * PLATE.w) / PLATE.h)));
   const plateH = Math.round((plateW * PLATE.h) / PLATE.w);
 
@@ -104,7 +117,10 @@ function shape(cardW, w, h, pen) {
   const cardH = Math.round(ctrlTop + ctrlBlockH + foot + inset);
 
   return {
-    card: { x: Math.round((w - cardW) / 2), y: Math.round((h - cardH) / 2), w: cardW, h: cardH },
+    // centred across the window, and centred DOWN THE FREE BAND: the paper stands in the picture
+    // above the placard, not in the middle of a frame the placard is standing in the bottom of
+    card: { x: Math.round((w - cardW) / 2), y: Math.round((free - cardH) / 2), w: cardW, h: cardH },
+    free,
     pen, in1, in2, pad, inset, colW,
     plate: { x: Math.round(inset + (colW - plateW) / 2), y: plateY, w: plateW, h: plateH },
     band: Math.max(3, plateW * 0.02), // the hatch under the plate's bottom edge
@@ -112,17 +128,28 @@ function shape(cardW, w, h, pen) {
   };
 }
 
-/** Set the card's face for a frame of w x h CSS px. Everything in CSS px. */
-export function cutCards(w, h) {
+/**
+ * Set the card's face for a frame of w x h CSS px. Everything in CSS px.
+ * `free` is the height the sheet may stand in — the frame less the placard's band at its foot.
+ */
+export function cutCards(w, h, free = h) {
   const pen = Math.max(1.4, h / 560);
+  const room = Math.max(180, Math.min(h, free));
   let cardW = Math.round(Math.min(w * 0.955, 620));
-  let L = shape(cardW, w, h, pen);
+  let L = shape(cardW, w, h, pen, room);
   // …and then narrowed to the plate it turned out to hold, twice, which is enough to settle it
   for (let pass = 0; pass < 3 && L.plate.w < L.colW - 0.75; pass++) {
     const next = Math.max(180, Math.round(L.plate.w + 2 * L.inset));
     if (next >= cardW) break;
+    const narrower = shape(next, w, h, pen, room);
+    // A SHEET NEVER NARROWS ITSELF INTO A SECOND ROW OF CONTROLS. The three at the foot break onto
+    // two rows when the measure will not hold them, which takes another forty-four pixels of height
+    // off the picture — so a narrowing that buys the plate width at that price is not a bargain and
+    // the wider sheet stands. (It only ever came up once the placard took the foot of the frame:
+    // with the whole window to itself the sheet is never driven that narrow.)
+    if (narrower.ctrlBlockH > L.ctrlBlockH) break;
     cardW = next;
-    L = shape(cardW, w, h, pen);
+    L = narrower;
   }
   return L;
 }
@@ -233,8 +260,9 @@ function strikeName(L, dpr, parity, card) {
  * and 'next' — from the three controls and from a thumb dragged across the plate.
  *
  *   el          the root, to be mounted inside #help
- *   place(w,h,dpr)  lay the card out for this frame
- *   show(slug)  put a card on it; returns a promise for the plate having arrived
+ *   place(w,h,dpr,free)  lay the card out for this frame; `free` is the height above the placard
+ *   show(slug)  put a card on it; returns a promise for the plate being ON THE PAPER (decoded and
+ *               painted), not merely fetched
  *   step(p)     the 12 fps two: which strike is showing
  *   box(key)    a control's box on screen in px
  *   slug        which card is up
@@ -269,12 +297,12 @@ export function makeCardView({ onControl } = {}) {
   let slug = null, parity = 0;
   const warm = new Map(); // the neighbours, held so the browser keeps them
 
-  function place(w, h, devicePR) {
+  function place(w, h, devicePR, free = h) {
     dpr = devicePR;
-    const k = `${Math.round(w)}x${Math.round(h)}@${dpr}`;
+    const k = `${Math.round(w)}x${Math.round(h)}@${dpr}/${Math.round(free)}`;
     if (k === key && L) return L;
     key = k;
-    L = cutCards(w, h);
+    L = cutCards(w, h, free);
     Object.assign(el.style, { left: `${L.card.x}px`, top: `${L.card.y}px`, width: `${L.card.w}px`, height: `${L.card.h}px` });
     // the sheet, both strikes of it, stacked and shown turn about
     sheets?.forEach((c) => c.remove());
@@ -349,7 +377,7 @@ export function makeCardView({ onControl } = {}) {
     if (L) lay();
     step(parity);
     const url = cardUrl(next);
-    const done = new Promise((res) => {
+    const arrived = new Promise((res) => {
       if (img.src.endsWith(url) && img.complete && img.naturalWidth) return res(true);
       const on = () => {
         img.removeEventListener('load', on);
@@ -360,6 +388,18 @@ export function makeCardView({ onControl } = {}) {
       img.addEventListener('error', on);
       img.src = url;
     });
+    // …AND THEN THE PICTURE IS ACTUALLY THERE. `load` means the bytes arrived, not that the plate is
+    // on the paper: the plate is `decoding: async` and half a megabyte, so the browser fires load
+    // and decodes afterwards — and a still taken in that gap is the sheet with a white hole in it,
+    // which is exactly what happened to the first judged frame of this face
+    // (public/progress/card-viewer/viewer-1280x800.png: the paper, the name, the controls, no
+    // picture). decode() promises the image can be painted with no further delay, and the two
+    // frames after it are the compositor doing the painting. Everything that waits on the plate —
+    // the judging state, the tools — waits on THIS.
+    const done = arrived
+      .then(() => (img.decode ? img.decode().catch(() => {}) : null))
+      .then(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res))))
+      .then(() => true);
     preload(i);
     return done;
   }

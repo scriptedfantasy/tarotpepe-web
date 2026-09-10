@@ -150,6 +150,9 @@
 //   clear()                                    cuts whatever is up — the only thing that takes a
 //                                              line off the card without putting another in its place
 //   anchors                                    {shot: {x, y, w, floor}} — editable; flow.js sets the same
+//   band() → {at, top, bottom, h, w}           the strip of the frame the card stands in, in px,
+//                                              whether or not a word is on it (help-cards.js cuts
+//                                              its sheet to end above it)
 //   setState(name)                             greeting | question | reading | thinking | farewell (+ any script key)
 import { SCRIPT, lineFor, linesFor, reply as scriptReply, POSITIONS, positionKey } from './script.js';
 import { bySlug } from '../core/deck.js';
@@ -761,6 +764,18 @@ export async function build(ctx) {
   let lastShot = null;
   const headFrac = () => Math.max(HEAD, barFrac() + 0.028);
   function picking() {
+    // …AND NEVER WHILE A CARD IS UP ON THE ? CARD'S PAPER. The visitor has picked one out of the
+    // lay-out to look at and he is teaching it (help-cards.js, flow.js), which means his words are
+    // on this card while a sheet of paper fills the picture above it. The sheet is cut to end above
+    // the placard's top edge, and it is cut for the placard AT THE FOOT — so the head is not on
+    // offer here, whatever the camera is doing. (The lay-out is staged in `fan`, which is a spread
+    // shot with nothing picked out of it, so without this the dock would take the card to the head
+    // and stand it on top of the picture it is describing.)
+    if (ctx.pieces.help?.cards?.showing) return false;
+    // …nor while the EGG's lay-out is on the cloth (egg-deck.js): that is staged in `fan` too, and
+    // reveal has nothing picked out of it, so this test would read it as the pick beat and take the
+    // card to the head. Nobody is choosing three there — the seventy-eight are out to be looked at.
+    if (ctx.pieces.props?.deck?.mode === 'open') return false;
     if (!SPREAD_SHOTS.includes(shotName())) return false;
     const R = ctx.pieces.reveal;
     return !!R && (R.picks?.length ?? 0) < 3;
@@ -1423,6 +1438,31 @@ export async function build(ctx) {
     reply: scriptReply,
     positions: POSITIONS,
     anchors: ANCHORS,
+
+    // THE BAND THE CARD STANDS IN, whether or not there is a word on it: the strip of the frame the
+    // placard occupies (or would occupy the moment he says anything), in px, bleed included.
+    //
+    // It is arithmetic and not a measurement, deliberately: the card's height is FIXED — two lines
+    // of his, two of theirs, the gap and the two paddings, in ems of the hand this measure is cut in
+    // — so the answer is the same whether the card is up or the paper is bare, and a piece laying
+    // itself out around the placard is not made to wait for him to speak first. `at` says which
+    // edge it hangs from: 'foot' all evening, 'head' only through the pick (see THE DOCK).
+    //
+    // help-cards.js asks: the card viewer's sheet is cut to end above `top`, so his lesson about the
+    // card in the picture has somewhere to stand.
+    band() {
+      const H = ctx.size?.h || window.innerHeight || 900;
+      const em = hand?.em ?? capForCard(cardW || 300) / 0.72;
+      const h = ((WELL_LINES + REPLY_LINES) * LINE_H + REGISTER_GAP + 0.86 + 0.9) * em + 2 * PLACARD_BLEED;
+      if (picking()) {
+        const top = headFrac() * H - PLACARD_BLEED;
+        return { at: 'head', top, bottom: top + h, h, w: cardW };
+      }
+      const a = ANCHORS[shotName()];
+      const floor = Math.min(a?.floor ?? 0.945, 1 - barFrac() - 0.028);
+      const bottom = floor * H - lastKb + PLACARD_BLEED; // the keyboard lifts it; place() does the same
+      return { at: 'foot', top: bottom - h, bottom, h, w: cardW };
+    },
 
     // Name the beat of the evening. It used to decide whether the next line was labelled with his
     // name; nothing on the card is labelled any more, so this is now only the event other pieces

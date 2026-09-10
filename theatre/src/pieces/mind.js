@@ -55,8 +55,13 @@
 //   health()             → Promise<bool>; refreshes available/provider/model
 //   reply({beat, user, slug, position, question, focus}) → async generator of SENTENCES
 //                        beat: greeting | talk | object | reading | recall | followup | farewell |
-//                              question | answer | shuffle | fan | flip-ask | flip-hear | flip-close
+//                              question | answer | shuffle | fan | lesson | flip-ask | flip-hear |
+//                              flip-close
 //                        slug + position (0..2 | 'brought'|'going'|'do' | label) for a reading
+//                        slug alone for a 'lesson' — the visitor has the deck laid out and has
+//                        picked that card up to look at (help-cards.js); he teaches it, and the
+//                        whole of the house's bank for the card rides as `facts`. No position:
+//                        nothing is being read from it and nothing goes on the cloth.
 //                        'object' is set for you: a line that asks about a thing in the room is
 //                        read by mind-room.js and answered with that thing. It is still a 'talk'
 //                        turn — nothing is dealt, nothing moves — so no caller has to know.
@@ -162,6 +167,15 @@ function scripted({ beat, user, slug, position, question, spread = [], focus = n
     case 'flip-hear':
     case 'flip-close':
       return { text: '', offered: false };
+    // THE LESSON, and the empty string again. The visitor has the deck laid out and has picked a
+    // card up to look at; he teaches it. There are seventy-eight cards and the house's lines for
+    // each of them are READINGS — written to be said to a person about their own evening, in a
+    // position, once — not descriptions of a picture, so there is nothing here to recite and a
+    // canned paragraph per card, the same one every time, is exactly what the user cut out of the
+    // shuffle. With no live voice the viewer simply shows the card and the placard says nothing,
+    // which is what a book of plates does.
+    case 'lesson':
+      return { text: '', offered: false };
     default:
       return { text: beatText(beat), offered: false };
   }
@@ -186,6 +200,11 @@ export async function build(ctx) {
       .flatMap((k) => linesFor(slug, k))
       .join(' ');
   };
+  // THE LESSON TAKES THE WHOLE BANK. A reading is written from one position and must not spend the
+  // other two, so cardFacts hands over what the reading did not say. A lesson has no position at
+  // all — the visitor has picked the card up off the table to look at it, not to be read from it —
+  // so every line the house keeps for that card is a fact about the picture, and he gets all six.
+  const cardBank = (slug) => POSITION_KEYS.flatMap((k) => linesFor(slug, k)).join(' ');
 
   // POST /api/pepe → async generator of text deltas. Throws on any failure before or during.
   // `onTool` is called at most once, with {name, args}, when he pulls one of the levers the body
@@ -314,7 +333,12 @@ export async function build(ctx) {
         // For a recall the hint is deliberately left off: it is the very line the reading was
         // written from, and he must not say it twice. The facts — everything in the picture the
         // reading did NOT spend — are exactly what a second look at a card is for.
-        facts: (beat === 'reading' || beat === 'recall') && slug ? cardFacts(slug, position) : null,
+        // A LESSON gets the whole bank (cardBank): the visitor picked the card up off the table and
+        // asked what it is, so nothing about the picture is being saved for later.
+        facts: slug ? (beat === 'lesson' ? cardBank(slug) : beat === 'reading' || beat === 'recall' ? cardFacts(slug, position) : null) : null,
+        // …and, for a lesson, which suit it belongs to, or nothing at all if it is a trump. It is
+        // the first thing he is asked to teach and the deck is the only place it is written down.
+        suit: beat === 'lesson' ? (card?.suit ?? null) : undefined,
         // The thing in the room they asked about: its canon fact, and ONE written line as a hint
         // of voice — the same arrangement a card gets, and for the same reason. The lines are
         // nowhere in the persona, so there is no set speech for him to recite.
@@ -357,20 +381,19 @@ export async function build(ctx) {
       const entry = { role: 'pepe', text: '' };
       history.push(entry);
 
-      if (api.ready) await api.ready;
-      if (!api.available && api.healthError === 'timeout' && !retriedHealth) {
-        retriedHealth = true;
-        await api.health();
-      }
-      // the live voice went off earlier: ask again once a minute has passed
-      if (!api.available && latchedAt && Date.now() - latchedAt > RELATCH_MS) {
-        latchedAt = 0;
-        await api.health();
-      }
       let count = 0;
       let offeredOut = null; // the script knows; the live voice is read for it
       const yielded = [];
+      // WHAT HE SAID, WRITTEN DOWN — ONCE, whatever ends the turn. A caller may let go of this
+      // generator in the middle of it (flow's `render` returns the iterator when the visitor steps
+      // to the next card of a lesson), and a `return()` lands in the finally below and nowhere
+      // else: without it the turn would leave an empty line in the history and read back to him
+      // next time as a silence he kept. The flag is what makes the finally safe — every ordinary
+      // exit already calls this, and the second call must not undo the first.
+      let finished = false;
       const finish = () => {
+        if (finished) return;
+        finished = true;
         entry.text = yielded.join(' ');
         // A turn that was nothing but a lever — he pulled deal_cards and said not one word, which
         // is the commonest shape of all — leaves no line in the transcript to remember him by, and
@@ -385,78 +408,93 @@ export async function build(ctx) {
         }
       };
 
-      if (api.available) {
-        api.abort();
-        const ac = (controller = new AbortController());
-        let buf = '';
-        const onTool = (t) => {
-          if (report) report.tool = t;
-        };
-        try {
-          for await (const delta of stream(body, ac.signal, onTool)) {
-            buf += delta;
-            // emit every complete sentence, keep the tail
-            for (;;) {
-              END.lastIndex = 0;
-              const m = END.exec(buf);
-              if (!m) break;
-              const cut = m.index + m[0].length;
-              const s = tidy(buf.slice(0, cut));
-              buf = buf.slice(cut);
-              if (!s) continue;
-              yielded.push(s);
-              count++;
-              yield s;
-              if (count >= MAX_SENTENCES) {
-                ac.abort();
-                buf = '';
-                break;
-              }
-            }
-            if (ac.signal.aborted) break;
-          }
-          const tail = tidy(buf);
-          if (tail && count < MAX_SENTENCES) {
-            yielded.push(tail);
-            yield tail;
-          }
-        } catch (e) {
-          if (!ac.signal.aborted) console.warn('[mind] live reply failed, using the script:', e?.message ?? e);
-          if (e?.fatal) {
-            // Key or credit trouble upstream. Fall back to the script now, but do not latch for
-            // ever: a topped-up account or a fixed key should come back on its own, so the next
-            // turn after a minute asks the health endpoint again.
-            api.available = false;
-            latchedAt = Date.now();
-            console.warn('[mind] the live voice is off; asking again in a minute');
-          }
-        } finally {
-          if (controller === ac) controller = null;
+      try {
+        if (api.ready) await api.ready;
+        if (!api.available && api.healthError === 'timeout' && !retriedHealth) {
+          retriedHealth = true;
+          await api.health();
         }
-        // He answered — in words, or by putting his hand on the deck, or both. Either way this
-        // turn is his and the script does not speak over it.
-        if (yielded.length || report?.tool) {
-          if (report) report.live = true;
-          finish();
-          return;
+        // the live voice went off earlier: ask again once a minute has passed
+        if (!api.available && latchedAt && Date.now() - latchedAt > RELATCH_MS) {
+          latchedAt = 0;
+          await api.health();
         }
-        if (ac.signal.aborted && ac.signal.reason === 'abort') {
-          const i = history.indexOf(entry);
-          if (i >= 0) history.splice(i, 1);
-          return;
-        }
-      }
 
-      // the script. `fallback` is turn()'s way of saying which beat the written brain should
-      // answer with when the live voice has failed: the live call was made for the beat he TALKS
-      // in, and the script may need to answer the beat the regex read instead.
-      const written = scripted({ ...args, ...(fallback ?? {}), user: said, question: said, spread }, talk);
-      offeredOut = !!written.offered;
-      for (const s of splitSentences(written.text)) {
-        yielded.push(s);
-        yield s;
+        if (api.available) {
+          api.abort();
+          const ac = (controller = new AbortController());
+          let buf = '';
+          const onTool = (t) => {
+            if (report) report.tool = t;
+          };
+          try {
+            for await (const delta of stream(body, ac.signal, onTool)) {
+              buf += delta;
+              // emit every complete sentence, keep the tail
+              for (;;) {
+                END.lastIndex = 0;
+                const m = END.exec(buf);
+                if (!m) break;
+                const cut = m.index + m[0].length;
+                const s = tidy(buf.slice(0, cut));
+                buf = buf.slice(cut);
+                if (!s) continue;
+                yielded.push(s);
+                count++;
+                yield s;
+                if (count >= MAX_SENTENCES) {
+                  ac.abort();
+                  buf = '';
+                  break;
+                }
+              }
+              if (ac.signal.aborted) break;
+            }
+            const tail = tidy(buf);
+            if (tail && count < MAX_SENTENCES) {
+              yielded.push(tail);
+              yield tail;
+            }
+          } catch (e) {
+            if (!ac.signal.aborted) console.warn('[mind] live reply failed, using the script:', e?.message ?? e);
+            if (e?.fatal) {
+              // Key or credit trouble upstream. Fall back to the script now, but do not latch for
+              // ever: a topped-up account or a fixed key should come back on its own, so the next
+              // turn after a minute asks the health endpoint again.
+              api.available = false;
+              latchedAt = Date.now();
+              console.warn('[mind] the live voice is off; asking again in a minute');
+            }
+          } finally {
+            if (controller === ac) controller = null;
+          }
+          // He answered — in words, or by putting his hand on the deck, or both. Either way this
+          // turn is his and the script does not speak over it.
+          if (yielded.length || report?.tool) {
+            if (report) report.live = true;
+            finish();
+            return;
+          }
+          if (ac.signal.aborted && ac.signal.reason === 'abort') {
+            const i = history.indexOf(entry);
+            if (i >= 0) history.splice(i, 1);
+            return;
+          }
+        }
+
+        // the script. `fallback` is turn()'s way of saying which beat the written brain should
+        // answer with when the live voice has failed: the live call was made for the beat he TALKS
+        // in, and the script may need to answer the beat the regex read instead.
+        const written = scripted({ ...args, ...(fallback ?? {}), user: said, question: said, spread }, talk);
+        offeredOut = !!written.offered;
+        for (const s of splitSentences(written.text)) {
+          yielded.push(s);
+          yield s;
+        }
+        finish();
+      } finally {
+        finish(); // an ordinary end has already called it; a caller letting go has not
       }
-      finish();
     },
 
     // ---- the conversation ------------------------------------------------------------------------

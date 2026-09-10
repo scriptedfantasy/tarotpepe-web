@@ -46,6 +46,13 @@
 // his turn; a click on the picture does what space does, or picks a card at the fan, or starts the
 // evening again from the sign-off card.
 //
+// AND A CARD PICKED UP OFF THE TABLE IS TAUGHT (the user, on the lay-out: "maybe this could be the
+// teaching - in this whole laid out view, whenever a user clicks a card, pepe could explain the suit
+// and the individual cards"). A tap on one of the seventy-eight, or on one of the three lying face
+// up, puts that card on the ? card's paper (help-cards.js); the room answers with a `lesson` beat
+// on it and he teaches it on the placard, under the picture, while the paper stays up. Stepping to
+// another card stops the lesson and starts the next. See THE VISITOR HAS PICKED UP A CARD.
+//
 // AND THE READING CAN BE FLIPPED (the user: "we have to be able to flip the reading so the user can
 // pull a tarot for pepe"). The visitor offers, in their own words; he takes the offer by pulling a
 // lever the offer put within his reach; the room washes and they take three exactly as always, and
@@ -98,6 +105,11 @@ const LANDING_S = 3.0; // the parlour, held, before anybody says anything
 // ten seconds. The mind is not asked to write less — it writes what it writes and the flow stops
 // listening after the third sentence and drops the rest, so a long turn simply ends on time.
 const MAX_SENTENCES = 3;
+// A LESSON IS FOUR, and this is the one beat in the evening that gets a fourth. The visitor is not
+// waiting to type — they are holding a picture in front of them and reading about it — and the room
+// asks him for the suit and then the card, which is two things and not one. Four is what the note
+// asks for (server/pepe.mjs, the lesson) and four is what is listened to.
+const LESSON_SENTENCES = 4;
 
 // WHERE THE LETTERING STANDS — round 5, and it is the user's decision, not a taste of ours:
 //
@@ -262,6 +274,68 @@ export async function build(ctx) {
     cutField();
   });
 
+  // ---- THE VISITOR HAS PICKED UP A CARD, AND HE TEACHES IT ---------------------------------------
+  // The user, seeing the whole deck lying face up on the cloth: "maybe this could be the teaching -
+  // in this whole laid out view, whenever a user clicks a card, pepe could explain the suit and the
+  // individual cards."
+  //
+  // So the ? card's third face (help-cards.js) is a LESSON. It announces every card it puts up —
+  // the first tap, and every step of the arrows, the keys and the thumb — and this is where that is
+  // answered: one `lesson` beat per card, played on the placard at the foot of the frame while the
+  // picture stands above it. It is the globe's shape, with three differences, and each of them is
+  // the difference between a remark and a lesson:
+  //
+  //   THE FIELD DOES NOT OPEN UNDER IT. Every other turn of his ends with the visitor's block open
+  //     beneath his last sentence; this one does not, because the visitor is reading a card and a
+  //     caret blinking under it is an invitation to stop. A question can wait for BACK. So it is
+  //     rendered without `keepLast` — every sentence is SAID — and the field opens again, on the
+  //     line they were answering, when the paper goes down.
+  //   IT CAN BE INTERRUPTED BY THE NEXT CARD. Stepping to another card while he is mid-lesson is
+  //     the visitor saying they have heard enough about this one: `teaching` is set again, the
+  //     placard is wiped, the stream is stopped, and `render`'s `stop` ends the turn where it
+  //     stands. What he did say is his and stays in the transcript.
+  //   THE CAMERA DOES NOT MOVE. There is nothing to cut to — the whole frame is a sheet of paper.
+  //
+  // WITH NO LIVE VOICE none of it happens at all: the viewer shows the card and the placard says
+  // nothing. There are seventy-eight cards and the house keeps readings for them, not descriptions,
+  // so there is nothing written to fall back on and a canned paragraph per card would be the same
+  // paragraph every evening — the thing the user cut out of the shuffle.
+  let teaching = null; // {slug} the card now on the paper: one lesson owed
+  let taught = false; // …and one has already been said, so the next card wipes the placard first
+  ctx.on?.('help:cards', ({ slug } = {}) => {
+    if (!slug || !M?.available || !M?.reply) return;
+    const again = !!teaching || taught;
+    teaching = { slug };
+    if (again) {
+      M.abort?.(); // he stops writing about the card they have just put down
+      D?.clear?.(); // …and it comes off the placard at once, rather than sitting under the new one
+    }
+    cutField(); // the visitor's turn gives way; nothing they typed is sent, and none of it is lost
+  });
+
+  // One lesson per card, for as long as the paper is up. Returns when the viewer goes.
+  async function lessons(token) {
+    const was = api.beat;
+    api.beat = 'lesson';
+    D.folio?.('lesson');
+    const up = () => !!P.help?.cards?.showing;
+    while (alive(token) && teaching && up()) {
+      const { slug } = teaching;
+      teaching = null;
+      // the turn ends the moment another card comes up under it, or the paper goes down
+      const stop = () => !!teaching || !up();
+      const r = await render(M.reply({ beat: 'lesson', slug }), { hold: 1.4, max: LESSON_SENTENCES, stop });
+      if (r.said) taught = true;
+      if (!alive(token)) break;
+      // he has finished with this card. The paper stays up and the room waits at it: no field, no
+      // timer, nothing said — until they step to another card or put it down.
+      while (alive(token) && !teaching && up()) await wait(0.15);
+    }
+    teaching = null;
+    taught = false;
+    api.beat = was;
+  }
+
   // ---- small waits ------------------------------------------------------------------------------
   function wait(seconds, { skippable = false } = {}) {
     const token = run, s0 = skips, end = ctx.clock.raw + seconds;
@@ -335,8 +409,12 @@ export async function build(ctx) {
   //      is not right over the wash: something IS happening there, the beat is 3.7 s long, and a
   //      line that arrives after his hands have left is a line said to an empty table. See
   //      `drawing`.
+  // stop: a predicate. When it comes true the turn ENDS where it stands — the source is told to
+  //      stop writing and nothing more of it goes up. It is Escape, without the key: the lesson uses
+  //      it, because a visitor who has stepped to the next card is not owed the rest of a sentence
+  //      about the last one (see `lessons`).
   // → { said: how many went up, held: the one kept back }
-  async function render(source, { hold = 1.2, keepLast = false, each = null, max = MAX_SENTENCES, first = FIRST_SENTENCE_S } = {}) {
+  async function render(source, { hold = 1.2, keepLast = false, each = null, max = MAX_SENTENCES, first = FIRST_SENTENCE_S, stop = null } = {}) {
     const token = run;
     const it = iterate(source);
     let said = 0, held = null, taken = 0;
@@ -357,7 +435,8 @@ export async function build(ctx) {
     };
     try {
       for (let n = 0; ; n++) {
-        if (!alive(token) || skipBeat) {
+        if (!alive(token) || skipBeat || stop?.()) {
+          M?.abort?.();
           it.return?.();
           break;
         }
@@ -791,6 +870,18 @@ export async function build(ctx) {
         prompt = r.held ?? prompt;
         continue;
       }
+      // A CARD IS UP ON THE PAPER and he is teaching it. The visitor tapped one of the seventy-eight
+      // on the cloth, or one of the three lying face up, and the ? card's third face has it (see
+      // THE VISITOR HAS PICKED UP A CARD). The lesson is played here, on the placard under the
+      // picture, for as long as they keep the paper up and whatever they step to; when it goes down
+      // the field opens again on the line they were answering, with whatever they had typed still
+      // in it. It is not a silence — the quiet counter does not move and no waiting line is spent —
+      // and `!said` for the globe's reason: the visitor's own words always win the tie.
+      if (teaching && !said) {
+        await lessons(token);
+        if (!alive(token)) return { spoke: false };
+        continue;
+      }
       // A card was touched. It is the same digression the words ask for, and it is not a silence:
       // the quiet counter does not move and no line is spent on it.
       if (tapped != null) {
@@ -1109,6 +1200,8 @@ export async function build(ctx) {
       tapped = null;
       roomSays = null; // a country the globe found in the last visit is not told in the next one
       onFire = false; // …nor a fire the last visitor left burning
+      teaching = null; // …nor a card the last visitor was holding when the evening ended
+      taught = false;
       askAbort = null;
       api.intent = null;
       api.readings = 0;

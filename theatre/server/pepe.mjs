@@ -7,7 +7,8 @@
 //
 // Body: {beat, history, user, question, slug, position, cardName, numeral, positionLabel, hint, facts, spread, object, tools}
 //   beat      greeting | question | answer | shuffle | fan | reading | recall | followup | farewell | globe |
-//             talk | object | flip-ask | flip-hear | flip-close
+//             talk | object | lesson | flip-ask | flip-hear | flip-close
+//   suit      for a lesson: the suit of the card the visitor has picked up, or null for a trump
 //   flipped   true when the cards on the cloth were dealt for HIM and the visitor is the one
 //             reading them (the let_them_read lever). It changes exactly one sentence — the one
 //             that says what is on the table — and the three flip beats.
@@ -633,6 +634,25 @@ function situation(b, names = []) {
         return `The visitor is reading YOUR cards tonight and you are teaching them how. They have just turned card ${pos + 1} of three, ${name}${num}, in the position "${label}".${table} Ask them what they make of it, in one line, the way a teacher asks before telling.`;
       return `The visitor is reading YOUR cards tonight and you are teaching them how. Card ${pos + 1} of three is ${name}${num}, in the position "${label}", and they read it as: "${clip(b.user, 500)}".${table} Teach them from that: what the card says in this position, what they saw right, what they missed, in two or three sentences — the card is yours, so say also what of it lands on you.`;
     }
+    // ---- THE LESSON ------------------------------------------------------------------------------
+    // The visitor has the whole deck face up on the cloth (src/pieces/egg-deck.js) and has picked
+    // one card up to look at it (src/pieces/help-cards.js). The user: "maybe this could be the
+    // teaching - in this whole laid out view, whenever a user clicks a card, pepe could explain the
+    // suit and the individual cards."
+    //
+    // Nothing is dealt, nothing is read and nothing is on offer: the card is in their hand, not in
+    // a position, so there is no "what you brought" to answer and no spread line to say. What rides
+    // instead is the whole of the house's bank for that card (mind.js, cardBank) — six lines of
+    // picture, written for three positions and spent on none of them here.
+    //
+    // The card is nameable: allowedCards takes `cardName`, so the gate lets him say the name of the
+    // card the visitor is holding and strikes any other one, exactly as it does in a reading.
+    case 'lesson': {
+      const name = b.cardName || b.slug || 'the card';
+      const num = b.numeral ? ` (${b.numeral})` : '';
+      const facts = b.facts ? ` The house's lines for this card: "${String(b.facts).trim()}".` : '';
+      return `The visitor has the whole deck laid out on the table and has picked up ${name}${num} to look at, ${b.suit ? String(b.suit) : 'one of the twenty-two majors'}. Teach them the card: for a minor, the suit first and what it governs, then this card — its picture, what it says; for a major, its place in the sequence, then the card. Three or four sentences, in your own way.${facts}`;
+    }
     case 'recall': {
       if (!Array.isArray(b.spread) || !b.spread.filter((c) => c && c.name).length)
         return 'The visitor has asked to see their cards. Nothing has been dealt tonight; the deck is face down and untouched.';
@@ -926,6 +946,18 @@ const FAKES = {
     chunk({ tool_calls: [{ index: 0, function: { arguments: '}' } }] }),
     chunk({}, 'tool_calls'),
   ],
+  // ---- THE LESSON --------------------------------------------------------------------------------
+  // The visitor picked a card up off the lay-out and he teaches it. The name is taken out of the
+  // room's own note (fakeScript, below) rather than written here, because the point of driving this
+  // beat at all is the GATE: he must be able to say the name of the card in the visitor's hand and
+  // no other, and a stub that never names one proves nothing.
+  // (one string, and the spaces after the full stops are load-bearing: a sentence ends at a mark
+  // followed by WHITESPACE, both here and in the client, so two said() calls butted together are
+  // one long sentence and the placard would take them as one take.)
+  lesson: (name = 'the card') => [
+    ...said(`${name}, then. Everything in the picture is there on purpose, including the parts nobody points at. Look at what the figure has turned away from, anon.`),
+    chunk({}, 'stop'),
+  ],
   // …and the three beats that follow it. No card is named in any of them: he is being read to.
   'flip-ask': () => [...said('So. What does it say, anon.'), chunk({}, 'stop')],
   'flip-hear': () => [...said('That lands, more or less. I doubt the half where it is my own doing. Go on.'), chunk({}, 'stop')],
@@ -948,6 +980,10 @@ function fakeScript(cfg, body) {
   // …and, for the beats the room asks for in its own voice, the note itself: it is the only thing
   // in the request that says which beat this is, and a stub with no beat cannot answer one.
   const note = String(last?.content ?? '').match(/\[([^\]]*)\]\s*$/)?.[1] ?? '';
+  // the lesson: the card is in the note and nowhere else, so the stub reads it back out of it —
+  // without the numeral, which is not part of the printed name the gate is holding him to
+  if (/Teach them the card/.test(note))
+    return FAKES.lesson((note.match(/has picked up (.+?)(?: \([^)]*\))? to look at/)?.[1] ?? 'the card').trim());
   if (/Ask them what it says/.test(note)) return FAKES['flip-ask']();
   if (/Answer as the one whose card it is/.test(note)) return FAKES['flip-hear']();
   if (/hand the evening back to them/.test(note)) return FAKES['flip-close']();

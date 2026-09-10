@@ -21,6 +21,7 @@
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
+import sharp from 'sharp';
 
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, arr) => {
@@ -118,6 +119,49 @@ const CARD_AT = (i) => {
   return { x: ((v.x + 1) / 2) * r.width + r.left, y: ((1 - v.y) / 2) * r.height + r.top, slug: m.userData.slug };
 };
 
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+// THE PLATE'S OWN PIXELS
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+// The first frame this tool took of the viewer at 1280x800 was the paper, the name and the three
+// controls with A WHITE HOLE where the picture goes. The page was right and the plate arrived; the
+// tool shot it too early. `load` says the bytes came, not that the picture is on the paper: the
+// plate is `decoding: async` and half a megabyte, so the browser fires load and decodes afterwards.
+// help-cards.js's `show()` now waits for decode() and two frames on top of the load, and this waits
+// for the pixels themselves — a clip of the plate's own box, read for whether there is a picture in
+// it. Blank paper comes back flat; a Marseille plate is black ink on cream over its whole height.
+async function plateInk(page, box) {
+  const clip = { x: Math.round(box.x + box.w * 0.1), y: Math.round(box.y + box.h * 0.1), width: Math.round(box.w * 0.8), height: Math.round(box.h * 0.8) };
+  if (clip.width < 8 || clip.height < 8) return { lo: 255, hi: 255, spread: 0, mean: 255 };
+  const buf = await page.screenshot({ clip, scale: 'css', timeout: 120000 });
+  const { data } = await sharp(buf).greyscale().raw().toBuffer({ resolveWithObject: true });
+  let lo = 255, hi = 0, sum = 0;
+  for (const v of data) {
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+    sum += v;
+  }
+  return { lo, hi, spread: hi - lo, mean: sum / data.length };
+}
+async function waitPlate(page, ms = 20000) {
+  await page.evaluate(() => window.__theatre.pieces.help.cards.ready());
+  const t0 = Date.now();
+  for (;;) {
+    const box = await page.evaluate(() => window.__theatre.pieces.help.cards.plateBox());
+    const ink = await plateInk(page, box);
+    if (ink.spread > 60 || Date.now() - t0 > ms) return ink;
+    await page.waitForTimeout(200);
+  }
+}
+const poll = async (page, fn, ms, what) => {
+  const t0 = Date.now();
+  for (;;) {
+    const v = await page.evaluate(fn).catch(() => null);
+    if (v) return v;
+    if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`);
+    await page.waitForTimeout(150);
+  }
+};
+
 // a real finger dragged across the plate: CDP touch, so touch-action answers and not a number
 async function swipe(page, x, y, dx, steps = 10) {
   const cdp = await page.context().newCDPSession(page);
@@ -187,16 +231,17 @@ async function deckPass({ width, height, phone, tag }, held = {}) {
   if (phone) await page.touchscreen.tap(at.x, at.y);
   else await page.mouse.click(at.x, at.y);
   await settle(page, () => window.__theatre.pieces.help.cards.showing);
-  await page.evaluate(() => window.__theatre.pieces.help.cards.ready());
-  await page.waitForTimeout(450);
+  const ink = await waitPlate(page);
   const v = await page.evaluate(VIEW);
   must(v.showing && v.slug === at.slug, `${tag}: the tap on ${at.slug} did not open the viewer on it (slug=${v.slug})`);
   must(v.plate.loaded && v.plate.natural[0] === 1024 && v.plate.natural[1] === 1792, `${tag}: the plate is not the 1024x1792 face`);
+  must(ink.spread > 60, `${tag}: the plate is on the paper but blank in the frame (spread ${ink.spread}, mean ${ink.mean.toFixed(0)})`);
   must(v.deck === 'open', `${tag}: the deck was disturbed by the tap (mode=${v.deck})`);
   say(
     `${tag}: a tap on ${at.slug} opens the viewer — the paper is ${v.L.card.w}x${v.L.card.h} px, the plate ${v.plate.w.toFixed(0)}x${v.plate.h.toFixed(0)} css px off a ${v.plate.natural.join('x')} face ` +
       `(${((v.plate.w / width) * 100).toFixed(0)}% of the frame across, ${((v.plate.h / height) * 100).toFixed(0)}% down) · the name is cut at a ${v.L.capName.toFixed(1)} px cap, its numeral at ${v.L.capSub.toFixed(1)}, the controls at ${v.L.capCtrl.toFixed(1)} and ${v.L.boxes[0].h.toFixed(0)} px deep · the deck is still ${v.deck}`,
   );
+  say(`${tag}: the picture is IN the frame, not merely fetched — ink spread ${ink.spread}, mean ${ink.mean.toFixed(0)} over the plate's own box`);
   await page.screenshot({ path: `${OUT}/viewer-${width}x${height}.png`, scale: 'css', timeout: 120000 });
 
   await cropPass({ width, height, phone, slug: at.slug });
@@ -385,8 +430,7 @@ async function readingPass() {
     });
     await page.mouse.click(at.x, at.y);
     await page.waitForTimeout(600);
-    await page.evaluate(() => window.__theatre.pieces.help.cards.ready());
-    await page.waitForTimeout(500);
+    await waitPlate(page);
     const v = await page.evaluate(VIEW);
     const mid = await state();
     if (!v.showing) {
@@ -416,7 +460,10 @@ async function readingPass() {
 
     const b = await page.evaluate(() => window.__theatre.pieces.help.cards.controlBox('back'));
     await page.mouse.click(b.x + b.w / 2, b.y + b.h / 2);
-    await page.waitForTimeout(900);
+    // The field is WAITED for, not counted out. A card on the paper is a card he teaches now
+    // (flow.js, THE VISITOR HAS PICKED UP A CARD), and his lesson holds the placard until the paper
+    // goes down — so the visitor's block comes back a moment after BACK rather than instantly.
+    await poll(page, () => window.__theatre.pieces.dialogue.asking, 60000, 'the field coming back').catch(() => {});
     const after = await state();
     const still = await page.evaluate(() => window.__theatre.pieces.cards.drawn.children.filter((m) => m.visible).length);
     must(!(await page.evaluate(() => window.__theatre.pieces.help.cards.showing)), 'reading: BACK did not put the paper down');

@@ -46,6 +46,15 @@
 // walk the whole deck. It is a CUT in and a cut out, and it gives the room back exactly as it was
 // left. Nothing on the notice's own face mentions it and nothing announces it.
 //
+// AND THE THIRD FACE IS A LESSON. The user, on the whole deck lying face up: "maybe this could be
+// the teaching - in this whole laid out view, whenever a user clicks a card, pepe could explain the
+// suit and the individual cards." So every card this face puts up is announced — `help:cards` on
+// the first tap and on every step of the arrows, the keys and the thumb — and flow.js answers it by
+// asking him to teach that card, on the placard, while the picture stays up. This piece does not
+// speak and does not know that he does; it says which card is on the paper and stops there. What it
+// owes the lesson is the BAND: the sheet is cut to end above the placard's top edge, and so is the
+// root that catches taps, so his words have somewhere to stand and a thumb can turn his takes.
+//
 // API: open() · close() · toggle() · showing · reading · hitBox() (the board's box on screen, in px)
 //      cards: open(slug) · close() · next() · prev() · slug
 //      states: closed · hover (the board under a pointer) · open · cards
@@ -138,6 +147,12 @@ export async function build(ctx) {
     #help > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
     /* while the card is turned over, the notice is not drawn at all */
     #help.reading > canvas, #help.cards > canvas { display: none; }
+    /* THE PLACARD'S BAND IS NOT THE NOTICE'S. While a card is up he is TEACHING it, and his lesson
+       stands on the caption card at the foot of the frame — so the sheet leaves that band alone and
+       so does the sheet's own pointer catcher, which would otherwise eat the tap that turns his
+       next take. #overlay > * lays this out at inset 0; a class beats it, and --help-band is how
+       much of the foot the placard has taken (layoutCards). */
+    #help.cards { bottom: var(--help-band, 0px); }
   `;
   document.head.appendChild(style);
   const root = document.createElement('div');
@@ -370,11 +385,28 @@ export async function build(ctx) {
     const next = DECK[(i + d + DECK.length) % DECK.length].slug;
     plateReady = view.show(next);
     cue('deal');
+    // A STEP IS A NEW CARD, so it is said exactly as the first one was. flow listens for this and
+    // asks him to teach whatever is now on the paper — the lesson he was in the middle of stops
+    // where it stands and the next card's begins (flow.js, THE VISITOR HAS PICKED UP A CARD).
+    ctx.emit?.('help:cards', { slug: next });
     return next;
+  }
+  // THE FRAME THE SHEET MAY STAND IN. Everything above the placard's top edge — his lesson is said
+  // down there while the picture is up here, and two pieces of paper cannot have the same band. The
+  // caption's place at the foot is the user's settled decision, so the sheet is the one that gives
+  // way; help-cards.js solves the plate inside what is left (see its `free`). A dialogue piece that
+  // cannot say where its card stands leaves the whole frame, which is the old behaviour exactly.
+  const BAND_GAP = 10; // paper between the sheet's foot and the placard's head
+  function freeHeight(h) {
+    const b = ctx.pieces.dialogue?.band?.();
+    if (!b || b.at !== 'foot' || !(b.top > 0)) return h;
+    return Math.max(180, Math.min(h, b.top - BAND_GAP));
   }
   function layoutCards() {
     const w = ctx.size?.w || window.innerWidth, h = ctx.size?.h || window.innerHeight;
-    view.place(w, h, Math.min(2, window.devicePixelRatio || 1));
+    const free = freeHeight(h);
+    root.style.setProperty('--help-band', `${Math.max(0, Math.round(h - free))}px`);
+    view.place(w, h, Math.min(2, window.devicePixelRatio || 1), free);
   }
 
   function close() {
