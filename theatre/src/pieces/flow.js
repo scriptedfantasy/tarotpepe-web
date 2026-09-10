@@ -248,6 +248,24 @@ export async function build(ctx) {
     cutField();
   });
 
+  // ---- THE DECK IS OUT ON THE TABLE, AND HE SAYS WHAT IT IS FOR ---------------------------------
+  // A click on the stack lays all seventy-eight out face up (egg-deck.js). The user: "when looking
+  // at all the cards, the chatbox should display 'So you wanna learn about the cards? Pick one'…
+  // you don't necessarily need to write it exactly that way, but you have to make the user
+  // understand that the layout is about learning cards." So with a live voice it is his line, from
+  // a note that states the point (the `deck` beat); keyless it is PROMPTS.deck. Same shape as the
+  // fire's remark: over the open field, the field back under it, never during a reading.
+  let deckOut = false;
+  ctx.on?.('props:deck', ({ phase } = {}) => {
+    if (phase !== 'lay') return;
+    if (!D?.asking || picking || READING.has(api.beat)) return;
+    if (M?.available && M?.reply) {
+      if (roomSays) return;
+      roomSays = { beat: 'deck' };
+    } else deckOut = true;
+    cutField();
+  });
+
   // ---- THE DOOR HAS COME OPEN ON THE CROSSROADS, AND HE HAS ONE LINE -----------------------------
   // The third object in the evening that starts a turn with nobody having said anything, and it is
   // taken exactly where the fire's remark is taken: the open field is cut short, the line is played
@@ -925,6 +943,14 @@ export async function build(ctx) {
         const f = await render([PROMPTS.fine], { hold: 1.3, keepLast: true });
         if (!alive(token)) return { spoke: false };
         prompt = f.held ?? PROMPTS.fine;
+        continue;
+      }
+      // The deck was laid out with no live voice to say what for: the written line, once.
+      if (deckOut && !said) {
+        deckOut = false;
+        const d2 = await render([PROMPTS.deck], { hold: 1.3, keepLast: true });
+        if (!alive(token)) return { spoke: false };
+        prompt = d2.held ?? PROMPTS.deck;
         continue;
       }
       // The door came open on the crossroads while the field was open. Same shape as the fire's

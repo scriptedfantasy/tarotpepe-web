@@ -592,6 +592,10 @@ function situation(b, names = []) {
     // THE GLOBE, spun by the visitor. The only turn in the evening the ROOM starts: nothing was
     // said, a thing on the cabinet moved, and it landed somewhere. The country is the whole of the
     // state; the affair is his and he has never told this one before.
+    // THE DECK LAID OUT. A click on the stack put all seventy-eight face up on the table; the
+    // visitor is looking at them. It is where they learn the cards (a card picked up is a lesson).
+    case 'deck':
+      return 'The visitor has just laid the whole deck out face up on the table, to look at it. This is where they learn the cards: say so in one line, in your own way — they pick one up and you teach it.';
     case 'globe': {
       const c = clip(b.country, 60) || 'somewhere';
       return `The globe on the cabinet has just stopped turning, under the visitor's finger, on ${c}. You once had an affair there, on a holiday, years ago. Tell it in three sentences: where, what it was like, how it ended. Do not name the person.`;
@@ -961,6 +965,7 @@ const FAKES = {
   // …and the three beats that follow it. No card is named in any of them: he is being read to.
   'flip-ask': () => [...said('So. What does it say, anon.'), chunk({}, 'stop')],
   'flip-hear': () => [...said('That lands, more or less. I doubt the half where it is my own doing. Go on.'), chunk({}, 'stop')],
+  deck: () => [...said('so you want to learn the cards, anon. pick one up.'), chunk({}, 'stop')],
   'flip-close': () => [
     ...said('You read better than most of the people who pay me for it. I will keep the middle one. Say what you like now, anon.'),
     chunk({}, 'stop'),

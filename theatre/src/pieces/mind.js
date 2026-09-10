@@ -176,6 +176,9 @@ function scripted({ beat, user, slug, position, question, spread = [], focus = n
     // which is what a book of plates does.
     case 'lesson':
       return { text: '', offered: false };
+    // THE DECK LAID OUT: what it is for. Keyless, flow.js puts PROMPTS.deck up itself.
+    case 'deck':
+      return { text: '', offered: false };
     default:
       return { text: beatText(beat), offered: false };
   }

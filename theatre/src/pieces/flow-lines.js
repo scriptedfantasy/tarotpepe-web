@@ -37,6 +37,9 @@ export const PROMPTS = {
   // no others: it is the panel's line and the user asked for it verbatim. It is scripted rather
   // than written by the mind because a model asked to remark on a fire remarks on a fire.
   fine: 'This is fine.',
+  // the deck laid out face up: what it is for, when there is no live voice to say it (the user:
+  // "you have to make the user understand that the layout is about learning cards")
+  deck: 'So you want to learn the cards. Pick one.',
   // the third card has been read and the evening goes on: the field opens under this. It says out
   // loud that the cards can be gone back to, because the one thing the visitor cannot see from the
   // conversation's framing is that the three are still lying there.
