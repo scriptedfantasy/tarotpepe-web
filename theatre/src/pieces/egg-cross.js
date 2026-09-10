@@ -31,6 +31,32 @@
 // ------------------------------------------------------------------------------------------------
 //
 // ------------------------------------------------------------------------------------------------
+// ROUND 3 — THE ROOM WALKS, AND THE PICTURE IS THE ORIGINAL. Two corrections, both the user's, in
+// one sentence: "naw it still doesnt work - rather than a hard cut it should be a consistent camera
+// pan towards the outside, but the meme doesnt work if you redraw it, it only works as an original.
+// maybe you can just trace the outlines of the actual meme with our ink rather than trying to
+// redraw it?"
+//
+//   THE MOVE. There is no cut either way now. Two drawings after the leaf comes to rest the camera
+//   LEAVES the home plate: forward across the parlour, onto the doorway's own centre line, out
+//   through the opening with the architrave passing the lens, and to a stop at the eye of the
+//   crossroads — two and a half seconds, thirty drawings, a new position on every one of them
+//   (camera.js gained a dolly for it, `move(from, to, seconds, {via})`, and it is general: any
+//   piece may ask for one). The weather standing in the opening is opaque, so the country is not
+//   there until the lens is through it, and then it is the whole frame. The way back is the same
+//   road in a second and a half, and the leaf shuts three drawings into it, as the lens clears the
+//   opening. The camera's HOLD covers the whole excursion, both ways and the picture between them.
+//
+//   THE PICTURE. The landscape is not drawn any more. `tools/trace-plate.mjs` puts the user's own
+//   copy of the meme through the same mill the card back and his hands went through — the outlines
+//   found, the noise dropped, every line re-struck at the room's own nib with a hand's wobble, the
+//   dark side hatched where the original is dark, the sun's disc filled in the fire's yellow — and
+//   the plate loads that file (`public/reference/crossroads-ink.png`). Only the drawn WEATHER
+//   survives, and it changes sides: over a traced picture the bank of cloud stands in FRONT of the
+//   country rather than behind it, because a traced sheet is opaque and has no hole in its sky.
+// ------------------------------------------------------------------------------------------------
+//
+// ------------------------------------------------------------------------------------------------
 // THE CHOICE IS NOT IN THE USER'S WORDS. It is this file's addition and it is said so plainly here:
 // the user asked for the cross, the storm, the door and the line. What happens after the line was
 // left open, and an open door with a picture in it that nothing can be done about is a joke with no
@@ -118,6 +144,13 @@ import { INK, PAPER, canvasTexture } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 import { drawCross, drawLeaf, drawOutside, drawRain, drawLandscape, drawSky, drawStrike, LAND } from './egg-cross-draw.js';
 import { PLATE } from './egg-cross-plate.js';
+// WHERE THINGS ARE IN THE TRACED PICTURE. tools/trace-plate.mjs measures the horizon and the fork
+// off the original it traces and writes them here; until it has been run the file carries the drawn
+// landscape's own numbers, so the two roads' boxes sit on the same fork either way. It is IMPORTED
+// and not fetched, for BRIEF rule 4's reason: a piece that awaits a file wears four seconds. It is a
+// .js and not a .json because node's own ESM loader refuses a bare JSON import without an attribute
+// Vite does not need, and the tools in tools/ read the same file the page does.
+import TRACE_LAND from './egg-cross-land.js';
 import { thunder, THUNDER } from './egg-cross-sound.js';
 
 // ---- the pen, and the sheets it is spent on -------------------------------------------------------
@@ -127,14 +160,24 @@ import { thunder, THUNDER } from './egg-cross-sound.js';
 const PEN_M = 0.0118;
 const PPM_CROSS = 900; // the cross is 0.23 m tall: it needs the pixels per metre, not the pixels
 const PPM_LEAF = 420;
-const PPM_OUT = 320; // the two sheets that stand in the opening: the outside, and the rain on it
-// …AND THE PLATE'S OWN NIB, which is a different number for one reason: it stands 6.28 m from the
-// lens where the back wall stands 8.9, and it fills the frame where the wall is a fifth of it. What
-// has to match is the width ON THE GLASS. At 1920x1080 the room's own contour on that wall is
-// 3.2 px (0.013 m at 244 px to the metre) and this egg's sheets are struck one notch under it at
-// 2.9; the crossroads frame carries 325 px to the metre, so 2.9 px there is 0.0098 m of plate. The
-// sheet is cut at 300 px/m (egg-cross-plate.js), which makes that nib 2.9 canvas pixels as well.
-const PEN_PLATE = 0.0098;
+const PPM_OUT = 560; // the two sheets that stand in the opening: the outside, and the rain on it
+// …and 560 and not round 2's 320 because the lens now WALKS INTO these two. A sheet 0.81 m wide seen
+// from the home plate is 190 px of a 1280 frame and 320 px/m was three times what it needed; seen
+// from two thirds of a metre away — which is where the walk puts the lens for a drawing or two on its
+// way through — it is 1100 px of the same frame, and at 320 every rain-stroke on it was four times
+// magnified and went soft, which is the one thing a pen line in this film may not do.
+// …AND THE PLATE'S OWN NIB, which is a different number for one reason: what has to match between
+// two sheets at different depths is the width ON THE GLASS. At 1920x1080 the room's own contour on
+// the back wall is 3.2 px (0.013 m at 244 px to the metre) and every drawing in this egg is struck
+// one notch under it, at 2.9 px of glass.
+//
+// ROUND 3 MOVED THE PICTURE and this number with it. Round 2's sheet was 6.00 m wide and COVERED a
+// 1920-wide frame, so it carried 325 px of glass to the metre and 2.9 px was 0.0098 m of plate. The
+// picture is now 5.00 m wide and HELD INSIDE the frame — about 950 px of glass, which is 190 px to
+// the metre — so the same 2.9 px of glass is 0.0153 m. It is what the strike sheet and the weather
+// are struck at, and what the understudy landscape is struck at when there is no traced file; the
+// traced plate has its own nib, measured the same way, in tools/trace-plate.mjs (4.83 sheet px).
+const PEN_PLATE = 0.0153;
 const PPM_SKY = 200; // the weather sheet: a bank of cloud is broad tone and needs no more
 const PPM_STRIKE = 180; // …and the one drawing that blanks the country needs less again
 const MIN_TAP = 44; // px: what a thumb needs, whatever the cross measures on the glass
@@ -198,8 +241,33 @@ const SHUT_F = CLOSE.length * F.hold; // and ten drawings to shut it again
 const CHOICE_F = 720; // sixty seconds, and then the offer is withdrawn
 const CLEAR_F = 36; // the light path: three seconds of the storm lifting, still looking out
 const LIFT_AT = [0, 12, 24]; // …in three drawings of cloud: the bank, broken, a wisp, gone
-const OUT_CUT = 2; // drawings after the leaf comes to rest before the room cuts through the door
-const DARK_F = 2; // the dark path: the strike, and then the cut back
+const OUT_CUT = 2; // drawings after the leaf comes to rest before the camera leaves for the door
+const DARK_F = 2; // the dark path: the strike, and then the walk back
+// ---- THE WALK OUT, WHICH IS ROUND 3 AND IS THE USER'S OWN CORRECTION ------------------------------
+// He looked at round 2's hard cut: "naw it still doesnt work - rather than a hard cut it should be a
+// consistent camera pan towards the outside". So the room does not cut through the door any more; it
+// WALKS. When the leaf has come to rest the camera leaves the home plate, crosses the parlour,
+// comes onto the doorway's own centre line, goes out through the opening past the architrave and
+// stops at the eye of the crossroads shot — and the weather standing in the opening becomes the
+// country as it passes through. Two and a half seconds, thirty drawings, on the twelve like
+// everything else: camera.move (round 3's dolly) is a new position every drawing.
+//
+// THE WAYPOINT is what makes it a walk and not a diagonal drift. Home stands on the room's axis of
+// symmetry at x 0 and the doorway is at 1.5, so a straight chord crosses the parlour at an angle and
+// meets the wall obliquely; through the waypoint the camera goes forward, comes onto the door's
+// centre line while it is still well inside the room, and takes the last three metres square to the
+// opening — which is the only way this film moves a camera (BRIEF: lateral tracks, straight pushes,
+// square to the back wall). The lens never turns: `home` and `crossroads` both look straight down
+// −z, so the door slides to the middle of the frame and grows, and the verticals stay vertical.
+// z 0.75 is a hand's breadth downstage of the table's rim (0.62) and x 1.5 is a metre clear of the
+// bookcases at 1.02, so nothing in the set is walked through.
+const OUT_S = 2.5; // the walk out
+const BACK_S = 1.5; // …and the shorter way home
+const VIA_OUT = [PLATE.eye[0], 1.53, 0.75];
+const SHUT_AT = 3; // drawings into the way back before the leaf starts to shut: the lens is clear
+// how near the sheet of weather the lens has to be, in metres, for the opening to flash through as
+// bare paper on its way past — measured in front of the sheet; see THE THRESHOLD FLASHES THROUGH
+const THROUGH = 1.2;
 const SWAY = { amp: (4.2 * Math.PI) / 180, period: 1.55, tau: 3.4 }; // the pendant, damped over ten seconds
 const FAR = [360, 1080]; // the standing storm: a strike every 30 to 90 seconds
 
@@ -355,6 +423,21 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   plate.userData.noShadow = true;
   plate.visible = false;
   root.add(plate);
+  // THE PAPER THE PICTURE STANDS ON (round 3). The lens now holds the whole of the original rather
+  // than being covered by it — a square picture cropped to a 16:9 window loses both castles, the sun
+  // and the child's feet, which is the whole meme — so whatever the picture does not fill has to be
+  // something, and in this film that is paper. One quad, 20 by 24 m, standing a hand behind the
+  // picture: bare, no tone, no contour, the same sheet the drawing is printed on, continued.
+  const groundMesh = new THREE.Mesh(new THREE.PlaneGeometry(PLATE.ground[0], PLATE.ground[1]), (() => {
+    const m = new THREE.MeshStandardMaterial({ color: PAPER, roughness: 1, metalness: 0 });
+    m.userData.ink = { hatch: 0, lineWeight: 0, colorful: true };
+    m.name = 'cross-paper';
+    return m;
+  })());
+  groundMesh.name = 'cross-paper';
+  groundMesh.castShadow = groundMesh.receiveShadow = false;
+  groundMesh.position.set(PLATE.centre[0], PLATE.centre[1], PLATE.centre[2] - 0.06);
+  plate.add(groundMesh);
   const landMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(PLATE.w, PLATE.h),
     sheet(drawLandscape({ w: PLATE.w, h: PLATE.h, ppm: PLATE.ppm, penM: PEN_PLATE }), 'cross-landscape'),
@@ -364,13 +447,70 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   landMesh.position.set(...PLATE.centre);
   plate.add(landMesh);
   const SKY_COLS = 3;
-  const skyH = PLATE.h * LAND.skyV;
+  // how far down the picture the weather reaches. The trace tool measures the traced original's own
+  // skyline and writes it; the drawing's own number stands in if it has never been run.
+  const SKY_V = Number.isFinite(TRACE_LAND?.land?.skyV) ? TRACE_LAND.land.skyV : LAND.skyV;
+  const skyH = PLATE.h * SKY_V;
+  // …AND WHICH SIDE OF THE PICTURE THE WEATHER STANDS ON, which the land file settles before a
+  // texture has loaded: `source` is written only by the trace tool, so its presence is the standing
+  // answer to "is there a traced original on this sheet". BEHIND a drawn landscape, whose sky is a
+  // hole, filled with paper so the alpha test cannot eat its strokes on a phone. IN FRONT of a
+  // traced one, which is opaque and has weather of its own, drawn on nothing — a bank of cloud laid
+  // over the picture that lifts off it in the same three drawings.
+  const OVER = TRACE_LAND?.source != null;
   const skyGeo = new THREE.PlaneGeometry(PLATE.w, skyH);
-  const skyMesh = new THREE.Mesh(skyGeo, sheet(drawSky({ w: PLATE.w, h: skyH, ppm: PPM_SKY, penM: PEN_PLATE, cols: SKY_COLS }), 'cross-sky'));
+  const skyMesh = new THREE.Mesh(skyGeo, sheet(drawSky({ w: PLATE.w, h: skyH, ppm: PPM_SKY, penM: PEN_PLATE, cols: SKY_COLS, solid: !OVER, skyV: SKY_V }), 'cross-sky'));
   skyMesh.name = 'cross-sky';
   skyMesh.castShadow = skyMesh.receiveShadow = false;
-  skyMesh.position.set(PLATE.centre[0], PLATE.centre[1] + PLATE.h / 2 - skyH / 2, PLATE.centre[2] - 0.02);
-  plate.add(skyMesh);
+  skyMesh.position.set(PLATE.centre[0], PLATE.centre[1] + PLATE.h / 2 - skyH / 2, PLATE.centre[2] + (OVER ? 0.02 : -0.02));
+  // …AND OVER A TRACED ORIGINAL IT IS NOT HUNG AT ALL, which is the round's one deliberate loss and
+  // it is worth naming. Behind the drawn landscape this bank was the left road's whole payoff: the
+  // storm visibly breaking up over the country while the visitor was still standing out in it. A
+  // traced picture is opaque and has weather of its own, so the bank can only go IN FRONT — and in
+  // front it is OUR cloud drawn over HIS picture, which is the exact thing he threw round 2 out for
+  // ("the meme doesnt work if you redraw it"). Tried and looked at: unfilled it alpha-tests down to
+  // a stipple against the hatch already there, and filled it lays a paper slab over the best corner
+  // of the meme. So the three seconds after the left road are the room's own clearing — the light
+  // handed back, the rain stopped, the pendant coming down — watched from out here, and the picture
+  // is left alone. The sheet is still BUILT and still stepped, so `sky` reports what it always did
+  // and nothing downstream changes; it simply is not in the scene.
+  if (!OVER) plate.add(skyMesh);
+  // ---- AND THE PICTURE IS THE ORIGINAL, TRACED (round 3) ------------------------------------------
+  // The user: "the meme doesnt work if you redraw it, it only works as an original. maybe you can
+  // just trace the outlines of the actual meme with our ink rather than trying to redraw it?" So the
+  // landscape above is now only the UNDERSTUDY. `tools/trace-plate.mjs` puts his own copy of the
+  // picture through the mill — the outlines found, the noise dropped, every line re-struck at this
+  // plate's own nib about its own centre line, the dark side hatched, the sun's disc filled in the
+  // fire's yellow — and what it writes is loaded here and hung on the sheet.
+  //
+  // IT IS NOT AWAITED. A piece that awaits a file wears the headless browser's first four seconds
+  // (BRIEF rule 4), and this one has no need to: the texture is hung on the material when it
+  // arrives, and until it does the sheet carries the drawing. The loader is tracked, so a
+  // screenshot's `assets.settle()` still waits for it and no judge ever sees the understudy.
+  //
+  // AND THE WEATHER CHANGES SIDES WHEN IT ARRIVES. The drawn landscape leaves its sky as a HOLE so
+  // the bank of cloud can stand behind the hills and be occluded by them; a traced photograph has
+  // no hole in it and never will. So over a traced plate the bank stands in FRONT — a cut-out of
+  // paper-filled cloud (drawSky paints no ground: its canvas is transparent outside the bank), laid
+  // over the top four tenths of the picture, which is a storm rolling across a drawing rather than
+  // one seen through it. It lifts in the same three drawings either way, so the left road's three
+  // seconds are unchanged.
+  const TRACED = '/reference/crossroads-ink.png';
+  let traced = false;
+  try {
+    Promise.resolve(ctx.assets?.texture?.(TRACED))
+      .then((t) => {
+        if (!t?.image) return;
+        landMesh.material.map?.dispose?.();
+        t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+        landMesh.material.map = t;
+        landMesh.material.needsUpdate = true;
+        traced = true;
+      })
+      .catch((e) => console.warn('[cross] no traced plate; the drawing stands in:', e?.message ?? e));
+  } catch (e) {
+    console.warn('[cross] no traced plate; the drawing stands in:', e?.message ?? e);
+  }
   const strikeMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(PLATE.w, PLATE.h),
     sheet(drawStrike({ w: PLATE.w, h: PLATE.h, ppm: PPM_STRIKE, penM: PEN_PLATE }), 'cross-strike'),
@@ -537,6 +677,14 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
       }
     return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
   }
+  // WHOSE GEOGRAPHY THE PICTURE HAS: the traced original's, measured off the file by the tool, once
+  // the file is on the sheet; the drawing's own until then.
+  // …and it is the traced file's numbers ALONE, not the drawing's with a few of them overwritten.
+  // egg-cross-draw.js's LAND also says where the child, the sun and the two castles are IN THE
+  // DRAWING, and none of those is a fact about somebody else's picture; a tool handed a merged
+  // object would crop the child out of the wrong place and never know. What the trace measures is
+  // what there is.
+  const geography = () => (traced ? { ...TRACE_LAND.land } : LAND);
   const hitBox = () => boxOf(crossMesh, CROSS.w / 2, CROSS.h / 2);
   function tapBox() {
     const b = hitBox();
@@ -555,12 +703,18 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   function pathBox(which) {
     if (!plate.visible) return null;
     const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
+    const G = geography();
     landMesh.updateMatrixWorld(true);
-    v.set(0, 0, 0);
+    // THE SPLIT IS THE FORK'S OWN COLUMN, and not the middle of the sheet. In the drawing the two
+    // were the same number and the split could be the plate's centre line; a traced photograph puts
+    // its fork wherever the photograph puts it, and the tool measures that (egg-cross-land.js).
+    // The boxes are still the two halves of the GLASS either side of it, so they are as generous as
+    // a side of the screen and cannot overlap however wide the window is.
+    v.set((G.fork - 0.5) * PLATE.w, 0, 0);
     landMesh.localToWorld(v).project(ctx.camera);
     if (v.z > 1) return null; // the plate is behind the lens: there is no road on this glass
     const mid = ((v.x + 1) / 2) * W;
-    v.set(0, (0.5 - LAND.hz) * PLATE.h, 0);
+    v.set(0, (0.5 - G.hz) * PLATE.h, 0);
     landMesh.localToWorld(v).project(ctx.camera);
     const top = Math.max(0, Math.min(H - MIN_TAP, ((1 - v.y) / 2) * H));
     const x0 = which === 'left' ? 0 : Math.max(0, Math.min(W, mid));
@@ -627,55 +781,97 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   // finished — which is how the first storm came out with a dry window.
   const rain = () => RAIN ?? ctx.pieces.props?.rain ?? null;
 
-  // ---- THE CUT ----------------------------------------------------------------------------------
+  // ---- THE EXCURSION: THE ROOM WALKS OUT THROUGH ITS OWN DOOR ---------------------------------
+  // Round 2 CUT here, and the user threw the cut out. What happens now is one continuous move each
+  // way, and everything below exists to keep the drawing straight while it is running.
+  //
   // The camera is built AFTER props, so it is never cached: it is asked for by name each time, and
-  // a room with no camera piece simply never cuts and keeps the door in the frame. The cue is the
-  // room's own — flow.js plays `cut` on every cut it makes and this is a cut like any other.
+  // a room with no camera piece simply never leaves and keeps the door in the frame.
   const atPlate = () => ctx.pieces.camera?.current === 'crossroads';
-  // THE PLATE IS UP WHEREVER THE CAMERA IS STANDING AT IT, and nowhere else. It stands 6.4 m beyond
-  // a wall the parlour can only see through one doorway, and the sheet of weather in that doorway is
-  // opaque, so nothing in the room could reach it anyway — but a shot is a cheaper truth than an
-  // occlusion at every aspect, and it is also what makes `?view=camera&state=crossroads` honest: the
-  // picture is there whenever the camera is, whatever the door happens to be doing.
-  // It is called at the head of update AND on the far side of every cut, because a cut made inside
-  // one drawing must be true on that drawing: a proof that releases exactly the two drawings the cut
-  // is due on would otherwise be handed a `crossroads` camera looking at nothing.
+  // WHETHER THE ROOM IS OUT is this piece's own fact and no longer the camera's, because for two and
+  // a half seconds each way the answer is "on its way". `outside` is raised on the drawing the walk
+  // out leaves and lowered on the drawing the walk home arrives, so the plate is standing in the
+  // open air for the whole of both — which is what makes the passage through the opening work: the
+  // weather sheet in the doorway is opaque and hides the plate until the lens is past it, and the
+  // merged leaf behind it hides it again on the way in.
+  let outside = false;
+  // THE PLATE IS UP WHEREVER THE ROOM IS OUT, and nowhere else. It stands 9.40 m beyond a wall the
+  // parlour can only see through one doorway. It is called at the head of update AND on the far side
+  // of every move, because a move begun inside one drawing must be true on that drawing: a proof
+  // that releases exactly the drawing the walk leaves on would otherwise be handed a camera on its
+  // way to a picture that is not there.
   function syncPlate() {
-    const want = atPlate();
+    const want = outside || atPlate();
     if (plate.visible !== want) plate.visible = want;
   }
   // The camera is built AFTER props, so a `?cross=out` answered during the build has nobody to ask.
-  // The cut is parked and made on the first drawing there is a camera to make it with.
-  let pendingCut = null;
-  // …and the cut OUT is a HOLD and not a cut, which is a thing the conversation made necessary. The
-  // talk loop re-asserts its own frame at the top of every turn (flow.js: `if (C?.current !== frame)
-  // cut(frame)`), so a plain cut to the crossroads was pulled back into the parlour a second and a
-  // half later, for one drawing, until this piece cut out again — a flash-frame of the room in the
-  // middle of the picture. `camera.hold` is the camera saying no to everybody else for as long as
-  // the room is standing outside; the cut back in gives it up first.
-  function cutTo(shot) {
-    const C = ctx.pieces.camera;
-    if (!C || !C.shots?.[shot]) {
-      pendingCut = shot;
+  // It is parked and played on the first drawing there is a camera to play it with.
+  let pending = null;
+  // …and the excursion is HELD, which is a thing the conversation made necessary. The talk loop
+  // re-asserts its frame at the top of every turn (flow.js: `if (C?.current !== frame) cut(frame)`),
+  // so an unheld camera was pulled back into the parlour a second and a half later, for one drawing
+  // — a flash-frame of the room in the middle of the picture. With a MOVE instead of a cut it would
+  // be worse: the walk would simply be cancelled halfway across the room. So the hold goes on BEFORE
+  // the first drawing of the walk out (`{jump: false}`, or taking it would be the cut we are trying
+  // not to make), it MOVES to `home` for the walk back — the hold has to protect the way home too,
+  // and a hold on the shot we are leaving would block the leaving — and it is given up on the
+  // drawing the camera comes to rest. It covers the whole excursion, both ways and the picture
+  // between them.
+  const camera = () => ctx.pieces.camera ?? null;
+  // …and the walk itself, either way. `set()` asks for it with `at: true`, which is a still and
+  // jumps: a judging state is a frame somebody is looking at, not a move somebody is watching.
+  function goOut({ at = false } = {}) {
+    const C = camera();
+    if (!C || !C.shots?.crossroads) {
+      pending = at ? 'at' : 'out';
       return false;
     }
-    pendingCut = null;
-    if (shot === 'crossroads') {
-      if (C.holding === 'crossroads') return true;
+    pending = null;
+    outside = true;
+    syncPlate();
+    if (at || !C.move) {
+      // a still: the hold IS the jump (camera.hold puts the camera on the shot unless told not to)
       if (C.hold) C.hold('crossroads');
       else C.cut('crossroads');
-      ctx.pieces.sound?.play?.('cut'); // the room's own cue: flow.js plays it on every cut it makes
-    } else {
-      C.release?.('crossroads');
-      if (C.current !== shot) {
-        C.cut(shot);
-        ctx.pieces.sound?.play?.('cut');
-      }
+      syncPlate();
+      return true;
     }
-    syncPlate();
+    if (C.holding === 'crossroads' && !C.moving) return true;
+    C.hold('crossroads', { jump: false });
+    // the brake is SHORT: a dolly spends its drawings where it stops, and this one must not stop in
+    // the doorway — it crosses the threshold at cruise and brakes in the open air beyond it
+    C.move('home', 'crossroads', OUT_S, { via: [VIA_OUT], ease: [0.26, 0.2] });
     return true;
   }
-  const cutBack = () => (atPlate() ? cutTo('home') : (syncPlate(), false));
+  function goHome({ at = false } = {}) {
+    const C = camera();
+    if (!C) {
+      pending = null;
+      outside = false;
+      return false;
+    }
+    pending = null;
+    if (at || !C.move) {
+      C.release?.(C.holding);
+      if (C.current !== 'home') C.cut('home');
+      outside = false;
+      syncPlate();
+      return true;
+    }
+    if (!outside && C.current === 'home' && !C.moving) return false;
+    if (C.holding === 'home' && C.moving) return true; // already walking back
+    // the hold is carried over to the shot being walked back to, and only then is the move asked
+    // for: `home` is now the one frame nobody else may cut away from, which is where we are going.
+    C.hold('home', { jump: false });
+    C.move(null, 'home', BACK_S, { via: [VIA_OUT] }).then(() => {
+      outside = false;
+      syncPlate();
+      C.release?.('home');
+    });
+    return true;
+  }
+  // is the room out there and standing still — which is what the roads may be pointed at
+  const arrived = () => outside && atPlate() && !camera()?.moving;
 
   function start() {
     if (phase !== 'shut') return false;
@@ -736,8 +932,11 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
       name: `cross-${which}`,
       object: () => landMesh,
       tapBox: () => pathBox(which),
-      hit: (px, py) => phase === 'open' && inBox(pathBox(which), px, py),
-      enabled: () => phase === 'open' && plate.visible,
+      // …and only once the walk is OVER. While the camera is crossing the parlour the two roads are
+      // not a choice, they are scenery going past: the fork is not on the glass where pathBox says
+      // it is until the picture has arrived.
+      hit: (px, py) => phase === 'open' && arrived() && inBox(pathBox(which), px, py),
+      enabled: () => phase === 'open' && arrived(),
       onDown: () => choose(which === 'left' ? 'light' : 'dark'),
     });
   }
@@ -780,10 +979,19 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     get striking() {
       return strikeMesh.visible;
     },
-    plate: { w: PLATE.w, h: PLATE.h, at: [...PLATE.centre], eye: [...PLATE.eye], ppm: PLATE.ppm, safe: { ...PLATE.safe }, pen: PEN_PLATE },
+    plate: { w: PLATE.w, h: PLATE.h, at: [...PLATE.centre], eye: [...PLATE.eye], ppm: PLATE.ppm, safe: { ...PLATE.safe }, pen: PEN_PLATE, margin: PLATE.margin, bleed: PLATE.bleed, ground: [...PLATE.ground] },
     // the two colours the picture is allowed, for a proof that wants to name what it is looking at
     colours: { sun: '#f2b829', ink: INK, paper: PAPER },
-    schedule: { strike: F.strike, thunder: F.thunderAt, swingAt: F.swingAt, open: OPEN_F, shut: SHUT_F, choice: CHOICE_F, clear: CLEAR_F, far: FAR, cut: OUT_CUT, dark: DARK_F, lift: LIFT_AT },
+    schedule: { strike: F.strike, thunder: F.thunderAt, swingAt: F.swingAt, open: OPEN_F, shut: SHUT_F, choice: CHOICE_F, clear: CLEAR_F, far: FAR, cut: OUT_CUT, dark: DARK_F, lift: LIFT_AT, out: OUT_S, back: BACK_S, shutAt: SHUT_AT, via: [...VIA_OUT] },
+    // THE WALK, for a tool that has to know whether the picture has arrived or is still coming. It
+    // is the camera piece's own answer, passed through: this file asks for the move and does not
+    // own it.
+    get walking() {
+      return camera()?.moving ?? null;
+    },
+    get arrived() {
+      return arrived();
+    },
     swing: SWING.map((r) => +((r * 180) / Math.PI).toFixed(1)),
     close: CLOSE.map((r) => +((r * 180) / Math.PI).toFixed(1)),
     click: () => start(),
@@ -805,8 +1013,15 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
       landMesh.localToWorld(v0).project(ctx.camera);
       return { x: ((v0.x + 1) / 2) * W, y: ((1 - v0.y) / 2) * H };
     },
-    // the picture's own geography, so a tool can ask for the child rather than for a rectangle
-    land: { ...LAND },
+    // the picture's own geography, so a tool can ask for the child rather than for a rectangle —
+    // the traced original's once it is on the sheet, the drawing's until then
+    get land() {
+      return geography();
+    },
+    // …and WHICH of the two is on it, so a proof can label its own crops honestly
+    get traced() {
+      return traced ? { file: TRACED, source: TRACE_LAND.source, when: TRACE_LAND.when } : null;
+    },
     get leaf() {
       return { shown: hinge.visible, degrees: +((hinge.rotation.y * 180) / Math.PI).toFixed(1) };
     },
@@ -821,13 +1036,13 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     // enough in the past that the next stepped frame agrees it is already there.
     set(next = 'shut') {
       byHand = next !== 'shut';
-      pendingCut = null;
+      pending = null;
       const R = rain();
       if (next === 'shut') {
         phase = 'shut';
         path = null;
         clear(false);
-        cutBack();
+        goHome({ at: true });
         return;
       }
       R?.set?.(true);
@@ -843,8 +1058,9 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
         if (next === 'out') {
           // `cross-out` is the room standing OUT at the crossroads with the storm on it — and NOT
           // on a strike, because a strike blanks the country to bare paper and the whole of what
-          // this state exists for is the picture.
-          cutTo('crossroads');
+          // this state exists for is the picture. A STILL, so it jumps: the walk is a thing to be
+          // watched, and a judge is looking at one frame.
+          goOut({ at: true });
           flash.visible = false;
           doorFlash.visible = false;
           rainMesh.visible = true;
@@ -856,7 +1072,7 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
           // doorway held a picture and there was nothing else to see in it. Now the doorway IS the
           // weather, and a state that whites it out shows nothing of the thing it is named for. The
           // strike is proved where it belongs — driven, one drawing at a time, in the proof.
-          cutBack();
+          goHome({ at: true });
           flash.visible = false;
           doorFlash.visible = false;
           rainMesh.visible = true;
@@ -873,7 +1089,7 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
         flash.visible = false;
         strikeMesh.visible = false;
         skyAt(0);
-        cutBack();
+        goHome({ at: true });
         lights('cross-storm');
         if (sway) sway.rotation.z = 0;
         swayFrom = -1e9;
@@ -905,7 +1121,7 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     // swing, the pendant and the thunder are all on the same 12 fps grid as the boil.
     update(ctx2) {
       mindTheMute();
-      if (pendingCut) cutTo(pendingCut);
+      if (pending) goOut({ at: pending === 'at' });
       syncPlate();
       if (!ctx2.clock.stepped) return;
       if (phase === 'shut') return;
@@ -967,6 +1183,29 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
       doorFlash.visible = wantFlash;
       rainMesh.visible = !wantFlash;
       strikeMesh.visible = wantFlash;
+      // AND THE THRESHOLD FLASHES THROUGH. The last thing between the lens and the country is the
+      // sheet of weather standing in the doorway, and the last half metre of the walk magnifies its
+      // drawing four times and then twenty: a rain-stroke the width of the frame, which is a smear
+      // and not a drawing. So for the one or two drawings the lens is inside arm's reach of it, the
+      // opening is BARE PAPER — the same sheet a strike whitens it with — and the picture is on the
+      // far side of it. That is a flash-through and this film has one already; what it is not is a
+      // cut, because nothing about the camera changes on that drawing. It works both ways round: the
+      // walk home crosses the same half metre and gets the same drawing.
+      // (The sheet cannot simply be HIDDEN there: room.js's merged leaf is standing shut a hand's
+      // width behind it and would be the thing magnified instead.)
+      // …AND THE ZONE IS A DRAWING WIDE ON THE NEAR SIDE, which is a fact about the order main.js
+      // builds pieces in. The camera is built AFTER props, so props.update runs first and the
+      // position it reads is the one the camera held on the PREVIOUS drawing — and at cruise this
+      // walk covers 0.46 m a drawing. The far edge is therefore set half a metre further out than
+      // the distance that actually matters, so the flash lands on the drawings that are rendered
+      // close to the sheet rather than on the drawings that were.
+      if (outside) {
+        const cz = ctx.camera?.position?.z ?? 0;
+        if (cz < PLATE_Z + THROUGH && cz > PLATE_Z - THROUGH * 0.29) {
+          doorFlash.visible = true;
+          rainMesh.visible = false;
+        }
+      }
 
       // the door, and the cut through it
       if (phase === 'storm') {
@@ -981,11 +1220,13 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
           go('open');
         }
       } else if (phase === 'open') {
-        // TWO DRAWINGS AFTER THE LEAF COMES TO REST, THE ROOM CUTS THROUGH THE DOOR: the camera
-        // steps into the opening, turns its back on the parlour, and the crossroads is the frame.
-        // Two, and not none, because a cut on the same drawing the leaf stops on reads as the leaf
-        // hitting the lens; two drawings is the sixth of a second a cutter leaves on a stop.
-        if (f === OUT_CUT) cutTo('crossroads');
+        // TWO DRAWINGS AFTER THE LEAF COMES TO REST, THE ROOM LEAVES: the camera crosses the
+        // parlour, comes onto the doorway's centre line, goes out through the opening past the
+        // architrave, and stops at the eye of the crossroads. Two drawings, and not none, because a
+        // move that starts on the drawing the leaf stops on reads as the leaf pushing the lens; two
+        // is the sixth of a second a cutter leaves on a stop, and it is a beat of stillness with
+        // the door open before anything else happens.
+        if (f === OUT_CUT) goOut();
         if (f >= CHOICE_F) {
           // nobody chose. The room cuts back at once, the door shuts on its own and the weather
           // goes with it; `path` stays null, because an offer nobody took is not an answer.
@@ -1010,11 +1251,17 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
         // taken by a pointer, outside this function, so the first drawing of the closing is f = 0.
         // A minute running out happens INSIDE it — `go('closing')` is called from the branch above
         // and the counter has already been advanced by the time the next drawing arrives — so that
-        // closing's first drawing is f = 1, and an equality test on 0 never fired. `cutBack` is
-        // idempotent (it asks where the camera is), so this simply cuts on the first drawing at or
-        // after the mark, whichever way the phase was entered.
-        if (f >= back) cutBack();
-        const g2 = f - back;
+        // closing's first drawing is f = 1, and an equality test on 0 never fired. `goHome` is
+        // idempotent (it asks where the camera is and whether it is already walking), so this simply
+        // leaves on the first drawing at or after the mark, whichever way the phase was entered.
+        if (f >= back) goHome();
+        // AND THE DOOR SHUTS AS THE CAMERA CLEARS IT, three drawings into the way back — a quarter
+        // of a second, which at this speed is the lens through the opening and a stride inside it.
+        // Sooner and the leaf swings across a lens that is still outside; later and the room arrives
+        // at `home` with its own door standing open behind the walk. The five poses are ten drawings
+        // and the walk is eighteen, so the leaf is on the stop with a third of the move still to run
+        // and the last thing the visitor sees is the parlour, shut, settling into its frame.
+        const g2 = f - back - SHUT_AT;
         if (g2 >= 0) {
           const i = Math.floor(g2 / F.hold);
           if (i < CLOSE.length) showLeaf(CLOSE[i]);

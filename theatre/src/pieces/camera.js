@@ -21,9 +21,19 @@
 // true circle — rather than as the casual three-quarter a shifted lens over a table produces. This
 // file does not care which solver made a shot: both return {pos, look, up, fov, shift}.
 //
+// ROUND 3 — THE CAMERA HAS A DOLLY. `move(from, to, seconds, {via})` walks the lens from one shot
+// to another along a curve through as many waypoints as it is given, stepped on the 12 fps clock —
+// a new position every DRAWING, never a smooth glide — and eased in and out by the same motor the
+// rail's track uses. It is general: any piece may ask for one between any two shots. The egg over
+// the door is the first customer (the room walks out through the doorway instead of cutting), and
+// the entrance could take the same road: its arrival is hand-rolled today because there was no such
+// call to make.
+//
 // API: shots (the named shots; every layout name is kept, others added), current, cut(shot),
-//      hold(shot) / release(shot) / holding — one shot nobody else may cut away from (see below),
-//      move(shot, {kind: 'cut'|'push'|'track'|'whip', duration}), sequence([{shot, kind, duration, hold}]),
+//      hold(shot, {jump}) / release(shot) / holding — one shot nobody else may cut away from,
+//      move(shot, {kind: 'cut'|'push'|'track'|'whip', duration})   — the rail, and
+//      move(from, to, seconds, {via, ease})                        — the dolly (round 3),
+//      moving (what a move is doing, for a tool), sequence([{shot, kind, duration, hold}]),
 //      stop(), setState(name).
 // A shot is {pos, look, fov, up?, shift?: [x, y]} — shift in fractions of the frame, +y = the frame
 // drops (shows more floor) while the camera keeps looking straight ahead.
@@ -161,6 +171,87 @@ export async function build(ctx) {
     m?.done?.();
   };
 
+  // ---- THE DOLLY (round 3) ------------------------------------------------------------------
+  // A walk from one shot to another, along a CURVE and not a chord, and ON THE TWELVES.
+  //
+  //   THE PATH is a Catmull-Rom through the two poses' positions and whatever waypoints it is
+  //   given, sampled BY ARC LENGTH (`getPointAt`), so the speed is metres per second and not
+  //   parameter per second — without that a waypoint near one end makes the camera bolt down the
+  //   long leg and crawl the short one. A waypoint may be a shot's name, a solved pose, or a bare
+  //   [x, y, z]: the caller is describing a route through the set, not a list of frames.
+  //
+  //   THE CLOCK IS THE PAPER'S. Everything hand-animated in this film moves on the twelve, and a
+  //   camera walking through a doorway past a hand-drawn architrave has to be on the same grid as
+  //   the architrave or it is the one smooth thing in the picture. So the move counts DRAWINGS IT
+  //   HAS BEEN GIVEN — every tick where `clock.stepped` — rather than reading `clock.raw`. That is
+  //   the same counter the eggs use (egg-cross.js says why at length) and it has the same second
+  //   virtue: a frozen clock reports `stepped` on every tick, so a still being driven by a tool
+  //   still walks, one drawing per rendered frame, instead of standing forever at u = 0.
+  //
+  //   THE EASE is camera.js's own motor with a ramp at each end: the dolly leaves, cruises and
+  //   brakes, which is a hand on a wheel rather than a tween. `ease: [in, out]` overrides it.
+  const CURVE_TENSION = 0.5;
+  const pointOf = (v) => (Array.isArray(v) ? new THREE.Vector3().fromArray(v) : new THREE.Vector3().fromArray(resolve(v).pos));
+  //   AND THE LENS CHANGES LAST. A camera operator walks with the lens they have and re-frame at the
+  //   end; a focal length sliding all the way through a dolly is the one move this film does not
+  //   make. So the fov (and the lens rise with it) is held at the shot we left and taken to the shot
+  //   we are arriving at over the last stretch — `fovEase: [from, to]` as a fraction of the move.
+  //   The egg over the door needs exactly this: the crossroads is framed wide enough to hold the
+  //   whole picture, which on a phone is 66°, and 66° of PARLOUR halfway across the room would bow
+  //   every line in it. Held to the last stride, the lens only opens once there is nothing in the
+  //   frame but a flat sheet, where a wide lens shows nothing at all.
+  function dolly(fromShot, toShot, seconds = 2, { via = [], ease = [0.25, 0.25], fovEase = [0.72, 1] } = {}) {
+    finish();
+    const from = fromShot == null ? currentPose() : poseOf(resolve(fromShot));
+    const to = poseOf(resolve(toShot));
+    api.current = typeof toShot === 'string' ? toShot : 'custom';
+    const ways = (Array.isArray(via) ? via : [via]).filter((v) => v != null).map(pointOf);
+    const pts = [from.pos.clone(), ...ways, to.pos.clone()];
+    // two identical ends (a move to where we already are) would make a zero-length curve, which
+    // getPointAt cannot map: fall back to the straight blend, which is the same picture
+    const curve = pts.length > 2 || pts[0].distanceTo(pts[1]) > 1e-4 ? new THREE.CatmullRomCurve3(pts, false, 'catmullrom', CURVE_TENSION) : null;
+    const total = Math.max(1, Math.round(seconds * (ctx.clock?.fps || 12)));
+    move = {
+      from,
+      to,
+      kind: 'dolly',
+      curve,
+      k: 0,
+      total,
+      ease,
+      fovEase,
+      t0: ctx.clock.raw,
+      f0: ctx.clock.frame,
+      duration: seconds,
+      fromName: typeof fromShot === 'string' ? fromShot : null,
+      toName: typeof toShot === 'string' ? toShot : null,
+    };
+    // the first drawing of the move IS the pose it starts from, struck again: nothing jumps
+    stepDolly(move);
+    return new Promise((res) => (move.done = res));
+  }
+  const _dp = new THREE.Vector3();
+  const smooth = (a, b, x) => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a || 1e-6)));
+    return t * t * (3 - 2 * t);
+  };
+  function stepDolly(m) {
+    const raw = Math.min(1, m.k / m.total);
+    const u = motor(raw, m.ease[0], m.ease[1]);
+    const lens = smooth(m.fovEase[0], m.fovEase[1], raw);
+    if (m.curve) {
+      m.curve.getPointAt(Math.min(1, Math.max(0, u)), _dp);
+      _q.slerpQuaternions(m.from.q, m.to.q, u);
+      applyPose({
+        pos: _dp,
+        q: _q,
+        fov: m.from.fov + (m.to.fov - m.from.fov) * lens,
+        shift: [m.from.shift[0] + (m.to.shift[0] - m.from.shift[0]) * lens, m.from.shift[1] + (m.to.shift[1] - m.from.shift[1]) * lens],
+      });
+    } else blend(m.from, m.to, u);
+    return u;
+  }
+
   // internal: no token bookkeeping (sequences and loops own their token)
   function jump(shot) {
     finish();
@@ -204,10 +295,15 @@ export async function build(ctx) {
     get holding() {
       return held;
     },
-    hold(shot) {
+    // `jump: false` takes the hold WITHOUT moving the camera — which is what a piece that is about
+    // to WALK to the held shot needs. The hold has to be on before the first drawing of the move,
+    // or the conversation's own `cut(frame)` at the top of the next turn would take the camera back
+    // into the parlour halfway across the room; and the hold has to be MOVED to the shot being
+    // walked back to, or the way home would be blocked by the very hold that is protecting it.
+    hold(shot, { jump: doJump = true } = {}) {
       held = shot;
       seq++;
-      jump(shot);
+      if (doJump) jump(shot);
     },
     release(shot = null) {
       if (held == null || (shot != null && shot !== held)) return false;
@@ -219,11 +315,34 @@ export async function build(ctx) {
       seq++;
       jump(shot);
     },
-    // kind: 'cut' | 'push' (straight dolly down the axis) | 'track' (constant-speed lateral dolly) | 'whip' (3 frames, hard stop)
-    move(shot, { kind = 'push', duration = null } = {}) {
-      if (blocked(shot)) return Promise.resolve();
+    // TWO CALLS, ONE NAME, and which one is meant is read off the second argument.
+    //   move(shot, {kind, duration})            the RAIL: 'cut' | 'push' (straight dolly down the
+    //                                           axis) | 'track' (lateral) | 'whip' (3 frames, hard
+    //                                           stop). Runs on clock.raw; the camera is not a puppet.
+    //   move(from, to, seconds, {via, ease})    the DOLLY (round 3): a walk along a curve through
+    //                                           `via`, stepped on the twelve. `from` may be null,
+    //                                           which means "off whatever pose the camera is
+    //                                           holding" — the way back from an excursion that was
+    //                                           interrupted halfway out.
+    // A second argument that is a name, a point or a solved pose means the dolly; an options bag
+    // (or nothing) means the rail.
+    move(a, b, seconds, opts) {
+      const asDolly = typeof b === 'string' || Array.isArray(b) || (b && (Array.isArray(b.pos) || typeof b.fov === 'number'));
+      if (asDolly) {
+        if (blocked(b)) return Promise.resolve();
+        seq++;
+        return dolly(a, b, seconds, opts ?? {});
+      }
+      const { kind = 'push', duration = null } = b ?? {};
+      if (blocked(a)) return Promise.resolve();
       seq++;
-      return startMove(shot, kind, duration);
+      return startMove(a, kind, duration);
+    },
+    // what a move is doing, for a tool that has to know whether the picture has arrived
+    get moving() {
+      if (!move) return null;
+      const u = move.kind === 'dolly' ? Math.min(1, move.k / move.total) : null;
+      return { kind: move.kind, from: move.fromName ?? null, to: move.toName ?? (typeof api.current === 'string' ? api.current : null), u, drawing: move.k ?? null, drawings: move.total ?? null };
     },
     // steps: [{shot, kind = 'cut', duration, hold = 0}] — plays in order; resolves true when the last hold ends,
     // false if another cut/move/sequence took the camera first
@@ -296,6 +415,15 @@ export async function build(ctx) {
       if (!move) return;
       const m = move;
       let u;
+      if (m.kind === 'dolly') {
+        // ON THE TWELVES: one new position per DRAWING, and the drawings are the ones this piece
+        // has actually been given. Nothing happens on a tick the paper did not turn over.
+        if (!ctx.clock.stepped) return;
+        m.k++;
+        const done = stepDolly(m) >= 1 || m.k >= m.total;
+        if (done) finish();
+        return;
+      }
       if (m.kind === 'whip') {
         // on the animation clock: one big step per frame, then it is simply there
         const k = ctx.clock.frame - m.f0;

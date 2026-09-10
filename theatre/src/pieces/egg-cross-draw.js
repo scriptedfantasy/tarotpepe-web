@@ -810,14 +810,21 @@ function childInto(g, { X, Y, P, W, H, pen, fine, wob, rng, tone }) {
 // sky. And nothing here is drawn under full alpha: the sheet is a cut-out, so a stroke at half
 // strength is a stroke the alpha test throws away. Weight is spacing, not opacity.
 // =================================================================================================
-export function drawSky({ w, h, ppm, penM, cols = 3, seed = 3307 }) {
+// ROUND 3 — `solid` and `skyV`, and both of them are the traced picture arriving. Behind the DRAWN
+// landscape (whose sky is a hole) this bank has to be filled with paper or the alpha test eats its
+// strokes on a phone; in FRONT of a TRACED one — which is opaque and has a sky of its own — that
+// same fill would paint a paper slab over the best corner of the meme. `solid: false` leaves the
+// bank as strokes on nothing: a storm laid OVER the picture rather than seen through it, and one
+// that lifts off it in the same three drawings. `skyV` is how far down the sheet reaches, which is
+// the traced original's own skyline when there is one (tools/trace-plate.mjs measures it).
+export function drawSky({ w, h, ppm, penM, cols = 3, seed = 3307, solid = true, skyV = LAND.skyV }) {
   const TW = Math.round(w * ppm), TH = Math.round(h * ppm);
   const c = makeCanvas(TW * cols, TH);
   const g = c.getContext('2d');
   const pen = penM * ppm;
   const fine = pen * 0.62;
   const wob = pen * 0.34;
-  const S = LAND.skyV; // the sheet covers the top S of the plate: a plate v is v/S of this canvas
+  const S = skyV; // the sheet covers the top S of the plate: a plate v is v/S of this canvas
   const X = (u) => u * TW, Y = (v) => (v / S) * TH;
   const P = (u, v) => [X(u), Y(v)];
   const stages = [
@@ -856,14 +863,16 @@ export function drawSky({ w, h, ppm, penM, cols = 3, seed = 3307 }) {
       // dots exactly there: on a 390-wide phone the whole bank came out as drizzle. Filled, the
       // only cut edge in the cloud is its own silhouette and every stroke inside it lands on solid
       // paper. (The paper is the same paper the sky behind it is, so nothing shows.)
-      g.save();
-      g.fillStyle = PAPER;
-      g.beginPath();
-      g.moveTo(pts[0][0], pts[0][1]);
-      for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
-      g.closePath();
-      g.fill();
-      g.restore();
+      if (solid) {
+        g.save();
+        g.fillStyle = PAPER;
+        g.beginPath();
+        g.moveTo(pts[0][0], pts[0][1]);
+        for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
+        g.closePath();
+        g.fill();
+        g.restore();
+      }
       poly(g, under, { width: pen * 0.7, wobble: wob, rng });
       hatchIn(g, pts, [X(u0 - 0.04), Y(-0.12), X(u1 - u0 + 0.08) - X(0), Y(0.44) - Y(-0.12)], {
         angle: 1.2, spacing: pen * st.spacing, width: fine * 0.62, wobble: wob * 0.9, broken: st.broken, rng, alpha: 0.85,
