@@ -339,7 +339,7 @@ const TOOLS = {
     allowed: (b) => offersToRead(b),
     line: 'If the visitor has offered to read your cards and you accept, use let_them_read and say so in one sentence: it plays over your hands washing the deck.',
     state:
-      'let_them_read is within your reach this turn: the visitor has offered to read for you. Pulling it puts your hands on the deck — all seventy-eight go face down across the cloth under your palms and the visitor takes three straight out of the wash — and then they read those three to you, one at a time, and the cards are yours. Whatever you say in the same turn is the last thing they hear before the cards, and it plays over your working hands. You may leave it alone and answer them in words instead.',
+      'let_them_read is within your reach this turn: the visitor has offered to read for you. Pulling it puts your hands on the deck — all seventy-eight go face down across the cloth under your palms and the visitor takes three straight out of the wash — and then they read those three to you, one at a time, with you teaching them how, and the cards are yours. Whatever you say in the same turn is the last thing they hear before the cards, and it plays over your working hands. You may leave it alone and answer them in words instead.',
   },
 };
 
@@ -616,22 +616,22 @@ function situation(b, names = []) {
     // ---- THE READING, FLIPPED -------------------------------------------------------------------
     // The visitor offered, he pulled let_them_read, and the room dealt exactly as it deals for
     // them: the wash, three taken out of it, each one turned. From here the evening is the other
-    // way round. He does not read these cards. They are HIS, the visitor is reading them TO him,
-    // and all three beats say the same thing in three positions: ask, listen, take something from
-    // it. Nothing scripted stands behind any of them — with no provider these beats are silent and
+    // way round. They are HIS cards, the visitor is reading them TO him, and he is TEACHING them
+    // how (the user: "the flipped reading should actually be him teaching you about tarot"): the
+    // three beats are ask, teach, and say what they have learned. Nothing scripted stands behind any of them — with no provider these beats are silent and
     // the field simply opens under the card's own name.
     case 'flip-ask':
     case 'flip-hear':
     case 'flip-close': {
       if (beat === 'flip-close')
-        return `All three of your cards have been read to you by the visitor.${table} Say what you take from it, in your own way, and hand the evening back to them.`;
+        return `All three of your cards have been read to you by the visitor, and you have been teaching them as they went.${table} Say what they have learned tonight and what to look at next time they turn a card, in your own way, and hand the evening back to them.`;
       const pos = Number.isInteger(b.position) ? b.position : 0;
       const label = b.positionLabel || POSITION_LABELS[pos] || POSITION_LABELS[0];
       const name = b.cardName || b.slug || 'the card';
       const num = b.numeral ? ` (${b.numeral})` : '';
       if (beat === 'flip-ask')
-        return `The visitor is reading YOUR cards tonight. They have just turned card ${pos + 1} of three, ${name}${num}, in the position "${label}".${table} Ask them what it says, in one line, as the one being read for.`;
-      return `The visitor is reading YOUR cards tonight. Card ${pos + 1} of three is ${name}${num}, in the position "${label}", and they read it as: "${clip(b.user, 500)}".${table} Answer as the one whose card it is: what lands, what you doubt, in two or three sentences. Do not read the card yourself.`;
+        return `The visitor is reading YOUR cards tonight and you are teaching them how. They have just turned card ${pos + 1} of three, ${name}${num}, in the position "${label}".${table} Ask them what they make of it, in one line, the way a teacher asks before telling.`;
+      return `The visitor is reading YOUR cards tonight and you are teaching them how. Card ${pos + 1} of three is ${name}${num}, in the position "${label}", and they read it as: "${clip(b.user, 500)}".${table} Teach them from that: what the card says in this position, what they saw right, what they missed, in two or three sentences — the card is yours, so say also what of it lands on you.`;
     }
     case 'recall': {
       if (!Array.isArray(b.spread) || !b.spread.filter((c) => c && c.name).length)
