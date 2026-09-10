@@ -41,19 +41,28 @@
 // AND A THIRD FACE, which is not reached from the notice at all. The user, on the deck laid out on
 // the cloth: "they are so beautiful, users should be able to look at them outside of the drawing."
 // So a tap on a card in the drawing — one of egg-deck's seventy-eight, or one of the three lying
-// face up after a reading — turns this same piece of paper to a card viewer: help-cards.js, one
-// plate as printed at the size the window allows, its name under it, and arrows at the foot that
-// walk the whole deck. It is a CUT in and a cut out, and it gives the room back exactly as it was
-// left. Nothing on the notice's own face mentions it and nothing announces it.
+// face up after a reading — turns this same piece of paper to a card viewer: help-cards.js, ONE
+// PLATE as printed at the size the window allows and nothing else on the sheet. It is a CUT in and
+// a cut out, and it gives the room back exactly as it was left. Nothing on the notice's own face
+// mentions it and nothing announces it.
 //
 // AND THE THIRD FACE IS A LESSON. The user, on the whole deck lying face up: "maybe this could be
 // the teaching - in this whole laid out view, whenever a user clicks a card, pepe could explain the
-// suit and the individual cards." So every card this face puts up is announced — `help:cards` on
-// the first tap and on every step of the arrows, the keys and the thumb — and flow.js answers it by
-// asking him to teach that card, on the placard, while the picture stays up. This piece does not
-// speak and does not know that he does; it says which card is on the paper and stops there. What it
-// owes the lesson is the BAND: the sheet is cut to end above the placard's top edge, and so is the
-// root that catches taps, so his words have somewhere to stand and a thumb can turn his takes.
+// suit and the individual cards." So every card this face puts up is announced — `help:cards` — and
+// flow.js answers it by asking him to teach that card, on the placard, while the picture stays up.
+// This piece does not speak and does not know that he does; it says which card is on the paper and
+// stops there. What it owes the lesson is the BAND: the sheet is cut to end clear of the placard,
+// and so is the root that catches taps, so his words have somewhere to stand and a thumb can turn
+// his takes.
+//
+// THE VIEWER HAS NO CONTROLS, and that is the user's own instruction. Rounds up to twelve gave it
+// arrows, a BACK and the card's name, and stepping mid-lesson cut his line off half-written: "I can
+// only always get the explainer for one card and switching the card before the explainer happens
+// kind of seems to break the chat window. […] we should remove the switching capability […] we can
+// also remove the back […] The abort can be just clicking outside of the card." So `help:cards`
+// goes out when a card is PUT UP and at no other time, there is nothing on the sheet to press, and
+// the way out is a finger off the paper or Escape. `next`/`prev` stay on the api for tools; nothing
+// a visitor can touch calls them and neither of them announces anything.
 //
 // API: open() · close() · toggle() · showing · reading · hitBox() (the board's box on screen, in px)
 //      cards: open(slug) · close() · next() · prev() · slug
@@ -94,8 +103,8 @@ const NOD_EVERY = 9; // seconds
 // …and it asks four times. A visitor who has not looked up at the board by then is not going to,
 // and a sign that keeps twitching all evening is a sign nobody can stop looking at.
 const NOD_TIMES = 4;
-// the card the `cards` judging state is open on: a trump, so the numeral under the name is in the
-// frame as well as a suit would be
+// the card the `cards` judging state is open on. A trump, and the one whose plate is darkest over
+// its whole height, so a critic can see at a glance whether the picture actually arrived
 const JUDGED_CARD = 'the-moon';
 
 export async function build(ctx) {
@@ -148,11 +157,12 @@ export async function build(ctx) {
     /* while the card is turned over, the notice is not drawn at all */
     #help.reading > canvas, #help.cards > canvas { display: none; }
     /* THE PLACARD'S BAND IS NOT THE NOTICE'S. While a card is up he is TEACHING it, and his lesson
-       stands on the caption card at the foot of the frame — so the sheet leaves that band alone and
-       so does the sheet's own pointer catcher, which would otherwise eat the tap that turns his
-       next take. #overlay > * lays this out at inset 0; a class beats it, and --help-band is how
-       much of the foot the placard has taken (layoutCards). */
-    #help.cards { bottom: var(--help-band, 0px); }
+       stands on the caption card — so the sheet leaves that band alone and so does the sheet's own
+       pointer catcher, which would otherwise eat the tap that turns his next take. #overlay > *
+       lays this out at inset 0; a class beats it, and the two variables are how much of the head
+       and of the foot the placard has taken (layoutCards). The card stands at the foot all evening
+       and at the HEAD while a phone has the deck laid out, so both ends have to give way. */
+    #help.cards { top: var(--help-band-top, 0px); bottom: var(--help-band-bottom, 0px); }
   `;
   document.head.appendChild(style);
   const root = document.createElement('div');
@@ -192,16 +202,9 @@ export async function build(ctx) {
   // The user, on the deck laid out face up: "they are so beautiful, users should be able to look at
   // them outside of the drawing." So a tap on a card — one of the seventy-eight on the cloth, or
   // one of the three lying face up after a reading — turns the ? card to a third face with that
-  // plate on it at the size the window allows, and the arrows walk the whole deck from there.
-  // Nothing on the notice's own face says so, and nothing announces it.
-  const view = makeCardView({
-    onControl(key) {
-      gesture();
-      if (key === 'back') closeCards();
-      else if (key === 'next') stepCard(1);
-      else if (key === 'prev') stepCard(-1);
-    },
-  });
+  // plate on it at the size the window allows, and nothing else on the sheet. Nothing on the
+  // notice's own face says so, and nothing announces it.
+  const view = makeCardView();
   root.appendChild(view.el);
 
   let bill = null; // the cut notice: sheet box, control boxes, two plates
@@ -365,8 +368,8 @@ export async function build(ctx) {
     painted = ''; // the notice's plate has not been blitted since the card turned over
     return true;
   }
-  // BACK, Escape, or a finger anywhere off the paper: the room comes back exactly as it was left —
-  // the deck still laid out if it was laid out, the three cards still on the cloth if they were.
+  // Escape, or a finger anywhere off the paper: the room comes back exactly as it was left — the
+  // deck still laid out if it was laid out, the three cards still on the cloth if they were.
   // Nothing here touches either.
   function closeCards() {
     if (!dropCards()) return false;
@@ -378,35 +381,47 @@ export async function build(ctx) {
     ctx.emit?.('help:close');
     return true;
   }
+  // THE DECK, WALKED — for a tool and for nothing else. There is no arrow on the sheet, no key
+  // bound to this and no gesture that reaches it: the user cut the stepping out ("remove the
+  // switching capability when you click the card"), and the reason it may not come back quietly is
+  // that a step announced a new card mid-lesson and cut his line off half-written. So this says
+  // NOTHING — no `help:cards`, no cue — and the lesson on the placard is left exactly as it stands.
   function stepCard(d) {
     if (mode !== 'cards') return null;
     const i = DECK.findIndex((c) => c.slug === view.slug);
     if (i < 0) return null;
     const next = DECK[(i + d + DECK.length) % DECK.length].slug;
     plateReady = view.show(next);
-    cue('deal');
-    // A STEP IS A NEW CARD, so it is said exactly as the first one was. flow listens for this and
-    // asks him to teach whatever is now on the paper — the lesson he was in the middle of stops
-    // where it stands and the next card's begins (flow.js, THE VISITOR HAS PICKED UP A CARD).
-    ctx.emit?.('help:cards', { slug: next });
     return next;
   }
-  // THE FRAME THE SHEET MAY STAND IN. Everything above the placard's top edge — his lesson is said
-  // down there while the picture is up here, and two pieces of paper cannot have the same band. The
-  // caption's place at the foot is the user's settled decision, so the sheet is the one that gives
-  // way; help-cards.js solves the plate inside what is left (see its `free`). A dialogue piece that
+  // THE FRAME THE SHEET MAY STAND IN. Everything on the other side of the placard from the picture —
+  // his lesson is said on that card while the plate is up here, and two pieces of paper cannot have
+  // the same band. The caption's own place is dialogue's to decide (it stands at the foot all
+  // evening, and at the HEAD while a phone has the deck laid out, so that it never covers the cards
+  // the visitor is looking at), so the sheet is the one that gives way at whichever end it is asked
+  // to; help-cards.js solves the plate inside what is left (see its `free`). A dialogue piece that
   // cannot say where its card stands leaves the whole frame, which is the old behaviour exactly.
-  const BAND_GAP = 10; // paper between the sheet's foot and the placard's head
-  function freeHeight(h) {
+  const BAND_GAP = 10; // paper between the sheet's edge and the placard's
+  const MIN_FREE = 180;
+  function bandRoom(h) {
     const b = ctx.pieces.dialogue?.band?.();
-    if (!b || b.at !== 'foot' || !(b.top > 0)) return h;
-    return Math.max(180, Math.min(h, b.top - BAND_GAP));
+    if (!b || !(b.h > 0)) return { top: 0, bottom: 0, free: h };
+    if (b.at === 'head') {
+      const top = Math.max(0, Math.min(h - MIN_FREE, Math.round(b.bottom + BAND_GAP)));
+      return { top, bottom: 0, free: h - top };
+    }
+    if (!(b.top > 0)) return { top: 0, bottom: 0, free: h };
+    const free = Math.max(MIN_FREE, Math.min(h, b.top - BAND_GAP));
+    return { top: 0, bottom: Math.max(0, Math.round(h - free)), free };
   }
+  let bandAt = '';
   function layoutCards() {
     const w = ctx.size?.w || window.innerWidth, h = ctx.size?.h || window.innerHeight;
-    const free = freeHeight(h);
-    root.style.setProperty('--help-band', `${Math.max(0, Math.round(h - free))}px`);
-    view.place(w, h, Math.min(2, window.devicePixelRatio || 1), free);
+    const R = bandRoom(h);
+    bandAt = `${R.top}/${R.bottom}`;
+    root.style.setProperty('--help-band-top', `${R.top}px`);
+    root.style.setProperty('--help-band-bottom', `${R.bottom}px`);
+    view.place(w, h, Math.min(2, window.devicePixelRatio || 1), R.free);
   }
 
   function close() {
@@ -490,6 +505,37 @@ export async function build(ctx) {
       open();
     }
   });
+  // A FINGER ON THE DRAWING, WHILE A CARD IS UP, PUTS THE PAPER DOWN. The user: "the abort can be
+  // just clicking outside of the card." Outside the card is not all inside this piece's own root:
+  // the sheet is cut to stand clear of the placard, so the root is cut with it, and the band the
+  // placard has taken — plus the margin either side of the paper on a phone, where the sheet is 362
+  // px of a 390 px frame — falls through to the canvas instead. The placard takes its own taps when
+  // it is waiting to be turned (dialogue's `.cap.waiting` is the only moment it is not transparent
+  // to a pointer), so this never steals one of those; everything else that lands on the drawing is
+  // a finger off the paper and means what the user said it means.
+  //
+  // It is on the WINDOW, in the capture phase, and it stops what is behind it — and it has to be
+  // there rather than on the canvas, because the tap that OPENS the viewer is a tap on the canvas
+  // too: egg-deck's own listener puts the card up inside that very event, and a second listener on
+  // the same element would then find a card up and shut it again in the same gesture. Capture at
+  // the window runs BEFORE any of that, so what it reads is whether a card was up when the finger
+  // landed. Stopping there also keeps egg-deck from reading the tap as a finger on the bare cloth
+  // and raking the whole lay-out home, and keeps flow from reading it as the visitor skipping ahead
+  // through a line, which a visitor putting a card down did not mean.
+  //
+  // ONLY THE DRAWING. The target must be the glass itself: a tap on this piece's own root is
+  // answered by its click handler below (the margin round the paper), and one on the placard while
+  // it waits to be turned belongs to dialogue.
+  window.addEventListener(
+    'pointerdown',
+    (ev) => {
+      if (mode !== 'cards' || !showing || ev.target !== glass) return;
+      gesture();
+      ev.stopPropagation();
+      closeCards();
+    },
+    true,
+  );
 
   // the notice's own controls, and the paper around them
   root.addEventListener('pointerdown', (e) => {
@@ -531,8 +577,9 @@ export async function build(ctx) {
   }
   root.addEventListener('click', (ev) => {
     if (!showing) return;
-    // THE CARD'S FACE. Its three controls have already answered (they stop the click); a finger on
-    // the plate itself does nothing, and one anywhere off the paper gives the room back — the same
+    // THE CARD'S FACE. There is nothing on the sheet to press: a finger on the paper does nothing,
+    // and one anywhere off it gives the room back — which is the whole of the way out the user
+    // asked for ("the abort can be just clicking outside of the card"), Escape aside. The same
     // manners the notice and the reading keep, except that this face has no notice behind it.
     if (mode === 'cards') {
       const L = view.layout;
@@ -609,11 +656,6 @@ export async function build(ctx) {
       // The card face has no notice behind it — it was turned to from the table — so it gives the
       // room back directly, and gives it back exactly as it was left.
       mode === 'reading' ? toNotice() : close();
-    } else if (mode === 'cards' && showing && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
-      // the deck under the two keys a person's hand is already on
-      ev.preventDefault();
-      ev.stopImmediatePropagation();
-      stepCard(ev.key === 'ArrowRight' ? 1 : -1);
     } else if (ev.key === '?' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
       ev.stopImmediatePropagation();
       showing ? close() : open();
@@ -669,7 +711,10 @@ export async function build(ctx) {
       ready: () => plateReady,
       layout: () => view.layout,
       plateBox: () => view.plateBox(),
-      controlBox: (k) => view.box(k),
+      // the sheet's box on screen, in px — what a finger has to land OFF to put the paper down
+      sheetBox: () => view.sheetBox(),
+      // the band the placard has taken out of the frame while the paper is up, at whichever end
+      band: () => bandRoom(ctx.size?.h || window.innerHeight),
     },
     // one of the reading's own controls as a box on screen in px («DOWNLOAD», «BACK»), or null
     // while it is scrolled out of the card
@@ -754,8 +799,17 @@ export async function build(ctx) {
 
       // the notice, or one of the two other faces of the card — either way, on twos
       if (mode === 'reading') reader.step(parity);
-      else if (mode === 'cards') view.step(parity);
-      else if (showing || anim) paint(poseNow(ctx2), parity);
+      else if (mode === 'cards') {
+        // …AND THE PLACARD MAY HAVE MOVED UNDER IT. It walks from the foot to the head in three
+        // drawings when a phone lays the deck out (dialogue.js, THE DOCK), and the sheet is cut to
+        // stand clear of wherever it is standing — so the band is read on every stepped frame and
+        // the paper is solved again the moment it changes. It is arithmetic, not a measurement
+        // (dialogue's own note on `band`), so this costs nothing on the frames it changes nothing.
+        const h = ctx2.size?.h || window.innerHeight;
+        const R = bandRoom(h);
+        if (`${R.top}/${R.bottom}` !== bandAt) layoutCards();
+        view.step(parity);
+      } else if (showing || anim) paint(poseNow(ctx2), parity);
     },
   };
 }

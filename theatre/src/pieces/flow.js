@@ -50,8 +50,9 @@
 // teaching - in this whole laid out view, whenever a user clicks a card, pepe could explain the suit
 // and the individual cards"). A tap on one of the seventy-eight, or on one of the three lying face
 // up, puts that card on the ? card's paper (help-cards.js); the room answers with a `lesson` beat
-// on it and he teaches it on the placard, under the picture, while the paper stays up. Stepping to
-// another card stops the lesson and starts the next. See THE VISITOR HAS PICKED UP A CARD.
+// on it and he teaches it on the placard, beside the picture, while the paper stays up. One card,
+// one lesson: the viewer has no way to step to another (the user cut it out), so nothing arrives
+// under a line he is still writing. See THE VISITOR HAS PICKED UP A CARD.
 //
 // AND THE READING CAN BE FLIPPED (the user: "we have to be able to flip the reading so the user can
 // pull a tarot for pepe"). The visitor offers, in their own words; he takes the offer by pulling a
@@ -279,21 +280,26 @@ export async function build(ctx) {
   // in this whole laid out view, whenever a user clicks a card, pepe could explain the suit and the
   // individual cards."
   //
-  // So the ? card's third face (help-cards.js) is a LESSON. It announces every card it puts up —
-  // the first tap, and every step of the arrows, the keys and the thumb — and this is where that is
-  // answered: one `lesson` beat per card, played on the placard at the foot of the frame while the
-  // picture stands above it. It is the globe's shape, with three differences, and each of them is
-  // the difference between a remark and a lesson:
+  // So the ? card's third face (help-cards.js) is a LESSON. It announces the card it puts up —
+  // `help:cards`, once, when a tap on the drawing opens it and at no other time — and this is where
+  // that is answered: one `lesson` beat per card, played on the placard while the picture stands
+  // beside it. It is the globe's shape, with three differences, and each of them is the difference
+  // between a remark and a lesson:
   //
   //   THE FIELD DOES NOT OPEN UNDER IT. Every other turn of his ends with the visitor's block open
   //     beneath his last sentence; this one does not, because the visitor is reading a card and a
-  //     caret blinking under it is an invitation to stop. A question can wait for BACK. So it is
-  //     rendered without `keepLast` — every sentence is SAID — and the field opens again, on the
-  //     line they were answering, when the paper goes down.
-  //   IT CAN BE INTERRUPTED BY THE NEXT CARD. Stepping to another card while he is mid-lesson is
-  //     the visitor saying they have heard enough about this one: `teaching` is set again, the
-  //     placard is wiped, the stream is stopped, and `render`'s `stop` ends the turn where it
-  //     stands. What he did say is his and stays in the transcript.
+  //     caret blinking under it is an invitation to stop. A question can wait. So it is rendered
+  //     without `keepLast` — every sentence is SAID — and the field opens again, on the line they
+  //     were answering, when the paper goes down.
+  //   IT ENDS WHEN THE PAPER GOES DOWN, AND IT ENDS CLEANLY. `render`'s `stop` closes the turn
+  //     where it stands: the stream is told to stop writing and nothing further goes up, but the
+  //     sentence already on the card is LEFT STANDING and the placard is never wiped. What he did
+  //     say is his and stays in the transcript. (Rounds up to twelve let the NEXT CARD interrupt a
+  //     lesson too, and the wipe that came with it is what the user saw: "switching the card before
+  //     the explainer happens kind of seems to break the chat window." There is no stepping any
+  //     more. The `again` branch below is kept because the api can still put a second card up, and
+  //     a card arriving under a half-written line would still have to wipe it — but nothing a
+  //     visitor can touch reaches it.)
   //   THE CAMERA DOES NOT MOVE. There is nothing to cut to — the whole frame is a sheet of paper.
   //
   // WITH NO LIVE VOICE none of it happens at all: the viewer shows the card and the placard says
@@ -873,7 +879,7 @@ export async function build(ctx) {
       // A CARD IS UP ON THE PAPER and he is teaching it. The visitor tapped one of the seventy-eight
       // on the cloth, or one of the three lying face up, and the ? card's third face has it (see
       // THE VISITOR HAS PICKED UP A CARD). The lesson is played here, on the placard under the
-      // picture, for as long as they keep the paper up and whatever they step to; when it goes down
+      // picture, for as long as they keep the paper up; when it goes down
       // the field opens again on the line they were answering, with whatever they had typed still
       // in it. It is not a silence — the quiet counter does not move and no waiting line is spent —
       // and `!said` for the globe's reason: the visitor's own words always win the tie.

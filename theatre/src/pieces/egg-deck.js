@@ -723,6 +723,14 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
   canvas?.addEventListener(
     'pointerdown',
     (ev) => {
+      // A CARD IS UP ON THE ? CARD'S PAPER, AND THE TAP IS THE WAY OUT OF IT. The user: "the abort
+      // can be just clicking outside of the card." The paper covers all but a finger's breadth of a
+      // phone, so the room the visitor can actually touch is the margin round it and the placard's
+      // band — and both of those fall through to this canvas. So the deck yields the tap: help.js
+      // has its own listener here (registered after this one, since props is built first) and it
+      // puts the paper down. Without this the tap read as a finger on the bare cloth and raked the
+      // whole lay-out home under the card the visitor was looking at.
+      if (ctx.pieces.help?.cards?.showing) return;
       if (mode === 'shut') return;
       ev.stopPropagation();
       if (mode !== 'open') {

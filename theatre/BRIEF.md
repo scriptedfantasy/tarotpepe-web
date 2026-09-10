@@ -55,6 +55,25 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   out and the visitor is choosing, the card sits at the top; the moment the three are taken it is
   back at the bottom. It is the SAME card, same size, same registers; only its anchor moves. This is
   an exception the user granted, not a licence to move the caption anywhere else.
+  2026-09-10 the user granted the SECOND beat with the same fault, on the same grounds: the whole
+  deck laid face up on the cloth (egg-deck.js). "on mobile we'll need to move the chatbox to the
+  top, as it currently covers some of the cards." Measured on a 390x844 phone: the lay-out runs
+  y 322–838 and the caption at the bottom stands at 628–797, over half the bows. So on a PHONE in
+  portrait it hangs from the top for as long as the rows are out, and drops back the moment the deck
+  is squared. A laptop's frame is wide enough that the caption clears the bows and nothing about its
+  dock changes there. Two beats, both the user's; the caption is at the bottom everywhere else.
+- **The card viewer shows THE CARD AND NOTHING ELSE (the user's decision, 2026-09-10).** A tap on a
+  card in the drawing puts that plate on the ? card's paper (help-cards.js). It used to letter the
+  card's name under it and carry «‹ BACK ›» at the foot, which walked the whole deck — and a step
+  taken while Pepe was still writing about the last card cut his line off half-drawn. The user:
+  "I can only always get the explainer for one card and switching the card before the explainer
+  happens kind of seems to break the chat window. It then comes back afterwards, but it's not clean.
+  So I would suggest we remove the switching capability when you click the card. And I think we can
+  also remove the back and we can also remove the explanation, because we have the explanation
+  afterwards in the chat box, right? The abort can be just clicking outside of the card." So the
+  sheet holds one picture, as large as the paper allows beside the caption's band; the card is named
+  by HIM, in his first line; and the way out is a finger anywhere off the paper, or Escape. Do not
+  put a control back on that sheet.
 - **There is no chair on the visitor's side, and nobody apologises for it.** 2026-09-05, the user:
   "no visitor chair, just remove the text reference to a chair. he can say come closer or something
   like that." His greeting used to seat them — "Please sit. The chair is low; it was made for a

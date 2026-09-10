@@ -59,7 +59,8 @@
 // WHAT THAT COSTS, AND WHAT IT BUYS. The hand is cut for cap heights of 20–40 px and holds down to
 // 14, where the typewriter face was legible at a 9 px cap — so the card's type had to grow, and the
 // card with it (about a quarter taller). Everything else about it is untouched: one object, one
-// measure, bottom-centred, docked to the head for the pick, his green and the visitor's ink, the
+// measure, bottom-centred, docked to the head for the pick (and, on a phone, for the lay-out), his
+// green and the visitor's ink, the
 // two-line registers, the takes, the arrow, the drawn caret.
 //
 // GLYPHS OUTSIDE THE CASE. He answers in the visitor's language, so a line arrives with sorts no
@@ -151,8 +152,8 @@
 //                                              line off the card without putting another in its place
 //   anchors                                    {shot: {x, y, w, floor}} — editable; flow.js sets the same
 //   band() → {at, top, bottom, h, w}           the strip of the frame the card stands in, in px,
-//                                              whether or not a word is on it (help-cards.js cuts
-//                                              its sheet to end above it)
+//                                              whether or not a word is on it (help.js cuts the
+//                                              card viewer's sheet to stand clear of it)
 //   setState(name)                             greeting | question | reading | thinking | farewell (+ any script key)
 import { SCRIPT, lineFor, linesFor, reply as scriptReply, POSITIONS, positionKey } from './script.js';
 import { bySlug } from '../core/deck.js';
@@ -301,6 +302,14 @@ const PEPE_GREEN = '#3a7736';
 // So while the spread is out and the visitor is choosing, the SAME card — same measure, same two
 // registers, same drawn edge, same type; only its anchor moves — stands at the top of the frame.
 // The moment the third card is taken it is back at the foot.
+//
+// AND THERE IS A SECOND BEAT WITH THE SAME PROBLEM, granted by the user on the same grounds: the
+// EGG's lay-out, the whole deck face up on the cloth (egg-deck.js). "on mobile we'll need to move
+// the chatbox to the top, as it currently covers some of the cards." Seventy-eight cards run to the
+// rim of the table, so on a phone in portrait the bottom bows are under the placard exactly as the
+// spread was; the card hangs from the head for as long as the rows are out and drops back to the
+// foot when they are squared. A laptop's frame is wide enough that the placard clears the bows, so
+// nothing about the dock changes there — the exception is for the phone, and only for the phone.
 //
 // The line it hangs from: the same 5.5% margin the floor keeps at the bottom, and never inside a
 // letterbox bar.
@@ -763,14 +772,34 @@ export async function build(ctx) {
   let travelFrom = 0, travelTo = 0;
   let lastShot = null;
   const headFrac = () => Math.max(HEAD, barFrac() + 0.028);
+  // A PHONE, HELD UP: narrower than the measure this piece already calls narrow, and taller than it
+  // is wide. A laptop turned on its side is not one of these and neither is a tablet.
+  function phonePortrait() {
+    const W = ctx.size?.w || window.innerWidth || 1600;
+    const H = ctx.size?.h || window.innerHeight || 900;
+    return W <= PHONE && W < H;
+  }
   function picking() {
-    // …AND NEVER WHILE A CARD IS UP ON THE ? CARD'S PAPER. The visitor has picked one out of the
-    // lay-out to look at and he is teaching it (help-cards.js, flow.js), which means his words are
-    // on this card while a sheet of paper fills the picture above it. The sheet is cut to end above
-    // the placard's top edge, and it is cut for the placard AT THE FOOT — so the head is not on
-    // offer here, whatever the camera is doing. (The lay-out is staged in `fan`, which is a spread
-    // shot with nothing picked out of it, so without this the dock would take the card to the head
-    // and stand it on top of the picture it is describing.)
+    // A PHONE WITH THE DECK LAID OUT DOCKS TOO, and it is the same reason the pick docks. The user,
+    // on the lay-out: "on mobile we'll need to move the chatbox to the top, as it currently covers
+    // some of the cards." Seventy-eight cards fill the cloth to its rim and the bottom bows are
+    // exactly where the placard stands, so on a phone in portrait the card hangs from the head for
+    // as long as the rows are out — including the rake home, where they are still on the cloth —
+    // and drops back to the foot the moment the deck is squared again. On a laptop the frame is
+    // wide enough that the placard stands clear of the bows and nothing about the dock changes.
+    // This is decided BEFORE the two tests below, because the card viewer and the lay-out are
+    // exactly the case it is for: the sheet is cut to stand clear of the placard at whichever end
+    // it is (help.js, bandRoom), so the plate simply gets the space under it. It keeps the pick's
+    // own shot test for the pick's own reason — the camera may cut to him for an answer in the
+    // middle of all this, and a frame with no cards in it has nothing for the card to cover.
+    if (phonePortrait() && ctx.pieces.props?.deck?.out && SPREAD_SHOTS.includes(shotName())) return true;
+    // …AND OTHERWISE NEVER WHILE A CARD IS UP ON THE ? CARD'S PAPER. The visitor has picked one out
+    // of the lay-out to look at and he is teaching it (help-cards.js, flow.js), which means his
+    // words are on this card while a sheet of paper fills the picture beside it. On a laptop that
+    // sheet is cut for the placard AT THE FOOT — so the head is not on offer there, whatever the
+    // camera is doing. (The lay-out is staged in `fan`, which is a spread shot with nothing picked
+    // out of it, so without this the dock would take the card to the head and stand it on top of
+    // the picture it is describing.)
     if (ctx.pieces.help?.cards?.showing) return false;
     // …nor while the EGG's lay-out is on the cloth (egg-deck.js): that is staged in `fan` too, and
     // reveal has nothing picked out of it, so this test would read it as the pick beat and take the
@@ -1446,10 +1475,12 @@ export async function build(ctx) {
     // of his, two of theirs, the gap and the two paddings, in ems of the hand this measure is cut in
     // — so the answer is the same whether the card is up or the paper is bare, and a piece laying
     // itself out around the placard is not made to wait for him to speak first. `at` says which
-    // edge it hangs from: 'foot' all evening, 'head' only through the pick (see THE DOCK).
+    // edge it hangs from: 'foot' all evening, 'head' through the pick and, on a phone, for as long
+    // as the deck is laid out (see THE DOCK).
     //
-    // help-cards.js asks: the card viewer's sheet is cut to end above `top`, so his lesson about the
-    // card in the picture has somewhere to stand.
+    // help.js asks: the card viewer's sheet is cut to end clear of this band — above `top` at the
+    // foot, below `bottom` at the head — so his lesson about the card in the picture has somewhere
+    // to stand, whichever end he is standing at.
     band() {
       const H = ctx.size?.h || window.innerHeight || 900;
       const em = hand?.em ?? capForCard(cardW || 300) / 0.72;
