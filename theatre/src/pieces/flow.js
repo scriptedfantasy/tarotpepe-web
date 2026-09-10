@@ -982,8 +982,10 @@ export async function build(ctx) {
   }
 
   // ---- a finger on a card that is already lying there --------------------------------------------------
-  // The second road to `revisit`, and the one a visitor reaches for without being told: the cards
-  // are objects on a table, so touching one should bring it up to be looked at.
+  // The one a visitor reaches for without being told: the cards are objects on a table, so touching
+  // one should bring it up to be looked at. It used to be the second road to `revisit`; it is now
+  // the road to the card viewer (help-cards.js) — the plate as printed, on the ? card's paper — and
+  // `revisit` is left to the words, where the mind reports the intent. See onPointer.
   //
   // Nothing is asked of reveal for this. `reveal.picks` holds {slug, mesh} for each card it laid,
   // and the meshes stay in the scene until a new fan is dealt, so the hit test is ours: a raycast
@@ -1052,6 +1054,16 @@ export async function build(ctx) {
     if (cardsLive() && tapped == null) {
       const i = cardAt(e);
       if (i != null) {
+        // THE CARD VIEWER TAKES IT. A finger on a card lying face up means "let me see that card",
+        // and the ? card's paper answers it with the plate as printed (help-cards.js) — which is
+        // what the user asked for when they saw the deck laid out: "users should be able to look at
+        // them outside of the drawing." The two answers cannot both have the frame: the recall cuts
+        // to the card, walks the intertitle and puts his line on the placard, and every one of those
+        // is BEHIND the paper. So the viewer wins and the recall is skipped — the field is left open
+        // with whatever they had typed still in it, nothing is spent, and a recall is still one
+        // sentence away: "tell me about the second one" goes to the mind as it always did.
+        const slug = (R?.picks ?? []).filter((p) => p?.mesh)[i]?.slug;
+        if (slug && P.help?.cards?.open?.(slug)) return;
         // their own card, touched: it is not a skip and it does not count as a click
         tapped = i;
         askAbort?.abort();

@@ -6,8 +6,9 @@
 // click   a real mouse click on the squared deck, on a live page: does it open, on which plate,
 //         and does the cursor say so before the click does
 // frames  the lay-out at 1 s, 2.5 s and complete, with the 78 counted off their own meshes
-// look    the hover pop, a tap bringing a card to the lens with its name on the placard, and the
-//         second tap putting it back
+// look    the hover pop, and the insert — show()/hide() bringing a card to the lens at full size
+//         with its name on the placard and putting it back. (A TAP goes to the card viewer now,
+//         not to the lens: tools/_card-viewer-proof.mjs proves that road.)
 // deck    a real run at 12 fps with every mesh, pose, scale, material and texture window of the
 //         deck compared before and after, and the home plate pixel-compared
 // busy    the click refused mid-reading; a draw intent raking the lay-out home on its own; and a
@@ -183,8 +184,12 @@ if (has('click') || has('frames') || has('look')) {
     say(
       `look: the pointer on ${where.slug} — it comes UP the frame ${((where.before.z - popped.z) * 1000).toFixed(1)} mm and off the cloth ${((popped.y - where.before.y) * 1000).toFixed(1)} mm, cursor "${popped.cursor}"  → ${OUT}/hover.png`,
     );
-    // THE TAP. It goes to the lens, and the placard names it.
-    await page.mouse.click(where.px, where.py);
+    // THE INSERT. A TAP NO LONGER GOES HERE: the user asked to be able to look at the cards
+    // "outside of the drawing", so a finger on one of the seventy-eight turns the ? card to the
+    // card viewer instead (src/pieces/help-cards.js, proved by tools/_card-viewer-proof.mjs). The
+    // insert is still the piece's own — `props.deck.show(slug)` — and it is still what answers when
+    // there is no notice to take the tap, so it is still measured, by name rather than by finger.
+    await page.evaluate((s) => window.__theatre.pieces.props.deck.show(s), where.slug);
     await settle(page, AT_LENS, where.slug);
     const up = await page.evaluate(() => {
       const ctx = window.__theatre;
@@ -212,10 +217,10 @@ if (has('click') || has('frames') || has('look')) {
     });
     await page.screenshot({ path: `${OUT}/insert.png`, timeout: 120000 });
     say(
-      `look: the tap brings ${up.card} to the lens — ${up.toLens} m from it, at ${up.scale} (full size), ${up.w.toFixed(0)}x${up.h.toFixed(0)} px of a 1600x900 frame (${((up.h / 900) * 100).toFixed(0)}% of the short axis) · the placard reads "${up.placard}"  → ${OUT}/insert.png`,
+      `look: show() brings ${up.card} to the lens — ${up.toLens} m from it, at ${up.scale} (full size), ${up.w.toFixed(0)}x${up.h.toFixed(0)} px of a 1600x900 frame (${((up.h / 900) * 100).toFixed(0)}% of the short axis) · the placard reads "${up.placard}"  → ${OUT}/insert.png`,
     );
-    // …and a second tap puts it back
-    await page.mouse.click(where.px, where.py);
+    // …and hide() puts it back
+    await page.evaluate(() => window.__theatre.pieces.props.deck.hide());
     await settle(page, AT_REST, where.slug);
     const back = await page.evaluate(() => {
       const ctx = window.__theatre;
@@ -224,7 +229,7 @@ if (has('click') || has('frames') || has('look')) {
       const v = m.getWorldPosition(new ctx.THREE.Vector3());
       return { card: ctx.pieces.props.deck.card, phase: ctx.pieces.props.deck.phase, z: +v.z.toFixed(4), scale: +m.scale.x.toFixed(3) };
     });
-    say(`look: a second tap puts it back — card=${back.card}, phase ${back.phase}, at z ${back.z} and ${back.scale} of its size again${E(errors)}`);
+    say(`look: hide() puts it back — card=${back.card}, phase ${back.phase}, at z ${back.z} and ${back.scale} of its size again${E(errors)}`);
   }
   await page.close();
 }

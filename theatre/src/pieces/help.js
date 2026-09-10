@@ -38,19 +38,30 @@
 // the tap that used to happen at once (share sheet on a phone, a file on a laptop, inside the
 // gesture either way) and «BACK» puts the notice up as it was.
 //
+// AND A THIRD FACE, which is not reached from the notice at all. The user, on the deck laid out on
+// the cloth: "they are so beautiful, users should be able to look at them outside of the drawing."
+// So a tap on a card in the drawing — one of egg-deck's seventy-eight, or one of the three lying
+// face up after a reading — turns this same piece of paper to a card viewer: help-cards.js, one
+// plate as printed at the size the window allows, its name under it, and arrows at the foot that
+// walk the whole deck. It is a CUT in and a cut out, and it gives the room back exactly as it was
+// left. Nothing on the notice's own face mentions it and nothing announces it.
+//
 // API: open() · close() · toggle() · showing · reading · hitBox() (the board's box on screen, in px)
-//      states: closed · hover (the board under a pointer) · open
+//      cards: open(slug) · close() · next() · prev() · slug
+//      states: closed · hover (the board under a pointer) · open · cards
 import * as THREE from 'three';
 import { PAPER, drawTexture, inkMaterial, inkLine } from '../core/strokes.js';
 import { signCaps } from './titles-sign.js';
 import { cutBill } from './help-bill.js';
 import { makeReader } from './help-read.js';
+import { makeCardView } from './help-cards.js';
 import * as keep from './help-keep.js';
+import { DECK, bySlug } from '../core/deck.js';
 
 export const meta = {
   name: 'help',
-  judge: { shot: 'home', states: ['closed', 'hover', 'open'] },
-  files: ['src/pieces/help.js', 'src/pieces/help-bill.js', 'src/pieces/help-keep.js', 'src/pieces/help-read.js'],
+  judge: { shot: 'home', states: ['closed', 'hover', 'open', 'cards'] },
+  files: ['src/pieces/help.js', 'src/pieces/help-bill.js', 'src/pieces/help-keep.js', 'src/pieces/help-read.js', 'src/pieces/help-cards.js'],
 };
 
 const HOLD = 2 / 12; // every drawing is on twos
@@ -74,6 +85,9 @@ const NOD_EVERY = 9; // seconds
 // …and it asks four times. A visitor who has not looked up at the board by then is not going to,
 // and a sign that keeps twitching all evening is a sign nobody can stop looking at.
 const NOD_TIMES = 4;
+// the card the `cards` judging state is open on: a trump, so the numeral under the name is in the
+// frame as well as a suit would be
+const JUDGED_CARD = 'the-moon';
 
 export async function build(ctx) {
   const sign = ctx.pieces.props?.sign ?? null;
@@ -123,7 +137,7 @@ export async function build(ctx) {
     /* the notice's own plate, and only it: the reading's card hangs its own canvases inside #help */
     #help > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
     /* while the card is turned over, the notice is not drawn at all */
-    #help.reading > canvas { display: none; }
+    #help.reading > canvas, #help.cards > canvas { display: none; }
   `;
   document.head.appendChild(style);
   const root = document.createElement('div');
@@ -156,6 +170,24 @@ export async function build(ctx) {
     },
   });
   root.appendChild(reader.el);
+
+  // ---------------------------------------------------------------------------------------------
+  // 2c. THE THIRD FACE OF THE CARD — one tarot card, as printed (help-cards.js)
+  // ---------------------------------------------------------------------------------------------
+  // The user, on the deck laid out face up: "they are so beautiful, users should be able to look at
+  // them outside of the drawing." So a tap on a card — one of the seventy-eight on the cloth, or
+  // one of the three lying face up after a reading — turns the ? card to a third face with that
+  // plate on it at the size the window allows, and the arrows walk the whole deck from there.
+  // Nothing on the notice's own face says so, and nothing announces it.
+  const view = makeCardView({
+    onControl(key) {
+      gesture();
+      if (key === 'back') closeCards();
+      else if (key === 'next') stepCard(1);
+      else if (key === 'prev') stepCard(-1);
+    },
+  });
+  root.appendChild(view.el);
 
   let bill = null; // the cut notice: sheet box, control boxes, two plates
   let cutAt = '';
@@ -285,8 +317,73 @@ export async function build(ctx) {
     reader.place(w, h, Math.min(2, window.devicePixelRatio || 1));
   }
 
+  // ---- and the third face: one card, as printed ------------------------------------------------
+  // It arrives as a CUT and it leaves as one. The notice comes up off the bottom of the frame
+  // because a hand is laying it down in front of you; this face is not laid down, it is turned to —
+  // the visitor tapped a card and the card is what they get, in the same drawing.
+  let plateReady = Promise.resolve(false);
+  let downFace = null; // which face of the card the pointer last came down on
+  function toCards(slug) {
+    if (!bySlug[slug]) return false;
+    downFace = null;
+    dropReading();
+    const was = mode;
+    mode = 'cards';
+    if (!showing) {
+      showing = true;
+      anim = null;
+      pose = UP[UP.length - 1];
+      root.classList.remove('going');
+      root.classList.add('up');
+    }
+    root.classList.add('cards');
+    layoutCards();
+    plateReady = view.show(slug);
+    if (was !== 'cards') cue('flip');
+    ctx.emit?.('help:cards', { slug });
+    return true;
+  }
+  function dropCards() {
+    if (mode !== 'cards') return false;
+    mode = 'notice';
+    root.classList.remove('cards');
+    painted = ''; // the notice's plate has not been blitted since the card turned over
+    return true;
+  }
+  // BACK, Escape, or a finger anywhere off the paper: the room comes back exactly as it was left —
+  // the deck still laid out if it was laid out, the three cards still on the cloth if they were.
+  // Nothing here touches either.
+  function closeCards() {
+    if (!dropCards()) return false;
+    showing = false;
+    anim = null;
+    pose = DOWN[DOWN.length - 1];
+    root.classList.remove('up', 'going');
+    cue('settle');
+    ctx.emit?.('help:close');
+    return true;
+  }
+  function stepCard(d) {
+    if (mode !== 'cards') return null;
+    const i = DECK.findIndex((c) => c.slug === view.slug);
+    if (i < 0) return null;
+    const next = DECK[(i + d + DECK.length) % DECK.length].slug;
+    plateReady = view.show(next);
+    cue('deal');
+    return next;
+  }
+  function layoutCards() {
+    const w = ctx.size?.w || window.innerWidth, h = ctx.size?.h || window.innerHeight;
+    view.place(w, h, Math.min(2, window.devicePixelRatio || 1));
+  }
+
   function close() {
     if (!showing) return;
+    // the card face is not put down through the notice: it is a cut both ways (closeCards)
+    if (mode === 'cards') {
+      closeCards();
+      return;
+    }
     dropReading();
     showing = false;
     root.classList.add('going');
@@ -298,6 +395,7 @@ export async function build(ctx) {
   function jump(open_) {
     anim = null;
     dropReading();
+    dropCards();
     showing = open_;
     read = read || open_;
     pose = open_ ? UP[UP.length - 1] : DOWN[DOWN.length - 1];
@@ -364,8 +462,13 @@ export async function build(ctx) {
   // the notice's own controls, and the paper around them
   root.addEventListener('pointerdown', (e) => {
     gesture();
+    // WHICH FACE THE POINTER CAME DOWN ON. The card viewer is opened by a tap on the DRAWING, and
+    // that tap's own click must not then be read as a click on the paper that has just appeared
+    // under it — a card near the edge of a wide frame would open the viewer and shut it in the same
+    // gesture. A click only counts against the card face if its pointer came down on the card face.
+    downFace = mode;
     e.stopPropagation();
-    if (mode === 'reading') return; // the card's own controls answer for themselves
+    if (mode === 'reading' || mode === 'cards') return; // the card's own controls answer for themselves
     // a thumb coming down on «KEEP THIS READING» starts the sheet if the notice's own opening did
     // not — the reading it turns to then has its pages already drawn
     try {
@@ -396,6 +499,18 @@ export async function build(ctx) {
   }
   root.addEventListener('click', (ev) => {
     if (!showing) return;
+    // THE CARD'S FACE. Its three controls have already answered (they stop the click); a finger on
+    // the plate itself does nothing, and one anywhere off the paper gives the room back — the same
+    // manners the notice and the reading keep, except that this face has no notice behind it.
+    if (mode === 'cards') {
+      const L = view.layout;
+      if (!L || downFace !== 'cards') return; // the tap that opened it is not a tap on it
+      downFace = null;
+      const r = root.getBoundingClientRect();
+      const x = ev.clientX - r.left, y = ev.clientY - r.top;
+      if (x < L.card.x || x > L.card.x + L.card.w || y < L.card.y || y > L.card.y + L.card.h) closeCards();
+      return;
+    }
     // THE READING'S FACE. Its two controls are the card's own and have already answered (they stop
     // the click); everything left is either the paper of the reading, which does nothing, or the
     // room around it, which turns the card back over — the same manners the notice keeps.
@@ -458,8 +573,15 @@ export async function build(ctx) {
     if (tag_ === 'INPUT' || tag_ === 'TEXTAREA') return; // he is being written to
     if (ev.key === 'Escape' && showing) {
       ev.stopImmediatePropagation();
-      // one step back at a time: the reading gives the notice back, the notice gives the room back
+      // one step back at a time: the reading gives the notice back, the notice gives the room back.
+      // The card face has no notice behind it — it was turned to from the table — so it gives the
+      // room back directly, and gives it back exactly as it was left.
       mode === 'reading' ? toNotice() : close();
+    } else if (mode === 'cards' && showing && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+      // the deck under the two keys a person's hand is already on
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      stepCard(ev.key === 'ArrowRight' ? 1 : -1);
     } else if (ev.key === '?' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
       ev.stopImmediatePropagation();
       showing ? close() : open();
@@ -469,6 +591,7 @@ export async function build(ctx) {
     cutAt = '';
     if (showing || anim) cut();
     if (mode === 'reading') layoutReader(); // the card is re-cut and the pages re-scaled to it
+    if (mode === 'cards') layoutCards(); // …and the plate is solved again for the window that is up
   });
 
   // ---------------------------------------------------------------------------------------------
@@ -494,6 +617,28 @@ export async function build(ctx) {
     },
     showReading: toReading,
     hideReading: toNotice,
+    // THE CARD VIEWER, on the third face of the ? card. `open(slug)` is what a tap on a card in the
+    // drawing calls — egg-deck's seventy-eight, and flow's three lying face up after a reading.
+    cards: {
+      open: (slug) => toCards(slug),
+      close: () => closeCards(),
+      next: () => stepCard(1),
+      prev: () => stepCard(-1),
+      get showing() {
+        return mode === 'cards';
+      },
+      get slug() {
+        return mode === 'cards' ? view.slug : null;
+      },
+      get card() {
+        return mode === 'cards' ? view.card : null;
+      },
+      // the plate having actually arrived — a tool, and the judging still, wait on this
+      ready: () => plateReady,
+      layout: () => view.layout,
+      plateBox: () => view.plateBox(),
+      controlBox: (k) => view.box(k),
+    },
     // one of the reading's own controls as a box on screen in px («DOWNLOAD», «BACK»), or null
     // while it is scrolled out of the card
     readControlBox: (k) => reader.box(k),
@@ -527,13 +672,22 @@ export async function build(ctx) {
       return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
     },
 
-    setState(name) {
+    async setState(name) {
       if (name === 'open') {
         jump(true);
         cut();
         paint(UP[UP.length - 1], 0);
         setHover(false);
         tip = tipTarget = 0;
+      } else if (name === 'cards') {
+        // the viewer, open on a fixed card, at the top of the two — and the plate is AWAITED, so a
+        // judged frame is never the paper with a hole where the picture goes
+        jump(false);
+        setHover(false);
+        tip = tipTarget = 0;
+        toCards(JUDGED_CARD);
+        view.step(0);
+        await plateReady;
       } else if (name === 'hover') {
         jump(false);
         hover = true;
@@ -566,8 +720,9 @@ export async function build(ctx) {
         sign.pivot.rotation.x = a;
       }
 
-      // the notice, or the reading on the other side of it — either way, on twos
+      // the notice, or one of the two other faces of the card — either way, on twos
       if (mode === 'reading') reader.step(parity);
+      else if (mode === 'cards') view.step(parity);
       else if (showing || anim) paint(poseNow(ctx2), parity);
     },
   };

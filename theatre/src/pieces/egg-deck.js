@@ -373,6 +373,13 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
   // THE PLACARD IS ONLY TAKEN DOWN IF THIS PIECE PUT IT UP. His last sentence may still be standing
   // when the visitor clicks the deck, and clearing the paper on the way out would wipe a line
   // nobody had finished reading.
+  // …and if the visitor is looking at one of these cards on the ? card's paper when the rows are
+  // raked home — because they asked for a reading, or the evening took the deck over — the paper
+  // goes first. It has nothing under it any more.
+  function viewerHome() {
+    const V = ctx.pieces.help?.cards;
+    if (V?.showing) V.close();
+  }
   let named = false;
   function unname() {
     if (!named) return;
@@ -500,6 +507,7 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
     if (hold == null && (busyBeat() || takenOver())) {
       mode = 'shut';
       frame0 = -1;
+      viewerHome();
       restore();
       say('shut');
       return;
@@ -633,6 +641,46 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
     const w = Math.max(b.w, MIN_TAP), h = Math.max(b.h, MIN_TAP);
     return { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h, grown: w > b.w || h > b.h };
   }
+  // THE DECK ANSWERS FOR WHAT IS LYING IN FRONT OF IT. The arbiter (props.js) only knows about
+  // switches, and a reading's three cards are not switches — they are flow's, and a finger on one
+  // of them means that card and nothing else. The deck's box is the projection of the eight corners
+  // of a rotated stack, which is a good deal larger than the stack's own silhouette and, at the
+  // conversation's framing, covers the middle of the row; so the pointer was landing on the deck
+  // and laying the whole thing out when the visitor had touched their own card. The deck says no
+  // itself: a card of theirs at that point, or within a finger's width of it, takes the touch.
+  function pointerHit(px, py) {
+    if (!canvas) return false;
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    ndc.set((px / r.width) * 2 - 1, -(py / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, ctx.camera);
+    const deck = deckOf();
+    const mine = deck ? ray.intersectObject(deck, true)[0] : null;
+    const b = tapBox();
+    const inBox = !!b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
+    if (!mine && !inBox) return false;
+    // what a reading has left on the cloth: reveal's own picks first — those are the meshes flow
+    // hit-tests — and the cards piece's laid ones, which are the same three by another road
+    const drawn = [
+      ...(ctx.pieces.reveal?.picks ?? []).map((p) => p?.mesh).filter(Boolean),
+      ...(cards()?.drawn?.children ?? []),
+    ].filter((m, i, a) => m.visible && a.indexOf(m) === i);
+    if (drawn.length) {
+      const theirs = ray.intersectObjects(drawn, true)[0];
+      if (theirs && (!mine || theirs.distance <= mine.distance)) return false;
+      // …and the near miss, read the way flow reads one and for the same reason: a laid card is
+      // about forty pixels wide where the conversation sits and a finger is wider than that. It is
+      // read whether or not the deck is under the pointer as well — the deck is a hand's breadth of
+      // table and their card is the size of a stamp, so the tie goes to the card every time.
+      const reach = Math.max(26, Math.min(r.width, r.height) * 0.05);
+      for (const m of drawn) {
+        m.getWorldPosition(_v).project(ctx.camera);
+        if (_v.z > 1) continue;
+        if (Math.hypot(((_v.x + 1) / 2) * r.width - px, ((1 - _v.y) / 2) * r.height - py) < reach) return false;
+      }
+    }
+    return true;
+  }
 
   // ── the pointer, while the deck is out ───────────────────────────────────────────────────────
   // The arbiter (props.js → SWITCHES) owns the click that OPENS it: the deck is an object like the
@@ -687,7 +735,14 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
       }
       const i = cardAt(ev);
       if (i == null) api.close();
-      else api.show(DECK[i].slug);
+      // A TAP GOES TO THE PAPER NOW, NOT TO THE LENS. The insert below is still what a card at its
+      // full size looks like INSIDE the drawing — lit by the room's key, bent on its own sheet, the
+      // ink pass over it, and at most three quarters of the frame — and the user, seeing the
+      // lay-out, asked for the other thing: "they are so beautiful, users should be able to look at
+      // them outside of the drawing." So the ? card's paper takes the tap (help-cards.js) and the
+      // rows stay exactly as they are underneath it. `show()` keeps the insert for anything that
+      // asks for it by name, and answers when the notice is not there to take it.
+      else if (!ctx.pieces.help?.cards?.open?.(DECK[i].slug)) api.show(DECK[i].slug);
     },
     true,
   );
@@ -743,6 +798,8 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
     },
     hitBox,
     tapBox,
+    // whether a pointer at (px, py) would open the deck — the arbiter's own test, for a tool
+    wouldOpen: (px, py) => mode === 'shut' && idle() && pointerHit(px, py),
     // where the seventy-eight lie, in world metres, for a tool that wants to measure the lay-out
     get poses() {
       return plan ? plan.poses.map((p, i) => ({ i, slug: DECK[i].slug, ...p })) : null;
@@ -765,6 +822,7 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
     // THE RAKE. The rows slide home in the order they were laid, in reverse.
     close() {
       if (mode === 'shut' || mode === 'gather') return false;
+      viewerHome();
       if (insert) {
         mesh[insert.i] && applyRest(insert.i, mesh[insert.i], 0);
         insert = null;
@@ -857,6 +915,8 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
     name: 'deck',
     object: () => (mode === 'shut' ? deckOf() : group),
     tapBox: () => (mode === 'shut' ? tapBox() : null),
+    // its own test, so that a reading's cards can win it (pointerHit)
+    hit: (px, py) => mode === 'shut' && pointerHit(px, py),
     enabled: () => (mode === 'shut' ? idle() : false), // once it is out, the capture listener has it
     // the sheet of 78 faces is fetched while the pointer is still on the stack, so the lay-out does
     // not start with a bow of blank cards on a cold cache
