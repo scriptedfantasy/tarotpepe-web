@@ -335,6 +335,13 @@ export async function build(ctx) {
         tools: Array.isArray(tools) && tools.length ? tools : undefined,
         // what he said the reading was for when he pulled deal_cards, spent on the shuffle line
         about: beat === 'shuffle' && talk.about ? talk.about : undefined,
+        // WHICH PATH THEY TOOK AT THE DOOR (src/pieces/egg-cross.js). null until the visitor has
+        // clicked the cross over the door, watched the storm come in and chosen one of the two roads
+        // in the doorway; 'light' or 'dark' from then on, for the rest of the evening. It rides on
+        // EVERY turn and not on a beat of its own, because it is not an event — it is a thing that
+        // is now true about this visitor, like the cards on the cloth, and the server turns it into
+        // one sentence of the room's note (server/pepe.mjs, pathLine).
+        path: ctx.pieces.props?.cross?.path ?? null,
       };
       if (beat === 'shuffle') talk.about = null;
       // counted once, whether the answer comes from the model or from the script

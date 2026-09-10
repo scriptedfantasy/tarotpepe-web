@@ -657,6 +657,19 @@ function situation(b, names = []) {
   }
 }
 
+// WHAT HAPPENED AT THE DOOR. The cross over the door was clicked, the storm came in, the door swung
+// open on a crossroads and the visitor took one of the two roads (src/pieces/egg-cross.js). It is
+// not a beat: it is a thing that is now TRUE about this visitor, so it rides on every turn from then
+// on, exactly as the cards on the cloth do, and it is one plain sentence with no instruction in it —
+// he is told what happened and left to decide whether it is worth a word. Most evenings it is worth
+// nothing at all, and that is the correct outcome for an egg.
+function pathLine(b) {
+  const p = b?.path;
+  if (p === 'light') return ' The visitor chose the light path at the door: the road to the castle on the hill, in the sun.';
+  if (p === 'dark') return ' The visitor chose the dark path at the door: the road to the castle on the crag, under the lightning. The storm has not let up since.';
+  return '';
+}
+
 // The messages array: history as alternating turns (first is always the visitor), then the last
 // user turn = what the visitor just said (if anything) + the room's note for this turn — a stage
 // direction in the beats build, a statement of what is true in the room build.
@@ -673,7 +686,7 @@ function buildMessages(b, names = [], style = DEFAULT_STYLE) {
   if (!hist.length || hist[0].role !== 'visitor') push('user', '[The door opens. The visitor comes in and stands across the table.]');
   for (const h of hist) push(h?.role === 'pepe' ? 'assistant' : 'user', h?.text);
   const said = String(b.user ?? b.question ?? '').trim();
-  const note = situation(b, names);
+  const note = situation(b, names) + pathLine(b);
   push('user', `${said ? said + '\n\n' : ''}[${note}]`);
   return msgs;
 }
