@@ -48,7 +48,7 @@ import { eggCross } from './egg-cross.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain', 'peep-fallen', 'konami-house', 'cross-storm', 'cross-dark'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain', 'peep-fallen', 'konami-house', 'cross-storm', 'cross-out', 'cross-dark'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
@@ -1024,8 +1024,11 @@ export async function build(ctx) {
     // THE CROSS on the frieze over the door. `phase` is shut / storm / open / closing / dark,
     // `path` what the visitor chose at the fork (null until they do), `click()` works the cross as
     // a pointer does — rain, lightning, thunder, the swing and all — `choose('light'|'dark')` takes
-    // a path as a click on it does, `set(phase)` puts it there for a still with no cue, and
-    // hitBox/tapBox are the cross's box on the glass and the box a thumb is given.
+    // a road as a click on it does, `set(phase)` puts it there for a still with no cue, and
+    // hitBox/tapBox are the cross's box on the glass and the box a thumb is given. Once the leaf is
+    // open the ROOM CUTS THROUGH THE DOOR to the camera's `crossroads` shot, where a drawn plate
+    // outside the wall is the whole frame: `out` says whether it is up, `pathBox('left'|'right')`
+    // is that road's ground on the glass, and `at(u, v)` is any point of the drawing in pixels.
     cross: CROSS,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
@@ -1118,8 +1121,9 @@ export async function build(ctx) {
       // `konami-house` is the house of cards standing on the cloth; every other name puts the deck
       // back exactly as it was
       KONAMI.setState(name);
-      // `cross-storm` is the door open on the crossroads mid-strike, `cross-dark` the storm that
-      // stayed; every other name is a cross on a wall nobody has touched.
+      // `cross-storm` is the door open on the weather, seen from the room; `cross-out` is the
+      // crossroads itself, the room having cut through the door and out to the plate; `cross-dark`
+      // the storm that stayed. Every other name is a cross on a wall nobody has touched.
       CROSS.setState(name);
     },
     update(ctx) {

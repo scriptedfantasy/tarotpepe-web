@@ -118,6 +118,13 @@
 //     out into bare floorboards the top anchor moves up instead and the pendant comes back in.
 import { fit, place, tanHalf } from './camera-frame.js';
 import { plate, CAP_BAND } from './camera-plan.js';
+// …and one shot this file does not compose: `crossroads`, where the camera stands IN the doorway
+// with its back to the parlour and a drawn plate 6.28 m outside the wall fills the frame. It is
+// solved by a COVER fit rather than by `fit` — the plate must never show an edge, so the lens opens
+// until the sheet just covers the window instead of until the contents just fit inside it — and the
+// sheet's own size is what that solver needs, so the numbers and the solver live together in
+// src/pieces/egg-cross-plate.js, which holds nothing but constants and arithmetic.
+import { crossroadsShot } from './egg-cross-plate.js';
 
 // ---- the tabletop: WHAT IS ACTUALLY ON THE CLOTH (round 7) ----------------------------------------
 // Round 6 wrote the business down as two constants — a row 0.85 m wide and a ribbon reaching 0.571 —
@@ -562,6 +569,14 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
       optional: [PEPE_BOX],
       pad: 0.16,
     }),
+    // THROUGH the door, which is the one shot in the film that is not in the room. The cross over
+    // the door lets the weather in, the leaf swings, and two drawings later the room cuts here: the
+    // camera standing in the opening at 1.45 m, looking straight out along its own centre line, and
+    // a drawn plate 6.28 m away filling the frame with a crossroads. Solved for the window by a
+    // cover fit (egg-cross-plate.js) — 29.7 deg at 16:9, 44.7 on a phone held upright — so the
+    // sheet's edges cannot appear at any shape. Nothing of the parlour is in it: the lining stands
+    // two centimetres behind the lens.
+    crossroads: crossroadsShot(aspect),
     // the window: the door's frame slid across the back wall, MIRRORED rather than solved again —
     // the lateral track runs between the two, and two frames solved separately would differ by a
     // degree of lens, which a track would play as a slow zoom.

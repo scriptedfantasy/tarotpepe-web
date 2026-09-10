@@ -22,6 +22,7 @@
 // file does not care which solver made a shot: both return {pos, look, up, fov, shift}.
 //
 // API: shots (the named shots; every layout name is kept, others added), current, cut(shot),
+//      hold(shot) / release(shot) / holding — one shot nobody else may cut away from (see below),
 //      move(shot, {kind: 'cut'|'push'|'track'|'whip', duration}), sequence([{shot, kind, duration, hold}]),
 //      stop(), setState(name).
 // A shot is {pos, look, fov, up?, shift?: [x, y]} — shift in fractions of the frame, +y = the frame
@@ -31,7 +32,7 @@ import { buildShots } from './camera-shots.js';
 
 export const meta = {
   name: 'camera',
-  judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'track', 'whip'] },
+  judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'crossroads', 'track', 'whip'] },
   files: ['src/pieces/camera.js', 'src/pieces/camera-shots.js', 'src/pieces/camera-frame.js', 'src/pieces/camera-plan.js'],
 };
 
@@ -181,21 +182,53 @@ export async function build(ctx) {
     return new Promise((res) => (move.done = res));
   }
 
+  // ---- A HELD SHOT (round 2) ------------------------------------------------------------------
+  // The one thing in this film that is not in the room: the cross over the door lets the weather
+  // in, the leaf swings, and the room CUTS THROUGH THE DOOR and stands outside it looking at a
+  // crossroads (src/pieces/egg-cross.js). For as long as it is out there, that frame IS the film —
+  // and the conversation's own loop re-asserts its frame at the top of every turn (flow.js: `if
+  // (C?.current !== frame) cut(frame)`), which would pull the camera back into the parlour a second
+  // after the cut, for one drawing, until the egg cut out again. One drawing of the wrong room is a
+  // flash-frame, and no amount of re-cutting from the other side fixes it.
+  //
+  // So the camera can be told to HOLD. While a hold is on, cut/move/sequence to anything else are
+  // ignored — not queued, ignored — and the piece that took the hold is the piece that gives it
+  // back. A judging state clears it, because a judge outranks the evening. Nothing else in the film
+  // uses this, and nothing else should: it is for the one shot that is not a shot of the room.
+  let held = null;
+  const blocked = (shot) => held != null && shot !== held;
+
   const api = {
     shots,
     current: 'home',
+    get holding() {
+      return held;
+    },
+    hold(shot) {
+      held = shot;
+      seq++;
+      jump(shot);
+    },
+    release(shot = null) {
+      if (held == null || (shot != null && shot !== held)) return false;
+      held = null;
+      return true;
+    },
     cut(shot) {
+      if (blocked(shot)) return;
       seq++;
       jump(shot);
     },
     // kind: 'cut' | 'push' (straight dolly down the axis) | 'track' (constant-speed lateral dolly) | 'whip' (3 frames, hard stop)
     move(shot, { kind = 'push', duration = null } = {}) {
+      if (blocked(shot)) return Promise.resolve();
       seq++;
       return startMove(shot, kind, duration);
     },
     // steps: [{shot, kind = 'cut', duration, hold = 0}] — plays in order; resolves true when the last hold ends,
     // false if another cut/move/sequence took the camera first
     async sequence(steps) {
+      if (held != null) return false;
       const token = ++seq;
       for (const { shot, kind = 'cut', duration, hold = 0 } of steps) {
         if (token !== seq) return false;
@@ -209,8 +242,10 @@ export async function build(ctx) {
       seq++;
       finish();
     },
-    // judging states: the six stills, plus the two moves running from t=0
+    // judging states: the six stills, plus the two moves running from t=0. A judge outranks the
+    // evening: whatever the room was holding, it gives it up for a named state.
     setState(name) {
+      held = null;
       if (name === 'track') {
         // a lateral track across the back wall, window to door; loops so a contact sheet always catches it moving
         const token = ++seq;
@@ -249,7 +284,7 @@ export async function build(ctx) {
       if (n !== laid) {
         const onFan = api.current === 'fan';
         reframe();
-        if (onFan) {
+        if (onFan && held == null) {
           // …and only where there is something to see. The three slots share one band of cloth, so
           // the first card pays for the whole of the row: at 1600x900 the lens goes 15.4° → 20.3°
           // as it lands and the second and third cost 0.03° and a millimetre between them. A move

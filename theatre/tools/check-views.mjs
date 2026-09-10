@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 const VIEWS = {
   ink: ['default', 'lines-only', 'tone-only'],
   room: ['default'],
-  props: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain', 'peep-fallen', 'konami-house', 'cross-storm', 'cross-dark'],
+  props: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain', 'peep-fallen', 'konami-house', 'cross-storm', 'cross-out', 'cross-dark'],
   table: ['default'],
   pepe: ['default'],
   pepeAnim: ['idle', 'talk', 'gesture', 'consider'],
@@ -16,7 +16,7 @@ const VIEWS = {
   reveal: ['dealt', 'turning', 'revealed', 'fan', 'shuffle', 'fanning', 'pick', 'gather', 'deal', 'turn'],
   lighting: ['default', 'evening', 'lamp'],
   sound: ['default'],
-  camera: ['home', 'wide', 'pepe', 'table', 'spread', 'door', 'fan'],
+  camera: ['home', 'wide', 'pepe', 'table', 'spread', 'door', 'fan', 'crossroads'],
   entrance: ['closed', 'opening', 'open'],
   titles: ['title', 'chapter', 'closing', 'hidden'],
   dialogue: ['greeting', 'question', 'reading', 'farewell'],
