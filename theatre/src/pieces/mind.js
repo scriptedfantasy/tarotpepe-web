@@ -30,6 +30,12 @@
 //               reading — all three, or `t.focus` when they named one — play his sentences there,
 //               and go back to the frame the conversation was in. With no cards down it still
 //               fires for the memory forms, and he says plainly that nothing has been drawn.
+//   'flip'      THE EVENING TURNED ROUND (the user: "we have to be able to flip the reading so the
+//               user can pull a tarot for pepe"). The visitor offered to read for HIM and he
+//               accepted, by pulling `let_them_read`. His sentences ARE the wash line, exactly as
+//               for a draw; the room washes and the visitor takes three out of it as always — and
+//               then, instead of him reading each card, the field opens for THEM under a line of
+//               his asking what it says. See src/pieces/flow-flip.js.
 //   'farewell'  they are leaving. His sentences are the goodbye; play them and close the evening.
 //
 // Nothing else in the piece decides to deal. mind.offered says whether his last turn put a reading
@@ -39,13 +45,17 @@
 //   turn(text)           → Promise<{intent, focus, sentences, text, tool}>  the conversation loop
 //   intentOf(text)       → 'talk' | 'draw' | 'recall' | 'farewell' without speaking (the regex)
 //   offered, hasSpread   bool
+//   flipped              bool: the cards down are HIS, dealt because the visitor offered to read
+//                        for him (the let_them_read lever; see flow-flip.js). It rides on every
+//                        turn from then on, so the room's one sentence about the table says whose
+//                        the cards are. Cleared by newSpread() and reset().
 //   available            bool, true once health() has answered with a provider
 //   provider, model      'anthropic' | 'openrouter' | 'none', and the model id
 //   ready                Promise → available (health, never longer than 3 s)
 //   health()             → Promise<bool>; refreshes available/provider/model
 //   reply({beat, user, slug, position, question, focus}) → async generator of SENTENCES
 //                        beat: greeting | talk | object | reading | recall | followup | farewell |
-//                              question | answer | shuffle | fan
+//                              question | answer | shuffle | fan | flip-ask | flip-hear | flip-close
 //                        slug + position (0..2 | 'brought'|'going'|'do' | label) for a reading
 //                        'object' is set for you: a line that asks about a thing in the room is
 //                        read by mind-room.js and answered with that thing. It is still a 'talk'
@@ -140,6 +150,17 @@ function scripted({ beat, user, slug, position, question, spread = [], focus = n
     // better event than a canned sentence, and a canned sentence would be the same one every time
     // a visitor found the pair — which is exactly the thing the user ruled out for the shuffle.
     case 'phone':
+      return { text: '', offered: false };
+    // THE READING, FLIPPED — and the empty string is the whole answer here too. The visitor offered
+    // to read for him, he pulled let_them_read, and these three beats are his side of being read
+    // to: asking what a card says, answering what they made of it, taking something from the three.
+    // Not one word of it is written down anywhere, and none is going to be: a canned "and what does
+    // that one say" under every card, every evening, is exactly the thing the user cut out of the
+    // shuffle. With no live voice the beats are silent and the field simply opens under the card's
+    // own name, which is the honest version of a flipped reading with nobody at home.
+    case 'flip-ask':
+    case 'flip-hear':
+    case 'flip-close':
       return { text: '', offered: false };
     default:
       return { text: beatText(beat), offered: false };
@@ -300,6 +321,10 @@ export async function build(ctx) {
         object: objectBody(obj, talk),
         // where the globe stopped, for the `globe` beat and nothing else (src/pieces/egg-globe.js)
         country: beat === 'globe' && country ? String(country) : undefined,
+        // WHOSE CARDS ARE ON THE CLOTH. Set for the whole of a flipped reading and everything after
+        // it (flow-flip.js sets it when the lever fires, newSpread and reset put it back), because
+        // the server's one sentence about the table is the only place the room can say it.
+        flipped: api.flipped || undefined,
         // the conversation's own facts, so the live voice knows what the room knows
         intent: intent ?? null,
         offered: talk.offered,
@@ -314,7 +339,10 @@ export async function build(ctx) {
       if (beat === 'shuffle') talk.about = null;
       // counted once, whether the answer comes from the model or from the script
       if (obj) noteTold(obj, talk);
-      if (beat === 'reading' && slug && card) {
+      // …and `flip-ask` puts a card on the cloth exactly as a reading does: it is the beat at which
+      // the visitor has just turned one of HIS three, so from here the room knows it is down and
+      // the guard will let him name it.
+      if ((beat === 'reading' || beat === 'flip-ask') && slug && card) {
         spread[posIndex] = { position: posIndex, label: POSITIONS[posIndex], slug, name: card.name, numeral: card.numeral };
         body.spread = spread.filter(Boolean).map((c) => ({ position: c.position, label: c.label, name: c.name, numeral: c.numeral }));
       }
@@ -486,7 +514,11 @@ export async function build(ctx) {
       // but server/pepe.mjs deliberately does NOT restate them in that direction, because a turn
       // whose whole job is a barometer does not need a paragraph nudging him toward the deck.
       const beat = guess === 'farewell' ? 'farewell' : object ? 'object' : dealt.length && aboutTheSpread(said, dealt) ? 'followup' : 'talk';
-      const tools = guess === 'farewell' ? null : dealt.length ? ['deal_cards', 'show_cards'] : ['deal_cards'];
+      // `let_them_read` is proposed on every turn he is not being said goodbye to; the server keeps
+      // it only when the visitor's own line offered to read FOR him (offersToRead), exactly as it
+      // keeps `deal_cards` only when they asked for cards. Proposing it costs nothing: the client
+      // proposes, the server disposes.
+      const tools = guess === 'farewell' ? null : dealt.length ? ['deal_cards', 'show_cards', 'let_them_read'] : ['deal_cards', 'let_them_read'];
       const report = {};
       const lines = [];
       try {
@@ -513,6 +545,13 @@ export async function build(ctx) {
         // shuffle beat itself and he speaks over his own hands, which is the better line anyway
         return { intent: 'draw', text: said, focus: null, sentences: lines, tool };
       }
+      // THE EVENING TURNED ROUND. They offered to read for him and he accepted. The room deals as
+      // it always deals — the wash, three out of it — and then the visitor reads those three to
+      // him. His sentences here are the wash line, exactly as they are for a deal.
+      if (tool?.name === 'let_them_read') {
+        talk.offered = false;
+        return { intent: 'flip', text: said, focus: null, sentences: lines, tool };
+      }
       if (tool?.name === 'show_cards') {
         const n = Number(tool.args?.card); // a model may write it as a string; the room does not mind
         const focus = Number.isFinite(n) && n >= 1 && n <= dealt.length ? Math.round(n) - 1 : null;
@@ -535,6 +574,10 @@ export async function build(ctx) {
     },
 
     offered: false,
+    // The cards on the cloth are HIS and the visitor dealt them for him (the let_them_read lever).
+    // flow-flip.js sets it; everything that clears the cloth clears it, so a second, ordinary
+    // reading is the visitor's again.
+    flipped: false,
     get hasSpread() {
       return spread.filter(Boolean).length > 0;
     },
@@ -544,6 +587,7 @@ export async function build(ctx) {
       spread.length = 0;
       talk.offered = false;
       api.offered = false;
+      api.flipped = false;
     },
 
     reset() {
@@ -557,6 +601,7 @@ export async function build(ctx) {
       talk.told = Object.create(null);
       talk.about = null;
       api.offered = false;
+      api.flipped = false;
       // a new visitor deserves a fresh look at the endpoint: a key may have arrived meanwhile
       latchedAt = 0;
       retriedHealth = false;

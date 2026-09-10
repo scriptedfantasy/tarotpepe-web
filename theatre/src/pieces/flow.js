@@ -46,15 +46,22 @@
 // his turn; a click on the picture does what space does, or picks a card at the fan, or starts the
 // evening again from the sign-off card.
 //
-// API: start(), restart(), beat, intent, readings, recalls, setState(name)
+// AND THE READING CAN BE FLIPPED (the user: "we have to be able to flip the reading so the user can
+// pull a tarot for pepe"). The visitor offers, in their own words; he takes the offer by pulling a
+// lever the offer put within his reach; the room washes and they take three exactly as always, and
+// then THEY read those three to HIM — the field opens under each card instead of a reading of his
+// going up over it. Nothing on the notice says so; it is found by offering. See flow-flip.js.
+//
+// API: start(), restart(), beat, intent, readings, recalls, flips, setState(name)
 //   states: greeting · talk · shuffle · fan · dealt · reading · recall · farewell (stills)
 import * as THREE from 'three';
 import { PROMPTS, SAMPLE_ANSWER, scriptedLines, splitSentences, parsePick, detectIntent, recallFocus } from './flow-lines.js';
+import { makeFlip } from './flow-flip.js';
 
 export const meta = {
   name: 'flow',
   judge: { shot: 'home', states: ['greeting', 'talk', 'shuffle', 'fan', 'dealt', 'reading', 'recall', 'farewell'], dom: true },
-  files: ['src/pieces/flow.js', 'src/pieces/flow-lines.js'],
+  files: ['src/pieces/flow.js', 'src/pieces/flow-lines.js', 'src/pieces/flow-flip.js'],
 };
 
 const TIMEOUT = Symbol('timeout');
@@ -130,7 +137,9 @@ const SHOTS = ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle
 // nothing about how wide it is.
 
 // What the mind may report for a turn. Anything else is talk, which is the safe answer.
-const INTENTS = ['talk', 'draw', 'recall', 'farewell'];
+// `flip` is the evening turned round: the visitor offered to read for HIM and he took the offer
+// (the let_them_read lever). See flow-flip.js.
+const INTENTS = ['talk', 'draw', 'recall', 'farewell', 'flip'];
 
 export async function build(ctx) {
   const P = ctx.pieces;
@@ -208,7 +217,10 @@ export async function build(ctx) {
   // remark about the furniture there would cut the placard they are answering. So the reading
   // beats are named, and through all of them the room burns in silence. Same rule while he is
   // mid-turn: the visitor's own open field is the only place this line is allowed to appear.
-  const READING = new Set(['shuffle', 'fan', 'dealt', 'reading', 'recall']);
+  // ('flip' is the open field inside a flipped reading — the visitor writing what a card says —
+  // and it burns silently for the same reason the pick prompt does: the placard they are answering
+  // must not be cut out from under them.)
+  const READING = new Set(['shuffle', 'fan', 'dealt', 'reading', 'recall', 'flip']);
   let onFire = false; // the last tongue caught while the field was open: one line owed
   ctx.on?.('props:fine', ({ burning, full } = {}) => {
     // the pointer left and the last wisp went out. If he had not got round to saying it yet he
@@ -609,7 +621,12 @@ export async function build(ctx) {
   // the visitor takes three out of it where it lies. `sentences` is the turn in which he agreed to
   // it, said over his working hands rather than before them. Returns the line the conversation
   // picks up on afterwards (said over the open field).
-  async function drawing(token, nth, sentences) {
+  //
+  // `flip` — THE SAME BUSINESS, DEALT THE OTHER WAY ROUND (the user: "we have to be able to flip
+  // the reading so the user can pull a tarot for pepe"). Everything down to the gather is identical
+  // and is not written twice: the wash, his line over it, the hand-over, the visitor's three picks.
+  // What changes is what happens to the three afterwards, and that is flow-flip.js's.
+  async function drawing(token, nth, sentences, { flip = false } = {}) {
     // ROUND 6, AND THEY ARE THE USER'S TWO CUTS: "lets remove: story card and push out."
     //
     // THE STORY CARD IS GONE. A full-frame chapter card — ARCANA & DIVINATION / The Cards — used
@@ -623,6 +640,9 @@ export async function build(ctx) {
     // hand-over, one drawing long, so this reads as ONE piece of business: he washes the deck in
     // front of them and then they choose out of it.
     if (nth > 0) M?.newSpread?.(); // a second reading: the cloth cleared, the conversation kept
+    // whose cards these are, from the wash onwards: it rides on every turn he takes for the rest of
+    // the evening, so the room's one sentence about the table says who they belong to
+    if (M) M.flipped = flip;
     // The plan view over the cloth, where the wash is staged, and the frame the whole of this beat
     // is played in. (It used to cut to `riffle`, a 62° rake built to read a bridge in profile;
     // there is no bridge, and reveal.shuffle() only had to cut away from it again.)
@@ -679,6 +699,11 @@ export async function build(ctx) {
     api.beat = 'dealt';
     cut('turn'); // 46° over the cloth: the frame the cards are turned in
     await wait(0.9);
+
+    // THE READING, FLIPPED. The three are his and the visitor reads them to him: the field opens
+    // under each card instead of a reading of his going up over it. It owns its own last frame and
+    // its own last line, so this returns on it. (flow-flip.js)
+    if (flip) return await FLIP(token);
 
     await readings(token);
     if (!alive(token)) return null;
@@ -809,6 +834,20 @@ export async function build(ctx) {
         if (!alive(token)) return { spoke: false };
         frame = 'home';
         prompt = back ?? PROMPTS.afterReading[0];
+        continue;
+      }
+      // THE EVENING TURNED ROUND. They offered to read for him and he took the offer, by pulling
+      // the lever the offer put within his reach. The wash and the three picks are the ones above,
+      // unchanged; from the gather on, the visitor reads and he is read to. His turn here is the
+      // wash line, exactly as it is for a deal, and what comes back is the line his last sentence
+      // of the whole business leaves standing over the open field — or nothing, in which case the
+      // field opens under the third card's own name and neither he nor the room says a word.
+      if (intent === 'flip') {
+        api.flips++;
+        const back = await drawing(token, api.readings++, sentences, { flip: true });
+        if (!alive(token)) return { spoke: false };
+        frame = 'home';
+        prompt = back ?? null;
         continue;
       }
       // the good night. His turn is the goodbye, and it is said in the room he is sitting in.
@@ -947,7 +986,9 @@ export async function build(ctx) {
   }
   // a card is only touchable while it is the visitor's turn to speak — never while he is talking,
   // never at the fan, where every click already belongs to the cards being chosen
-  const cardsLive = () => !picking && !!D?.asking && (R?.picks?.length ?? 0) > 0 && api.beat !== 'recall';
+  // ...and never during a flipped reading, where the open field IS the card: the visitor is writing
+  // what the one in the insert says, and a finger on the cloth there would cut their own placard
+  const cardsLive = () => !picking && !!D?.asking && (R?.picks?.length ?? 0) > 0 && api.beat !== 'recall' && api.beat !== 'flip';
 
   // ---- the visitor's keys and clicks --------------------------------------------------------------------
   function onKey(e) {
@@ -1009,6 +1050,7 @@ export async function build(ctx) {
     intent: null, // what the mind made of the visitor's last line
     readings: 0, // how many times the cards have come out tonight
     recalls: 0, // ... and how many times they have been looked at again
+    flips: 0, // ... and how many of the readings were the visitor reading for HIM (flow-flip.js)
     start() {
       const token = ++run;
       skipBeat = false;
@@ -1020,6 +1062,7 @@ export async function build(ctx) {
       api.intent = null;
       api.readings = 0;
       api.recalls = 0;
+      api.flips = 0;
       M?.abort?.();
       M?.reset?.();
       D?.clear?.();
@@ -1105,5 +1148,8 @@ export async function build(ctx) {
       }
     },
   };
+  // THE FLIPPED READING, built with this file's own machinery and owning none of its own. It is
+  // stood up here, after `api`, because it holds a reference to it. (flow-flip.js)
+  const FLIP = makeFlip({ P, api, alive, wait, timeout, render, cut, closer });
   return api;
 }

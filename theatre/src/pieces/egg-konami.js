@@ -423,7 +423,9 @@ export function buildKonami(ctx) {
   // the film's business: flow's beat says whether one is running, the wash says whether the
   // seventy-eight are already out on the cloth, and the deck's own blocks say whether the deck is
   // even there to leap (reveal hides them from the smoosh until the gather squares them again).
-  const BUSY = new Set(['shuffle', 'fan', 'dealt', 'reading', 'recall']);
+  // ('flip' is the field inside a flipped reading — the visitor writing what one of HIS cards says,
+  // flow-flip.js — and the deck is as busy there as it is in a reading of theirs.)
+  const BUSY = new Set(['shuffle', 'fan', 'dealt', 'reading', 'recall', 'flip']);
   function idle() {
     if (api.active) return false;
     const beat = ctx.pieces.flow?.beat;

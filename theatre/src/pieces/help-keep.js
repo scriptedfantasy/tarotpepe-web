@@ -44,7 +44,9 @@
 // on the page is a 33 px cap on the plate, inside the band the hand was cut for.
 //
 // API (hung on ctx.pieces.help.keep):
-//   readingNow(ctx)        {cards:[{slug,name}] left to right, transcript:[{role,text}], when:Date}
+//   readingNow(ctx)        {cards:[{slug,name}] left to right, transcript:[{role,text}], flipped,
+//                          when:Date}. `flipped` is the evening in which the VISITOR read for him
+//                          (flow-flip.js): the same sheet, with HIS READING under the name.
 //   hasReading(ctx)        is there anything to keep yet
 //   prepare(ctx)           start building; resolves {pages:[canvas], blob}
 //   hand(ctx)              the visitor's tap: build if it is not built, then deliver
@@ -122,7 +124,12 @@ export function readingNow(ctx) {
   const transcript = (ctx?.pieces?.mind?.history ?? [])
     .map((h) => ({ role: h?.role === 'pepe' ? 'pepe' : 'visitor', text: String(h?.text ?? '').trim() }))
     .filter((h) => h.text);
-  return { cards, transcript, when: new Date() };
+  // WHOSE READING IT WAS. Almost always the visitor's, and then the sheet does not say so: a
+  // reading is the thing this shop hands over and there is nobody else it could belong to. When the
+  // visitor read for HIM instead (flow-flip.js, mind.flipped), the cards printed at the head are
+  // his and the transcript underneath is them reading his cards to him — so the sheet says it.
+  const flipped = !!ctx?.pieces?.mind?.flipped;
+  return { cards, transcript, flipped, when: new Date() };
 }
 
 export function hasReading(ctx) {
@@ -130,7 +137,7 @@ export function hasReading(ctx) {
   return r.cards.length > 0 || r.transcript.length > 0;
 }
 
-const signature = (r) => `${r.cards.map((c) => c.slug).join(',')}|${r.transcript.map((t) => t.role[0] + t.text.length).join(',')}`;
+const signature = (r) => `${r.flipped ? 'his|' : ''}${r.cards.map((c) => c.slug).join(',')}|${r.transcript.map((t) => t.role[0] + t.text.length).join(',')}`;
 
 // The canned reading behind ?view=keep, so the dev view draws a full sheet on a page where nobody
 // has said anything yet. Every word of it is the user's own, taken from script.js and
@@ -347,7 +354,18 @@ export async function renderPages(reading, { scale = SCALE } = {}) {
   signCaps(g, 'TAROT PEPE', PAGE.w / 2, 40 + headCap / 2, { capH: headCap, tracking: 0.3, pen: Math.max(2, headCap * 0.115), seed: 200 });
   const dateCap = 8.4;
   signCaps(g, stamp(when), PAGE.w / 2, 79 + dateCap / 2, { capH: dateCap, tracking: 0.22, pen: Math.max(0.8, dateCap * 0.115), seed: 201, alpha: 0.82 });
-  rule(g, PAD, 99, PAGE.w - PAD, 99, 0.72, rng, 3);
+  // WHOSE READING IT WAS, when it was not the visitor's: two words under the name, in the small
+  // hand, and the head takes one more row for them. It is not set on the date's own line — the
+  // stamp already runs to 254 pt of a 352 pt measure and a long weekday would push the pair off the
+  // paper — so the rule and everything under it come down by a row instead.
+  let ruleY = 99, cardTop = 112;
+  if (reading.flipped) {
+    const markCap = 7.2;
+    signCaps(g, 'HIS READING', PAGE.w / 2, 92 + markCap / 2, { capH: markCap, tracking: 0.34, pen: Math.max(0.8, markCap * 0.115), seed: 202 });
+    ruleY += 13;
+    cardTop += 13;
+  }
+  rule(g, PAD, ruleY, PAGE.w - PAD, ruleY, 0.72, rng, 3);
 
   // ---- the cards, as they lie -----------------------------------------------------------------
   const gap = 13;
@@ -356,7 +374,7 @@ export async function renderPages(reading, { scale = SCALE } = {}) {
   // card, it is the same card with more cloth around it
   const cw = (MEASURE - 2 * gap) / 3;
   const ch = (cw * 1792) / 1024; // the deck's own aspect (layout.js: 0.13 x 0.2275)
-  const top = 112;
+  const top = cardTop;
   let cx = (PAGE.w - (n * cw + (n - 1) * gap)) / 2;
   const nameCap = 7.4;
   let nameRows = 1;

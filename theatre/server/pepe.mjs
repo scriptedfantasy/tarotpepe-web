@@ -7,7 +7,10 @@
 //
 // Body: {beat, history, user, question, slug, position, cardName, numeral, positionLabel, hint, facts, spread, object, tools}
 //   beat      greeting | question | answer | shuffle | fan | reading | recall | followup | farewell | globe |
-//             talk | object
+//             talk | object | flip-ask | flip-hear | flip-close
+//   flipped   true when the cards on the cloth were dealt for HIM and the visitor is the one
+//             reading them (the let_them_read lever). It changes exactly one sentence — the one
+//             that says what is on the table — and the three flip beats.
 //   history   [{role:'visitor'|'pepe', text}]  the conversation so far (not including `user`)
 //   user      what the visitor just said, if anything (for followup, the question)
 //   hint      the scripted line for this card/position — a sample of his voice, never copied
@@ -255,6 +258,28 @@ function asksForCards(b) {
   return YES.test(said) && !!last && CARD_WORDS.test(String(last.text));
 }
 
+// THE SAME LINE, READ FROM THE OTHER SIDE. The visitor offering to read FOR him — "let me read for
+// you", "your turn", "I'll read your cards", "pull a card for you" — which is the only thing that
+// puts `let_them_read` within his reach. It is the mirror of asksForCards and it is built the same
+// way: an OFFER, not a trigger. With the lever in reach he still judges whether they meant it, and
+// he may decline in words and pull nothing.
+//
+// Both levers can be allowed on one line ("let me read your cards" asks for cards too, by the
+// letter of CARD_WORDS) and that is correct: two hands within reach and he chooses which.
+const READS_FOR_HIM = [
+  // read / pull / draw / deal / do / lay … for you (or to you, or on you)
+  /\b(read|reading|pull|pulling|draw|drawing|deal|dealing|do|lay|turn)\b[^.!?]{0,24}\b(for|to|on) (you|u|pepe|the frog)\b/i,
+  // … your cards, your fortune, your turn
+  /\b(read|pull|draw|deal|lay)\b\s+(?:me\s+|out\s+)?(?:a\s+|an\s+|one\s+|some\s+|three\s+|the\s+)?(?:cards?\s+|tarot\s+)?your\b/i,
+  /\byour turn\b/i,
+  // let me / can I / shall I / I'll … read
+  /\b(let me|lets me|can i|may i|shall i|should i|i will|i'll|ill|i want to|i would like to|id like to|what if i|how about i|my turn to)\b[^.!?]{0,24}\bread\b/i,
+];
+function offersToRead(b) {
+  const said = String(b?.user ?? '').trim();
+  return !!said && READS_FOR_HIM.some((re) => re.test(said));
+}
+
 const TOOLS = {
   deal_cards: {
     description:
@@ -296,6 +321,25 @@ const TOOLS = {
     allowed: (b) => dealtCount(b) > 0,
     line: 'If the visitor has asked to look at the cards already on the table, use show_cards and say what you notice; the room takes the camera to them.',
     state: 'show_cards is within your reach this turn. Pulling it takes the room back to the cards already lying on the cloth, in front of the visitor; nothing is dealt and nothing is shuffled.',
+  },
+  // THE THIRD LEVER, AND IT IS THE EVENING TURNED ROUND. The user: "We have to be able to flip the
+  // reading so the user can pull a tarot for pepe." So the visitor may offer to read for HIM, and
+  // if he takes the offer the room does exactly what it does for a reading — the wash, the three
+  // taken out of it, each one turned — and then, instead of him reading the card, the field opens
+  // for them under a line of his asking what it says. The cards on the cloth are his for the rest
+  // of the evening (spreadLine says so) and he answers as the one being read for.
+  //
+  // It is offered ONLY when the visitor's own line offers it (offersToRead). Same argument as
+  // deal_cards: a reading nobody asked for is a reading taken away from them, and a flipped one
+  // nobody offered is worse — it hands them a job they did not want.
+  let_them_read: {
+    description:
+      'Let the visitor read the cards for you. The deck is washed out flat across the cloth under both your palms exactly as for a reading, the visitor takes three straight out of the wash, and as each one is turned you ask them what it says and answer what they tell you. Use this only when the visitor has offered to read your cards, in whatever words, and you want to accept. You may decline instead, in words, and pull nothing.',
+    parameters: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    allowed: (b) => offersToRead(b),
+    line: 'If the visitor has offered to read your cards and you accept, use let_them_read and say so in one sentence: it plays over your hands washing the deck.',
+    state:
+      'let_them_read is within your reach this turn: the visitor has offered to read for you. Pulling it puts your hands on the deck — all seventy-eight go face down across the cloth under your palms and the visitor takes three straight out of the wash — and then they read those three to you, one at a time, and the cards are yours. Whatever you say in the same turn is the last thing they hear before the cards, and it plays over your working hands. You may leave it alone and answer them in words instead.',
   },
 };
 
@@ -469,12 +513,17 @@ function cardGate(b, on = true) {
 // ---------------------------------------------------------------------------------------------
 const POSITION_LABELS = ['what you brought', 'what is actually going on', 'what to do about it'];
 
-function spreadLine(spread) {
+// WHOSE CARDS THESE ARE. `flipped` is the room saying the visitor dealt for HIM tonight, and it
+// changes nothing but this sentence — which is the only sentence he has telling him what is on the
+// cloth, so it is the only place it can be said. It rides every beat that carries the table: the
+// readings back at him, a second look at them, the talk afterwards, the good night.
+function spreadLine(spread, flipped = false) {
   if (!Array.isArray(spread) || !spread.length) return '';
   const parts = spread
     .filter((c) => c && c.name)
     .map((c) => `${(c.position ?? 0) + 1}. ${c.name}${c.numeral ? ` (${c.numeral})` : ''}, ${c.label ?? POSITION_LABELS[c.position ?? 0] ?? ''}`);
-  return parts.length ? ` On the table so far: ${parts.join('; ')}.` : '';
+  if (!parts.length) return '';
+  return flipped ? ` The three cards on the table are yours, read to you by the visitor: ${parts.join('; ')}.` : ` On the table so far: ${parts.join('; ')}.`;
 }
 
 // The levers, said again in the direction. The tool definitions travel in their own field, which a
@@ -502,7 +551,7 @@ function leverState(names) {
 
 function situation(b, names = []) {
   const beat = String(b.beat ?? 'greeting');
-  const table = spreadLine(b.spread);
+  const table = spreadLine(b.spread, b.flipped);
   const levers = leverState(names);
   const clip = (s, n) => String(s ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, n);
   switch (beat) {
@@ -548,6 +597,9 @@ function situation(b, names = []) {
     }
     case 'shuffle': {
       const about = b.about ? ` You took the reading to be about "${clip(b.about, 80)}".` : '';
+      // the same wash, dealt the other way round: they offered to read for you and you took it
+      if (b.flipped)
+        return `The visitor offered to read your cards and you took them up on it. The deck is in your hands: all seventy-eight are face down and spread over the cloth, swirling round each other under both your palms, in front of them. In a moment they will take three straight out of the wash and read them to you. Ask them to take three, in your own words, in this one line: three is all they need to hear, not which and not where.`;
       return `The visitor asked for a reading and the deck is in your hands: all seventy-eight are face down and spread over the cloth, swirling round each other under both your palms, in front of them.${about} In a moment they will take three straight out of the wash. Ask them to, in your own words, in this one line: three is all they need to hear, not which and not where.`;
     }
     case 'fan':
@@ -560,6 +612,26 @@ function situation(b, names = []) {
       const hint = b.hint ? ` The house's lines for this card in this position, a sample of the voice and of the picture: "${String(b.hint).trim()}".` : '';
       const facts = b.facts ? ` Other things that are in this picture: "${String(b.facts).trim()}".` : '';
       return `You have just turned card ${pos + 1} of three, in the position "${label}": ${name}${num}.${table}${hint}${facts}`;
+    }
+    // ---- THE READING, FLIPPED -------------------------------------------------------------------
+    // The visitor offered, he pulled let_them_read, and the room dealt exactly as it deals for
+    // them: the wash, three taken out of it, each one turned. From here the evening is the other
+    // way round. He does not read these cards. They are HIS, the visitor is reading them TO him,
+    // and all three beats say the same thing in three positions: ask, listen, take something from
+    // it. Nothing scripted stands behind any of them — with no provider these beats are silent and
+    // the field simply opens under the card's own name.
+    case 'flip-ask':
+    case 'flip-hear':
+    case 'flip-close': {
+      if (beat === 'flip-close')
+        return `All three of your cards have been read to you by the visitor.${table} Say what you take from it, in your own way, and hand the evening back to them.`;
+      const pos = Number.isInteger(b.position) ? b.position : 0;
+      const label = b.positionLabel || POSITION_LABELS[pos] || POSITION_LABELS[0];
+      const name = b.cardName || b.slug || 'the card';
+      const num = b.numeral ? ` (${b.numeral})` : '';
+      if (beat === 'flip-ask')
+        return `The visitor is reading YOUR cards tonight. They have just turned card ${pos + 1} of three, ${name}${num}, in the position "${label}".${table} Ask them what it says, in one line, as the one being read for.`;
+      return `The visitor is reading YOUR cards tonight. Card ${pos + 1} of three is ${name}${num}, in the position "${label}", and they read it as: "${clip(b.user, 500)}".${table} Answer as the one whose card it is: what lands, what you doubt, in two or three sentences. Do not read the card yourself.`;
     }
     case 'recall': {
       if (!Array.isArray(b.spread) || !b.spread.filter((c) => c && c.name).length)
@@ -830,6 +902,24 @@ const FAKES = {
   'prose-only': () => [...said('You drew The Fool. Then The Moon, which is worse.'), chunk({}, 'stop')],
   // he names a card that is not the one in front of him
   fourth: () => [...said('The picture is a tower. What you want is The Star, and it is not on this table.'), chunk({}, 'stop')],
+  // ---- THE READING, FLIPPED ---------------------------------------------------------------------
+  // The visitor offered to read for him and he takes them up on it: one line and the lever, with
+  // the name cut across two deltas and the (empty) arguments across two more, because that is the
+  // shape a real one arrives in.
+  'let-them-read': () => [
+    ...said('Go on then, anon. Nobody has read to me since the exchange closed.'),
+    chunk({ tool_calls: [{ index: 0, id: 'call_5', type: 'function', function: { name: 'let_them' } }] }),
+    chunk({ tool_calls: [{ index: 0, function: { name: '_read', arguments: '{' } }] }),
+    chunk({ tool_calls: [{ index: 0, function: { arguments: '}' } }] }),
+    chunk({}, 'tool_calls'),
+  ],
+  // …and the three beats that follow it. No card is named in any of them: he is being read to.
+  'flip-ask': () => [...said('So. What does it say, anon.'), chunk({}, 'stop')],
+  'flip-hear': () => [...said('That lands, more or less. I doubt the half where it is my own doing. Go on.'), chunk({}, 'stop')],
+  'flip-close': () => [
+    ...said('You read better than most of the people who pay me for it. I will keep the middle one. Say what you like now, anon.'),
+    chunk({}, 'stop'),
+  ],
 };
 
 // PEPE_FAKE=1 is the useful default: it talks, and it deals when the visitor's own words ask for
@@ -842,7 +932,16 @@ function fakeScript(cfg, body) {
   const last = [...(body.messages ?? [])].reverse().find((m) => m.role === 'user');
   // the visitor's own words only: the stage direction that follows them is full of the word "cards"
   const t = String(last?.content ?? '').replace(/\[[^\]]*\]\s*$/, '').toLowerCase();
+  // …and, for the beats the room asks for in its own voice, the note itself: it is the only thing
+  // in the request that says which beat this is, and a stub with no beat cannot answer one.
+  const note = String(last?.content ?? '').match(/\[([^\]]*)\]\s*$/)?.[1] ?? '';
+  if (/Ask them what it says/.test(note)) return FAKES['flip-ask']();
+  if (/Answer as the one whose card it is/.test(note)) return FAKES['flip-hear']();
+  if (/hand the evening back to them/.test(note)) return FAKES['flip-close']();
   const offered = (body.tools ?? []).map((x) => x.function?.name);
+  // the offer to read FOR him is read first: "let me read your cards" would trip the deal stub too
+  if (offered.includes('let_them_read') && /\b(read (for|to) you|read your (cards|fortune|tarot)|your turn|let me read|pull (a |one )?cards? for you)\b/.test(t))
+    return FAKES['let-them-read']();
   if (offered.includes('show_cards') && /\b(show me|see them|look at them|what did i draw)\b/.test(t)) return FAKES.show();
   if (offered.includes('deal_cards') && /\b(read my (cards|fortune)|my cards|a reading|three cards|deal me|shuffle the deck|tarot please)\b/.test(t)) return FAKES.deal();
   return FAKES.talk();
