@@ -223,6 +223,33 @@ export async function build(ctx) {
     cutField();
   });
 
+  // ---- THE DOOR HAS COME OPEN ON THE CROSSROADS, AND HE HAS ONE LINE -----------------------------
+  // The third object in the evening that starts a turn with nobody having said anything, and it is
+  // taken exactly where the fire's remark is taken: the open field is cut short, the line is played
+  // with `keepLast` so it stands ON the placard with the field open under it, and the conversation
+  // carries on. The line is `PROMPTS.cross` and it is fixed — `Choose your path, anon.` — for the
+  // reason `This is fine.` is fixed: a model asked about a picture in a doorway describes the
+  // picture, and he is not looking at it.
+  //
+  // NEVER OVER A READING, the fire's rule and for the fire's reason: while the visitor is choosing
+  // three cards the field IS open, and a remark about the weather there would cut the placard they
+  // are answering. Through all of it the storm plays, the door opens and he says nothing.
+  let atTheDoor = false; // the door is open and the field was free: one line owed
+  ctx.on?.('props:cross', ({ phase } = {}) => {
+    if (phase !== 'open') {
+      // The door is shut again, chosen or not, and the next storm is owed a line of its own. It is
+      // cleared on `shut`/`dark` and NOT on `closing`: closing arrives the instant a path is taken,
+      // which can be the same frame the line was cut into, and clearing it there would swallow the
+      // one line for a visitor who chose quickly.
+      if (phase === 'shut' || phase === 'dark') atTheDoor = false;
+      return;
+    }
+    if (atTheDoor) return;
+    if (!D?.asking || picking || READING.has(api.beat)) return;
+    atTheDoor = true;
+    cutField();
+  });
+
   // ---- small waits ------------------------------------------------------------------------------
   function wait(seconds, { skippable = false } = {}) {
     const token = run, s0 = skips, end = ctx.clock.raw + seconds;
@@ -776,6 +803,18 @@ export async function build(ctx) {
         const f = await render([PROMPTS.fine], { hold: 1.3, keepLast: true });
         if (!alive(token)) return { spoke: false };
         prompt = f.held ?? PROMPTS.fine;
+        continue;
+      }
+      // The door came open on the crossroads while the field was open. Same shape as the fire's
+      // remark, and the same subtractions: no react(), because he does not turn round; no cut,
+      // because the camera has not noticed the weather either; no mind, because the line is fixed.
+      // The quiet counter does not move — it is a digression, not a silence — and `!said` because
+      // the visitor's own words always win the tie.
+      if (atTheDoor && !said) {
+        atTheDoor = false;
+        const x = await render([PROMPTS.cross], { hold: 1.3, keepLast: true });
+        if (!alive(token)) return { spoke: false };
+        prompt = x.held ?? PROMPTS.cross;
         continue;
       }
       if (!said) {

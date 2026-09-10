@@ -43,10 +43,12 @@ import { eggNakamoto } from './egg-nakamoto.js';
 import { eggPeep } from './egg-peep.js';
 
 import { buildKonami } from './egg-konami.js';
+// THE CROSS on the frieze over the door, and the storm behind it (src/pieces/egg-cross.js).
+import { eggCross } from './egg-cross.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain', 'peep-fallen', 'konami-house'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain', 'peep-fallen', 'konami-house', 'cross-storm', 'cross-dark'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
@@ -961,6 +963,10 @@ export async function build(ctx) {
   // ---- THE HOUSE OF CARDS. The room's seventh switch, and it has no object: ↑↑↓↓←→←→BA on the
   // keyboard, in six seconds, with the room idle (src/pieces/egg-konami.js). ------------------
   const KONAMI = buildKonami(ctx);
+  // ---- THE CROSS over the door, and the storm it lets in (src/pieces/egg-cross.js). ------------
+  // It is given the pendant (which it lifts into a pivot at the rose so that it can swing) and the
+  // room's own door rectangle; the rain, the light and the sound it asks for by their own apis.
+  const CROSS = eggCross(ctx, { group: g, switches: SWITCHES, pendant, door: room.door, rain: RAIN });
 
   return {
     group: g,
@@ -1015,6 +1021,12 @@ export async function build(ctx) {
     // returns false if the room is busy), `active` says whether it is running, `idle` whether it
     // would be allowed to, and `?konami=<t>` / the `konami-house` state hold a frame of it.
     konami: KONAMI,
+    // THE CROSS on the frieze over the door. `phase` is shut / storm / open / closing / dark,
+    // `path` what the visitor chose at the fork (null until they do), `click()` works the cross as
+    // a pointer does — rain, lightning, thunder, the swing and all — `choose('light'|'dark')` takes
+    // a path as a click on it does, `set(phase)` puts it there for a still with no cue, and
+    // hitBox/tapBox are the cross's box on the glass and the box a thumb is given.
+    cross: CROSS,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -1106,6 +1118,9 @@ export async function build(ctx) {
       // `konami-house` is the house of cards standing on the cloth; every other name puts the deck
       // back exactly as it was
       KONAMI.setState(name);
+      // `cross-storm` is the door open on the crossroads mid-strike, `cross-dark` the storm that
+      // stayed; every other name is a cross on a wall nobody has touched.
+      CROSS.setState(name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -1128,6 +1143,7 @@ export async function build(ctx) {
       NAKAMOTO.update(ctx);
       PEEP.update(ctx);
       KONAMI.update(ctx);
+      CROSS.update(ctx); // after RAIN: the weather sets its own light and the storm sits over it
     },
   };
 }
