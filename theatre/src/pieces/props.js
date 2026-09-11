@@ -40,6 +40,8 @@ import { eggMirror } from './egg-mirror.js';
 
 import { eggNakamoto } from './egg-nakamoto.js';
 
+import { eggSilvia } from './egg-silvia.js';
+
 import { eggPeep } from './egg-peep.js';
 
 import { buildKonami } from './egg-konami.js';
@@ -50,7 +52,7 @@ import { eggCross } from './egg-cross.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'mirror-sad', 'mirror-smug', 'nakamoto-rain', 'silvia-open', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
@@ -377,17 +379,9 @@ export async function build(ctx) {
     // framed image behind pepe should be a nakamoto card." Same nail, same 0.4 x 0.46 frame, same
     // cords — only the sheet inside it changed, so the row against the clock is what it was. The
     // egg hangs it itself, at the foot of this file, because it needs the pointer arbiter.
-    const rowA = [[0.46, 0.4, 0.46, 'diagram', true]];
-    let seed = 100;
-    const hang = (list, y) => {
-      for (const [x, w, h, kind, ornate] of list) {
-        const f = O.pictureFrame({ w, h, kind, seed: seed++, ornate });
-        f.position.set(x, y, WALL + 0.015);
-        g.add(f);
-        O.hangCords(g, x, y + h / 2, w / 2 - 0.02, HOOK_Y, WALL + 0.012);
-      }
-    };
-    hang(rowA, 2.04);
+    // …and the RIGHT frame — the circuit diagram — is hung the same way now, by egg-silvia.js,
+    // for the same reason and for one more: it is a cabinet door and it has to be able to swing.
+    // Same nail, same 0.4 x 0.46 frame, same seed, same plate. Nothing about the row has moved.
     const clock = O.wallClock({ r: 0.185 });
     clock.position.set(0, 2.06, WALL + 0.03);
     g.add(clock);
@@ -960,6 +954,11 @@ export async function build(ctx) {
   // The slot is the one the operator's photograph hung in, to the millimetre: the row against the
   // clock is unchanged and only the sheet in the frame is new.
   const NAKAMOTO = eggNakamoto(ctx, { group: g, switches: SWITCHES, slot: { x: -0.46, y: 2.04, w: 0.4, h: 0.46, z: WALL + 0.015, hookY: HOOK_Y } });
+  // ---- PEPE SILVIA in the right frame, and the wall behind it (src/pieces/egg-silvia.js). ---
+  // The circuit diagram hangs on the nail it always hung on; it is now hinged at its left edge, and
+  // what is behind it is a conspiracy board. It takes the same slot the diagram was hung in, to the
+  // millimetre, so the row against the clock is unchanged until somebody opens it.
+  const SILVIA = eggSilvia(ctx, { group: g, switches: SWITCHES, slot: { x: 0.46, y: 2.04, w: 0.4, h: 0.46, z: WALL + 0.015, hookY: HOOK_Y }, wallZ: WALL });
   // ---- PEEP THE TOAD on the press's middle bay, and the floor he ends up on (src/pieces/egg-peep.js). --
   const PEEP = eggPeep(ctx, { group: g, switches: SWITCHES, jar: g.getObjectByName('miel-jar') });
   // ---- THE HOUSE OF CARDS. The room's seventh switch, and it has no object: ↑↑↓↓←→←→BA on the
@@ -1067,6 +1066,13 @@ export async function build(ctx) {
     // `set(n)` prints a number with no rain and no cue, and hitBox/tapBox are the frame's box on
     // the glass and the box a thumb is given.
     nakamoto: NAKAMOTO,
+    // PEPE SILVIA in the right frame. `open` is whether the board is up, `toggle()` works the frame
+    // as a click does — the swing, the eighteen sheets, the red string and the cues — `set(open)`
+    // puts the wall there for a still with none of it, `phase` is shut / opening / up / closing,
+    // `progress` says which drawing of it we are on, and hitBox/tapBox are the LEAF's box on the
+    // glass (which moves as it swings) and the box a thumb is given. `sheetBox(id)` is any one
+    // card's box; `red` is the string's colour, which is the room's fourth.
+    silvia: SILVIA,
     // the shop's board over Pepe's head. `mesh` is what a pointer is raycast against, `pivot` is
     // its hook line (rotate that and the board swings on its cord), and w/h are its size in metres.
     // help.js hangs its own tag under the pivot and tips it when the pointer is over the board.
@@ -1131,6 +1137,9 @@ export async function build(ctx) {
       // `nakamoto-rain` is the code halfway down the glass on a card printed 97; every other name
       // is the card at rest on the number this browser was left on.
       NAKAMOTO.setState(name);
+      // `silvia-open` is the right frame swung open on the whole board — eighteen pinned sheets and
+      // every length of red string tied. Every other name is a picture on a wall nobody has touched.
+      SILVIA.setState(name);
       // `peep-fallen` is the toad on the boards in front of the press; every other name has him
       // standing on the shelf, which is where a reload always puts him
       PEEP.setState(name);
@@ -1166,6 +1175,7 @@ export async function build(ctx) {
       FINE.update(ctx);
       MIRROR?.update(ctx);
       NAKAMOTO.update(ctx);
+      SILVIA.update(ctx);
       PEEP.update(ctx);
       KONAMI.update(ctx);
       DECK_OUT.update(ctx);

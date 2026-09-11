@@ -293,6 +293,28 @@ export async function build(ctx) {
     cutField();
   });
 
+  // ---- THE WALL BEHIND HIM IS A CONSPIRACY BOARD -------------------------------------------------
+  // The visitor opens the right-hand picture frame (src/pieces/egg-silvia.js), it swings like a
+  // cabinet door, and over the next six seconds fourteen pinned cards and photographs go up across
+  // the back wall and are joined with red string. When the last length is tied the room says so,
+  // once, and he is asked what he has found.
+  //
+  // IT IS THE GLOBE'S SHAPE, with three subtractions, and each of them is the joke:
+  //   NO react(). The wall is BEHIND him and he does not turn round. A man who has built that board
+  //     over some weeks does not need to look at it to describe it.
+  //   NO cut. The camera has not noticed either.
+  //   NO SCRIPT. Keyless there is no line and there is not going to be one: a canned paragraph about
+  //     Pepe Silvia, the same one every evening, is exactly the thing the user cut out of the
+  //     shuffle. With no live voice the wall simply goes up in silence, which is funnier.
+  // And the fire's guard, for the fire's reason: never over a reading, and only into the visitor's
+  // own open field — the placard they are answering must not be cut out from under them.
+  ctx.on?.('props:silvia', ({ open } = {}) => {
+    if (!open || roomSays || !M?.available || !M?.reply) return;
+    if (!D?.asking || picking || READING.has(api.beat)) return;
+    roomSays = { beat: 'silvia' };
+    cutField(); // the visitor's turn gives way; nothing they typed is sent, and none of it is lost
+  });
+
   // ---- THE VISITOR HAS PICKED UP A CARD, AND HE TEACHES IT ---------------------------------------
   // The user, seeing the whole deck lying face up on the cloth: "maybe this could be the teaching -
   // in this whole laid out view, whenever a user clicks a card, pepe could explain the suit and the
@@ -916,7 +938,8 @@ export async function build(ctx) {
         prompt = back ?? prompt;
         continue;
       }
-      // The globe came to rest while the field was open. His line goes up on the placard and the
+      // The globe came to rest while the field was open — or the deck went out, or the wall behind
+      // him finished going up (`silvia`). His line goes up on the placard and the
       // field opens again under it, exactly as a talk turn ends — so it is a digression and not a
       // silence: the quiet counter does not move and no waiting line is spent on it. There is no
       // script behind this one, so `render` is asked directly and a dead call leaves the room as

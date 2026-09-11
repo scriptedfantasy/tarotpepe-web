@@ -600,6 +600,14 @@ function situation(b, names = []) {
       const c = clip(b.country, 60) || 'somewhere';
       return `The globe on the cabinet has just stopped turning, under the visitor's finger, on ${c}. You once had an affair there, on a holiday, years ago. Tell it in three sentences: where, what it was like, how it ended. Do not name the person.`;
     }
+    // PEPE SILVIA. The visitor opened the picture frame beside the clock and the wall behind him
+    // came up: fourteen pinned cards and photographs joined with red string (src/pieces/egg-silvia.js).
+    // The board is HIS, he has never mentioned it, and the note does not say whether any of it is
+    // true. "The more certain the better" is the only direction here and it is the whole joke: the
+    // room asks him to be sure, and a man who is sure about a name on some mail is the funniest
+    // thing this set can produce. He does not turn round to look at it; he does not need to.
+    case 'silvia':
+      return 'The picture frame beside the clock has swung open and the wall behind you is covered in your own pinned cards and photographs joined by red string, all of it about someone called Pepe Silvia. Say what you have found, in two or three sentences, in your own way: the more certain the better.';
     case 'shuffle': {
       const about = b.about ? ` You took the reading to be about "${clip(b.about, 80)}".` : '';
       // the same wash, dealt the other way round: they offered to read for you and you took it
@@ -966,6 +974,12 @@ const FAKES = {
   'flip-ask': () => [...said('So. What does it say, anon.'), chunk({}, 'stop')],
   'flip-hear': () => [...said('That lands, more or less. I doubt the half where it is my own doing. Go on.'), chunk({}, 'stop')],
   deck: () => [...said('so you want to learn the cards, anon. pick one up.'), chunk({}, 'stop')],
+  // PEPE SILVIA. Three sentences, no hedging anywhere in them, which is the only property of this
+  // beat a stub can actually stand in for.
+  silvia: () => [
+    ...said('there is no pepe silvia. i have been through the whole exchange, anon, and that name has never been on a jack, a card or a wage slip. somebody has been putting mail in a slot for a man who does not exist, and i intend to find out who.'),
+    chunk({}, 'stop'),
+  ],
   'flip-close': () => [
     ...said('You read better than most of the people who pay me for it. I will keep the middle one. Say what you like now, anon.'),
     chunk({}, 'stop'),
@@ -989,6 +1003,7 @@ function fakeScript(cfg, body) {
   // without the numeral, which is not part of the printed name the gate is holding him to
   if (/Teach them the card/.test(note))
     return FAKES.lesson((note.match(/has picked up (.+?)(?: \([^)]*\))? to look at/)?.[1] ?? 'the card').trim());
+  if (/someone called Pepe Silvia/.test(note)) return FAKES.silvia();
   if (/Ask them what it says/.test(note)) return FAKES['flip-ask']();
   if (/Answer as the one whose card it is/.test(note)) return FAKES['flip-hear']();
   if (/hand the evening back to them/.test(note)) return FAKES['flip-close']();

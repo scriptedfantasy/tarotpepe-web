@@ -221,6 +221,17 @@ const PLAIN = [
     /\bduct\b|\bconduit\b|\bcleats?\b|\bterminal box\b|\bcables?\b|\bwires?\b|\btrough\b/,
     ['The cable duct. The town\'s calls ran along that wall in it. It is empty now, and it is still screwed to the plaster.'],
   ],
+  // THE RIGHT FRAME, AND IT STANDS BEFORE THE CLOCK'S OWN LINE ON PURPOSE: PLAIN is walked in order
+  // and "the picture beside the clock" contains the word clock, so behind the clock's frame this
+  // answer would never be reached. It is a circuit diagram on a nail and it is also a cabinet door
+  // with a conspiracy board behind it (src/pieces/egg-silvia.js), and the line gives none of that
+  // away: he says what is hanging there and stops, the way he does about the sixty other things
+  // that came with the room. `pepe silvia` is in the keys because somebody will type the name
+  // before they have touched anything, and the honest answer to that is the same answer.
+  [
+    /\bdiagram\b|\bcircuit\b|\bother frame\b|\bright frame\b|\bgrid\b|\bpicture beside the clock\b|\bframe beside the clock\b|\bpepe silvia\b|\bsilvia\b/,
+    ['a circuit diagram, beside the clock. it is a jack field drawn on paper, it was on the wall when i took the room, and there is nothing behind it.'],
+  ],
   [
     /\bclock\b|\bpendulum\b|\bseconds hand\b/,
     ['The exchange clock. It kept the time the women here were paid by, to the minute. It still keeps it; nothing in this room is urgent any more.'],
@@ -285,10 +296,6 @@ const PLAIN = [
   [
     /\balbum\b|\bfamily album\b|\balbum de famille\b/,
     ['An album of somebody\'s family. It came with the room and I have never opened it.'],
-  ],
-  [
-    /\bdiagram\b|\bcircuit\b|\bother frame\b|\bgrid\b/,
-    ['A circuit diagram in a frame. It is a jack field drawn on paper. That one was here too.'],
   ],
   [
     /\bpicture\b|\bframes?\b|\bpaintings?\b/,
