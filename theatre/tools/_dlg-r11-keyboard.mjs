@@ -10,6 +10,10 @@
 //   node tools/_dlg-r11-keyboard.mjs
 import { chromium, devices } from 'playwright';
 
+// The dev server to drive. A builder running a server of their own passes BASE; the default is the
+// user's own on 5173, so nothing that ran before this line runs differently.
+const BASE = process.env.BASE ?? 'http://127.0.0.1:5173';
+
 const iPhone = devices['iPhone 14'];
 const KB = 291; // px an iPhone 14's keyboard takes, with its accessory bar
 
@@ -35,7 +39,7 @@ page.on('pageerror', (e) => console.log('ERR', String(e)));
 await page.route('**/@vite/client', (r) =>
   r.fulfill({ contentType: 'application/javascript', body: 'export const createHotContext=()=>({on(){},send(){},accept(){},dispose(){},prune(){},invalidate(){},decline(){}});export const updateStyle=()=>{};export const removeStyle=()=>{};export const injectQuery=(u)=>u;' }),
 );
-await page.goto('http://127.0.0.1:5173/?view=dialogue&state=question', { waitUntil: 'load', timeout: 180000 });
+await page.goto(`${BASE}/?view=dialogue&state=question`, { waitUntil: 'load', timeout: 180000 });
 await page.waitForFunction('window.__theatreReady === true', null, { timeout: 120000 });
 await page.waitForTimeout(1200);
 

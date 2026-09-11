@@ -13,7 +13,7 @@
 // AND IT IS ONE OBJECT. One width for a given frame (46% of it, ~90% on a phone, never under
 // 300 px), one height, one place, whatever is written on it. A line too long for its well does not
 // stretch the card: it is cut into TAKES at its own clauses and the takes are played into the same
-// card. See WELL_LINES, `measure`, `splitTakes`.
+// card. See BODY_LINES, `measure`, `splitTakes`.
 //
 // TWO REGISTERS, BOTH ALWAYS THERE (round 6). The card is not his caption with the visitor tacked
 // underneath; it is a conversation between two people and the drawing says so without a word of
@@ -21,6 +21,46 @@
 // VISITOR'S, and it is standing there, empty, before they have typed a character, so there is never
 // a moment when it is unclear where their words will go. Nothing moves when the turn changes: the
 // card is the same object, the same height, in the same place, all evening.
+//
+// ROUND 13: THE FOUR LINES ARE ONE BODY, AND HE MAY USE ALL OF THEM. The user, looking at his phone
+// at a card carrying two lines of his and two lines of nothing: "I think Pepe should use all four
+// lines in the chat box to speak because with only two lines the user has to click too often. The
+// user's cursor can pop up on an empty chatbox after pepe spoke if the chatbox is full. if it isn't
+// full the user can type into the line below pepe."
+//
+// So the two fixed compartments are gone and the card is FOUR LINES OF ONE GRID. Nothing else about
+// it moved — same measure, same height at a given window, same place, his green and their ink:
+//
+//   · HIS TAKE IS UP TO FOUR LINES. Words are packed into it until the next one will not fit in
+//     four, and only then does the arrow come up and the next take wait for the visitor. A sentence
+//     that used to be three cards and two clicks on a phone is usually one card and none;
+//   · THE FIELD OPENS ON THE LINE BELOW HIS WORDS. A two-line take leaves two lines, and their
+//     caret stands at the head of the third — which is what the lower register always was, except
+//     that it is now wherever his words ended rather than always the middle of the card;
+//   · A TAKE THAT FILLS ALL FOUR LINES TAKES THE CARD WITH IT. There is no line below the fourth,
+//     so when the field opens his words come OFF the paper and the caret has the whole card: an
+//     empty sheet and a place to write, rather than a full one with the visitor squeezed into the
+//     margin. Nothing is lost — every word of his is in the transcript (mind.history) and on the
+//     sheet the visitor takes away (help-keep.js);
+//   · AND THE MARK KEEPS ITS CORNER. A full take's last line is a full line, and the arrow stands
+//     at the foot of the card: the line is wrapped a mark's width short so the two never touch.
+//     See THE MARK'S OWN CORNER.
+//
+// WHAT IT IS WORTH, MEASURED (tools/_dlg-r13-proof.mjs, a six-sentence reply, the visitor turning
+// each take when the mark comes up):
+//
+//                          arrows he asks for      cards the reply takes
+//     1280x800  before            6                        12
+//               after             0                         6
+//     390x844   before           10                        16
+//               after             1                         7
+//
+// AND flow's MAX_SENTENCES IS NOT PART OF THIS, which was checked rather than assumed. A turn is
+// capped at three sentences there, and flow hands this card ONE sentence per `say` — so a sentence
+// gets a card of its own however deep the card is, and four lines cannot pack three of them into
+// one take. The cap is a rule about how long he talks, not about how much fits on the paper: three
+// sentences cost about three cards now instead of about seven, and nothing about the four lines
+// cuts a turn short. It is left at 3.
 //
 // AND NOBODY IS NAMED. Round 5 lettered TAROT PEPE over the first line of a beat and left it off
 // the rest, which the user saw at once — "sometimes it says tarotpepe … it should say tarotpepe at
@@ -178,20 +218,18 @@ const BLINK = 6; // frames the caret is on, then off (12fps → half a second ea
 // lower-third is a physical card: one width, one height, and the type is SET INTO it. So:
 //
 //   · the measure is a fraction of the frame and nothing else (46% wide, ~90% on a phone);
-//   · his words live in a WELL of exactly two lines, always two lines tall whether one word or
-//     twenty-two are in it;
-//   · the visitor's REGISTER under it is another two lines, reserved in exactly the same way and
-//     standing there empty before they have typed anything — round 6's fault was that their turn
-//     had no place of its own and took whatever his line had left over;
-//   · a line too long for the well is not allowed to stretch the card. It is CUT INTO TAKES and
+//   · the card's body is exactly FOUR LINES of type, always four lines tall whether one word or
+//     forty are on it (round 13; it was two of his over two of theirs, with a gap between them);
+//   · his take takes as many of the four as it needs from the TOP, and what it leaves is where the
+//     visitor writes — their caret on the line under his last word, in their own ink. A take that
+//     fills all four leaves nothing, so the card is cleared for them (see openBlock);
+//   · a line too long for the card is not allowed to stretch it. It is CUT INTO TAKES and
 //     the takes are played into the same card, one after the other, the way a subtitle changes
 //     while the card it is set in does not. (The alternative — hold the line and let the card
-//     grow — is the fault we are fixing.) Each take FILLS the well — both lines of it, to the last
-//     word that fits — and the visitor turns to the next one when they are ready: see splitTakes
-//     and THE ARROW.
-const WELL_LINES = 2; // his register, in lines of type. The whole point: it never changes.
-const REPLY_LINES = 2; // the visitor's register. Reserved whether or not there is a word in it.
-const REGISTER_GAP = 0.4; // the paper between the two registers, in ems. Not a rule: a gap.
+//     grow — is the fault we are fixing.) Each take FILLS the body — all four lines of it, to the
+//     last word that fits — and the visitor turns to the next one when they are ready: see
+//     splitTakes and THE ARROW.
+const BODY_LINES = 4; // the card, in lines of type. The whole point: it never changes.
 // The leading, as a multiple of the em. Round 12 took it from 1.5 to 1.25 because the em means
 // something different now: the words are LETTERED, and a cap height of `em × 0.72` at 1.25 ems of
 // leading gives a line pitch of 1.74 caps — the notice's own (help-bill: `lead = capBody × 1.92`),
@@ -233,6 +271,19 @@ const PHONE = 700; // frames narrower than this are a phone: the card takes near
 // The card's own margins, in ems, matching the padding in the stylesheet below. The measure the
 // words are wrapped to is the card less these, less a hair for the pen's overshoot.
 const PAD_X = 1.3, PAD_X_NARROW = 0.8;
+// ---- THE MARK'S OWN CORNER (round 13) ----------------------------------------------------------
+// A take that has another take behind it FILLS the card — that is what "fills" means: the cut is
+// the last word that fits four lines, so the fourth line is a full line. The arrow stands at the
+// foot of the card, inside its corner, and a full fourth line would be lettered straight through
+// it. (It never could before: his register was the top two lines and the mark stood in the
+// visitor's empty one.)
+//
+// So the letterer leaves the mark its corner. The LAST line of a take that is followed by another
+// is wrapped short by the mark's own width — and only that line; the three above it keep the whole
+// measure. The arrow's box is 2.4 em square at `right: 0.35em`, and the drawn stroke inside it is
+// 2.1 em wide, so the mark reaches 2.6 em in from the card's right edge; the card's own margin
+// gives back PAD_X of that, and a word space keeps the two apart.
+const ARROW_REACH = 2.6, ARROW_GAP = 0.45; // ems, from the card's right edge
 
 // ---- THE THINKING MARK -------------------------------------------------------------------------
 // Three dots in his register while a turn of his is in flight. The numbers, all of them measured:
@@ -378,19 +429,22 @@ function buildStyle() {
     }
     #dialogue .cap.narrow { padding-left: ${PAD_X_NARROW}em; padding-right: ${PAD_X_NARROW}em; }
     #dialogue .cap.mid { top: 50%; transform: translate(-50%, -50%); }
-    /* THE TWO REGISTERS — the fixed compartments the type is set into: his above, the visitor's
-       below, both reserved before a word is written, so the card is the same object on every line
-       of the evening and nothing moves when the turn changes. */
+    /* THE BODY — four lines of one grid (round 13). It is a FIXED height, reserved before a word is
+       written, so the card is the same object on every line of the evening and nothing moves when
+       the turn changes. What changes inside it is only how many of the four he has used: his take
+       stands at the top and takes what it needs, the visitor's line follows on the next line down,
+       and neither compartment has a height of its own. (Until round 13 they had: two lines of his
+       over two of theirs, with a gap ruled in paper between them. The user asked for all four.) */
     #dialogue .cap .inner {
-      height: calc(${(WELL_LINES + REPLY_LINES) * LINE_H + REGISTER_GAP}em);
-      display: flex; flex-direction: column;
+      height: calc(${BODY_LINES} * ${LINE_H}em);
+      display: flex; flex-direction: column; justify-content: flex-start;
     }
     #dialogue .cap .well {
-      height: calc(${WELL_LINES} * ${LINE_H}em); overflow: hidden;
-      display: flex; flex-direction: column; justify-content: flex-end;
+      flex: 0 0 auto; overflow: hidden;
+      display: flex; flex-direction: column; justify-content: flex-start;
     }
     #dialogue .cap .reply {
-      height: calc(${REPLY_LINES} * ${LINE_H}em); overflow: hidden; margin-top: ${REGISTER_GAP}em;
+      flex: 1 1 auto; min-height: 0; overflow: hidden;
       display: flex; flex-direction: column; justify-content: flex-start;
     }
     /* what is in a register keeps its own height and the register clips it — never squeezed */
@@ -481,13 +535,17 @@ function buildStyle() {
 // percent short and the rag is honest.
 const SPACE_ADV = 34; // the case's own advance for a word space, in cap units (titles-sign GLYPHS)
 const SAFE = 0.99; // the measure, a percent short: a word measured alone is a hair off in company
-function handMetrics(capH, contentW) {
+function handMetrics(capH, contentW, padX = PAD_X) {
   const em = capH / 0.72;
   const widths = new Map();
   const M = {
     capH,
     em,
     lead: LINE_H * em,
+    // what the arrow's corner costs the last line of a take that has another behind it. It is
+    // taken off the RIGHT of that line only — the line is then centred in what is left, so the
+    // words walk away from the mark rather than sitting in it. See THE MARK'S OWN CORNER.
+    reserve: Math.max(0, ARROW_REACH - padX + ARROW_GAP) * em,
     // the canvas is the whole of the card's inside; the words are wrapped a little short of it, so
     // the pen's overshoot at the end of a stroke stays on the paper
     contentW,
@@ -534,12 +592,19 @@ function foldWords(text, M) {
 // Greedy wrap, the way help-bill wraps the notice. Returns [{ text, start }] where `start` is the
 // character offset of the line's first sort inside `words.join(' ')` — which is the string the
 // caption types itself out of, so the two always agree.
-function wrapWords(words, M, maxLines = Infinity) {
+//
+// `reserve` is the mark's corner: px taken off the measure of the LAST line the block is allowed
+// (the fourth of a take that has another take behind it), and off no other line. Everything that
+// wraps or counts words takes the same argument, so the fill, the cut and the strike agree on
+// where the fourth line ends.
+function wrapWords(words, M, maxLines = Infinity, reserve = 0) {
   const lines = [];
   let line = [];
   let w = 0;
   let start = 0;
   let at = 0;
+  const last = Number.isFinite(maxLines) ? maxLines : 0;
+  const room = () => M.measure - (reserve && lines.length + 1 === last ? reserve : 0);
   const flush = () => {
     lines.push({ text: line.join(' '), start });
     at += line.join(' ').length + 1;
@@ -550,7 +615,7 @@ function wrapWords(words, M, maxLines = Infinity) {
   for (const word of words) {
     const ww = M.width(word);
     const cand = line.length ? w + M.gap + ww : ww;
-    if (!line.length || cand <= M.measure) {
+    if (!line.length || cand <= room()) {
       line.push(word);
       w = cand;
       continue;
@@ -564,12 +629,12 @@ function wrapWords(words, M, maxLines = Infinity) {
   return lines;
 }
 // How many words of `words`, starting at `i`, fill `maxLines` lines. Exclusive end index.
-function fillTo(words, i, maxLines, M) {
+function fillTo(words, i, maxLines, M, reserve = 0) {
   let k = i, lines = 1, w = 0;
   while (k < words.length) {
     const ww = M.width(words[k]);
     const cand = w ? w + M.gap + ww : ww;
-    if (!w || cand <= M.measure) {
+    if (!w || cand <= M.measure - (reserve && lines === maxLines ? reserve : 0)) {
       w = cand;
       k++;
       continue;
@@ -679,10 +744,11 @@ export async function build(ctx) {
   function setHand() {
     const capH = capForCard(cardW);
     const em = capH / 0.72;
-    const padX = (cap.classList.contains('narrow') ? PAD_X_NARROW : PAD_X) * em;
+    const pad = cap.classList.contains('narrow') ? PAD_X_NARROW : PAD_X;
+    const padX = pad * em;
     const contentW = Math.max(60, cardW - 2 * padX);
     if (hand && Math.abs(hand.capH - capH) < 0.01 && Math.abs(hand.contentW - contentW) < 0.01) return false;
-    hand = handMetrics(capH, contentW);
+    hand = handMetrics(capH, contentW, pad);
     cap.style.fontSize = `${em.toFixed(3)}px`;
     return true;
   }
@@ -887,6 +953,7 @@ export async function build(ctx) {
     drawBlock(wellInk.canvas, wellInk.lines, {
       width: hand.contentW, capH: hand.capH, lead: hand.lead, tracking: TRACK,
       pen: hand.pen, color: PEPE_GREEN, boil: boilTick(), seed: 3, shown: wellInk.shown, bleed: hand.bleed,
+      inset: wellInk.inset,
     });
   }
   function paintReply() {
@@ -956,18 +1023,23 @@ export async function build(ctx) {
   //
   // ROUND 12 measures with the hand instead of with the browser. The bisection is gone with the
   // ruler: a greedy fill is what the wrap itself does, so `fillTo` walks the words once and hands
-  // back the last one that fits two lines. Everything after that — the clause preference, the
-  // widow rule, the numbers above — is untouched.
+  // back the last one that fits. Everything after that — the clause preference, the widow rule, the
+  // numbers above — is untouched. ROUND 13 changed one number in it: the take is four lines deep
+  // rather than two, which is the whole of what the user asked for.
   const BREAKS = [/[.?!…]["'”’)»]?$/, /[;:]$/, /,$/];
   const CLAUSE_REACH = 2; // words the cut may walk back to reach a clause ending, and no further
-  function splitTakes(text, maxLines = WELL_LINES) {
+  function splitTakes(text, maxLines = BODY_LINES) {
     const M = hand;
     const words = foldWords(text, M);
     if (words.length < 2) return [words.join(' ') || signFold(text)];
     const takes = [];
     let i = 0;
     while (i < words.length) {
-      const max = fillTo(words, i, maxLines, M);
+      // Filled with the arrow's corner left out of the last line — and then, if that turned out to
+      // be the whole of the rest of the line, filled AGAIN without it: a take nothing follows shows
+      // no arrow, so it has no mark to leave room for and keeps the whole measure.
+      let max = fillTo(words, i, maxLines, M, M.reserve);
+      if (max < words.length && fillTo(words, i, maxLines, M, 0) >= words.length) max = words.length;
       let cut = max;
       if (max < words.length) {
         // the clause break is a preference, not a rule: it is taken only if it is right there
@@ -1050,19 +1122,32 @@ export async function build(ctx) {
     mountReply(lastAnswer);
     f.dispose?.(); // an ask() still waiting resolves null (its own settle() is re-entrant-safe)
   }
+  // HIS WORDS OFF THE CARD, and the card left standing. One caller: the field opening under a take
+  // that filled all four lines (round 13). It is not `cut()` — the placard keeps its place, its
+  // measure and its seed, and the pen does not redraw it — and it is not `clear()`, which takes the
+  // whole card off the paper.
+  function clearWell() {
+    const well = cap.querySelector('.well');
+    if (well) well.innerHTML = '';
+    wellInk = null;
+    standing = false; // there is nothing of his on the card any more; the transcript has it
+  }
   // Set one take into the well of a card that is already standing. The card itself is not touched:
   // same measure, same height, same seed — so the pen does not redraw and nothing flickers between
   // the takes of a long line.
   //
-  // The take is wrapped WHOLE and its canvas is cut to the lines it occupies; the well is
-  // bottom-aligned, so a one-line take stands on the lower of his two lines exactly as it always
-  // has. Returns the word marks the typing is counted against: `at` is the character offset just
-  // past a word (and its space) inside the take, which is the same arithmetic the hidden word spans
-  // used to carry.
-  function setTake(text) {
+  // The take is wrapped WHOLE and its canvas is cut to the lines it occupies; it stands at the TOP
+  // of the card's four (round 13 — it used to be bottom-aligned in a two-line well of its own), so
+  // a one-line take is the first line of the card and the visitor's caret is on the second.
+  // Returns the word marks the typing is counted against: `at` is the character offset just past a
+  // word (and its space) inside the take, which is the same arithmetic the hidden word spans used
+  // to carry.
+  function setTake(text, more = false) {
     const well = cap.querySelector('.well');
     if (!well || !hand) return [];
-    const lines = wrapWords(text.split(' ').filter(Boolean), hand);
+    // the mark's corner is left out of the fourth line only, and only when a take follows this one
+    const reserve = more ? hand.reserve : 0;
+    const lines = wrapWords(text.split(' ').filter(Boolean), hand, BODY_LINES, reserve);
     well.innerHTML = '<div class="line"><canvas class="ink" aria-hidden="true"></canvas><span class="sr"></span></div>';
     const line = well.querySelector('.line');
     line.querySelector('.sr').textContent = text;
@@ -1075,8 +1160,15 @@ export async function build(ctx) {
     // THE FIRST WORD ARRIVES WITH THE CARD. A critic caught the card standing empty in two stills
     // out of twenty-four — not a hang, but the single frame between the card being drawn and the
     // clock's first tick — so the take is struck with its first word already down.
-    wellInk = { canvas: line.querySelector('canvas'), lines, text, shown: words.length ? words[0].at - 1 : 0 };
+    wellInk = {
+      canvas: line.querySelector('canvas'), lines, text,
+      shown: words.length ? words[0].at - 1 : 0,
+      // the corner the arrow will stand in, kept with the strike so the boil re-cuts it the same
+      inset: reserve && lines.length >= BODY_LINES ? reserve : 0,
+    };
     paintWell();
+    // his take has decided how many lines are left; anything standing in theirs is re-rolled to fit
+    if (replyInk) setReply(field ? field.input.value : lastAnswer);
     return words;
   }
   // THE VISITOR'S REGISTER. It is reserved whether or not there is a word in it, so the card holds
@@ -1095,11 +1187,19 @@ export async function build(ctx) {
     if (field) el.appendChild(field.caret[0]);
     setReply(text);
   }
+  // How many of the card's four lines are left for them: what his take did not use. It is at least
+  // one — a take that used all four has been taken off the card by the time the field opens (see
+  // openBlock), and the dots are one line of his like any other.
+  function freeLines() {
+    const used = wellInk ? wellInk.lines.length : think ? 1 : 0;
+    return Math.max(1, BODY_LINES - used);
+  }
   function setReply(text) {
     if (!replyInk || !hand) return;
+    const room = freeLines();
     let words = foldWords(text ?? '', hand);
     let lines = wrapWords(words, hand);
-    while (lines.length > REPLY_LINES && words.length > 1) {
+    while (lines.length > room && words.length > 1) {
       words = words.slice(1);
       lines = wrapWords(words, hand);
     }
@@ -1145,7 +1245,7 @@ export async function build(ctx) {
     render(lastAnswer);
     cap.hidden = false;
     const takes = splitTakes(text);
-    const words = setTake(takes[0]);
+    const words = setTake(takes[0], takes.length > 1);
     standing = true;
     fit();
     drawCard();
@@ -1167,7 +1267,7 @@ export async function build(ctx) {
   function nextTake(t) {
     setArrow(false); // the mark belongs to the take that has just gone
     t.ti += 1;
-    t.words = setTake(t.takes[t.ti]);
+    t.words = setTake(t.takes[t.ti], t.ti < t.takes.length - 1);
     t.chars = -1;
     t.start = ctx.clock.t;
     if (ctx.clock.frozen) reveal(t.words, Infinity);
@@ -1413,6 +1513,15 @@ export async function build(ctx) {
   function openBlock(value = '') {
     const reply = cap.querySelector('.reply');
     if (!reply) return null;
+    // ROUND 13 — A FULL CARD IS CLEARED FOR THEM. The user: "The user's cursor can pop up on an
+    // empty chatbox after pepe spoke if the chatbox is full. if it isn't full the user can type
+    // into the line below pepe." A take that used all four lines has left no line to write on, and
+    // the answer is not to squeeze them in beside him: his words come off the paper and the caret
+    // has the whole card. Nothing of his is lost — the transcript keeps every sentence (mind.js,
+    // history) and so does the sheet the visitor takes away (help-keep.js) — and the card does not
+    // change shape, place or measure doing it. A take that left even one line is untouched: they
+    // write under his last word, in their own ink, exactly as they always have.
+    if (wellInk && wellInk.lines.length >= BODY_LINES) clearWell();
     cap.classList.add('asking');
     const c = document.createElement('span');
     c.className = 'caret';
@@ -1471,8 +1580,9 @@ export async function build(ctx) {
     // THE BAND THE CARD STANDS IN, whether or not there is a word on it: the strip of the frame the
     // placard occupies (or would occupy the moment he says anything), in px, bleed included.
     //
-    // It is arithmetic and not a measurement, deliberately: the card's height is FIXED — two lines
-    // of his, two of theirs, the gap and the two paddings, in ems of the hand this measure is cut in
+    // It is arithmetic and not a measurement, deliberately: the card's height is FIXED — four lines
+    // of type and the two paddings, in ems of the hand this measure is cut in (round 13; it was two
+    // lines of his over two of theirs with a gap between, which came to the same kind of number)
     // — so the answer is the same whether the card is up or the paper is bare, and a piece laying
     // itself out around the placard is not made to wait for him to speak first. `at` says which
     // edge it hangs from: 'foot' all evening, 'head' through the pick and, on a phone, for as long
@@ -1484,7 +1594,7 @@ export async function build(ctx) {
     band() {
       const H = ctx.size?.h || window.innerHeight || 900;
       const em = hand?.em ?? capForCard(cardW || 300) / 0.72;
-      const h = ((WELL_LINES + REPLY_LINES) * LINE_H + REGISTER_GAP + 0.86 + 0.9) * em + 2 * PLACARD_BLEED;
+      const h = (BODY_LINES * LINE_H + 0.86 + 0.9) * em + 2 * PLACARD_BLEED;
       if (picking()) {
         const top = headFrac() * H - PLACARD_BLEED;
         return { at: 'head', top, bottom: top + h, h, w: cardW };

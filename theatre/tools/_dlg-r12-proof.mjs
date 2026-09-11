@@ -20,6 +20,10 @@
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 
+// The dev server to drive. A builder running a server of their own passes BASE; the default is the
+// user's own on 5173, so nothing that ran before this line runs differently.
+const BASE = process.env.BASE ?? 'http://127.0.0.1:5173';
+
 const ROOT = '/Users/workbook2024/Development/tarotpepe/.claude/worktrees/wes-tarot-theatre/theatre';
 const OUT = `${ROOT}/public/progress`;
 mkdirSync(OUT, { recursive: true });
@@ -87,7 +91,7 @@ async function shotCard(page, name, pad = 26) {
 
 const log = [];
 async function pass(label, viewport) {
-  const { context, page } = await open(viewport, 'http://127.0.0.1:5173/?view=dialogue&state=greeting');
+  const { context, page } = await open(viewport, `${BASE}/?view=dialogue&state=greeting`);
 
   // ---- (a) a take of his, mid-strike and struck out -------------------------------------------
   await page.evaluate((t) => {
@@ -201,7 +205,7 @@ const phone = await pass('phone', { width: 390, height: 844 });
 
 // ---- (d) the pick prompt, docked at the head, with the spread under it --------------------------
 for (const [label, viewport] of [['laptop', { width: 1600, height: 900 }], ['phone', { width: 390, height: 844 }]]) {
-  const { context, page } = await open(viewport, 'http://127.0.0.1:5173/?view=flow&state=fan');
+  const { context, page } = await open(viewport, `${BASE}/?view=flow&state=fan`);
   await page.waitForTimeout(2600);
   await page.screenshot({ path: `${OUT}/dlg-r12-${label}-d-dock.png` });
   const c = await card(page);

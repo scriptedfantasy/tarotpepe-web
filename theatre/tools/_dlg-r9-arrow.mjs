@@ -6,6 +6,10 @@
 //   node tools/_dlg-r9-arrow.mjs [--w 1600 --h 900] [--shot /abs/out.png]
 import { chromium } from 'playwright';
 
+// The dev server to drive. A builder running a server of their own passes BASE; the default is the
+// user's own on 5173, so nothing that ran before this line runs differently.
+const BASE = process.env.BASE ?? 'http://127.0.0.1:5173';
+
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((a, x, i, arr) => (x.startsWith('--') ? [...a, [x.slice(2), arr[i + 1] ?? 'true']] : a), []),
 );
@@ -19,7 +23,7 @@ page.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 await page.route('**/@vite/client', (r) =>
   r.fulfill({ contentType: 'application/javascript', body: `export function createHotContext(){return{accept(){},acceptExports(){},dispose(){},prune(){},decline(){},invalidate(){},on(){},off(){},send(){},data:{}};} export function updateStyle(){} export function removeStyle(){} export function injectQuery(u){return u;} export class ErrorOverlay{}` }),
 );
-await page.goto('http://127.0.0.1:5173/?view=dialogue&state=greeting', { waitUntil: 'load', timeout: 180000 });
+await page.goto(`${BASE}/?view=dialogue&state=greeting`, { waitUntil: 'load', timeout: 180000 });
 for (let i = 0; i < 500; i++) {
   if (await page.evaluate(() => window.__theatreReady === true).catch(() => false)) break;
   await page.waitForTimeout(200);

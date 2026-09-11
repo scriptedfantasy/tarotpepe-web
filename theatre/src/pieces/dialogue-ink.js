@@ -61,11 +61,16 @@ export function drawBlock(canvas, lines, opts = {}) {
     shown = Infinity,
     bleed = 0,
     alpha = 1,
+    // px kept clear at the RIGHT of the LAST row and of no other: the corner the take's arrow
+    // stands in (dialogue.js, THE MARK'S OWN CORNER). That row is centred in what is left, so the
+    // words walk away from the mark instead of being lettered through it. The caller has already
+    // wrapped the row to the same reduced measure, so nothing here re-measures anything.
+    inset = 0,
   } = opts;
   const rows = lines.length ? lines : [{ text: '', start: 0 }];
   const h = Math.max(1, Math.round(rows.length * lead + 2 * bleed));
   const w = Math.max(1, Math.round(width));
-  const key = `${rows.map((l) => l.text).join('')}|${w}|${h}|${capH.toFixed(2)}|${lead.toFixed(2)}|${color}|${alpha}|${shown}|${boil}|${seed}|${tracking}`;
+  const key = `${rows.map((l) => l.text).join('')}|${w}|${h}|${capH.toFixed(2)}|${lead.toFixed(2)}|${color}|${alpha}|${shown}|${boil}|${seed}|${tracking}|${Math.round(inset)}`;
   canvas.style.width = `${w}px`;
   canvas.style.height = `${h}px`;
   if (bleed) canvas.style.margin = `${-bleed}px 0`;
@@ -87,7 +92,9 @@ export function drawBlock(canvas, lines, opts = {}) {
     if (upto === 0) return;
     // the cap band sits centred in its line box, so the leading is even above and below
     const top = bleed + i * lead + (lead - capH) / 2;
-    signCaps(g, L.text, w / 2, top, {
+    // ... and the last row is centred in the measure LESS the mark's corner, when there is one
+    const room = inset && i === rows.length - 1 ? Math.max(1, w - inset) : w;
+    signCaps(g, L.text, room / 2, top, {
       capH,
       tracking,
       pen: nib,
