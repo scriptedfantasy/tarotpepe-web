@@ -368,20 +368,20 @@ export function drawRain({ w, h, ppm, penM, cols = 4, seed = 8123 }) {
 }
 
 // =================================================================================================
-// 4. THE CROSSROADS, ON A PLATE IN THE OPEN AIR.
+// 4. THE CROSSROADS, ON A PLATE IN THE OPEN AIR — WHICH IS NOW ONLY THE UNDERSTUDY.
 //
-// The sheet is 6.00 x 5.22 m and stands 6.28 m from the lens (src/pieces/egg-cross-plate.js holds
-// those numbers and the cover fit that solves the lens for whatever window we are in). It fills the
-// frame at every aspect, and the two named windows keep different parts of it:
+// Everything below draws a crossroads from nothing, and since round 3 it is not what the visitor
+// sees: tools/trace-plate.mjs puts the user's own copy of the meme through the room's pen and
+// src/pieces/egg-cross.js hangs THAT on the plate ("the meme doesnt work if you redraw it"). This
+// drawing stands in for the few hundred milliseconds before the file lands, and it is hung at the
+// original's own size in the middle of the sheet so that its composition still reads as a square.
 //
-//   a laptop  (1920x1080)  its WHOLE WIDTH and the middle 64 % of its height
-//   a phone   (390x844)    its WHOLE HEIGHT and the middle 40 % of its width
-//
-// so the part BOTH of them see is u 0.302..0.698 by v 0.1815..0.8185 — PLATE.safe. Everything the
-// picture is about is drawn inside that box: the fork, the signpost with two arms, the child from
-// behind, the bright castle under its sun, the dark castle under its lightning. Outside it is not
-// margin and is not blank — it is the rest of the country, which is what a laptop is given more of,
-// and the sky and the road, which is what a phone is given more of.
+// ROUND 2 COMPOSED IT FOR A COVER FIT and the note that stood here worked out which part of it both
+// named windows kept — u 0.302..0.698 by v 0.1815..0.8185 — so that nothing the picture is about
+// could be cropped. That box was PLATE.safe and it is gone: the lens now holds the WHOLE of the
+// picture at every window shape and fills the rest of the frame with the country carried on past it
+// (egg-cross-plate.js), so PLATE.safe is the whole sheet and there is no part of this drawing that
+// a laptop or a phone can lose. The composition below is unchanged, because it was a good one.
 //
 // THE SECOND RULE, and it is the one the round-1 drawing never had to think about: THE PLACARD
 // STANDS ON THE ROAD. His line goes up on the drawn card at the foot of this frame like every other

@@ -1041,9 +1041,10 @@ export async function build(ctx) {
     // a pointer does — rain, lightning, thunder, the swing and all — `choose('light'|'dark')` takes
     // a road as a click on it does, `set(phase)` puts it there for a still with no cue, and
     // hitBox/tapBox are the cross's box on the glass and the box a thumb is given. Once the leaf is
-    // open the ROOM CUTS THROUGH THE DOOR to the camera's `crossroads` shot, where a drawn plate
-    // outside the wall is the whole frame: `out` says whether it is up, `pathBox('left'|'right')`
-    // is that road's ground on the glass, and `at(u, v)` is any point of the drawing in pixels.
+    // open the ROOM WALKS OUT THROUGH THE DOOR to the camera's `crossroads` shot, where a drawn
+    // sheet outside the wall fills the frame at every window shape: `out` says whether it is up,
+    // `castleBox('light'|'dark')` is that castle's box on the glass — the two castles are the
+    // switches since round 4 — and `at(u, v)` is any point of the traced original, in pixels.
     cross: CROSS,
     // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the

@@ -57,11 +57,36 @@
 // ------------------------------------------------------------------------------------------------
 //
 // ------------------------------------------------------------------------------------------------
-// THE CHOICE IS NOT IN THE USER'S WORDS. It is this file's addition and it is said so plainly here:
-// the user asked for the cross, the storm, the door and the line. What happens after the line was
-// left open, and an open door with a picture in it that nothing can be done about is a joke with no
-// second half. So the two roads are switches — the left road's ground and the right road's, each
-// half the frame from the horizon down. Take the LEFT and the storm CLEARS while the visitor is
+// ROUND 4 — THE FRAME IS FULL, AND THE CASTLES ARE THE SWITCHES. Two corrections, both the user's,
+// in one sentence: "can you make this actually full width so it fills the whole screen and is not
+// just a square? and can you make the castles the place where the user should click to decide what
+// way to go?"
+//
+//   THE FRAME. Round 3 stood the traced square on bare paper and opened the lens until the picture
+//   just fitted, because the original is square, somebody else's, and has no spare country at any
+//   edge: a cover fit on it beheads both castles and cuts the child off at the knee. That answer
+//   was right about the crop and wrong about the room round it. So round 4 gives the picture the
+//   spare country it does not have — tools/extend-plate.mjs carries the original's own landscape
+//   out to the edges of a sheet two and a half picture-widths across and two and a half deep, in
+//   the same pen, from six bands measured off the original's own edges: the crest of the bright
+//   hill, the foot of its cliff, the road under it, the crag's ridge, the lit ledge, the ground.
+//   The lens then COVERS that sheet at every window shape, so the frame is always full of drawing,
+//   and still holds the whole original inside it (egg-cross-plate.js takes the smaller of the two
+//   openings). The original is untouched: it is simply no longer the edge of the world.
+//
+//   THE SWITCHES. See below.
+// ------------------------------------------------------------------------------------------------
+//
+// ------------------------------------------------------------------------------------------------
+// THE CHOICE IS NOT IN THE USER'S WORDS — but WHERE IT IS TAKEN now is. It is this file's addition
+// and it is said so plainly here: the user asked for the cross, the storm, the door and the line.
+// What happens after the line was left open, and an open door with a picture in it that nothing can
+// be done about is a joke with no second half. Rounds 1 to 3 made the two ROADS the switches, each
+// half the frame from the horizon down; the user, on round 4: "and can you make the castles the
+// place where the user should click to decide what way to go?" So the switch is the destination and
+// not the road to it — a box round the bright castle with the sun over it, and one round the dark
+// one on its crag, both measured off the picture by the trace tool and grown for a thumb, with
+// nothing but country in between. Take the LIGHT and the storm CLEARS while the visitor is
 // still looking out at the country: the bank of cloud breaks up and goes in three drawings over
 // three seconds, and only then does the room cut back and the door shut, leaving it exactly as it
 // was — the same pixels, and there is a proof that says so. Take the RIGHT and a strike answers on
@@ -72,7 +97,8 @@
 // chose the dark path at the door…" — and what he does with that is his.
 //
 // Nothing announces any of it. The cursor over the cross is the whole affordance, and the cursor
-// over each half of the ground is the whole of the second one. If sixty seconds pass with nothing
+// over each castle is the whole of the second one — over the roads, over the boy and over the
+// signpost it is an arrow, because those are not the choice. If sixty seconds pass with nothing
 // chosen, the room cuts back in, the door shuts by itself and the storm clears: an offer nobody
 // took.
 // ------------------------------------------------------------------------------------------------
@@ -130,10 +156,13 @@
 //                (or 'storm': the door open on the weather, from the room) · 'out' (the crossroads
 //                itself) · 'dark'
 //   hitBox()     the cross's box on the glass, in px · tapBox() the box a thumb is given
-//   pathBox(s)   'left' | 'right': that road's ground on the glass
-//   doorBox()    the doorway on the glass · plateBox() the plate on it · at(u, v) any point of the
-//                drawing, in px, so a tool can crop the child rather than a rectangle
-//   plate/land   the sheet's own numbers and the picture's own geography, for the same reason
+//   castleBox(s) 'light' | 'dark' (or the old 'left' | 'right'): that castle's box on the glass,
+//                grown for a thumb — the switch the visitor takes a road with, since round 4
+//   doorBox()    the doorway on the glass · plateBox() the whole sheet on it · pictureBox() the
+//                traced original inside that · at(u, v) any point of the ORIGINAL, in px, so a tool
+//                can crop the child rather than a rectangle
+//   plate/land/castles   the sheet's own numbers, the picture's geography, and where each castle is
+//                drawn — all of it measured off the file by tools/trace-plate.mjs
 //   setState(n)  `cross-storm` is the door open on the weather; `cross-out` the crossroads plate
 //                mid-storm; `cross-dark` the standing storm
 //   render(s)    the thunder through an OfflineAudioContext, for the proof
@@ -171,15 +200,20 @@ const PPM_OUT = 560; // the two sheets that stand in the opening: the outside, a
 // the back wall is 3.2 px (0.013 m at 244 px to the metre) and every drawing in this egg is struck
 // one notch under it, at 2.9 px of glass.
 //
-// ROUND 3 MOVED THE PICTURE and this number with it. Round 2's sheet was 6.00 m wide and COVERED a
-// 1920-wide frame, so it carried 325 px of glass to the metre and 2.9 px was 0.0098 m of plate. The
-// picture is now 5.00 m wide and HELD INSIDE the frame — about 950 px of glass, which is 190 px to
-// the metre — so the same 2.9 px of glass is 0.0153 m. It is what the strike sheet and the weather
-// are struck at, and what the understudy landscape is struck at when there is no traced file; the
-// traced plate has its own nib, measured the same way, in tools/trace-plate.mjs (4.83 sheet px).
-const PEN_PLATE = 0.0153;
+// ROUND 3 MOVED THE PICTURE and this number with it; round 4 moved it a shade more. Round 2's sheet
+// was 6.00 m wide and COVERED a 1920-wide frame, so it carried 325 px of glass to the metre and
+// 2.9 px was 0.0098 m of plate. The original is now 5.00 m wide and held whole in the frame with a
+// hold of 1.5 % — about 1050 px of glass at 1920 wide, which is 210 px to the metre — so the same
+// 2.9 px of glass is 0.0138 m. It is what the strike sheet and the weather are struck at, and what
+// the understudy landscape is struck at while the traced file is on its way; the traced plate has
+// its own nib, measured the same way, in tools/trace-plate.mjs (3.86 sheet px at 1440).
+const PEN_PLATE = 0.0138;
 const PPM_SKY = 200; // the weather sheet: a bank of cloud is broad tone and needs no more
-const PPM_STRIKE = 180; // …and the one drawing that blanks the country needs less again
+// …and the one drawing that blanks the country needs less again, which round 4 made a real saving:
+// the strike is cut to the WHOLE sheet now — 12.6 by 12.2 m — so every px/m on it costs 155 000
+// pixels of canvas at build time. 120 is a 1512 px sheet for one drawing of bare paper with a fork
+// of light down it, held for a twelfth of a second.
+const PPM_STRIKE = 120;
 const MIN_TAP = 44; // px: what a thumb needs, whatever the cross measures on the glass
 
 // ---- THE CROSS, on the frieze over the door -------------------------------------------------------
@@ -423,12 +457,13 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   plate.userData.noShadow = true;
   plate.visible = false;
   root.add(plate);
-  // THE PAPER THE PICTURE STANDS ON (round 3). The lens now holds the whole of the original rather
-  // than being covered by it — a square picture cropped to a 16:9 window loses both castles, the sun
-  // and the child's feet, which is the whole meme — so whatever the picture does not fill has to be
-  // something, and in this film that is paper. One quad, 20 by 24 m, standing a hand behind the
-  // picture: bare, no tone, no contour, the same sheet the drawing is printed on, continued.
-  const groundMesh = new THREE.Mesh(new THREE.PlaneGeometry(PLATE.ground[0], PLATE.ground[1]), (() => {
+  // THE PAPER BEHIND IT. Round 3 stood the picture ON this and a good half of every frame was it;
+  // round 4 carries the drawing out to the edges of the sheet instead (the user: "make this actually
+  // full width"), and the lens is now solved to COVER that sheet at every window shape, so this quad
+  // can no longer appear in any frame. It is kept, one quad, for the reason a stage keeps a back
+  // wall: the cover fit is arithmetic on floating-point numbers and the day it is a pixel short the
+  // thing behind the drawing should be the paper it is printed on and not the void.
+  const groundMesh = new THREE.Mesh(new THREE.PlaneGeometry(PLATE.w * 1.6, PLATE.h * 1.6), (() => {
     const m = new THREE.MeshStandardMaterial({ color: PAPER, roughness: 1, metalness: 0 });
     m.userData.ink = { hatch: 0, lineWeight: 0, colorful: true };
     m.name = 'cross-paper';
@@ -438,19 +473,38 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   groundMesh.castShadow = groundMesh.receiveShadow = false;
   groundMesh.position.set(PLATE.centre[0], PLATE.centre[1], PLATE.centre[2] - 0.06);
   plate.add(groundMesh);
-  const landMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(PLATE.w, PLATE.h),
-    sheet(drawLandscape({ w: PLATE.w, h: PLATE.h, ppm: PLATE.ppm, penM: PEN_PLATE }), 'cross-landscape'),
-  );
+  // THE SHEET, which since round 4 is the whole landscape and not the original alone: 12.60 by 12.20
+  // metres of it, the traced square standing 5 by 5 in the middle (egg-cross-plate.js, and
+  // tools/extend-plate.mjs for what is drawn in the rest of it). One quad, one texture.
+  const landMesh = new THREE.Mesh(new THREE.PlaneGeometry(PLATE.w, PLATE.h), (() => {
+    const m = new THREE.MeshStandardMaterial({ color: PAPER, roughness: 1, metalness: 0 });
+    m.userData.ink = { hatch: 0.02, lineWeight: 0, colorful: true };
+    m.name = 'cross-landscape';
+    return m;
+  })());
   landMesh.name = 'cross-landscape';
   landMesh.castShadow = landMesh.receiveShadow = false;
   landMesh.position.set(...PLATE.centre);
   plate.add(landMesh);
+  // …AND THE UNDERSTUDY IS ITS OWN SHEET NOW. The drawn landscape (egg-cross-draw.js) stands in for
+  // the traced original for the few hundred milliseconds before the file lands, and it is composed
+  // to fill a square: stretched over a sheet two and a half times wider it would be a different
+  // drawing. So it is hung at the ORIGINAL's own size in the middle of the plate and taken down the
+  // moment the real one arrives. Its canvas is the picture's 1440 px and not the sheet's 3628, which
+  // is also what keeps this build under BRIEF rule 4's ceiling.
+  const standIn = new THREE.Mesh(
+    new THREE.PlaneGeometry(PLATE.pic.w, PLATE.pic.h),
+    sheet(drawLandscape({ w: PLATE.pic.w, h: PLATE.pic.h, ppm: PLATE.ppm, penM: PEN_PLATE }), 'cross-standin'),
+  );
+  standIn.name = 'cross-standin';
+  standIn.castShadow = standIn.receiveShadow = false;
+  standIn.position.set(PLATE.centre[0] + PLATE.pic.dx, PLATE.centre[1] + PLATE.pic.dy, PLATE.centre[2] + 0.01);
+  plate.add(standIn);
   const SKY_COLS = 3;
   // how far down the picture the weather reaches. The trace tool measures the traced original's own
   // skyline and writes it; the drawing's own number stands in if it has never been run.
   const SKY_V = Number.isFinite(TRACE_LAND?.land?.skyV) ? TRACE_LAND.land.skyV : LAND.skyV;
-  const skyH = PLATE.h * SKY_V;
+  const skyH = PLATE.pic.h * SKY_V;
   // …AND WHICH SIDE OF THE PICTURE THE WEATHER STANDS ON, which the land file settles before a
   // texture has loaded: `source` is written only by the trace tool, so its presence is the standing
   // answer to "is there a traced original on this sheet". BEHIND a drawn landscape, whose sky is a
@@ -458,11 +512,11 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   // traced one, which is opaque and has weather of its own, drawn on nothing — a bank of cloud laid
   // over the picture that lifts off it in the same three drawings.
   const OVER = TRACE_LAND?.source != null;
-  const skyGeo = new THREE.PlaneGeometry(PLATE.w, skyH);
-  const skyMesh = new THREE.Mesh(skyGeo, sheet(drawSky({ w: PLATE.w, h: skyH, ppm: PPM_SKY, penM: PEN_PLATE, cols: SKY_COLS, solid: !OVER, skyV: SKY_V }), 'cross-sky'));
+  const skyGeo = new THREE.PlaneGeometry(PLATE.pic.w, skyH);
+  const skyMesh = new THREE.Mesh(skyGeo, sheet(drawSky({ w: PLATE.pic.w, h: skyH, ppm: PPM_SKY, penM: PEN_PLATE, cols: SKY_COLS, solid: !OVER, skyV: SKY_V }), 'cross-sky'));
   skyMesh.name = 'cross-sky';
   skyMesh.castShadow = skyMesh.receiveShadow = false;
-  skyMesh.position.set(PLATE.centre[0], PLATE.centre[1] + PLATE.h / 2 - skyH / 2, PLATE.centre[2] + (OVER ? 0.02 : -0.02));
+  skyMesh.position.set(PLATE.centre[0] + PLATE.pic.dx, PLATE.centre[1] + PLATE.pic.dy + PLATE.pic.h / 2 - skyH / 2, PLATE.centre[2] + (OVER ? 0.02 : -0.02));
   // …AND OVER A TRACED ORIGINAL IT IS NOT HUNG AT ALL, which is the round's one deliberate loss and
   // it is worth naming. Behind the drawn landscape this bank was the left road's whole payoff: the
   // storm visibly breaking up over the country while the visitor was still standing out in it. A
@@ -503,14 +557,20 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
         if (!t?.image) return;
         landMesh.material.map?.dispose?.();
         t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+        t.anisotropy = Math.max(t.anisotropy || 1, ctx.renderer?.capabilities?.getMaxAnisotropy?.() ?? 1);
         landMesh.material.map = t;
         landMesh.material.needsUpdate = true;
+        standIn.visible = false; // the drawing has done its turn
         traced = true;
       })
       .catch((e) => console.warn('[cross] no traced plate; the drawing stands in:', e?.message ?? e));
   } catch (e) {
     console.warn('[cross] no traced plate; the drawing stands in:', e?.message ?? e);
   }
+  // THE STRIKE IS CUT TO THE WHOLE SHEET and not to the original, because what a flash does is blank
+  // the COUNTRY, and the country is now the whole frame. Its canvas is struck at a third of the
+  // plate's own pixels per metre: it is one drawing of bare paper with a fork of light down it, held
+  // for a twelfth of a second, and there is nothing in it a finer sheet would say better.
   const strikeMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(PLATE.w, PLATE.h),
     sheet(drawStrike({ w: PLATE.w, h: PLATE.h, ppm: PPM_STRIKE, penM: PEN_PLATE }), 'cross-strike'),
@@ -685,6 +745,29 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   // object would crop the child out of the wrong place and never know. What the trace measures is
   // what there is.
   const geography = () => (traced ? { ...TRACE_LAND.land } : LAND);
+  // WHERE A POINT OF THE PICTURE LANDS ON THE GLASS, in px, and `u, v` are THE ORIGINAL'S own — 0,0
+  // is the top-left corner of the meme and 1,1 the bottom-right of it, whatever else is on the sheet
+  // round it. That is round 4's one change to this file's coordinates and it is the useful way
+  // round: everything anybody asks this piece for is a fact about the picture (the fork, the child's
+  // shoes, a castle), and where the picture sits on the sheet is one line of arithmetic, here.
+  function at(u, v) {
+    if (!plate.visible) return null;
+    const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
+    landMesh.updateMatrixWorld(true);
+    v0.set(PLATE.pic.dx + (u - 0.5) * PLATE.pic.w, PLATE.pic.dy + (0.5 - v) * PLATE.pic.h, 0);
+    landMesh.localToWorld(v0).project(ctx.camera);
+    if (v0.z > 1) return null; // behind the lens
+    return { x: ((v0.x + 1) / 2) * W, y: ((1 - v0.y) / 2) * H };
+  }
+  // …and the two castles, in those same coordinates. The trace tool measures them off the original
+  // it traces; the drawn understudy's own numbers stand in until the file is on the sheet, so the
+  // switches are in the right place either way (egg-cross-draw.js LAND: `bright` and `dark` are the
+  // two castles' centre lines and `hz` the horizon they stand above).
+  const DRAWN_CASTLES = {
+    light: { u0: LAND.bright - 0.1, v0: LAND.hz - 0.215, u1: LAND.bright + 0.1, v1: LAND.hz + 0.01 },
+    dark: { u0: LAND.dark - 0.1, v0: LAND.hz - 0.2, u1: LAND.dark + 0.1, v1: LAND.hz + 0.01 },
+  };
+  const castles = () => (traced && TRACE_LAND?.castles?.light && TRACE_LAND?.castles?.dark ? TRACE_LAND.castles : DRAWN_CASTLES);
   const hitBox = () => boxOf(crossMesh, CROSS.w / 2, CROSS.h / 2);
   function tapBox() {
     const b = hitBox();
@@ -692,34 +775,59 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     const w2 = Math.max(b.w, MIN_TAP), h2 = Math.max(b.h, MIN_TAP);
     return { x: b.x + b.w / 2 - w2 / 2, y: b.y + b.h / 2 - h2 / 2, w: w2, h: h2, grown: w2 > b.w || h2 > b.h };
   }
-  // THE TWO ROADS, AND WHAT THE VISITOR POINTS AT IS THE GROUND. Each is half the picture from the
-  // horizon down to the foot of the frame: the sky is not a road, and a tap on a cloud is not a
-  // choice. The split is the plate's own centre line, which projects to the middle of the frame
-  // because the camera stands on that line — so the left road's ground is the left half of the
-  // glass and the right road's is the right half, and the two can never overlap however generous
-  // they are. On a 390-wide phone that is 195 by about 470 px each, which is not a target, it is a
-  // side of the screen. They are asked directly (`hit`), the way the globe is, because the thing
-  // being pointed at is half of a drawing and not an object.
-  function pathBox(which) {
-    if (!plate.visible) return null;
+  // ---- THE TWO CASTLES, WHICH ARE THE SWITCHES (round 4) -------------------------------------------
+  // The user: "and can you make the castles the place where the user should click to decide what way
+  // to go?" Rounds 3 and before gave each road half of the glass from the horizon down — an enormous
+  // target, and a wrong one twice over: half the screen is not a thing anybody thinks they are
+  // clicking, and the ROAD is not what the choice is about. The choice is about where it goes. So
+  // the switch is the place: the bright castle with the sun over it for the light path, the dark one
+  // on its crag for the other, and bare country everywhere else.
+  //
+  // WHERE THEY ARE IS MEASURED OFF THE PICTURE and not typed in here: tools/trace-plate.mjs finds
+  // each castle in the original it traces — the bright one by the plate of colour the sun is keyed
+  // in, which it stands inside; the dark one as the island of storm-half stone that stands upright —
+  // and writes both into egg-cross-land.js in the PICTURE's own u,v. This function does nothing but
+  // project that rectangle and make it big enough to hit.
+  //
+  // AND IT IS GROWN, twice over. A fifth of its own size each way, because a castle drawn on a hill
+  // has a hill under it and a sky round it and a pointer near the spires should count; and then out
+  // to a floor of 120 px on a laptop and 80 on a phone, which is what the dark castle needs on a
+  // small frame (it measures 73 by 50 there). The two can grow until they touch and no further: the
+  // gap between them is 272 px of a 1280 frame and 131 of a 390, and the code splits it rather than
+  // letting a pointer in the middle of the picture be a choice.
+  const MIN_CASTLE = 120; // px on a laptop…
+  const MIN_CASTLE_PHONE = 80; // …and on a phone, where a thumb is bigger and the frame is not
+  const castleBox = (which) => {
+    const c = castles()?.[which === 'left' ? 'light' : which === 'right' ? 'dark' : which];
+    if (!c || !plate.visible) return null;
+    const a = at(c.u0, c.v0), b = at(c.u1, c.v1);
+    if (!a || !b) return null;
     const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
-    const G = geography();
-    landMesh.updateMatrixWorld(true);
-    // THE SPLIT IS THE FORK'S OWN COLUMN, and not the middle of the sheet. In the drawing the two
-    // were the same number and the split could be the plate's centre line; a traced photograph puts
-    // its fork wherever the photograph puts it, and the tool measures that (egg-cross-land.js).
-    // The boxes are still the two halves of the GLASS either side of it, so they are as generous as
-    // a side of the screen and cannot overlap however wide the window is.
-    v.set((G.fork - 0.5) * PLATE.w, 0, 0);
-    landMesh.localToWorld(v).project(ctx.camera);
-    if (v.z > 1) return null; // the plate is behind the lens: there is no road on this glass
-    const mid = ((v.x + 1) / 2) * W;
-    v.set(0, (0.5 - G.hz) * PLATE.h, 0);
-    landMesh.localToWorld(v).project(ctx.camera);
-    const top = Math.max(0, Math.min(H - MIN_TAP, ((1 - v.y) / 2) * H));
-    const x0 = which === 'left' ? 0 : Math.max(0, Math.min(W, mid));
-    const x1 = which === 'left' ? Math.max(0, Math.min(W, mid)) : W;
-    return { x: x0, y: top, w: Math.max(MIN_TAP, x1 - x0), h: Math.max(MIN_TAP, H - top) };
+    let x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x);
+    let y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+    const min = Math.min(W, H) < 520 ? MIN_CASTLE_PHONE : MIN_CASTLE;
+    const grow = (lo, hi, want) => {
+      const mid = (lo + hi) / 2;
+      const half = Math.max((hi - lo) * 0.61, want / 2, MIN_TAP / 2);
+      return [mid - half, mid + half];
+    };
+    [x0, x1] = grow(x0, x1, min);
+    [y0, y1] = grow(y0, y1, min);
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  };
+  // …and neither may reach into the other. Asked for both at once so the split is the same split
+  // whichever of them is being asked about.
+  function pathBox(which) {
+    const light = castleBox('light'), dark = castleBox('dark');
+    if (!light || !dark) return which === 'light' || which === 'left' ? light : dark;
+    const lr = light.x + light.w, dl = dark.x;
+    if (lr > dl) {
+      const mid = (lr + dl) / 2;
+      light.w = Math.max(MIN_TAP, mid - light.x);
+      dark.w = Math.max(MIN_TAP, dark.x + dark.w - mid);
+      dark.x = mid;
+    }
+    return which === 'light' || which === 'left' ? light : dark;
   }
   const inBox = (b, px, py) => !!b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
 
@@ -927,17 +1035,17 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     enabled: () => phase === 'shut',
     onDown: () => start(),
   });
-  for (const which of ['left', 'right']) {
+  for (const which of ['light', 'dark']) {
     switches?.add?.({
       name: `cross-${which}`,
       object: () => landMesh,
       tapBox: () => pathBox(which),
-      // …and only once the walk is OVER. While the camera is crossing the parlour the two roads are
-      // not a choice, they are scenery going past: the fork is not on the glass where pathBox says
-      // it is until the picture has arrived.
+      // …and only once the walk is OVER. While the camera is crossing the parlour the castles are
+      // not a choice, they are scenery going past: neither is on the glass where pathBox says it is
+      // until the picture has arrived.
       hit: (px, py) => phase === 'open' && arrived() && inBox(pathBox(which), px, py),
       enabled: () => phase === 'open' && arrived(),
-      onDown: () => choose(which === 'left' ? 'light' : 'dark'),
+      onDown: () => choose(which),
     });
   }
 
@@ -979,7 +1087,14 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     get striking() {
       return strikeMesh.visible;
     },
-    plate: { w: PLATE.w, h: PLATE.h, at: [...PLATE.centre], eye: [...PLATE.eye], ppm: PLATE.ppm, safe: { ...PLATE.safe }, pen: PEN_PLATE, margin: PLATE.margin, bleed: PLATE.bleed, ground: [...PLATE.ground] },
+    // THE SHEET's own numbers, and the ORIGINAL's inside it. `w`/`h` are the whole landscape, which
+    // is what the mesh is cut to and what the lens covers; `pic` is the part somebody else drew.
+    plate: {
+      w: PLATE.w, h: PLATE.h, at: [...PLATE.centre], eye: [...PLATE.eye], ppm: PLATE.ppm,
+      safe: { ...PLATE.safe }, pen: PEN_PLATE, hold: PLATE.hold,
+      pic: { ...PLATE.pic },
+      sheet: [...(TRACE_LAND?.size ?? [])],
+    },
     // the two colours the picture is allowed, for a proof that wants to name what it is looking at
     colours: { sun: '#f2b829', ink: INK, paper: PAPER },
     schedule: { strike: F.strike, thunder: F.thunderAt, swingAt: F.swingAt, open: OPEN_F, shut: SHUT_F, choice: CHOICE_F, clear: CLEAR_F, far: FAR, cut: OUT_CUT, dark: DARK_F, lift: LIFT_AT, out: OUT_S, back: BACK_S, shutAt: SHUT_AT, via: [...VIA_OUT] },
@@ -998,25 +1113,35 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     choose,
     hitBox,
     tapBox,
+    // THE TWO SWITCHES: 'light' | 'dark' (and 'left' | 'right' still answer, because the two roads
+    // were called that for three rounds and props.js's own note still names them). Since round 4
+    // each is a box round the castle that road leads to, grown for a thumb.
+    castleBox: pathBox,
     pathBox,
     // the doorway on the glass, for the proof's 2x crop of the weather in it
     doorBox: () => boxOf(outMesh, PW / 2, PH / 2),
-    // …and the plate on the glass, which at the crossroads shot is bigger than the glass
+    // the whole SHEET on the glass, which at this shot is bigger than the glass at every window
+    // shape — that is what "full frame" means and a proof can weigh it
     plateBox: () => boxOf(landMesh, PLATE.w / 2, PLATE.h / 2),
-    // where a point of the drawing lands on the glass, in px: what the proof crops the child and
-    // the signpost out of, without either of us guessing where they are
-    at(u, v) {
-      if (!plate.visible) return null;
-      const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
-      landMesh.updateMatrixWorld(true);
-      v0.set((u - 0.5) * PLATE.w, (0.5 - v) * PLATE.h, 0);
-      landMesh.localToWorld(v0).project(ctx.camera);
-      return { x: ((v0.x + 1) / 2) * W, y: ((1 - v0.y) / 2) * H };
+    // …and the ORIGINAL inside it, which must be WHOLLY on the glass: the four corners of the part
+    // somebody else drew
+    pictureBox: () => {
+      const a = at(0, 0), b = at(1, 1);
+      if (!a || !b) return null;
+      return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
     },
+    // where a point of the drawing lands on the glass, in px — in the ORIGINAL's own u,v: what the
+    // proof crops the child and the signpost out of, without either of us guessing where they are
+    at,
     // the picture's own geography, so a tool can ask for the child rather than for a rectangle —
     // the traced original's once it is on the sheet, the drawing's until then
     get land() {
       return geography();
+    },
+    // …and where the two castles are DRAWN, in the picture's own u,v, before anything is grown for a
+    // thumb: what a proof draws its box against
+    get castles() {
+      return { ...castles() };
     },
     // …and WHICH of the two is on it, so a proof can label its own crops honestly
     get traced() {

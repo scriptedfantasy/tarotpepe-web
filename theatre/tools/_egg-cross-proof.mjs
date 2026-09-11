@@ -15,17 +15,22 @@
 //                      the strike (the panes white), of the swing, of the door open on WEATHER AND
 //                      NOTHING ELSE, and then of the cut through it; the events, the cues, the
 //                      pendant and the light at each step.
-//   THE PICTURE        round 2's whole brief. The doorway is measured for a picture and must not
-//                      have one; the plate is measured for filling the frame at 1280x800 and at
-//                      390x844 with no edge showing; the child and the signpost are cropped at 2x
-//                      out of the frame they are actually in; every named thing in the drawing is
-//                      asked whether it is inside BOTH windows, by projecting the plate's own
-//                      geography rather than by reading a rectangle off a screenshot.
-//   THE TWO ROADS      real clicks on each half of the ground. After the LEFT road the storm lifts
-//                      off the country in three drawings while the room is still looking out, and
-//                      the room is then pixel-compared against the room before the storm, on a
+//   THE PICTURE        round 4's whole brief, and it is two questions and not one. THE FRAME IS
+//                      FULL: the sheet's own box is measured against the glass at 1280x800,
+//                      1920x1080, 2560x1080 and 390x844 and must run off all four edges of each,
+//                      and the bare rows and columns at those edges are counted. THE ORIGINAL IS
+//                      WHOLE: its four corners are on the glass in every one of them, and every
+//                      named thing in it — both castles, the sun, the signpost, the child's shoes —
+//                      is asked by projecting the picture's own geography rather than by reading a
+//                      rectangle off a screenshot. Both seams are cropped at 2x and WEIGHED: the
+//                      ink in a strip outside the original against the same strip inside it.
+//   THE TWO CASTLES    real clicks on each castle, each box cropped at 2x with the box ruled on it;
+//                      and the two roads, which were the switches until this round, are pointed at
+//                      and clicked and must do nothing at all. After the BRIGHT castle the storm
+//                      lifts off the country in three drawings while the room is still looking out,
+//                      and the room is then pixel-compared against the room before the storm, on a
 //                      frozen clock, so that the boil cannot differ and the only thing that can is
-//                      the weather. After the RIGHT road: a strike, the cut back, a later strike.
+//                      the weather. After the DARK one: a strike, the walk back, a later strike.
 //   THE TIMEOUT        sixty seconds of drawings with nothing chosen: the room comes back in.
 //   HIS LINE           a whole evening, no ?view: the door, the greeting, then the cross. What is
 //                      asked is that `Choose your path, anon.` went up EXACTLY ONCE, that it was
@@ -35,7 +40,7 @@
 //   THE THUNDER        rendered offline through the very code the room plays it with.
 //
 //   BASE=http://127.0.0.1:8721 node tools/_egg-cross-proof.mjs [--out DIR] [--only storm,light]
-//   sections: cross · storm · phone · light · dark · timeout · line · wire · sound
+//   sections: cross · storm · frames · light · dark · timeout · line · wire · sound
 import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { mkdirSync } from 'node:fs';
@@ -227,6 +232,54 @@ const shot = async (page) => {
   }
   throw new Error('no frame');
 };
+// how deep the bare margin is at each edge of a frame: the number of rows or columns at the very
+// edge with NO mark in them at all. This is the measurement round 4 exists for — the user looked at
+// round 3 and said "make this actually full width so it fills the whole screen and is not just a
+// square", and what he was looking at was two hundred and forty blank columns down each side.
+const bareEdges = (img, thresh = 210) => {
+  const lit = (x, y) => {
+    const i = (y * img.w + x) * img.ch;
+    return img.data[i] * 0.3 + img.data[i + 1] * 0.59 + img.data[i + 2] * 0.11 < thresh;
+  };
+  const rowLit = (y) => {
+    for (let x = 0; x < img.w; x++) if (lit(x, y)) return true;
+    return false;
+  };
+  const colLit = (x) => {
+    for (let y = 0; y < img.h; y++) if (lit(x, y)) return true;
+    return false;
+  };
+  const walk = (n, f) => {
+    let k = 0;
+    while (k < n && !f(k)) k++;
+    return k;
+  };
+  return {
+    top: walk(img.h, (k) => rowLit(k)),
+    bottom: walk(img.h, (k) => rowLit(img.h - 1 - k)),
+    left: walk(img.w, (k) => colLit(k)),
+    right: walk(img.w, (k) => colLit(img.w - 1 - k)),
+  };
+};
+// a crop with a box ruled on it, so that "the switch is on the castle" is a thing a person can see
+async function cropWithBox(buf, view, box, out, { scale = 2 } = {}) {
+  const meta = await sharp(buf).metadata();
+  const left = Math.max(0, Math.round(view.x));
+  const top = Math.max(0, Math.round(view.y));
+  const width = Math.max(8, Math.min(meta.width - left, Math.round(view.w)));
+  const height = Math.max(8, Math.min(meta.height - top, Math.round(view.h)));
+  const r = { x: (box.x - left) * scale, y: (box.y - top) * scale, w: box.w * scale, h: box.h * scale };
+  const svg = Buffer.from(
+    `<svg width="${width * scale}" height="${height * scale}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="none" stroke="#d03a2a" stroke-width="3" stroke-dasharray="9 6"/></svg>`,
+  );
+  await sharp(buf)
+    .extract({ left, top, width, height })
+    .resize({ width: width * scale, height: height * scale, kernel: 'nearest' })
+    .composite([{ input: svg, top: 0, left: 0 }])
+    .png()
+    .toFile(out);
+  return { left, top, width, height };
+}
 async function crop(buf, box, out, { pad = 16, scale = 2 } = {}) {
   const meta = await sharp(buf).metadata();
   const left = Math.max(0, Math.round(box.x - pad));
@@ -330,11 +383,11 @@ if (doing('cross')) {
   console.log(`  the box a thumb gets  ${box1(b.tap)}${b.tap?.grown ? '  (grown to 44 px)' : ''}`);
   ok(wholly(b.hit, W, H), 'it is WHOLLY inside the home plate — nothing of it is cut by the frame');
   const buf = await shot(page);
-  await snap(page, `${OUT}/egg-cross-r3-room.png`);
-  await crop(buf, b.hit, `${OUT}/egg-cross-r3-cross-2x.png`, { pad: 22, scale: 4 });
+  await snap(page, `${OUT}/egg-cross-r4-room.png`);
+  await crop(buf, b.hit, `${OUT}/egg-cross-r4-cross-2x.png`, { pad: 22, scale: 4 });
   const img = await rawOf(buf);
   const ink = coverage(img, b.hit);
-  console.log(`  ink inside its box    ${ink}%   →  ${OUT}/egg-cross-r3-cross-2x.png`);
+  console.log(`  ink inside its box    ${ink}%   →  ${OUT}/egg-cross-r4-cross-2x.png`);
   ok(ink > 4 && ink < 40, `it is two strokes and a nail and not a blot (${ink}% of its box is ink)`);
   // …and it answers a pointer where it is drawn, which is what makes it a switch and not a picture
   const hovered = await page.evaluate(async (t) => {
@@ -351,16 +404,17 @@ if (doing('cross')) {
     const C = window.__theatre.pieces.props.cross;
     return { tap: C.tapBox(), door: C.doorBox(), plate: C.plate };
   });
-  await snap(p2, `${OUT}/egg-cross-r3-phone.png`);
+  await snap(p2, `${OUT}/egg-cross-r4-phone.png`);
   console.log(`  ON A 390-WIDE PHONE   the cross ${box1(b2.tap)} — ${inFrame(b2.tap, ...PHONE) ? 'in frame' : 'OUTSIDE THE FRAME'}`);
   console.log(`                        the doorway ${box1(b2.door)} — ${inFrame(b2.door, ...PHONE) ? 'in frame' : 'OUTSIDE THE FRAME'}`);
   console.log('  (this is a fact about the ROOM and not about the egg: at 390 px the home plate holds');
   console.log('   about x -1.1 to +1.1 m of the back wall, and the door runs 1.05 to 1.95. The window');
   console.log('   egg-rain lives behind is outside the same frame on the other side.)');
-  console.log(`  THE PLATE ITSELF      ${b2.plate.w} x ${b2.plate.h} m, its centre at [${b2.plate.at.join(', ')}], the eye at [${b2.plate.eye.join(', ')}]`);
-  console.log(`                        cut at ${b2.plate.ppm} px/m (${Math.round(b2.plate.w * b2.plate.ppm)} x ${Math.round(b2.plate.h * b2.plate.ppm)} px), nib ${b2.plate.pen} m`);
-  console.log(`                        what BOTH windows keep of it: u ${b2.plate.safe.u0}..${b2.plate.safe.u1}, v ${b2.plate.safe.v0}..${b2.plate.safe.v1}`);
-  console.log(`  →  ${OUT}/egg-cross-r3-room.png · ${OUT}/egg-cross-r3-phone.png`);
+  console.log(`  THE SHEET ITSELF      ${b2.plate.w.toFixed(2)} x ${b2.plate.h.toFixed(2)} m, its centre at [${b2.plate.at.join(', ')}], the eye at [${b2.plate.eye.join(', ')}]`);
+  console.log(`                        cut at ${b2.plate.ppm.toFixed(1)} px/m (${b2.plate.sheet.join(' x ')} px), nib ${b2.plate.pen} m`);
+  console.log(`  THE ORIGINAL ON IT    ${b2.plate.pic.w.toFixed(2)} x ${b2.plate.pic.h.toFixed(2)} m, standing at u ${b2.plate.pic.u0}..${b2.plate.pic.u1}, v ${b2.plate.pic.v0}..${b2.plate.pic.v1} of the sheet`);
+  console.log(`                        what EVERY window keeps of it: u ${b2.plate.safe.u0}..${b2.plate.safe.u1}, v ${b2.plate.safe.v0}..${b2.plate.safe.v1}, with a hold of ${(100 * b2.plate.hold).toFixed(1)}%`);
+  console.log(`  →  ${OUT}/egg-cross-r4-room.png · ${OUT}/egg-cross-r4-phone.png`);
   ok((page.__errors ?? []).length === 0 && (p2.__errors ?? []).length === 0, `no page errors (${[...page.__errors, ...p2.__errors].slice(0, 2).join(' | ') || 'none'})`);
 }
 
@@ -391,7 +445,7 @@ if (doing('storm')) {
   await release(page, 1);
   await settle(page);
   const strike = await world(page);
-  await snap(page, `${OUT}/egg-cross-r3-strike.png`);
+  await snap(page, `${OUT}/egg-cross-r4-strike.png`);
   ok(strike.flashing, `on the first drawing the panes are white: a strike (stormFrame ${strike.stormFrame})`);
   ok(strike.light.state === 'cross-flash', `and the whole room's tone jumps with it — the light is "${strike.light.state}", key ${strike.light.key}`);
   ok(strike.rain.on, `the rain started on its own, by egg-rain's own api (${strike.rain.layers} layer(s))`);
@@ -409,7 +463,7 @@ if (doing('storm')) {
   await release(page, 1);
   await settle(page);
   const swing0 = await world(page);
-  await snap(page, `${OUT}/egg-cross-r3-swing.png`);
+  await snap(page, `${OUT}/egg-cross-r4-swing.png`);
   ok(swing0.doorShown && swing0.weather, `at drawing ${swing0.stormFrame} the leaf comes off the jamb at ${swing0.leaf.degrees} deg and the weather is behind it`);
   const poses = [swing0.leaf.degrees];
   for (let i = 0; i < 5; i++) {
@@ -424,12 +478,12 @@ if (doing('storm')) {
   await settle(page);
   const open1 = await world(page);
   const bufOpen = await shot(page);
-  await snap(page, `${OUT}/egg-cross-r3-open.png`);
+  await snap(page, `${OUT}/egg-cross-r4-open.png`);
   const doorBox = await page.evaluate(() => window.__theatre.pieces.props.cross.doorBox());
-  await crop(bufOpen, doorBox, `${OUT}/egg-cross-r3-doorway-2x.png`, { pad: 20, scale: 3 });
+  await crop(bufOpen, doorBox, `${OUT}/egg-cross-r4-doorway-2x.png`, { pad: 20, scale: 3 });
   ok(open1.phase === 'open', `the door is open (phase "${open1.phase}" at drawing ${open1.stormFrame}, ${open1.leaf.degrees} deg)`);
   ok(open1.shot !== 'crossroads' && !open1.out, `and the room has NOT cut yet — it is still on "${open1.shot}", two drawings short of it`);
-  console.log(`  the doorway on the glass: ${box1(doorBox)}   →  ${OUT}/egg-cross-r3-doorway-2x.png`);
+  console.log(`  the doorway on the glass: ${box1(doorBox)}   →  ${OUT}/egg-cross-r4-doorway-2x.png`);
 
   const imgOpen = await rawOf(bufOpen);
   const imgBefore = await rawOf(bufBefore);
@@ -462,9 +516,9 @@ if (doing('storm')) {
   }
   const arrival = await world(page);
   strip.push({ buf: await shot(page), at: 'arrived' });
-  await sheet(strip, `${OUT}/egg-cross-r3-walk-out.png`, 4, W, H);
+  await sheet(strip, `${OUT}/egg-cross-r4-walk-out.png`, 4, W, H);
   console.log(`  the walk out, z metre by metre: ${zs.map((z) => z.toFixed(2)).join(' → ')} → ${arrival.eye[2].toFixed(2)}`);
-  console.log(`  →  ${OUT}/egg-cross-r3-walk-out.png`);
+  console.log(`  →  ${OUT}/egg-cross-r4-walk-out.png`);
   ok(new Set(zs.map((z) => z.toFixed(3))).size === zs.length, 'every drawing of it is a NEW position: the camera never stands still on the way');
   ok(zs[0] > zs[zs.length - 1] && zs.every((z, i) => i === 0 || z < zs[i - 1]), 'and it only ever goes one way — forward, across the room and out');
   // …and no DRAWING of it moves further than half a metre, which is the difference between a walk
@@ -476,38 +530,53 @@ if (doing('storm')) {
   ok(arrival.arrived, 'the room is out there and standing still, which is when the two roads become a choice');
   const out1 = arrival;
   const bufPlate = await shot(page);
-  await snap(page, `${OUT}/egg-cross-r3-crossroads.png`);
+  await snap(page, `${OUT}/egg-cross-r4-crossroads.png`);
   console.log(`  the picture on the sheet: ${out1.traced ? `${out1.traced.file} — traced from ${out1.traced.source} on ${out1.traced.when}` : 'THE DRAWING IS STANDING IN (no traced original loaded)'}`);
   ok(!!out1.traced, "the plate carries the USER'S OWN PICTURE, put through the mill — not a redrawing of it");
   const geom = await page.evaluate(() => {
     const C = window.__theatre.pieces.props.cross, T = window.__theatre;
     const s = T.pieces.camera.shots.crossroads;
-    return { fov: +s.fov.toFixed(2), pos: s.pos, look: s.look, box: C.plateBox(), plate: C.plate, size: T.size ?? { w: innerWidth, h: innerHeight } };
+    return { fov: +s.fov.toFixed(2), pos: s.pos, look: s.look, sheet: C.plateBox(), pic: C.pictureBox(), plate: C.plate, size: T.size ?? { w: innerWidth, h: innerHeight } };
   });
   console.log(`  the shot: fov ${geom.fov} deg from [${geom.pos.join(', ')}] looking at [${geom.look.join(', ')}]`);
-  console.log(`  the picture on the glass: ${box1(geom.box)} for a ${geom.size.w}x${geom.size.h} frame`);
-  // ROUND 3 INVERTS ROUND 2'S TEST, and this is the round's one real decision. Round 2's drawn sheet
-  // COVERED the window and its edges had to be off the glass; the original is square and somebody
-  // else's, and a cover fit on it cuts the child off at the knee — so the lens now HOLDS it, on a
-  // field of paper. What is asked here is the opposite thing.
-  //
-  // …WITH THE ONE CONCESSION THE PLATE DECLARES, and it is read off the piece rather than assumed:
-  // `bleed` lets the picture's HEIGHT run a few per cent past a wide frame, at both ends, because a
-  // square picture held whole inside 16:9 is half the width of the screen and what is at the very
-  // top and the very foot of this one is sky and road. Nothing is ever allowed off the SIDES — that
-  // is where the two castles are — and the marks that matter are asked for by name below.
-  const bleed = geom.plate.bleed ?? 0;
-  const overTop = -geom.box.y, overFoot = geom.box.y + geom.box.h - geom.size.h;
-  console.log(`  what runs past the frame: ${Math.max(0, overTop).toFixed(0)} px off the top, ${Math.max(0, overFoot).toFixed(0)} off the foot (the plate declares a bleed of ${(100 * bleed).toFixed(0)}% of its height, ${(geom.box.h * bleed / 2).toFixed(0)} px each end)`);
-  ok(geom.box.x >= -1 && geom.box.x + geom.box.w <= geom.size.w + 1, 'not a pixel of it is lost off either SIDE: both castles, both roads, the whole width of the original');
-  ok(Math.max(0, overTop, overFoot) <= geom.box.h * bleed * 0.55 + 2, `and no more runs past the top or the foot than the plate says it may`);
-  ok(geom.box.w > geom.size.w * 0.45 || geom.box.h > geom.size.h * 0.85, `and it is not a stamp on a page: ${(100 * geom.box.w / geom.size.w).toFixed(0)}% of the frame's width, ${(100 * geom.box.h / geom.size.h).toFixed(0)}% of its height`);
+  console.log(`  the SHEET on the glass:    ${box1(geom.sheet)} for a ${geom.size.w}x${geom.size.h} frame`);
+  console.log(`  the ORIGINAL inside it:    ${box1(geom.pic)}`);
+  // ROUND 4 ASKS THE OPPOSITE OF ROUND 3 ON ONE COUNT AND THE SAME ON THE OTHER. Round 3 held the
+  // picture INSIDE the frame on a field of paper; the user asked for the frame to be full. So the
+  // SHEET must cover the glass — the drawing runs off every edge — and the ORIGINAL must still be
+  // whole inside it, which is what the country either side of it is for.
+  ok(geom.sheet.x <= 0.5 && geom.sheet.y <= 0.5 && geom.sheet.x + geom.sheet.w >= geom.size.w - 0.5 && geom.sheet.y + geom.sheet.h >= geom.size.h - 0.5,
+    'the drawing runs off all four edges of the frame: there is no paper margin anywhere on this glass');
+  ok(wholly(geom.pic, geom.size.w, geom.size.h), 'and the ORIGINAL is whole inside it — both castles, the sun, the signpost and the boy');
+  console.log(`  the original fills ${(100 * geom.pic.w / geom.size.w).toFixed(0)}% of the frame's width and ${(100 * geom.pic.h / geom.size.h).toFixed(0)}% of its height, the hold is ${(100 * geom.plate.hold).toFixed(1)}%`);
   const imgPlate = await rawOf(bufPlate);
-  const inkPlate = coverage(imgPlate, geom.box);
-  const inkPaper = coverage(imgPlate, { x: 2, y: geom.size.h / 2 - 20, w: Math.max(6, geom.box.x - 8), h: 40 });
-  console.log(`  ink inside the picture: ${inkPlate}% · ink in the paper beside it: ${inkPaper}%`);
-  ok(inkPlate > 3 && inkPlate < 34, `it is a drawing and not a wash (${inkPlate}% of the picture is ink)`);
-  ok(inkPaper < 1.5, `and what is round it is bare paper (${inkPaper}% ink), which is what this film puts round a picture`);
+  const bare = bareEdges(imgPlate);
+  console.log(`  bare rows and columns at the frame's own edges: top ${bare.top}, bottom ${bare.bottom}, left ${bare.left}, right ${bare.right}`);
+  ok(Math.max(bare.left, bare.right) <= 2, `nothing of the sides is bare paper (${bare.left} px left, ${bare.right} right)`);
+  ok(Math.max(bare.top, bare.bottom) <= geom.size.h * 0.08, `and neither the top nor the foot carries a margin (${bare.top} px, ${bare.bottom} px — what is there is the drawing's own sky and its own road)`);
+  const inkPlate = coverage(imgPlate, { x: 0, y: 0, w: geom.size.w, h: geom.size.h });
+  console.log(`  ink over the whole frame: ${inkPlate}%`);
+  ok(inkPlate > 3 && inkPlate < 34, `it is a drawing and not a wash (${inkPlate}% of the frame is ink)`);
+
+  // ---- THE TWO SEAMS, AT 2x --------------------------------------------------------------------
+  // Either side of the traced original there is a join between somebody else's drawing and ours,
+  // and a person has to be able to look at it. A strip 160 px wide centred on each, doubled.
+  for (const [side, x] of [['left', geom.pic.x], ['right', geom.pic.x + geom.pic.w]]) {
+    const view = { x: x - 80, y: geom.size.h * 0.06, w: 160, h: Math.min(geom.size.h * 0.82, 420) };
+    await crop(bufPlate, { x: view.x, y: view.y, w: view.w, h: view.h }, `${OUT}/egg-cross-r4-seam-${side}-2x.png`, { pad: 0, scale: 2 });
+    console.log(`  the ${side} seam, at 2x: the original's edge stands at x ${x.toFixed(0)}  →  ${OUT}/egg-cross-r4-seam-${side}-2x.png`);
+  }
+  // …and it is WEIGHED as well as looked at: the ink in a strip just outside the original against
+  // the ink in the same strip just inside it. A continuation lighter or heavier than the picture it
+  // joins reads as a join whatever else is right about it.
+  const seamW = Math.round(geom.pic.w * 0.06);
+  const band = (x0) => coverage(imgPlate, { x: x0, y: geom.pic.y + geom.pic.h * 0.02, w: seamW, h: geom.pic.h * 0.96 });
+  const seamL = [band(geom.pic.x), band(geom.pic.x - seamW)];
+  const seamR = [band(geom.pic.x + geom.pic.w - seamW), band(geom.pic.x + geom.pic.w)];
+  console.log(`  the ink either side of the left seam:  ${seamL[0]}% inside · ${seamL[1]}% outside  (${(seamL[1] / Math.max(0.01, seamL[0])).toFixed(2)}x)`);
+  console.log(`  the ink either side of the right seam: ${seamR[0]}% inside · ${seamR[1]}% outside  (${(seamR[1] / Math.max(0.01, seamR[0])).toFixed(2)}x)`);
+  for (const [k, v] of [['left', seamL], ['right', seamR]])
+    ok(v[1] / Math.max(0.01, v[0]) > 0.45 && v[1] / Math.max(0.01, v[0]) < 2.2, `  the ${k} seam does not step: the country either side carries the same weight of ink to within a half`);
 
   // THE CHILD AND THE SIGNPOST, cropped at 2x out of the frame the picture is actually in — and
   // asked for BY THE PICTURE'S OWN GEOGRAPHY, which since round 3 is measured off the traced file by
@@ -522,18 +591,18 @@ if (doing('storm')) {
     };
     return {
       land: { ...L },
+      castles: { ...C.castles },
       child: b(L.fork - 0.1, 0.68, L.fork + 0.1, 0.985),
       post: b(L.fork - 0.11, L.hz - 0.23, L.fork + 0.11, L.hz + 0.02),
       bright: b(0.08, 0.05, 0.44, 0.38), // the sun-lit half above the skyline
       dark: b(0.56, 0.03, 0.96, 0.36), // …and the storm's
-      whole: b(0.02, 0.02, 0.98, 0.98),
     };
   });
   console.log(`  the picture's own geography, measured off the file: ${JSON.stringify(parts.land)}`);
-  await crop(bufPlate, parts.child, `${OUT}/egg-cross-r3-child-2x.png`, { pad: 10, scale: 2 });
-  await crop(bufPlate, parts.post, `${OUT}/egg-cross-r3-signpost-2x.png`, { pad: 10, scale: 2 });
-  console.log(`  the child    ${box1(parts.child)}  →  ${OUT}/egg-cross-r3-child-2x.png`);
-  console.log(`  the signpost ${box1(parts.post)}  →  ${OUT}/egg-cross-r3-signpost-2x.png`);
+  await crop(bufPlate, parts.child, `${OUT}/egg-cross-r4-child-2x.png`, { pad: 10, scale: 2 });
+  await crop(bufPlate, parts.post, `${OUT}/egg-cross-r4-signpost-2x.png`, { pad: 10, scale: 2 });
+  console.log(`  the child    ${box1(parts.child)}  →  ${OUT}/egg-cross-r4-child-2x.png`);
+  console.log(`  the signpost ${box1(parts.post)}  →  ${OUT}/egg-cross-r4-signpost-2x.png`);
   ok(wholly(parts.child, geom.size.w, geom.size.h), 'the child is wholly inside the laptop frame, feet and all — which a cover fit could not do');
   ok(coverage(imgPlate, parts.child) > 3, `and he is DRAWN and not implied (${coverage(imgPlate, parts.child)}% of his box is ink)`);
   const ySun = yellow(imgPlate, parts.bright);
@@ -556,23 +625,28 @@ if (doing('storm')) {
   await settle(page);
   const lit = await world(page);
   const bufLit = await shot(page);
-  await snap(page, `${OUT}/egg-cross-r3-crossroads-strike.png`);
+  await snap(page, `${OUT}/egg-cross-r4-crossroads-strike.png`);
   console.log(`  the storm's fourth strike is due on drawing ${strikeShot.due}; the storm is on ${lit.stormFrame}`);
   ok(lit.flashing && lit.striking, 'a strike lights the plate too: the country goes to bare paper with a fork of light down it');
   const imgLit = await rawOf(bufLit);
-  const inkLit = coverage(imgLit, geom.box);
+  const inkLit = coverage(imgLit, geom.pic);
   console.log(`  ink inside the picture on the strike: ${inkLit}% against ${inkPlate}% a moment before`);
   ok(inkLit < inkPlate, 'and it is a FLASH: every stroke of tone is gone for the one drawing');
   await release(page, 1);
   await settle(page);
   ok(!(await world(page)).striking, 'one drawing, and one only: a flash that lasted two would be a lamp');
 
-  // ---- THE TWO ROADS -----------------------------------------------------------------------------
+  // ---- THE TWO CASTLES, WHICH ARE THE SWITCHES ---------------------------------------------------
+  // The user: "and can you make the castles the place where the user should click to decide what way
+  // to go?" So what is asked here is four things: that each castle answers a pointer, that the box
+  // sits ON the castle (cropped at 2x with the box ruled on it, so a person can see it), that it is
+  // big enough for a thumb, and that the ROADS — which were the switches for three rounds — now do
+  // nothing at all.
   const paths = {};
-  for (const side of ['left', 'right']) {
+  for (const side of ['light', 'dark']) {
     const b = await page.evaluate((s) => {
       const T = window.__theatre, g = T.renderer.domElement, r = g.getBoundingClientRect();
-      const box = T.pieces.props.cross.pathBox(s);
+      const box = T.pieces.props.cross.castleBox(s);
       g.dispatchEvent(new PointerEvent('pointermove', { clientX: r.left + box.x + box.w / 2, clientY: r.top + box.y + box.h / 2, bubbles: true, pointerType: 'mouse' }));
       return box;
     }, side);
@@ -582,15 +656,60 @@ if (doing('storm')) {
       ...(await page.evaluate(() => ({ hovered: window.__theatre.pieces.props.switches.hovered, cursor: window.__theatre.renderer.domElement.style.cursor }))),
     };
   }
-  console.log(`  the left road's ground   ${box1(paths.left.box)}  → the arbiter says "${paths.left.hovered}", cursor "${paths.left.cursor}"`);
-  console.log(`  the right road's ground  ${box1(paths.right.box)} → the arbiter says "${paths.right.hovered}", cursor "${paths.right.cursor}"`);
-  ok(paths.left.hovered === 'cross-left' && paths.right.hovered === 'cross-right', 'each half of the ground answers the pointer, and nothing announces either of them');
-  ok(paths.left.box.x + paths.left.box.w <= paths.right.box.x + 0.5, 'the two cannot overlap: they are the two halves of the frame, split on the plate’s own centre line');
-  // …and how DEEP they are is the picture's business and not this file's: the top of each box is the
-  // fork the trace tool measured on the sheet, and this original forks lower down than the drawing
-  // did. Half the glass by better than a third of it is a side of the screen, not a target.
-  ok(paths.left.box.w >= geom.size.w * 0.45 && paths.left.box.h >= geom.size.h * 0.33, `and they are generous: ${(100 * paths.left.box.w / geom.size.w).toFixed(0)}% of the glass wide by ${(100 * paths.left.box.h / geom.size.h).toFixed(0)}% deep`);
-  ok(paths.left.box.y > 0, `the sky is not a road: both boxes start at the horizon (${paths.left.box.y.toFixed(0)} px down)`);
+  console.log(`  the bright castle  ${box1(paths.light.box)} → the arbiter says "${paths.light.hovered}", cursor "${paths.light.cursor}"`);
+  console.log(`  the dark castle    ${box1(paths.dark.box)} → the arbiter says "${paths.dark.hovered}", cursor "${paths.dark.cursor}"`);
+  console.log(`  where they are DRAWN, measured off the file: ${JSON.stringify(parts.castles)}`);
+  ok(paths.light.hovered === 'cross-light' && paths.dark.hovered === 'cross-dark', 'each castle answers the pointer, and nothing announces either of them');
+  ok(paths.light.cursor === 'pointer' && paths.dark.cursor === 'pointer', 'the cursor over each of them is a pointer');
+  ok(paths.light.box.x + paths.light.box.w <= paths.dark.box.x + 0.5, 'and the two cannot overlap: the country between them belongs to neither');
+  ok(Math.min(paths.light.box.w, paths.light.box.h, paths.dark.box.w, paths.dark.box.h) >= 120,
+    `both are at least 120 px on a laptop (the smallest side of either is ${Math.min(paths.light.box.w, paths.light.box.h, paths.dark.box.w, paths.dark.box.h).toFixed(0)} px)`);
+  // …and the box is ON the castle: the crop shows both, ruled.
+  for (const [k, name] of [['light', 'bright'], ['dark', 'dark']]) {
+    const b = paths[k].box;
+    const view = { x: b.x - b.w * 0.35, y: b.y - b.h * 0.35, w: b.w * 1.7, h: b.h * 1.7 };
+    await cropWithBox(bufPlate, view, b, `${OUT}/egg-cross-r4-castle-${k}-2x.png`, { scale: 2 });
+    console.log(`  the ${name} castle with its box on it  →  ${OUT}/egg-cross-r4-castle-${k}-2x.png`);
+    ok(coverage(imgPlate, b) > 3, `  and there is a castle inside the ${name} box (${coverage(imgPlate, b)}% of it is ink)`);
+  }
+  // ---- AND THE ROADS ARE NOT SWITCHES ANY MORE ---------------------------------------------------
+  // Three points on the near ground that were the LEFT road's own box in round 3 — the middle of the
+  // left field, the middle of the right field, and the fork itself — are pointed at and then
+  // clicked. Nothing may happen at any of them: no hover, no pointer, and no path taken.
+  // …and the pointer is moved and then A DRAWING IS RELEASED before the arbiter is asked, because
+  // the hit test runs once a frame out of props.update and props.update is behind this file's gate.
+  // Without the release the answer is whatever the last released drawing decided, which here was the
+  // dark castle, and the test would fail on its own machinery.
+  const roads = {};
+  for (const [k, uv] of [['the left road', [-0.28, 0.86]], ['the right road', [0.28, 0.86]], ['the fork itself', [0, null]]]) {
+    const at = await page.evaluate(([du, v]) => {
+      const C = window.__theatre.pieces.props.cross, L = C.land;
+      const p = C.at(L.fork + du, v == null ? L.hz + 0.06 : v);
+      const g = window.__theatre.renderer.domElement, r = g.getBoundingClientRect();
+      g.dispatchEvent(new PointerEvent('pointermove', { clientX: r.left + p.x, clientY: r.top + p.y, bubbles: true, pointerType: 'mouse' }));
+      return p;
+    }, uv);
+    await release(page, 1);
+    await settle(page);
+    roads[k] = {
+      at: [Math.round(at.x), Math.round(at.y)],
+      ...(await page.evaluate(() => ({ hovered: window.__theatre.pieces.props.switches.hovered, cursor: window.__theatre.renderer.domElement.style.cursor }))),
+    };
+  }
+  for (const [k, v] of Object.entries(roads)) console.log(`  ${k.padEnd(16)} at ${v.at.join(',')} → the arbiter says "${v.hovered}", cursor "${v.cursor}"`);
+  ok(Object.values(roads).every((v) => v.hovered == null && v.cursor !== 'pointer'), 'the roads are not switches any more: a pointer over either of them, or over the fork, is an arrow over a picture');
+  const roadClick = await page.evaluate(async () => {
+    const T = window.__theatre, C = T.pieces.props.cross, g = T.renderer.domElement, r = g.getBoundingClientRect();
+    const p = C.at(C.land.fork - 0.28, 0.86);
+    for (const type of ['pointerdown', 'pointerup', 'click'])
+      g.dispatchEvent(new PointerEvent(type, { clientX: r.left + p.x, clientY: r.top + p.y, bubbles: true, pointerType: 'mouse', button: 0 }));
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    return { phase: C.phase, path: C.path };
+  });
+  await release(page, 2);
+  const afterRoad = await world(page);
+  console.log(`  a real click on the left road: phase "${afterRoad.phase}", path ${JSON.stringify(afterRoad.path)}`);
+  ok(afterRoad.phase === 'open' && afterRoad.path === null, 'and a click on one does NOTHING: the offer is still standing and nothing was chosen');
 
   // the pendant, and the cues
   console.log(`  the pendant over the table: ${before.pendant} at rest → ${open1.pendant} rad mid-storm`);
@@ -604,20 +723,27 @@ if (doing('storm')) {
   console.log(`  the bus: ${JSON.stringify(ev)}`);
   ok(ev[0]?.phase === 'storm' && ev.some((e) => e.phase === 'open'), 'props:cross went up for the storm and again for the open door');
   ok((page.__errors ?? []).length === 0, `no page errors (${(page.__errors ?? []).slice(0, 2).join(' | ') || 'none'})`);
-  console.log(`  →  ${OUT}/egg-cross-r3-strike.png · ${OUT}/egg-cross-r3-swing.png · ${OUT}/egg-cross-r3-open.png · ${OUT}/egg-cross-r3-crossroads.png · ${OUT}/egg-cross-r3-crossroads-strike.png`);
+  console.log(`  →  ${OUT}/egg-cross-r4-strike.png · ${OUT}/egg-cross-r4-swing.png · ${OUT}/egg-cross-r4-open.png · ${OUT}/egg-cross-r4-crossroads.png · ${OUT}/egg-cross-r4-crossroads-strike.png`);
 }
 
 // =================================================================================================
-// 2b. THE SAME PICTURE, AND THE SAME WALK, ON A PHONE
+// 2b. THE ARRIVAL FRAME AT FOUR SHAPES, AND THE WALK ON A PHONE
 //     Round 2 asked whether a phone kept the fork, the signpost and both castles, because a cover
-//     fit threw away whatever the window's shape did not want. Round 3 holds the WHOLE picture at
-//     every shape — so what is asked here is that it is whole, that it is big enough to be a picture
-//     and not a stamp, and that the walk out plays the same on a phone as on a laptop.
+//     fit threw away whatever the window's shape did not want. Round 3 held the WHOLE picture at
+//     every shape, on paper. Round 4 has to do both at once — the user: "make this actually full
+//     width so it fills the whole screen and is not just a square" — so every frame is asked TWO
+//     questions that used to be one: is the frame FULL (no paper at any edge, and the drawing's own
+//     sheet running off all four of them), and is the ORIGINAL WHOLE inside it (its four corners on
+//     the glass, and every named thing in it).
 // =================================================================================================
-if (doing('phone')) {
-  console.log('\nTHE PICTURE AND THE WALK ON A PHONE  (390x844, against 1280x800)');
+if (doing('frames')) {
+  console.log('\nTHE ARRIVAL FRAME AT FOUR SHAPES  (1280x800 · 1920x1080 · 2560x1080 · 390x844)');
   await fresh();
-  for (const [w, h, name] of [[...PHONE, 'phone'], [...PLATE, 'laptop']]) {
+  const SHAPES = [[1280, 800, 'laptop'], [1920, 1080, 'sixteen-nine'], [2560, 1080, 'twentyone-nine'], [390, 844, 'phone']];
+  for (const [w, h, name] of SHAPES) {
+    // A BROWSER EACH. Software WebGL takes a chromium down somewhere around its sixth context and
+    // this sheet is fifty megabytes of texture a page; four shapes in one browser killed the fourth.
+    await fresh();
     // NOT `?cross=out`: `open()` boots a judged page, and `?view=props&state=default` puts every egg
     // in the room back to its resting state a moment after the parameter has been read. The still is
     // asked for through the api, which is the same call the judging state makes.
@@ -632,47 +758,62 @@ if (doing('phone')) {
         out: C.out,
         traced: !!C.traced,
         fov: +T.pieces.camera.shots.crossroads.fov.toFixed(2),
-        box: C.plateBox(),
+        sheet: C.plateBox(),
+        pic: C.pictureBox(),
+        castles: { light: C.castleBox('light'), dark: C.castleBox('dark') },
         size: { w: innerWidth, h: innerHeight },
         plate: C.plate,
         // WHAT MUST BE IN THE FRAME, named. The two things nearest an edge are the ones a cover fit
         // ate first — the sun's crown at the top and the child's shoes at the foot — and the two
-        // castles are what a side crop would take. The sides are asked at 1 % in; the top and foot
-        // at 4 %, which is inside the bleed the plate declares.
+        // castles are what a side crop would take.
         marks: {
           'the left edge, mid-height': at(0.01, 0.5),
           'the right edge, mid-height': at(0.99, 0.5),
-          'the top of the sky': at(0.5, 0.04),
-          'the foot of the road': at(0.5, 0.96),
+          'the top of the sky': at(0.5, 0.01),
+          'the foot of the road': at(0.5, 0.99),
           'the fork': at(L.fork, L.hz),
           'the signpost': at(L.fork, L.hz - 0.12),
           'the bright castle': at(0.24, 0.17),
-          'the dark castle': at(0.78, 0.19),
+          'the dark castle': at(0.81, 0.19),
           'the sun': at(0.22, 0.12),
-          "the child's shoes": at(L.fork, 0.955),
+          "the child's shoes": at(L.fork, 0.985),
         },
       };
     });
-    await snap(page, `${OUT}/egg-cross-r3-crossroads-${name}.png`);
-    console.log(`  ${name} ${st.size.w}x${st.size.h}: fov ${st.fov} deg, the picture ${box1(st.box)} — ${(100 * st.box.w / st.size.w).toFixed(0)}% of the width, ${(100 * st.box.h / st.size.h).toFixed(0)}% of the height`);
+    const buf = await shot(page);
+    await snap(page, `${OUT}/egg-cross-r4-frame-${name}.png`);
+    const img = await rawOf(buf);
+    const bare = bareEdges(img);
+    console.log(`  ${name.padEnd(15)} ${st.size.w}x${st.size.h}  fov ${st.fov}`);
+    console.log(`     the sheet on the glass ${box1(st.sheet)} · the original ${box1(st.pic)} — ${(100 * st.pic.w / st.size.w).toFixed(0)}% of the width, ${(100 * st.pic.h / st.size.h).toFixed(0)}% of the height`);
+    console.log(`     bare rows/columns at the edges: top ${bare.top}, bottom ${bare.bottom}, left ${bare.left}, right ${bare.right}`);
     ok(st.out && st.traced, `  the traced original is on the sheet`);
-    const bl = st.plate.bleed ?? 0;
-    const over = Math.max(0, -st.box.y, st.box.y + st.box.h - st.size.h);
-    ok(st.box.x >= -1 && st.box.x + st.box.w <= st.size.w + 1, `  not a pixel of it is lost off either SIDE of a ${name} frame`);
-    ok(over <= st.box.h * bl * 0.55 + 2, `  and no more than the declared bleed runs past its top or foot (${over.toFixed(0)} px of an allowed ${(st.box.h * bl / 2).toFixed(0)})`);
+    ok(st.sheet.x <= 0.5 && st.sheet.y <= 0.5 && st.sheet.x + st.sheet.w >= st.size.w - 0.5 && st.sheet.y + st.sheet.h >= st.size.h - 0.5,
+      `  THE FRAME IS FULL: the drawing runs off all four edges of a ${st.size.w}x${st.size.h} window`);
+    ok(Math.max(bare.left, bare.right) <= 2 && Math.max(bare.top, bare.bottom) <= st.size.h * 0.08,
+      `  and there is no margin of paper at any of them (${bare.top}/${bare.bottom}/${bare.left}/${bare.right} px, and what there is is the drawing's own sky and road)`);
+    ok(wholly(st.pic, st.size.w, st.size.h), `  THE ORIGINAL IS WHOLE: all four of its corners are on the glass`);
     // BRIEF: the named subject fills at least 70 % of the short axis on a phone. The short axis of
-    // a phone is its width, and the picture is what the visitor is being asked to look at.
+    // a phone is its width, and the original is what the visitor is being asked to look at.
     const short = Math.min(st.size.w, st.size.h);
-    const fills = Math.max(st.box.w, st.box.h) / short;
+    const fills = Math.max(st.pic.w, st.pic.h) / short;
     ok(fills >= 0.7, `  and it fills ${(100 * fills).toFixed(0)}% of the short axis (the film's own rule is 70)`);
     const missing = [];
     for (const [k, p] of Object.entries(st.marks)) {
-      const inside = !!p && p.x > 2 && p.x < st.size.w - 2 && p.y > 2 && p.y < st.size.h - 2;
+      const inside = !!p && p.x > 1 && p.x < st.size.w - 1 && p.y > 1 && p.y < st.size.h - 1;
       console.log(`     ${inside ? 'in ' : 'OUT'}  ${k.padEnd(24)} ${p ? `at ${p.x.toFixed(0)},${p.y.toFixed(0)}` : 'nowhere: the plate is not up'}`);
       if (!inside) missing.push(k);
     }
     ok(missing.length === 0, `  every named thing in the picture is in the ${name} frame${missing.length ? ` — missing ${missing.join(', ')}` : ''}`);
-    console.log(`  →  ${OUT}/egg-cross-r3-crossroads-${name}.png`);
+    // the two switches, at this shape
+    const min = Math.min(st.size.w, st.size.h) < 520 ? 80 : 120;
+    for (const k of ['light', 'dark']) {
+      const b = st.castles[k];
+      console.log(`     the ${k} castle's box ${box1(b)}`);
+      ok(b && Math.min(b.w, b.h) >= min - 0.5 && wholly(b, st.size.w, st.size.h), `  the ${k} castle is at least ${min} px square here and wholly on the glass`);
+    }
+    ok(st.castles.light.x + st.castles.light.w <= st.castles.dark.x + 0.5, '  and the two do not touch');
+    console.log(`  →  ${OUT}/egg-cross-r4-frame-${name}.png`);
     ok((page.__errors ?? []).length === 0, `  no page errors (${(page.__errors ?? []).slice(0, 2).join(' | ') || 'none'})`);
   }
 
@@ -705,21 +846,21 @@ if (doing('phone')) {
   }
   const parrive = await world(ph);
   pstrip.push({ buf: await shot(ph), at: `arrived fov ${parrive.fov}` });
-  await sheet(pstrip, `${OUT}/egg-cross-r3-walk-phone.png`, 4, PHONE[0], PHONE[1]);
+  await sheet(pstrip, `${OUT}/egg-cross-r4-walk-phone.png`, 4, PHONE[0], PHONE[1]);
   console.log(`  the phone's lens through the walk: ${pfov.join(' → ')} → ${parrive.fov}`);
   ok(parrive.shot === 'crossroads' && !parrive.walking, `  it arrives (camera "${parrive.shot}", eye [${parrive.eye.join(', ')}])`);
   ok(pfov.slice(0, 7).every((f) => Math.abs(f - pfov[0]) < 0.5), '  and the lens is the parlour’s own for the first two thirds of it: no wide-angle room on the glass');
   ok(parrive.fov > pfov[0] + 10, `  the whole lens change is in the last stride (${pfov[0]} → ${parrive.fov} deg)`);
-  console.log(`  →  ${OUT}/egg-cross-r3-walk-phone.png`);
+  console.log(`  →  ${OUT}/egg-cross-r4-walk-phone.png`);
   ok((ph.__errors ?? []).length === 0, `  no page errors (${(ph.__errors ?? []).slice(0, 2).join(' | ') || 'none'})`);
 }
 
 // =================================================================================================
-// 3. THE LEFT ROAD: the storm clears while the visitor is still looking out, and then the room is
-//    exactly as it was — pixel for pixel
+// 3. THE BRIGHT CASTLE — the light path: the storm clears while the visitor is still looking out,
+//    and then the room is exactly as it was — pixel for pixel
 // =================================================================================================
 if (doing('light')) {
-  console.log('\nTHE LEFT ROAD  (a real click on the left half, the clearing, the cut home, and the room compared with itself)');
+  console.log('\nTHE BRIGHT CASTLE  (a real click on it, the clearing, the walk home, and the room compared with itself)');
   await fresh();
   const [W, H] = PLATE;
   // THE CLOCK IS FROZEN for this one, and it has to be. The line boils: the drawing is re-struck on
@@ -734,16 +875,16 @@ if (doing('light')) {
   const page = await open(W, H, '&t=6&now=21:12');
   const before = await world(page);
   const bufBefore = await shot(page);
-  await snap(page, `${OUT}/egg-cross-r3-before.png`);
+  await snap(page, `${OUT}/egg-cross-r4-before.png`);
   await page.evaluate(() => window.__theatre.pieces.props.cross.set('out'));
   await settle(page);
   const out1 = await world(page);
   ok(out1.phase === 'open' && out1.out && out1.shot === 'crossroads', `the room is standing out at the crossroads (camera "${out1.shot}", sky drawing ${out1.sky})`);
-  const b = await page.evaluate(() => window.__theatre.pieces.props.cross.pathBox('left'));
+  const b = await page.evaluate(() => window.__theatre.pieces.props.cross.castleBox('light'));
   await page.mouse.click(b.x + b.w / 2, b.y + b.h / 2);
   await settle(page);
   const chose = await world(page);
-  ok(chose.path === 'light' && chose.phase === 'closing', `the left road is taken (path "${chose.path}", phase "${chose.phase}")`);
+  ok(chose.path === 'light' && chose.phase === 'closing', `the bright castle is taken and it is the light path (path "${chose.path}", phase "${chose.phase}")`);
   ok(chose.shot === 'crossroads', 'and the room is STILL LOOKING OUT: the clearing is something the visitor watches');
   // the three drawings of the cloud lifting, caught one at a time
   const lift = [];
@@ -751,7 +892,7 @@ if (doing('light')) {
     await page.waitForFunction((k) => window.__theatre.pieces.props.cross.sky !== k, lift[lift.length - 1] ?? 0, { timeout: 300000, polling: 100 }).catch(() => {});
     const s = await world(page);
     lift.push(s.sky);
-    if (s.sky >= 0 && s.out) await snap(page, `${OUT}/egg-cross-r3-clearing-${i + 1}.png`);
+    if (s.sky >= 0 && s.out) await snap(page, `${OUT}/egg-cross-r4-clearing-${i + 1}.png`);
     if (s.sky < 0) break;
   }
   console.log(`  the cloud lifting, drawing by drawing: ${[0, ...lift].join(' → ')}  (-1 is the sheet taken off)`);
@@ -778,7 +919,7 @@ if (doing('light')) {
   await settle(page);
   const after = await world(page);
   const bufAfter = await shot(page);
-  await snap(page, `${OUT}/egg-cross-r3-after-light.png`);
+  await snap(page, `${OUT}/egg-cross-r4-after-light.png`);
   console.log(`  before: ${JSON.stringify({ ...before.light, phase: before.phase, rain: before.rain.on, pendant: before.pendant, shot: before.shot })}`);
   console.log(`  after:  ${JSON.stringify({ ...after.light, phase: after.phase, rain: after.rain.on, pendant: after.pendant, shot: after.shot })}`);
   ok(after.phase === 'shut' && after.path === 'light', `the storm cleared and the choice is remembered (phase "${after.phase}", path "${after.path}")`);
@@ -790,15 +931,15 @@ if (doing('light')) {
   const d = diff(await rawOf(bufBefore), await rawOf(bufAfter));
   console.log(`  the two frames, pixel for pixel: ${d.n} differ${d.box ? ` (inside ${box1(d.box)})` : ''}`);
   ok(d.n === 0, `the room is EXACTLY as it was (${d.n} pixels changed)`);
-  console.log(`  →  ${OUT}/egg-cross-r3-before.png · ${OUT}/egg-cross-r3-after-light.png · ${OUT}/egg-cross-r3-clearing-*.png`);
+  console.log(`  →  ${OUT}/egg-cross-r4-before.png · ${OUT}/egg-cross-r4-after-light.png · ${OUT}/egg-cross-r4-clearing-*.png`);
   ok((page.__errors ?? []).length === 0, `no page errors (${(page.__errors ?? []).slice(0, 2).join(' | ') || 'none'})`);
 }
 
 // =================================================================================================
-// 4. THE RIGHT ROAD: a strike, the cut back, and the storm stays for the evening
+// 4. THE DARK CASTLE — the dark path: a strike, the walk back, and the storm stays for the evening
 // =================================================================================================
 if (doing('dark')) {
-  console.log('\nTHE RIGHT ROAD  (a real click on the right half, then a later strike)');
+  console.log('\nTHE DARK CASTLE  (a real click on it, then a later strike)');
   await fresh();
   const [W, H] = PLATE;
   const page = await open(W, H);
@@ -813,13 +954,13 @@ if (doing('dark')) {
   await settle(page);
   const out1 = await world(page);
   ok(out1.phase === 'open' && out1.arrived, `the room walked out and is standing at the crossroads (camera "${out1.shot}", ${took} drawings after the click)`);
-  const b = await page.evaluate(() => window.__theatre.pieces.props.cross.pathBox('right'));
+  const b = await page.evaluate(() => window.__theatre.pieces.props.cross.castleBox('dark'));
   await page.mouse.click(b.x + b.w / 2, b.y + b.h / 2);
   await release(page, 1); // the drawing the road is taken ON: the strike is on it
   await settle(page);
   const struck = await world(page);
-  await snap(page, `${OUT}/egg-cross-r3-dark-answer.png`);
-  ok(struck.path === 'dark' && struck.striking, 'the right road is answered by a strike, on the drawing it is taken');
+  await snap(page, `${OUT}/egg-cross-r4-dark-answer.png`);
+  ok(struck.path === 'dark' && struck.striking, 'the dark castle is answered by a strike, on the drawing it is taken');
 
   // ---- AND THE WALK HOME, WHICH IS THE SAME ROAD IN A SECOND AND A HALF ---------------------------
   // Eighteen drawings, and the door shuts three drawings into it — as the lens clears the opening,
@@ -836,10 +977,10 @@ if (doing('dark')) {
     await release(page, 3);
     await settle(page);
   }
-  await sheet(back, `${OUT}/egg-cross-r3-walk-back.png`, 4, W, H);
+  await sheet(back, `${OUT}/egg-cross-r4-walk-back.png`, 4, W, H);
   console.log(`  the walk home, z drawing by drawing: ${bz.map((z) => z.toFixed(2)).join(' → ')}`);
   console.log(`  the leaf through it: ${leafAt.map((d) => (d == null ? '—' : d + '°')).join(' → ')}`);
-  console.log(`  →  ${OUT}/egg-cross-r3-walk-back.png`);
+  console.log(`  →  ${OUT}/egg-cross-r4-walk-back.png`);
   ok(bz.every((z, i) => i === 0 || z >= bz[i - 1]), 'it only ever goes one way — back through the door and across the room');
   ok(bz[bz.length - 1] > bz[0] + 8, `and it gets the whole way home (${bz[0].toFixed(2)} → ${bz[bz.length - 1].toFixed(2)} m)`);
   ok(leafAt[0] == null || leafAt[0] > 90, 'the door is still standing wide open on the drawing the room leaves');
@@ -848,7 +989,7 @@ if (doing('dark')) {
   await release(page, 14); // whatever is left of the walk and the leaf coming onto its stop
   await settle(page);
   const shutOn = await world(page);
-  await snap(page, `${OUT}/egg-cross-r3-after-dark.png`);
+  await snap(page, `${OUT}/egg-cross-r4-after-dark.png`);
   console.log(`  after the choice: ${JSON.stringify({ phase: shutOn.phase, path: shutOn.path, shot: shutOn.shot, light: shutOn.light.state, key: shutOn.light.key, rain: shutOn.rain.layers })}`);
   ok(shutOn.phase === 'dark' && shutOn.path === 'dark', `the door shut on the weather and the storm stayed (phase "${shutOn.phase}")`);
   ok(shutOn.shot === 'home' && !shutOn.out, `the room cut back through the door first (camera "${shutOn.shot}")`);
@@ -867,10 +1008,10 @@ if (doing('dark')) {
   await settle(page);
   const later = await world(page);
   const bufLater = await shot(page);
-  await snap(page, `${OUT}/egg-cross-r3-dark-strike.png`);
+  await snap(page, `${OUT}/egg-cross-r4-dark-strike.png`);
   ok(later.flashing && later.light.state === 'cross-flash', `and on the next, the whole flash again — panes white, the room a shade up (light "${later.light.state}", key ${later.light.key})`);
   const img = await rawOf(bufLater);
-  console.log(`  →  ${OUT}/egg-cross-r3-dark-answer.png · ${OUT}/egg-cross-r3-after-dark.png · ${OUT}/egg-cross-r3-dark-strike.png (${img.w}x${img.h})`);
+  console.log(`  →  ${OUT}/egg-cross-r4-dark-answer.png · ${OUT}/egg-cross-r4-after-dark.png · ${OUT}/egg-cross-r4-dark-strike.png (${img.w}x${img.h})`);
   console.log(`  the bus: ${JSON.stringify(await page.evaluate(() => window.__ev))}`);
   ok((page.__errors ?? []).length === 0, `no page errors (${(page.__errors ?? []).slice(0, 2).join(' | ') || 'none'})`);
 }
@@ -903,7 +1044,7 @@ if (doing('timeout')) {
   await release(page, 40);
   await settle(page);
   const done = await world(page);
-  await snap(page, `${OUT}/egg-cross-r3-timeout.png`);
+  await snap(page, `${OUT}/egg-cross-r4-timeout.png`);
   console.log(`  after it: ${JSON.stringify({ phase: done.phase, path: done.path, shot: done.shot, light: done.light.state, rain: done.rain.on })}`);
   ok(done.phase === 'shut' && done.path === null && done.light.state === 'default' && !done.rain.on, 'the door shut, the storm cleared, and the room kept nothing');
   ok((page.__errors ?? []).length === 0, `no page errors (${(page.__errors ?? []).slice(0, 2).join(' | ') || 'none'})`);
@@ -959,7 +1100,7 @@ if (doing('line')) {
     beat: window.__theatre.pieces.flow.beat,
     phase: window.__theatre.pieces.props.cross.phase,
   }));
-  await snap(page, `${OUT}/egg-cross-r3-said.png`);
+  await snap(page, `${OUT}/egg-cross-r4-said.png`);
   console.log(`  the placard, at the crossroads: "${said}"`);
   console.log(`  every prompt the placard was handed all evening: ${JSON.stringify(state.asks)}`);
   console.log(`  …and everything dialogue.say was told to cut: ${JSON.stringify(state.says)}`);
@@ -1009,7 +1150,7 @@ if (doing('line')) {
     console.log(`  the placard through it: "${text1.slice(0, 70)}"`);
   }
   ok((page.__errors ?? []).length === 0, `no page errors (${(page.__errors ?? []).slice(0, 2).join(' | ') || 'none'})`);
-  console.log(`  →  ${OUT}/egg-cross-r3-said.png`);
+  console.log(`  →  ${OUT}/egg-cross-r4-said.png`);
 }
 
 // =================================================================================================
