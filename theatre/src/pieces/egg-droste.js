@@ -45,7 +45,7 @@ const SHEET_Z = DEPTH / 2 - 0.008;
 
 export function eggDroste(ctx, { group, slot }) {
   const M = O.materials();
-  const { z, hookY } = slot;
+  const { z } = slot;
   // the nail and the frame's OUTER size, in metres. props.js owns all four and re-lays them on
   // every resize; nothing in this file decides any of them.
   let x = slot.x, y = slot.y, frameW = slot.w, frameH = slot.h;
@@ -63,9 +63,12 @@ export function eggDroste(ctx, { group, slot }) {
   g.position.set(x, y, z);
   group.add(g);
 
-  // the cords go back to the same picture rail every other frame on this wall hangs from, and they
-  // are rebuilt with the frame because the frame's top edge moves when the window changes shape
-  let cordGroup = null;
+  // NO CORDS. Every other frame on this wall goes back to the picture rail on a pair of them, and
+  // this one did too until the user saw the corner: "lets remove the angular hanging line." At
+  // 0.80 m wide the frame's top corners are a long way out from the rail's hook, so the two cords
+  // came down as a wide V — a pair of hard diagonals across bare plaster, the longest straight
+  // lines anywhere on that wall and the only ones not drawing anything. The clock keeps its cords,
+  // which are short and hang straight; this picture is on a nail nobody can see.
   let sheet = null;
   const size = { w: 0, h: 0, frameW: 0, frameH: 0, aspect: 0 };
 
@@ -73,11 +76,6 @@ export function eggDroste(ctx, { group, slot }) {
     for (const c of [...g.children]) {
       g.remove(c);
       c.geometry?.dispose?.();
-    }
-    if (cordGroup) {
-      group.remove(cordGroup);
-      cordGroup.traverse((o) => o.geometry?.dispose?.());
-      cordGroup = null;
     }
   }
 
@@ -111,9 +109,6 @@ export function eggDroste(ctx, { group, slot }) {
     sheet.castShadow = false;
     sheet.position.z = SHEET_Z;
     g.add(sheet);
-    cordGroup = new THREE.Group();
-    group.add(cordGroup);
-    O.hangCords(cordGroup, x, y + frameH / 2, Math.max(0.03, frameW / 2 - 0.02), hookY, z - 0.003);
     size.w = w;
     size.h = h;
     size.frameW = frameW;

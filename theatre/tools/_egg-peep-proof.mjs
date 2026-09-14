@@ -107,11 +107,7 @@ console.log('\nWHERE PEEP STANDS  (world metres, off the geometry; and his box o
     T.pieces.props.peep.set(true);
     const floor = B(g);
     T.pieces.props.peep.set(false);
-    // the six places the insects land, which he must not be in (egg-insects.js)
-    T.pieces.props.setState('insects-gathered');
-    const seats = T.scene.getObjectByName('insects').children.map((c) => c.position.toArray().map((n) => +n.toFixed(3)));
-    T.pieces.props.setState('default');
-    return { shelf, floor, jar: B(jar), press: B(press), seats, cat: B(T.scene.getObjectByName('cat')), roomHalf: T.layout.room.width / 2 };
+    return { shelf, floor, jar: B(jar), press: B(press), cat: B(T.scene.getObjectByName('cat')), roomHalf: T.layout.room.width / 2 };
   });
   const size = (b) => [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]].map((n) => +n.toFixed(3));
   console.log(`  on the shelf   x ${m.shelf.min[0]}..${m.shelf.max[0]}   y ${m.shelf.min[1]}..${m.shelf.max[1]}   z ${m.shelf.min[2]}..${m.shelf.max[2]}   (${size(m.shelf).join(' x ')} m)`);
@@ -123,13 +119,11 @@ console.log('\nWHERE PEEP STANDS  (world metres, off the geometry; and his box o
   // the middle bay of the press, one board under the jar
   ok(m.shelf.min[1] > 0.56 && m.shelf.min[1] < 0.59, 'he stands on the press\'s middle board (y 0.575), not on the board the jar is on');
   ok(m.shelf.min[0] > m.press.min[0] && m.shelf.max[0] < m.press.max[0], 'the whole of him is over the press');
-  // NOT where the insects gather
-  const clash = m.seats.filter((s) => {
-    const half = 0.0575; // the insects' sheets are 0.115 square
-    return s[0] + half > m.shelf.min[0] && s[0] - half < m.shelf.max[0] && s[1] + half > m.shelf.min[1] && s[1] - half < m.shelf.max[1];
-  });
-  console.log(`  the insects' six landing places: y ${Math.min(...m.seats.map((s) => s[1])).toFixed(3)}..${Math.max(...m.seats.map((s) => s[1])).toFixed(3)}  ` + `— Peep's head is at y ${m.shelf.max[1]}`);
-  ok(clash.length === 0, 'no insect lands within a sheet\'s width of him, in either axis');
+  // AND CLEAR OF THE JAR HE STANDS BESIDE. The board the jar is on is spoken for by the jar; his
+  // own board is the one below it, and this is the test that he is beside the press's dressing
+  // rather than inside it — the same question the landing places on the jar's board used to ask.
+  console.log(`  the jar's board: y ${m.jar.min[1]}..${m.jar.max[1]}  —  Peep's head is at y ${m.shelf.max[1]}`);
+  ok(m.shelf.max[1] < m.jar.min[1] + 0.001, 'his head is under the board the MIEL jar stands on, not level with the jar');
   // and he is on the boards, not in the wall or in the press
   ok(m.floor.min[1] > -0.002 && m.floor.min[1] < 0.004, 'fallen, he is ON the floor: his lowest point is y 0');
   ok(m.floor.max[0] < m.roomHalf - 0.01, `fallen, he clears the right-hand wall (x ${m.roomHalf}) by ${(m.roomHalf - m.floor.max[0]).toFixed(3)} m`);

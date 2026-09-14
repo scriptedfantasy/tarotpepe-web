@@ -161,7 +161,7 @@ let BOXES = null;
     const at = (x, y, z) => { v.set(x, y, z).project(T.camera); return [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H]; };
     const box = (a, b) => { const p = at(...a), q = at(...b); return { x: Math.min(p[0], q[0]), y: Math.min(p[1], q[1]), w: Math.abs(q[0] - p[0]), h: Math.abs(q[1] - p[1]) }; };
     return {
-      'back wall': box([-0.5, 1.35, -2.5], [0.85, 1.8, -2.5]), // the bare plaster the insects sit on
+      'back wall': box([-0.5, 1.35, -2.5], [0.85, 1.8, -2.5]), // bare plaster, nothing hung on it
       shutter: box([-1.05, 1.1, -2.46], [-0.6, 2.4, -2.46]), // the leaf folded flat beside the window
       door: box([1.1, 0.5, -2.5], [1.9, 2.05, -2.5]),
       'rug (plain)': box([-1.2, 0.001, 0.45], [0.2, 0.001, 1.15]), // its printed field, downstage of everything

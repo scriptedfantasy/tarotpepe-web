@@ -29,7 +29,6 @@ import { eggFuse } from './egg-fuse.js';
 import { buildVortex } from './egg-vortex.js';
 import { buildWine } from './egg-wine.js';
 import { eggGlobe } from './egg-globe.js';
-import { buildInsects, insectState } from './egg-insects.js';
 import { eggVase } from './egg-vase.js';
 
 import { eggRain, rainState } from './egg-rain.js';
@@ -50,7 +49,7 @@ import { eggCross } from './egg-cross.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'insects-gathered', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'silvia-open', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'silvia-open', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
 };
 
@@ -79,41 +78,54 @@ export async function build(ctx) {
   const HOOK_Y = railY - 0.02;
 
   // ---- THE ROW UNDER THE PICTURE RAIL ----------------------------------------------------------
-  // TWO THINGS HANG ON THIS WALL NOW, not three. The user: "lets remove the nakamoto painting
-  // entirely, gives us more space for the clock and the room picture." So the card is gone
-  // (egg-nakamoto.js with it) and the clock and the picture of this room share the plaster.
+  // TWO THINGS HANG ON THIS WALL: the CLOCK and THE PICTURE OF THIS ROOM, sharing the plaster with
+  // an even gap and nothing else on it at all. It is bare on purpose and the user asked for it
+  // twice — "lets remove the nakamoto painting entirely, gives us more space for the clock and the
+  // room picture", and then "remove the insects entirely, that wall is too messy anyway" — so the
+  // emptiness either side of these two is the point and not slack waiting to be filled.
   //
-  // WHERE THE PLASTER ENDS, both measured rather than assumed (tools/_droste-where.mjs prints every
-  // world box on this stretch; room.js's own comment gives the leaf):
-  //   x -0.49  the window's downstage shutter leaf folds flat onto the wall to here, and anything
-  //            left of it has been behind a louvre since the room was built. The Nakamoto card's
-  //            left third was, and living with that was the compromise this change ends.
-  //   x  1.03  the door architrave takes everything past it.
-  // …so the row has 1.520 m of wall, and it is shared three ways: a gap, the clock, a gap, the
-  // picture, a gap. EVEN, and solved for the window in front of it, because the picture's width is
-  // the window's aspect and a fixed layout would only be even at one shape.
+  // THE FOUR EDGES, every one measured rather than assumed (tools/_droste-where.mjs prints every
+  // world box on this stretch, and the shadow Pepe throws on it from each shot):
+  //   x -0.49   the window's downstage shutter leaf folds flat onto the wall to here; anything left
+  //             of it has been behind a louvre since the room was built.
+  //   x  1.03   the door architrave takes everything past it.
+  //   y  2.2649 the shop board's bottom edge. The row used to tuck 12.8 mm BEHIND it — the board
+  //             hangs in front, so it cut the frame's top rail — and the user, looking at that
+  //             corner: "give the painting a bit spacing to the top tarot - reading - 3 cards
+  //             sign." The frame's topmost point, which is its corner blocks and not its rail, now
+  //             stands 50 mm clear at 2.2149, and the board's drop shadow falls on plaster.
+  //   y  1.4001 PEPE'S OWN HEAD, and this is the edge that surprised the round. He sits 1.6 m in
+  //             front of this wall, so his silhouette covers a patch of it larger than he is: cast
+  //             from the `pepe` shot his crown lands on the plaster at 1.4001 and his shoulders
+  //             reach x ±0.70 (from `home` and `wide` it is 1.3138 and 1.2934 at x ±0.58). A
+  //             picture whose foot went below that line would be a picture behind his head at the
+  //             one shot that is all head. Everything else on this stretch is lower: the vase's
+  //             furthest stem 1.371, the cat 1.324, and the pale rectangle on the paper — a mark,
+  //             not an object — 1.786.
   //
-  // WHERE THE PLASTER ENDS UP AND DOWN, and this is the number that has not moved in four rounds:
-  //   y 2.2649  the shop board's bottom edge (it hangs in front, so a frame tucks BEHIND it; the
-  //             row has always tucked 12.8 mm and the picture keeps exactly that much).
-  //   y 1.788   the highest insect sheet under the row (egg-insects.js WALL_SPOTS). One of the six
-  //             was at [0.12, 1.76] and topped out at 1.818, which is 16 mm inside a picture this
-  //             wide; the coordinator's call was to move an insect rather than shrink the picture,
-  //             and that is the one insect in the way. It is now [0.12, 1.73] — a 30 mm drop, the
-  //             least that clears the frame, at the same x, on the same line as the sheet at
-  //             [0.62, 1.73] which already clears it by the same 14 mm.
-  // Between them is 0.4754 m and the frame with its corner blocks is exactly that. So the picture
-  // is HEIGHT-BOUND at every window shape narrower than about 2.05:1, and its width follows.
+  // SO THE PICTURE HANGS FROM A LINE AND NOT FROM A NAIL HEIGHT. Its height changes with the window
+  // (its shape is the window's shape), so a fixed centre would walk its top edge up and down under
+  // the shop board and lose the 50 mm. `top` is the fixed thing and the nail is solved from it.
+  // 0.7954 m of clear wall between the two lines, of which the frame with its corner blocks takes
+  // 0.78 at most; then the width follows the aspect, and where the width would take more of the
+  // wall than the row can spare, the width is capped and the height follows IT instead.
+  //
+  // THE GAP FLOOR IS 0.11 AND IT IS THE ONLY TASTE IN THIS BLOCK. With nothing else on the wall a
+  // 16:9 picture at the full 0.78 would want to be 1.24 m across — four fifths of the plaster, a
+  // mural rather than a picture — so something has to hold it back, and the thing that does is the
+  // gap. 0.11 is the spacing this row was already hung at on a 1600x900 window in the layout before
+  // this one (it solved to 0.1170) rounded to a round number: the tightest the wall has been seen
+  // at and looked right at. It binds on every landscape window and on none upright.
   const ROW = {
     left: -0.49,
     right: 1.03,
-    y: 2.04, // the row's centre line: the nail every frame on this wall has hung from
+    top: 2.2149, // the frame's corner blocks hang under this line, 50 mm below the shop board
+    floor: 1.4001, // Pepe's crown, cast onto this wall from the closest shot that holds him
     clockR: 0.185,
     clockY: 2.06,
-    frameH: 0.46, // the moulding's outer height; + corner blocks it is 0.4754
     rim: 0.022,
     corner: 0.0077, // how far a corner block stands proud of the moulding's outer edge
-    minGap: 0.08, // a window wider than ~2.05:1 stops being height-bound and this holds the gap
+    minGap: 0.11,
   };
   // The row, solved for one window. Returns the clock's x, the picture's nail and the frame's outer
   // size, and the gap the three of them share.
@@ -122,22 +134,30 @@ export async function build(ctx) {
     const clockW = ROW.clockR * 2;
     const band = ROW.right - ROW.left;
     const pad = ROW.corner * 2;
-    const maxOuter = band - clockW - 3 * ROW.minGap;
-    let sheetH = ROW.frameH - ROW.rim * 2;
+    const maxOuterW = band - clockW - 3 * ROW.minGap;
+    const maxOuterH = ROW.top - ROW.floor - 0.0194; // …less a finger's clearance off his crown
+    let sheetH = maxOuterH - pad - ROW.rim * 2;
     let sheetW = sheetH * A;
-    let outer = sheetW + ROW.rim * 2 + pad;
-    if (outer > maxOuter) {
-      outer = maxOuter;
-      sheetW = outer - ROW.rim * 2 - pad;
+    if (sheetW + ROW.rim * 2 + pad > maxOuterW) {
+      sheetW = maxOuterW - ROW.rim * 2 - pad;
       sheetH = sheetW / A;
     }
-    const gap = (band - clockW - outer) / 3;
+    const outerW = sheetW + ROW.rim * 2 + pad;
+    const outerH = sheetH + ROW.rim * 2 + pad;
+    const gap = (band - clockW - outerW) / 3;
     return {
       gap,
       clockX: ROW.left + gap + ROW.clockR,
-      frame: { x: ROW.left + gap + clockW + gap + outer / 2, y: ROW.y, w: sheetW + ROW.rim * 2, h: sheetH + ROW.rim * 2 },
+      frame: {
+        x: ROW.left + gap + clockW + gap + outerW / 2,
+        y: ROW.top - outerH / 2, // hung from the top line, not from a fixed centre
+        w: sheetW + ROW.rim * 2,
+        h: sheetH + ROW.rim * 2,
+      },
       sheet: { w: sheetW, h: sheetH },
-      outer,
+      outer: outerW,
+      outerH,
+      foot: ROW.top - outerH,
     };
   }
   const rowAspect = () => {
@@ -347,8 +367,8 @@ export async function build(ctx) {
       unit.add(b);
       const j = O.shelfItem({ kind: 'jar', name: 'MIEL', h: 0.13, scale: 1.3, seed: 72 }, rng);
       j.position.set(0.13, CABH, 0.0);
-      // named, because the insects gather round it and take their six landing places off its own
-      // bounding box rather than off a written-down coordinate (egg-insects.js)
+      // named, because egg-peep.js takes its landing place off this jar's own bounding box rather
+      // than off a written-down coordinate, so the toad follows it if the press dressing moves
       j.name = 'miel-jar';
       unit.add(j);
     }
@@ -999,8 +1019,6 @@ export async function build(ctx) {
   // ---- THE WINE on the cart. The room's sixth switch (src/pieces/egg-wine.js). -------------
   const WINE = buildWine(ctx, wineObj, { switches: SWITCHES });
 
-  // ---- THE INSECTS on the back wall, and the honey jar they gather at (src/pieces/egg-insects.js). --
-  const INSECTS = buildInsects(ctx, { group: g, switches: SWITCHES, jar: g.getObjectByName('miel-jar'), wallZ: WALL });
 
   // ---- THE VASE OF DRIED STEMS on the operator's position (src/pieces/egg-vase.js). ---------
   // The room's eighth switch, and the only one that puts colour anywhere but on Pepe and the cards.
@@ -1020,13 +1038,15 @@ export async function build(ctx) {
   // HOW BIG AND WHERE are THE ROW's, at the head of this build: the picture takes the whole height
   // the band allows and whatever width that makes of the window's aspect, and the clock and it then
   // share the plaster three ways. What it comes to, measured (tools/_droste-where.mjs):
-  //     window      sheet            frame            nail x    clock x   gap
-  //     1280x800    0.666 x 0.416    0.710 x 0.460    0.526     -0.163    0.142
-  //     1600x900    0.740 x 0.416    0.784 x 0.460    0.514     -0.188    0.117
-  //     390x844     0.192 x 0.416    0.236 x 0.460    0.605     -0.006    0.299
-  // Against the 0.456 x 0.285 it was before the card came down, the laptop's picture is half as
-  // wide again and half as tall again — two and a tenth times the sheet. The phone's is the same
-  // size it was (upright, the band is the whole of the limit) and stands in twice the plaster.
+  //     window      sheet            frame            nail            clock x   gap
+  //     1280x800    0.761 x 0.475    0.805 x 0.519    0.510, 1.948    -0.195    0.110
+  //     1600x900    0.761 x 0.428    0.805 x 0.472    0.510, 1.971    -0.195    0.110
+  //     390x844     0.340 x 0.736    0.384 x 0.780    0.580, 1.817    -0.055    0.250
+  // The landscape windows are held by the gap and are the same width as each other; the phone is
+  // held by the wall and is the tall one. Both stand 50.0 mm under the shop board, measured, and
+  // clear Pepe's own shadow on the plaster by 280 mm on a laptop and 19 mm on a phone. Against the
+  // 0.456 x 0.285 sheet this picture started the round at, the laptop's is two and two thirds the
+  // area and the phone's is six and a quarter.
   const DROSTE = eggDroste(ctx, { group: g, slot: { ...layRow(rowAspect()).frame, z: WALL + 0.015, hookY: HOOK_Y } });
   // …and the row is laid now and again on every resize, because the picture's width IS the window's
   // aspect: a wall that was even at 16:9 is not even on a phone unless the clock moves with it. The
@@ -1090,12 +1110,6 @@ export async function build(ctx) {
     // click does, `drunk` is whether the room is currently under it, and hitBox/tapBox are the
     // bottle's box on the glass and the box a thumb is given.
     wine: WINE,
-    // THE INSECTS. `state` is where each one is (wall, air, jar), `fly(i)` sends one off as a click
-    // does, and hitBox(i)/tapBox(i) are a sheet's box on the glass and the box a thumb is given.
-    insects: INSECTS,
-    // THE VASE. `state` is dried / wilting / empty / leaf, `click()` starts the nine drawings as a
-    // pointer does (cue, events and all), `set(state)` puts it there for a still with neither, and
-    // hitBox/tapBox are the vase's box on the glass and the box a thumb is given.
     vase: VASE,
     // THE WEATHER. `on` is whether there is rain in the drawing, `toggle()` starts or stops it as a
     // click on the panes does (cue, event and all), `set(on)` puts full rain or none there for a
@@ -1213,11 +1227,6 @@ export async function build(ctx) {
       WINE.setState(name); // `wine-drunk`; every other name puts the bottle back
       if (name === 'globe-spinning') GLOBE.showSpinning();
       else GLOBE.reset();
-      // `insects-gathered` is the six of them round the jar; every other name is the wall, which
-      // is where a reload always puts them
-      insectState(INSECTS, name);
-      // `vase-empty` and `vase-leaf` are the middle and the end of the egg; every other name is the
-      // dried stems, which is what a reload always finds in that vase.
       VASE?.setState(name);
       // `rain` is full rain behind the panes with the room one shade down; every other name is a dry
       // afternoon, which is where a reload always puts it
@@ -1256,7 +1265,6 @@ export async function build(ctx) {
       VORTEX.update(ctx); // last: while it runs, the hands and the bob are its own
       WINE.update(ctx);
       GLOBE.update(ctx);
-      INSECTS?.update(ctx);
       VASE?.update(ctx);
       RAIN?.update(ctx);
       FINE.update(ctx);

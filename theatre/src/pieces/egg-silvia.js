@@ -610,7 +610,8 @@ export function eggSilvia(ctx, { group, switches, slot }) {
     tex.anisotropy = Math.max(tex.anisotropy || 1, ctx.renderer?.capabilities?.getMaxAnisotropy?.() ?? 1);
     // colorful: the pass shows the drawing verbatim and re-states its achromatic marks at the room's
     // own nib. lineWeight 0: no second contour drawn round a flat card. hatch 0.02: a sheet pinned
-    // flat to a wall takes no wash. egg-insects.js's three numbers, for egg-insects.js's reasons.
+    // flat to a wall takes no wash. Those three — colorful true, lineWeight 0, hatch 0.02 — are
+    // pepe.js's own numbers for a paper cut-out, and they are why he and these are drawn by one hand.
     const mat = inkMaterial({ color: '#ffffff', map: tex, hatch: 0.02, lineWeight: 0, colorful: true });
     mat.alphaTest = 0.5;
     mat.transparent = false;
@@ -973,8 +974,10 @@ export function eggSilvia(ctx, { group, switches, slot }) {
         poseOpen(f, ctx2.clock.frame % 2);
         // one tack, one sheet. The cue is fired here and not on the pointer because THIS is when the
         // pin goes in; the pointer's own sound was the catch, a second earlier. And it is PANNED to
-        // where that card is on the glass — the insects' own rule for their buzz — which is what
-        // keeps eighteen pins at four a second from arriving as one rattle.
+        // where that card is on the glass, by the room's own rule for a cue made by a thing the
+        // visitor can see: project the object's box, take the centre of it across the frame as −1 to
+        // +1 (panOf, above), so a pin driven on the right of the picture arrives from the right.
+        // That is what keeps eighteen pins at four a second from arriving as one rattle.
         for (let k = was; k < cards; k++) ctx.pieces.sound?.play?.('tap', { gain: 0.5, pan: panOf(order[k]) });
         if (f >= UP_F) {
           phase = 'up';

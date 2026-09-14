@@ -38,8 +38,8 @@
 //
 // Sixteen drawings, sixteen meshes, ONE canvas and ONE texture: each mesh keeps its own four UVs
 // and they are re-pointed at the step's column. (Sixteen canvases would have cost about half a
-// second of props' 1500 ms build budget — a canvas is ~30 ms in the headless browser, which is the
-// measurement egg-insects.js paid for.)
+// second of props' 1500 ms build budget — a canvas is ~30 ms in the headless browser, and every
+// piece in this room that draws its own sheets is built against that number.)
 //
 // WHAT THE ROOM DOES. A `rain` state is injected into lighting.js's own table (it publishes
 // `states`, so this costs that file nothing): the key dropped and cooled to an overcast sky, the
@@ -56,7 +56,7 @@
 // key still works.
 //
 // WHAT ANNOUNCES IT: nothing. No label, no glow, no tag. The cursor over the panes is the whole
-// affordance, as it is for the radio, the cat, the lever and the insects.
+// affordance, as it is for the radio, the cat and the lever.
 //
 // api (published as props.rain):
 //   on            is there rain in the drawing (true from the first stroke to the last)

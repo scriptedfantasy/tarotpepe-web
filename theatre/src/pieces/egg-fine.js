@@ -93,9 +93,9 @@ import { mulberry32 } from '../core/rng.js';
 // ---- the numbers the fire is timed by, AND THEY ARE COUNTED IN DRAWINGS ------------------------
 // Three seconds is thirty-six drawings, half a second is six, and it is the drawings that are the
 // unit, not the seconds. That is not a convenience for the tools: everything hand-animated in this
-// film is a count of drawings on the twelve — an insect's flight is 8 to 14 of them, the lever is
-// one, the smoosh is twenty-four — and a beat measured in wall seconds would be the only thing in
-// the room that ran on a different clock from the paper. On a machine that holds sixty frames a
+// film is a count of drawings on the twelve — the toad's fall off the press is nine of them, the
+// lever is one, the smoosh is twenty-four — and a beat measured in wall seconds would be the only
+// thing in the room that ran on a different clock from the paper. On a machine that holds sixty frames a
 // second the two are the same number; on one that does not, the fire takes as long as the rest of
 // the drawing does, which is the correct answer and the one a stop-motion camera would give.
 const HOLD_F = 36; // drawings of the pointer resting on the lamp before the first flame (3.0 s)
@@ -137,7 +137,12 @@ const SLIP = [0.62, -0.42];
 const TIP_V = 0.035, BASE_V = 0.965; // where the foot and the tip sit in the sheet, top-down
 const TALL = BASE_V - TIP_V;
 const ASPECT = 0.5; // the sheet is twice as tall as it is wide; a slender hand uses 0.7 of the width
-const PEN_PX = 2.4; // the room's own contour on the glass (egg-insects.js's measurement)
+// THE ROOM'S OWN CONTOUR ON THE GLASS, and it is measured and not chosen. The back wall runs 181 px
+// to the metre in the home frame at 1280x800, and the pen on that wall is 0.013 m — room-textures.js's
+// own figure for the wallpaper's sprigs, and the width at which the ink pass stops throwing a mark
+// away as a stray dark pixel. 0.013 x 181 is 2.4 screen pixels, and every nib in this file is solved
+// to arrive at it.
+const PEN_PX = 2.4;
 const SHEET_OVER = 1.35; // canvas px per screen px before rounding: a sheet is drawn a third over size
 const CH_STEP = 64, CH_MIN = 128, CH_MAX = 448;
 const sheetH = (px) => Math.max(CH_MIN, Math.min(CH_MAX, Math.round((px * SHEET_OVER) / CH_STEP) * CH_STEP));
@@ -338,8 +343,8 @@ const SEATS = [
   // top 0.8, at the window's own centre x -1.5, z WALL + 0.48, so it runs -1.98 to -1.02) and the
   // PTT's spares press on the door side (0.54 wide, 1.5 tall, at x W/2 - 0.31 = 2.29, running 2.02
   // to 2.56). The cart's tongue stands at its far left end, well clear of the radio at cart-local
-  // x 0.25; the press's stands on its top board inboard of the jar the insects use, which is at
-  // unit-local 0.13. Both are set as far out as their furniture goes, because those two thirds of
+  // x 0.25; the press's stands on its top board inboard of the MIEL jar, which is at unit-local
+  // 0.13. Both are set as far out as their furniture goes, because those two thirds of
   // the home plate are the only ones the floor pair does not already fill.
   { at: 'room', p: [-1.9, 0.8, -2.02], h: 1.0, ppm: 191, hand: 2, phase: 0 },
   { at: 'room', p: [2.32, 1.5, -2.34], h: 0.9, ppm: 184, hand: 1, phase: 1 },

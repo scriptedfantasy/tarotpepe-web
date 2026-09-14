@@ -19,9 +19,13 @@
 //
 // WHERE HE STANDS, AND WHY IT IS NOT THE BOARD THE JAR IS ON. He is on the MIDDLE BAY of the same
 // press — the second board up, 0.93 m under the honey jar — at the front lip, alone between the
-// ACIDE carboy and the tumbler. The board the jar stands on is spoken for: egg-insects.js gives
-// the six insects a ring of named landing places round that jar and they use the whole of it
-// (world x 2.175 → 2.508 of a board that runs 2.005 → 2.575, both sides of the jar and the lid).
+// ACIDE carboy and the tumbler. The board the jar stands on is spoken for twice over. It is the TOP
+// of the press, where "the run of shelving ends in a silhouette instead of a sawn-off edge"
+// (props.js) — two flat books and a black jar, read against the coat on the hat stand — and a third
+// object standing on that skyline is a lump in it. And there is no room on it in any case: the
+// ALMANACH lies flat across the left of the board and the jar stands 0.14 m in from the end, so on a
+// board running world x 2.005 → 2.575 the widest clear span left is the 103 mm outboard of the jar,
+// which is narrower than PLINTH.w below.
 // The shelf immediately below is no better — FICHES, FINE and FUSIBLES leave 45 mm of clear board
 // and this plinth is 98 mm. The middle bay is the one place on the press with a clear span wider
 // than the figurine (142 mm, x 2.269 → 2.411, full depth, 0.44 m of headroom), and it is the bay
@@ -29,8 +33,7 @@
 // the eye is allowed to stop" (props.js). A knock-off souvenir standing on its own in the one
 // empty bay is where a knock-off souvenir stands.
 //   Nothing here is written down in world coordinates: the seat is an offset off the MIEL jar's
-//   own bounding box, exactly as the insects' ring is, so if the press dressing ever moves, Peep
-//   moves with it.
+//   own bounding box, so if the press dressing ever moves, Peep moves with it.
 //
 // WHAT A CLICK DOES. A cheap synth croak — two square-wave notes, falling, a toy's chip and
 // nothing like the filtered noise the rest of this room is made of ('croak', sound-voices.js) —
@@ -48,7 +51,7 @@
 //
 // NOTHING ANNOUNCES HIM. No label in the UI, no glow, no outline, no line of dialogue, nothing on
 // the notice. The cursor over him becomes a pointer and that is the entire affordance — the same
-// bargain the radio, the cat, the mains lever, the globe, the wine and the insects make.
+// bargain the radio, the cat, the mains lever, the globe and the wine make.
 //
 // api (published as props.peep):
 //   clicks        how many times he has been clicked, all told
@@ -96,9 +99,9 @@ const HEAD = { r: 0.028, len: 0.034, y: 0.034, z: 0.030 };
 // mostly label anyway — that is what a souvenir base is for.
 const LABEL = { w: 0.094, h: 0.034, y: 0.023 };
 
-// WHERE HE SITS, in metres off the MIEL jar's own base centre — x across, y up, z out of the wall —
-// which is the same anchor egg-insects.js takes its ring off, and for the same reason: if the press
-// dressing moves, this moves with it and nothing else has to be edited.
+// WHERE HE SITS, in metres off the MIEL jar's own base centre — x across, y up, z out of the wall.
+// The anchor is the jar's own geometry and not a written-down coordinate, for one reason: if the
+// press dressing moves, this moves with it and nothing else has to be edited.
 //   x  −0.080   the middle of the clear span between the ACIDE carboy and the tumbler
 //   y  −0.925   the press top is 1.500 and the middle board is 0.575
 //   z  +0.031   the board's front lip is 63 mm out of the jar's front face; the plinth is 74 mm
@@ -118,9 +121,11 @@ const MIN_TAP = 44; // px: what a thumb needs, whatever he measures on the glass
 // to a light grey there, which the ink pass reads as paper and throws away. (It was legible at the
 // lens and gone at the plate, which is the worst of both: it looks finished to whoever drew it.)
 // Solid ink geometry has no mip chain to lose it in — a black mesh is black at any distance the
-// pass can still find its silhouette. And the sizes are the insects' rule, not life's: the mouth is
-// 7.5 mm on a 56 mm face, which is a fat line for a mouth and 1.4 px on the plate, and 1.4 px is
-// the least a mark can be here and still be a mark.
+// pass can still find its silhouette. And the sizes are drawn to be READ, not to be right: the film
+// gives a small thing the size it has to be read at rather than the size it has in life — the clock
+// keeps four of its twelve numerals and cuts those four half again over scale for exactly this
+// reason (props-textures.js) — so the mouth is 7.5 mm on a 56 mm face, which is a fat line for a
+// mouth and 1.4 px on the plate, and 1.4 px is the least a mark can be here and still be a mark.
 // …and they are set as far apart as the cap allows, which is also a measurement. Crowded — eyes
 // 5.8 mm above the centre, mouth 8.8 below — the three marks close up into one black square at the
 // plate and the face is a blot. Pushed to the rim there is a clear band of paper between the eyes

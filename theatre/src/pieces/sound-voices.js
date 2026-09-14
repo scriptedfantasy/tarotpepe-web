@@ -59,12 +59,12 @@ export const LEVEL = {
   // lowest thing any switch in this room does, and above the knock, because it takes the light
   // with it.
   clack: 0.138,
-  // an insect crossing the room (egg-insects.js). Quieter than the lamp's tumbler and quieter than
-  // the radio's crackle: it is meant to be noticed only by someone who is already watching the
-  // thing that makes it, the way a fly in a real room is.
+  // a small thing flying across the room. Quieter than the lamp's tumbler and quieter than the
+  // radio's crackle: it is meant to be noticed only by someone who is already watching the thing
+  // that makes it, the way a fly in a real room is.
   buzz: 0.021,
   // the fire on the shelves (egg-fine.js). The quietest voice in the room bar the room itself, and
-  // under the fly, which is the whole joke: twelve things are burning and nobody in the picture
+  // under the buzz, which is the whole joke: twelve things are burning and nobody in the picture
   // thinks it is worth mentioning. A visitor who is watching hears it; a visitor who is reading the
   // placard does not.
   crackle: 0.017,
@@ -95,7 +95,7 @@ export const LEVEL = {
   // but a hand that did something has to hear that it did.
   glug: 0.028,
   // the vase of dried stems, wilting (egg-vase.js). Dead flowers are the lightest thing anybody in
-  // this room could disturb, so it sits with the insect and the pour, at the quiet end: it happens
+  // this room could disturb, so it sits with the buzz and the pour, at the quiet end: it happens
   // on the sideboard at the far wall and it is meant to be heard only by whoever is watching it.
   rustle: 0.023,
   // the weather outside the window (egg-rain.js). It is not a cue, it is a BED — see rainBed at the
@@ -142,7 +142,7 @@ export const TRIM = {
   // latch and clock to the third decimal before it reports this one
   switch: 2.645,
   clack: 1.218,
-  // measured with tools/_egg-insects-buzz.mjs, the same offline render the probe uses
+  // measured offline from this bank, through the same OfflineAudioContext the probe renders in
   buzz: 5.375,
   // measured with tools/_egg-fine-proof.mjs, the same offline render the probe uses: rendered peak
   // 0.0133 (-37.5 dBFS) against a wanted LEVEL of 0.017
@@ -209,12 +209,12 @@ export const LENGTH = {
   static: 0.3,
   switch: 0.05,
   clack: 0.2,
-  // 0.34, and the number is arithmetic, not taste. egg-insects.js re-fires this every SECOND
-  // drawing of a flight and a flight runs at 12 fps: that is one buzz every 2/12 = 0.167 s. A cue
-  // shorter than the gap would leave bare room tone between them and a single crossing of the room
-  // would read as five separate insects. Rendered, this one is audible for 0.257 s (measured with
-  // tools/_egg-insects-buzz.mjs), so each runs 90 ms into the next. Change the cadence there and
-  // this number changes with it.
+  // 0.34, and the number is arithmetic, not taste. It is cut for a cue re-fired every SECOND drawing
+  // of a flight taken at 12 fps: that is one buzz every 2/12 = 0.167 s. A cue shorter than the gap
+  // would leave bare room tone between them and a single crossing of the room would read as five
+  // separate things flying. Rendered, this one is audible for 0.257 s (measured offline from this
+  // bank), so each runs 90 ms into the next. Anything that flies here holds that cadence, or this
+  // number changes with it.
   buzz: 0.34,
   // 0.42, and the number is arithmetic, not taste. egg-fine.js re-fires this every FOURTH drawing
   // while the room is alight and the film runs at 12 fps: that is one crackle every 4/12 = 0.333 s.
@@ -681,9 +681,12 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.switch;
     }
 
-    // AN INSECT CROSSING THE ROOM (egg-insects.js). A wingbeat is not a note and it must not be
-    // hummable: a housefly runs about 200 beats a second and what you actually hear is a band of
-    // noise round that, not a tone. So it is built the way every other paper sound in this piece is
+    // A SMALL THING FLYING ACROSS THE ROOM, AND NOTHING IN THE FILM FIRES THIS CUE. There is no
+    // flying object on the set; the voice is kept because it is finished and carries its own
+    // measurements — LEVEL 0.021, TRIM 5.375 against that, 0.34 s long and audible for 0.257 of
+    // them — and whatever flies through this room next wants this and not a second attempt at it.
+    //   A wingbeat is not a note and it must not be hummable: a housefly runs about 200 beats a
+    // second and what you actually hear is a band of noise round that, not a tone. So it is built the way every other paper sound in this piece is
     // — filtered noise — with the Q high enough that the band rings at a pitch and rough enough
     // that it never becomes an oscillator. Three of them: the beat, its octave, and a thin hiss of
     // air well above both, which is the half of a buzz that tells you where it is in the room.

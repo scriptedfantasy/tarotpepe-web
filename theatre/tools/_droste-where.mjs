@@ -60,7 +60,41 @@ const out = await page.evaluate(() => {
     obstacles.push({ name: name || '(unnamed)', x: [+b.min.x.toFixed(3), +b.max.x.toFixed(3)], y: [+b.min.y.toFixed(3), +b.max.y.toFixed(3)], z: [+b.min.z.toFixed(3), +b.max.z.toFixed(3)] });
   });
   obstacles.sort((a, b) => a.x[0] - b.x[0]);
-  return { WALLZ, named, obstacles };
+
+  // WHAT PEPE HIDES. He sits a metre and a half in front of the back wall, so from any shot his
+  // silhouette covers a rectangle of plaster bigger than he is — and a picture hung inside that
+  // rectangle is a picture behind his head. Every corner of his own box is carried along the ray
+  // from the camera through it until it meets the wall, and the four give the patch.
+  const shadow = {};
+  const puppet = window.__theatre.pieces.pepe;
+  const root = puppet?.group ?? puppet?.root ?? window.__theatre.scene.getObjectByName('pepe');
+  const C = window.__theatre.pieces.camera;
+  if (root && C) {
+    const b = new T.Box3().setFromObject(root);
+    const probe = new T.PerspectiveCamera(30, 1, 0.03, 60);
+    for (const name of ['home', 'wide', 'pepe']) {
+      try {
+        C.place(name, probe);
+      } catch {
+        continue;
+      }
+      const eye = probe.position;
+      const xs = [], ys = [];
+      for (const cx of [b.min.x, b.max.x])
+        for (const cy of [b.min.y, b.max.y])
+          for (const cz of [b.min.z, b.max.z]) {
+            const dz = cz - eye.z;
+            if (Math.abs(dz) < 1e-6) continue;
+            const t = (WALLZ - eye.z) / dz; // how far along the ray the wall is
+            if (t < 1) continue; // the wall is nearer than he is: he hides nothing there
+            xs.push(eye.x + (cx - eye.x) * t);
+            ys.push(eye.y + (cy - eye.y) * t);
+          }
+      if (xs.length) shadow[name] = { x: [+Math.min(...xs).toFixed(4), +Math.max(...xs).toFixed(4)], y: [+Math.min(...ys).toFixed(4), +Math.max(...ys).toFixed(4)] };
+    }
+    shadow.__box = { x: [+b.min.x.toFixed(4), +b.max.x.toFixed(4)], y: [+b.min.y.toFixed(4), +b.max.y.toFixed(4)], z: [+b.min.z.toFixed(4), +b.max.z.toFixed(4)] };
+  }
+  return { WALLZ, named, shadow, obstacles };
 });
 console.log(JSON.stringify(out, null, 1));
 await browser.close();

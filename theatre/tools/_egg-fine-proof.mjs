@@ -94,7 +94,7 @@ async function open(w, h, query = '') {
   await page.waitForFunction('window.__theatreReady === true', null, { timeout: 180000 });
   // ?view=props boots on the WIDE plate, and the cut to home has to be given a frame before
   // anything is projected: a box measured in the same tick as the cut is measured through the old
-  // lens (egg-insects.js's proof learnt this the expensive way).
+  // lens, and what comes back is a plausible box in the wrong place rather than an error.
   await page.evaluate(() => window.__theatre.pieces.camera.cut('home'));
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   await page.evaluate(() => window.__theatre.camera.updateMatrixWorld(true));
@@ -597,8 +597,8 @@ console.log('\nTHE ROOM, ALIGHT AND NOT  (1280x800, home, ?t=2.5 frozen; the sam
       else elsewhere++;
     }
   // A MARK GAINED OR LOST IS A BLOCK of changed pixels; a threshold flipping on the edge of a line
-  // that was already there is a scatter of single ones. Counting 2x2 blocks tells the two apart,
-  // and it is the test egg-insects.js's proof settled on for the same question.
+  // that was already there is a scatter of single ones. Counting 2x2 blocks tells the two apart, and
+  // it is the only way to ask whether a drawing changed without counting the pass's own dither.
   let blocks = 0, pepeBlocks = 0;
   const where = [];
   for (let y = 0; y < PH - 1; y++)

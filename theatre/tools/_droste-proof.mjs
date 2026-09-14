@@ -412,16 +412,43 @@ if (want(6)) {
       },
       [name, i ?? null],
     );
-  // WHERE ON THE GLASS A THUMB CAN ACTUALLY REACH IT. A box may hang half off the window once the
-  // camera is two metres from the back wall, and the CENTRE of such a box is not on the window at
-  // all — which is a fact about the scroll, not a fault in the arbiter. Clip to the window and aim
-  // at the middle of what is left.
-  const aim = (b, W = 1280, H = 800) => {
-    if (!b) return null;
-    const x0 = Math.max(0, b.x), x1 = Math.min(W, b.x + b.w);
-    const y0 = Math.max(0, b.y), y1 = Math.min(H, b.y + b.h);
+  // WHERE ON THE GLASS A THUMB CAN ACTUALLY REACH IT, and three things can stop it. A box may hang
+  // half off the window once the camera is three metres up the room, so the CENTRE of such a box is
+  // not on the window at all. The room's own DOM layers lie along the foot of the window — the
+  // placard, the visitor's field — and a point under one of those never reaches the canvas. And the
+  // scroll walks the camera THROUGH the room: at t = 0.5 the lens is at z 0.43, downstage of the
+  // table, so the squared deck is half a metre in front of it and a point aimed at the cat on the
+  // far wall is a point with the deck in the way. None of those is a fault in the arbiter; the
+  // third is the arbiter being right.
+  //
+  // So the box is sampled, and a point counts only when the DOCUMENT agrees it is over the drawing
+  // and THE ARBITER ITSELF says this is the prop under it. `switches.at()` is the same test a
+  // pointerdown gets, asked without an event — which makes this a check on the arbiter's own answer
+  // rather than on where the furniture happens to be.
+  const aimAt = async (name, box, W = 1280, H = 800) => {
+    if (!box) return null;
+    const x0 = Math.max(0, box.x), x1 = Math.min(W, box.x + box.w);
+    const y0 = Math.max(0, box.y), y1 = Math.min(H, box.y + box.h);
     if (x1 - x0 < 6 || y1 - y0 < 6) return null;
-    return [(x0 + x1) / 2, (y0 + y1) / 2];
+    const tries = [];
+    for (const fy of [0.5, 0.35, 0.65, 0.2, 0.8]) for (const fx of [0.5, 0.35, 0.65, 0.2, 0.8]) tries.push([x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy]);
+    const seen = new Set();
+    for (const [x, y] of tries) {
+      const who = await page.evaluate(
+        ([px, py]) => {
+          const e = document.elementFromPoint(px, py);
+          return { el: e ? e.tagName.toLowerCase() : null, sw: window.__theatre.pieces.props.switches?.at?.(px, py) ?? null };
+        },
+        [x, y],
+      );
+      if (who.el !== 'canvas') {
+        seen.add(`<${who.el}>`);
+        continue;
+      }
+      if (who.sw === name) return { at: [x, y], seen };
+      seen.add(who.sw ?? 'nothing');
+    }
+    return { at: null, seen };
   };
 
   await hold(0);
@@ -438,31 +465,45 @@ if (want(6)) {
   let leaves = null;
   for (let k = 1; k <= 20; k++) {
     await hold(k / 20);
-    if (!aim(await boxOf('cat'))) {
+    if (!(await aimAt('cat', await boxOf('cat')))?.at) {
       leaves = k / 20;
       break;
     }
   }
   say(`    the cat is on the glass up to t = ${leaves == null ? '1.00 (all the way)' : (leaves - 0.05).toFixed(2)} and off it after (it is on the press, below the picture)`);
 
-  // A TAP WHILE ZOOMED, on three things, at the deepest t each is still in the picture at.
+  // A TAP WHILE ZOOMED, on each of two props, AT THE DEEPEST t IT IS STILL IN THE PICTURE AT. The
+  // walk ends on the picture's own axis, so the bottom of the room leaves the frame on the way and
+  // which props are still reachable depends on how far in the visitor has gone. Pinning a fixed t
+  // would be testing where the furniture is, not whether the arbiter follows the live camera; the
+  // t is searched for instead, and reported, so a change to the room's layout moves the number
+  // rather than breaking the check.
   const taps = [
-    ['cat', null, 0.15, () => window.__theatre.pieces.props.cat.lit],
-    ['insects', 4, 0.5, () => window.__theatre.pieces.props.insects.state[4]],
+    ['cat', null, () => window.__theatre.pieces.props.cat.lit],
+    ['vase', null, () => window.__theatre.pieces.props.vase.state],
   ];
-  for (const [name, idx, t, read] of taps) {
-    await hold(t);
-    const b = await boxOf(name, idx);
-    const at = aim(b);
+  for (const [name, idx, read] of taps) {
+    let at = null, bx = null, t = null, seen = new Set();
+    for (let k = 10; k >= 1; k--) {
+      await hold(k / 20);
+      bx = await boxOf(name, idx);
+      const r = await aimAt(name, bx);
+      if (r) for (const v of r.seen) seen.add(v);
+      if (r?.at) {
+        at = r.at;
+        t = k / 20;
+        break;
+      }
+    }
     if (!at) {
-      check(false, `${name}${idx ?? ''} at t = ${t}: nothing of it is on the glass to tap`);
+      check(false, `${name}: the arbiter never named it under any point of its box at any t down to 0.05 (it named ${[...seen].join(', ')})`);
       continue;
     }
     const before = await page.evaluate(read);
     await page.mouse.click(at[0], at[1]);
     await drawings(page, 6);
     const after = await page.evaluate(read);
-    check(after !== before, `a tap on the ${name}${idx ?? ''} at t = ${t} still works (${JSON.stringify(before)} → ${JSON.stringify(after)}), aimed at ${at[0].toFixed(0)},${at[1].toFixed(0)} inside a box that runs ${b.x.toFixed(0)}..${(b.x + b.w).toFixed(0)}`);
+    check(after !== before, `a tap on the ${name} at t = ${t} — the deepest the arbiter still answers for it — works (${JSON.stringify(before)} → ${JSON.stringify(after)}), aimed at ${at[0].toFixed(0)},${at[1].toFixed(0)} in a box running ${bx.x.toFixed(0)}..${(bx.x + bx.w).toFixed(0)}${seen.size ? `; nearer things the walk puts in the way at deeper t: ${[...seen].join(', ')}` : ''}`);
   }
   await page.close();
 }
