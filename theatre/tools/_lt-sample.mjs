@@ -8,12 +8,14 @@ const { width: W, height: H, channels: C } = info;
 const PTS = {
   'wall bare (mid)': [860, 250],
   'wall over clock': [845, 100],
-  'wall L of shutters': [300, 180],
+  'wall far L (was shutters)': [300, 180],
   'under shelf L board': [520, 520],
   'shadow R of vase': [985, 440],
   'shadow on door': [1265, 560],
   'door bare': [1200, 300],
-  'shutter face': [560, 120],
+  // was 'shutter face': the back wall's window and its leaves are gone and this samples the plaster
+  // the clock now hangs on, which is a flat and is exactly as useful a probe
+  'wall under the clock': [560, 120],
   'table top': [800, 700],
   'table skirt R': [1080, 810],
   'table skirt L': [560, 810],

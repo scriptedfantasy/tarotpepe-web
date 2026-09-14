@@ -12,7 +12,8 @@ const SIZES = [[1600, 900], [1200, 1100], [390, 760]];
 const BOXES = {
   pendant: [-0.235, 0.235, 2.45, 3.1, -0.235, 0.235],
   'door opening': [1.05, 1.95, 0, 2.45, -2.51, -2.49],
-  'window opening': [-1.95, -1.05, 1.04, 2.45, -2.51, -2.49],
+  // the back wall's window opening stood here and a frame edge was not allowed to cut it. It has
+  // been taken out of the room; the plaster runs through and there is nothing to protect.
   'TAROT board': [-0.5, 0.5, 2.41, 2.59, -2.46, -2.45],
   'VOYANTE board': [1.16, 1.84, 2.21, 2.41, -2.51, -2.5],
   clock: [-0.185, 0.185, 1.875, 2.245, -2.48, -2.47],

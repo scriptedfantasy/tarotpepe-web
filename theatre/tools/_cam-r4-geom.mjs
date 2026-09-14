@@ -33,8 +33,7 @@ const P = {
   'TAROT sign top': [0, 2.59, -2.455],
   'VOYANTE top': [1.5, 2.41, -2.508],
   'door head': [1.5, 2.45, -2.5],
-  'window head': [-1.5, 2.45, -2.5],
-  'shutter top': [-1.5, 2.46, -2.5],
+  // 'window head' and 'shutter top' stood at x -1.5 on the back wall until the window came out
   'clock top': [0, 2.245, -2.47],
   'picture top': [-0.46, 2.27, -2.485],
   'picture bottom': [-0.46, 1.81, -2.485],

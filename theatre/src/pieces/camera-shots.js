@@ -265,7 +265,6 @@ const RIM = 0.62; // the table's radius; its top is at 0.76
 const FOOT = [0, 0, RIM]; // where the table meets the floor, nearest the visitor
 const RUG = [0, 0, 1.1]; // the rug's near edge
 const DOOR = { x: 1.5, x0: 1.05, x1: 1.95, head: 2.45, board: 2.41 };
-const WIN = { x: -1.5, x0: -1.95, x1: -1.05, head: 2.45 };
 
 // a box of points: the corners of a thing, for "wholly in or wholly out"
 const box = (x0, x1, y0, y1, z0, z1) => {
@@ -577,10 +576,13 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
     // sheet's edges cannot appear at any shape. Nothing of the parlour is in it: the lining stands
     // two centimetres behind the lens.
     crossroads: crossroadsShot(aspect),
-    // the window: the door's frame slid across the back wall, MIRRORED rather than solved again —
-    // the lateral track runs between the two, and two frames solved separately would differ by a
-    // degree of lens, which a track would play as a slow zoom.
-    window: null,
+    // THE CART END OF THE BACK WALL: the door's frame slid across it, MIRRORED rather than solved
+    // again — the lateral track runs between the two, and two frames solved separately would differ
+    // by a degree of lens, which a track would play as a slow zoom.
+    // It was called `window`, because that is what this frame was pointed at. The user had the
+    // window taken out of the back wall, so it is named for what is actually in it now: the test
+    // table with the radio and the bottles, the radiator behind it, the clock on the plaster above.
+    cart: null,
     // From the threshold: the visitor's first look in, and it is `home` seen from a STANDING eye
     // height — 1.70 rather than 1.62 — because that is the difference the shot is for. The visitor
     // comes in on their feet, looks at the room, and the cut to `home` is them sitting down at the
@@ -594,10 +596,10 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
       floorZ: 2.15,
     }),
   };
-  // the window is the door's own frame, mirrored about the room's axis
+  // the cart end is the door's own frame, mirrored about the room's axis
   {
     const d = shots.door;
-    shots.window = { ...d, pos: [-d.pos[0], d.pos[1], d.pos[2]], look: [-d.look[0], d.look[1], d.look[2]] };
+    shots.cart = { ...d, pos: [-d.pos[0], d.pos[1], d.pos[2]], look: [-d.look[0], d.look[1], d.look[2]] };
   }
 
   // the three card inserts: one card, hung from the top of the frame with the cloth under it for

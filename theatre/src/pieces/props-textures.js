@@ -950,6 +950,9 @@ export function curtainTexture(seed = 15) {
       paper(g, W, H, '#f8f4ec', { grain: 0, seed });
       // Round 3: six fold lines instead of eleven, and no vertical repeat — the curtain is cloth
       // hanging in a few big folds, not a field of rain-hatch beside an already-louvred window.
+      // NOTHING DRAWS THIS NOW: the only curtains in the room hung in the back wall's window and
+      // that window has been taken out (props.js). Kept, with `curtainSet`, against a round that
+      // wants cloth on a wall again.
       for (let v = 0; v < 6; v++) {
         const x0 = 14 + v * 43 + (rng() - 0.5) * 8;
         const pts = [];

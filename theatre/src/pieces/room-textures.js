@@ -155,8 +155,11 @@ function eachSprig(x0, x1, y0, y1, seed, visit) {
 // separately with its own drift, tilt and pen weight. Everything between motifs is untouched
 // paper — well over four fifths of it.
 //
-// This is the FLAT's paper, hung before the exchange was ever put in the room, and it has had
-// forty years of window on it: `drop` and `fade` are what is left of the print. They used to be
+// This is the FLAT's paper, hung before the exchange was ever put in the room, and it has had forty
+// years of daylight on it: `drop` and `fade` are what is left of the print. (It used to say "forty
+// years of window", and there was one on this wall to mean. The window is out of the back wall now;
+// the fade is not a thing that un-happens when a window is bricked up, and the room's light still
+// comes from stage left whatever it comes through.) They used to be
 // one in ten missing or faded; they are one in four now, because the rectangle the tall multiple
 // covered is drawn separately (`ghostTexture`) and kept at full strength. The paper is the
 // control; the ghost is the sample that was never exposed.
@@ -186,7 +189,7 @@ export function wallpaperTexture({ tile = 1.02, ppm = 1000, seed = 21, drop = 0.
 // THE GHOST. One sheet of paper for one place on the wall: the rectangle the tall multiple stood
 // against, unbolted and taken for scrap when the automatic exchange came in. It is not a mark
 // added to the wall — it is the wall with nothing taken off it. Inside the rectangle every sprig
-// is present and drawn at full pen weight, because the paper here never saw the window; outside it
+// is present and drawn at full pen weight, because the paper here never saw the light; outside it
 // the same rows are the faded ones `wallpaperTexture` draws. Same lattice, same hands, same phase,
 // so the boundary cuts THROUGH the pattern instead of framing it, and there is no line round it:
 // what states the rectangle is four bolt holes and two cut cable ends, and the rest is tone.

@@ -6,14 +6,14 @@
 //   BARE     a front face the key can see — the back wall, the fronts of the shelves, the cloth,
 //            Pepe's robe. Most of the frame. The film's discipline: do not be afraid of paper.
 //   RAIN     a cast shadow on a front face, and the right-hand side of every form: one level of
-//            vertical strokes. This is what says "the light comes from the window, stage left".
+//            vertical strokes. This is what says "the light comes from stage left".
 //   CROSS    undersides, the insides of the window reveal, the two upper corners, the ceiling
 //            line: the densest lattice. A draughtsman hatches a pocket every time.
 //
 // How the tiers are made (the numbers below are the lit luminance the ink pass reads; with the
 // ramp this piece asks it for, a papered wall is BARE above L≈0.30, RAIN below it, and a pocket
 // or a corner near zero goes to cross-hatch):
-//   - KEY        one directional light on the window's axis (stage left, 34° up, leaning a little
+//   - KEY        one directional light, stage left, 34° up, leaning a little
 //                downstage) so every front face is lit and every shadow falls down-and-right,
 //                short. Crisp: tight bias, a 2048 map fitted to the room, radius 1 on a hard PCF
 //                kernel — the ink pass wants an edge to tear, not a gradient.
@@ -39,13 +39,14 @@
 //                strokes stop. Round 9 adds a fourth, and it is the odd one: the CAT LAMP on the
 //                right-hand bookcase has a switch on it, so its level is this piece's decision but
 //                whether it burns at all is the visitor's (props.cat.lit — see catLampLevel).
-//   - NIGHT      a cross-hatched pane inside every window, so at night the glass goes solid the
-//                way the arch of La Brique Rouge does.
+//   - NIGHT      a cross-hatched pane inside the window, so at night the glass goes solid the
+//                way the arch of La Brique Rouge does. There is ONE window now — the stage-right
+//                one — and this used to build panes for two.
 //
-// States: default (afternoon through the shutters), evening (the lamps carry it, the window dark,
-// more cross-hatch in the corners), lamp (only the table lamp and the pendant; the rest of the
-// room falls away). evening/lamp nudge the ink piece's tone thresholds through
-// ctx.pieces.ink.params and restore them on the way back.
+// States: default (the afternoon), evening (the lamps carry it, the window dark, more cross-hatch
+// in the corners), lamp (only the table lamp and the pendant; the rest of the room falls away).
+// evening/lamp nudge the ink piece's tone thresholds through ctx.pieces.ink.params and restore them
+// on the way back.
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 
@@ -62,9 +63,31 @@ const LAMPS_FALLBACK = {
   pendant: new THREE.Vector3(0, 2.5, 0),
   cat: new THREE.Vector3(0.85, 1.16, -2.4),
 };
-const WIN_FALLBACK = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.16 };
+// The stage-right window's own rectangle, in that wall's plane (u = world z), for the frame where
+// the room piece failed to build and there is nothing to ask. It used to be the BACK wall's window,
+// carried at depth 0.16 while room.js built it at 0.21 — a number that had been out of step for
+// rounds and was never noticed, because the only thing it fed was a fallback nobody reaches. The
+// back wall has no window now, so this is room.js's `sideWin`, copied exactly, depth and all.
 
-// The key's direction (towards the light). Stage left, 34° up, leaning a little downstage so the
+const WIN_FALLBACK = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.21 };
+
+// THE KEY'S DIRECTION (towards the light), AND IT WAS NEVER THE WINDOW'S. This was labelled "the
+// window, stage left" for as long as there was a window stage left, and when that window came out
+// the first question was whether the key had to follow it to the stage-right one. It does not, and
+// the reason is in the vector: z is +0.68, which puts the source DOWNSTAGE of the room, in front of
+// the set. No light through a window in the back wall at z -2.5 can arrive from in front of it. The
+// key has always been a film key placed where a film key goes — off the lens, high, on the side the
+// shadows are wanted — and the sentence under it says so itself: "so the back wall and every front
+// face keeps a good NdotL and stays bare paper". That is the whole reason it stands here.
+//
+// MIRRORING IT WAS TRIED AND RENDERED. Flip x to +0.48 (and the bounce to -0.78, off the other wall)
+// and the light comes from the stage-right side, where the one remaining window actually is. The
+// room that comes back is a different room: every cast shadow runs down and to the LEFT, so the
+// mouldings, the door's fielded panels, the shelf boards and Pepe's own silhouette all change which
+// side they are drawn on, and the ink pass's tone ramp — which was measured against down-and-right
+// on this exact set — lands its strokes somewhere else. It is a re-lighting of the whole film to buy
+// a motivation nobody can see, for a window that is 57 px wide at the edge of the frame. So: kept.
+// Stage left, 34° up, leaning a little downstage so the
 // back wall and every front face keeps a good NdotL and stays bare paper. Shadows therefore run
 // DOWN and to the RIGHT, and they are short: a shelf 10 cm off the wall lays a band a finger wide
 // under its board, and Pepe — a cut-out standing 1.7 m off the wall — drops his silhouette below
@@ -79,7 +102,7 @@ const FLOOR_DIR = new THREE.Vector3(0.1, -1, 0.22).normalize();
 // One design per state. Intensities are three's physical units (a white lambert surface square to
 // a directional light of intensity PI renders as 1.0).
 const STATES = {
-  // Afternoon through the shutters. Measured on a flat front face: lit 0.90, cast shadow 0.19
+  // The afternoon. Measured on a flat front face: lit 0.90, cast shadow 0.19
   // (one level of rain), a right-hand side 0.22 (rain), an underside 0.09 (dense), a corner 0.03.
   default: {
     key: 3.3,
@@ -114,7 +137,7 @@ const STATES = {
   // Night is not a darker paper. The key is gone; the open room sits just inside the ink pass's
   // rain band, so plaster carries a sparse vertical shower; the three lamps lift their own pools
   // back to bare paper; the corner lights push the corners the rest of the way into cross-hatch.
-  // Only the window panes are solid.
+  // Only the window's panes are solid.
   evening: {
     key: 0,
     keyColor: '#c8d2e4',
@@ -188,7 +211,7 @@ export async function build(ctx) {
   // other piece builds, so no material has been compiled against the old type.)
   if (ctx.renderer) ctx.renderer.shadowMap.type = THREE.PCFShadowMap;
 
-  // ── the key: the window, stage left ──
+  // ── the key: stage left, and see KEY_DIR for why it is not the window's ──
   const key = new THREE.DirectionalLight(STATES.default.keyColor, STATES.default.key);
   key.position.copy(KEY_DIR).multiplyScalar(9);
   key.target.position.set(0, 0.9, -0.5);
@@ -314,13 +337,13 @@ export async function build(ctx) {
   }
   placeLamps(LAMPS_FALLBACK);
 
-  // ── night panes: a cross-hatched sheet just inside each window's glass ──
+  // ── night panes: a cross-hatched sheet just inside the window's glass ──
   const night = new THREE.Group();
   night.name = 'night-panes';
   night.visible = false;
   g.add(night);
   let nightBuilt = false;
-  function buildNight(win, sideWin) {
+  function buildNight(sideWin) {
     const mat = inkMaterial({ hatch: 1, lineWeight: 0.8 });
     const paneGroup = (w) => {
       const grp = new THREE.Group();
@@ -340,8 +363,9 @@ export async function build(ctx) {
       }
       return grp;
     };
-    night.add(paneGroup(win));
-    // the side window is the back-wall window turned onto the stage-right wall (room.js's frame)
+    // ONE window, on the stage-right wall. There were two of these — the back wall's casement got a
+    // pane group in its own plane and this one got the same group turned a quarter turn — and the
+    // back wall's window has been taken out of the room, so the turned one is all there is.
     const side = paneGroup(sideWin);
     side.rotation.y = -Math.PI / 2;
     side.position.x = hx - Math.abs(zb);
@@ -412,7 +436,7 @@ export async function build(ctx) {
     }
     if (!nightBuilt && ctx.pieces.room !== undefined) {
       const r = ctx.pieces.room;
-      buildNight(r.window ?? WIN_FALLBACK, r.sideWindow ?? WIN_FALLBACK);
+      buildNight(r.sideWindow ?? WIN_FALLBACK);
     }
     if (!inkDefaults && ctx.pieces.ink?.params?.tone) applyInk(STATES[current].ink);
   }

@@ -90,7 +90,8 @@ export class Parts {
     this.frame = null; // optional parent transform for parts built in a local frame
     this.warp = warp; // (x, y, z) → [dx, dy, dz], applied to every vertex at build
   }
-  // Build parts inside a local frame (e.g. a window on a side wall, built as if on the back wall).
+  // Build parts inside a local frame — the window on the stage-right wall is built in the back
+  // wall's own coordinates and then turned, which is why `buildWindow` takes a flat u/y rectangle.
   withFrame(matrix, fn) {
     const prev = this.frame;
     this.frame = prev ? prev.clone().multiply(matrix) : matrix.clone();

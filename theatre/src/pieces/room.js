@@ -1,9 +1,19 @@
 // PIECE: room — the parlour set itself: floorboards, three papered walls with wainscot, dado,
-// picture rail, frieze and cornice, a tall shuttered window stage left (and a second one on the
-// stage-right wall), a panelled door with a transom light stage right, a column radiator under
-// the window, a plain ceiling. Frontal, symmetrical, drawn with a pen: the geometry carries the
+// picture rail, frieze and cornice, a panelled door with a transom light stage right, one tall
+// shuttered window — on the stage-right wall — a column radiator on the plaster stage left, a
+// plain ceiling. Frontal, symmetrical, drawn with a pen: the geometry carries the
 // drawing (real slats, real panels, real mouldings — the ink pass draws lines where there are
 // edges), the textures carry only the PATTERN of what things are made of.
+//
+// THE BACK WALL HAS NO WINDOW. It had one, stage left, opposite the door: a casement in a reveal
+// with two louvred leaves folded flat over the plaster to x -0.50. The user: "i'd also like to
+// remove the window in the back left, we can then place the room drawing in the middle behind pepe
+// and the clock off to the left." So that stretch is plain papered field now, the dado and the
+// picture rail run through it as they do everywhere else on this wall, and the room's one window is
+// the stage-right one. What went with it: the reveal, the architrave, the sill, the casement and
+// its glass, the two shutter leaves, the telephone LEAD-IN through the head — and, in props.js, the
+// curtains. What did NOT go is the radiator, which is furniture and not joinery: it stands where it
+// stood, behind the bar cart, and Pepe still answers for it when he is asked (mind-room.js).
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
@@ -28,17 +38,26 @@ const BAND = {
 };
 
 // THE GHOST. The rectangle of wallpaper the tall multiple stood against until the automatic
-// exchange came in and it was unbolted for scrap. Measured, not guessed: the picture row hangs at
-// y 2.04 with 0.46 m frames, so its bottom edge is 1.81 and the ghost's head has to stay under it
-// — at 1.78 they clear each other by 30 mm, which is 6 px in the home frame and reads as two
-// separate things. His head sits at 1.24, well inside, which is the whole point of the rectangle:
-// the room frames him with the shape of what is not there any more.
-// Its width is 0.96, not the 1.24 that was proposed, and that is a measurement too: the window's
-// downstage shutter leaf folds flat onto this same wall and its outer edge stands at x −0.50, so a
-// rectangle to ±0.62 has its left-hand edge behind a shutter and only one of its two sides to show
-// for itself. ±0.48 clears the leaf by 20 mm, is the width of the position standing under it, and
-// is symmetrical, which the other one could not be.
-const GHOST = { x0: -0.48, x1: 0.48, y0: 0.97, y1: 1.78 };
+// exchange came in and it was unbolted for scrap. Its head is at 1.78: that was set when the picture
+// row hung at y 2.04 with 0.46 m frames, whose bottom edge was 1.81, and 1.78 cleared it by 30 mm.
+// The row has been re-hung twice since and the head has stayed, because what it is now is the line
+// the picture's own foot comes down past — see the width below. His head sits at 1.24, well inside,
+// which is the whole point of the rectangle: the room frames him with the shape of what is not
+// there any more.
+// Its width is 0.78, and that is a measurement too, though not the one it used to be. It was ±0.48,
+// set by the window's downstage shutter leaf standing at x −0.50; the window is gone and so is the
+// leaf, and what bounds the rectangle now is the thing that hangs over it. THE PICTURE OF THIS ROOM
+// is nailed at x 0 (props.js, THE ROW) and its foot comes down to 1.680 on a laptop and 1.728 at
+// 16:9 — below this rectangle's head at 1.78 at every window shape the room is judged in, because
+// the row solves the picture's height from Pepe's crown and never gets back up to 1.78. So the head
+// of the ghost is BEHIND the picture, always, and the only question is how much of it shows either
+// side. The picture's outer edge is at its narrowest ±0.3977 (a square window, where the height
+// binds before the width does), so ±0.39 is under it by 8 mm at the worst aspect and under it by
+// 20 at the shapes that ship. What the room sees of the ghost is its two long sides and its foot,
+// running out from behind the picture down to the dado: a picture hung over an old scar, which is
+// what it is. A rectangle any wider would push its own head out past the frame as two short stubs
+// of tone with nothing to explain them.
+const GHOST = { x0: -0.39, x1: 0.39, y0: 0.97, y1: 1.78 };
 
 // The cable duct: a wooden trough along both side walls with an iron cleat every 0.9 m. 2.30 is
 // its UNDERSIDE, which is the line the camera sees — it is always below it — and it is also what
@@ -137,10 +156,18 @@ export async function build(ctx) {
   }
 
   // ---- openings (in each wall's own plane: u along the wall, y up) ----
-  const win = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.21 };
+  // The back wall has ONE opening now: the door, stage right. Where the window was — x −1.95 to
+  // −1.05, sill 1.04, head 2.45 — the bands below simply run through, because the hole is no longer
+  // in `holes` and nothing else about that wall was ever special-cased for it.
   const door = { x0: 1.05, x1: 1.95, y0: 0, y1: 2.45, top: 2.12, depth: 0.1 };
-  // a second window on the stage-right wall; its u axis is world z (u = z)
+  // The room's window, on the stage-right wall; its u axis is world z (u = z). It carries the same
+  // joinery the back wall's did, which is why `buildWindow` is still here and still general.
   const sideWin = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.21 };
+  // Where the radiator stands. It used to be handed the window's own rectangle and centred under
+  // it; the window is gone and the radiator is not, so it carries the numbers itself. Same x, same
+  // width, same wall: it sits behind the bar cart (props.js stands that at x −1.5, 0.96 wide and
+  // 0.8 tall, 480 mm off the plaster), which is most of why it was never the thing being looked at.
+  const radiator = { x0: -1.95, x1: -1.05 };
   // Downstage on each side wall, level with the visitor's shoulder, a second door: the way in from
   // the landing (stage right) and the door of a press (stage left). They sit in the stretch of side
   // wall that only the long door/window/track shots see — in those the lens is a metre from the
@@ -186,7 +213,7 @@ export async function build(ctx) {
   const uEnd = zb + D + overrun;
   const walls = [
     // back wall: u = x, plane at z = zb facing +z
-    { u0: -hx, u1: hx, holes: [win, door], bands: backBands, ghost: GHOST, place: (u, y, w, h, m, out = 0) => P.plane(w, h, u, y, zb + out, m, { receive: true }) },
+    { u0: -hx, u1: hx, holes: [door], bands: backBands, ghost: GHOST, place: (u, y, w, h, m, out = 0) => P.plane(w, h, u, y, zb + out, m, { receive: true }) },
     // stage-left wall: u = z, plane at x = -hx facing +x
     { u0: zb, u1: uEnd, holes: [sideDoorL], bands: sideBands, place: (u, y, w, h, m) => P.plane(w, h, -hx, y, u, m, { ry: Math.PI / 2, receive: true }) },
     // stage-right wall: u = z, plane at x = +hx facing -x
@@ -242,8 +269,7 @@ export async function build(ctx) {
   buildTerminalBox(P, M, hx, 0.12);
 
   // ---- the openings ----
-  buildWindow(P, M, win, zb, jit, { leadIn: true });
-  buildRadiator(P, M, win, zb);
+  buildRadiator(P, M, radiator, zb);
   buildDoor(P, M, door, zb);
   buildSwitch(P, M, door.x0 - 0.1 - 0.16, 1.22, zb);
   // a mouse hole in the skirting, stage right of the door: an arch of solid hatch
@@ -254,7 +280,12 @@ export async function build(ctx) {
   // stage left: local +z → world +x, local x → world −z (so u ranges are negated below)
   const leftFrame = new THREE.Matrix4().makeTranslation(-hx - zb, 0, 0).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2));
   P.withFrame(rightFrame, () => {
-    buildWindow(P, M, sideWin, zb, jit);
+    // THE LEAD-IN comes in HERE now, and it is better here than it was. It was driven through the
+    // back wall's window head, which was the far side of the room from the wiring; the duct runs the
+    // stage-right wall and stops at this window's shutters, and the terminal box stands beside the
+    // way-in door on this same wall. So the pair now drops past the head of the only window there
+    // is, twelve feet from the box it ends in, and the sentence reads in one direction.
+    buildWindow(P, M, sideWin, zb, jit, { leadIn: true });
     buildSideDoor(P, M, sideDoorR, zb, { knob: 1 });
     buildSwitch(P, M, sideDoorR.x0 - 0.1 - 0.17, 1.22, zb); // the switch by the way in
   });
@@ -262,7 +293,13 @@ export async function build(ctx) {
 
   P.build(g, 'room');
   ctx.scene.add(g);
-  return { group: g, window: win, sideWindow: sideWin, door, bands: BAND, setState() {} };
+  // `window` is NOT published any more and the absence is the point: there is no window on the back
+  // wall to be asked about, and a piece that wants the room's one window asks for `sideWindow` and
+  // gets a rectangle in the stage-right wall's own plane (u = world z). Anything that still reads
+  // `room.window` gets undefined and falls to its own fallback, which would put a drawing back on
+  // plaster — so the readers were changed rather than left to fall: lighting.js, props.js,
+  // egg-rain.js, egg-cross.js.
+  return { group: g, sideWindow: sideWin, door, bands: BAND, setState() {} };
 }
 
 // A tall casement window in a reveal, an architrave, a sill, and two louvred shutters folded
@@ -371,8 +408,10 @@ function buildWindow(P, M, w, zb, jit = Math.random, { leadIn = false } = {}) {
     // there and the meeting stiles and the glazing bar pass in front of it, which is exactly what
     // puts it on the far side of the window. So the tube comes through under the head, over the
     // top light of the left leaf, and the pair drops from it across both panes to the sill.
-    // (x0 + 0.25 and not less: the props piece hangs a 0.19 m curtain panel from x0 − 0.03, and the
-    // first cut of this was drawn behind cloth.)
+    // (x0 + 0.25 and not less. That was set when this ran in the back wall's window, which props.js
+    // dressed with a 0.19 m curtain panel from x0 − 0.03 — the first cut of it was drawn behind
+    // cloth. This window has never had curtains, so the number now buys clearance it does not need;
+    // it is kept because a quarter of a metre in from the jamb is also simply where a tube goes.)
     const lx = x0 + 0.25, ly = y1 - 0.12;
     const cz = zr + 0.062;
     P.cylinder(0.017, 0.017, 0.026, lx, ly, cz, M.trim, { rx: Math.PI / 2, segments: 12 });
@@ -447,8 +486,13 @@ function buildShutterLeaf(P, M, x0, x1, y0, y1, z0, z1, side, jit = Math.random)
   P.box(0.05, 0.02, 0.05, dogX, y0 + 0.08, z1 + 0.02, M.metal, { cast: true });
 }
 
-// A cast-iron column radiator under the window: two manifolds, a row of columns, feet, a valve
-// with a wheel, and a pipe down into the floor.
+// A cast-iron column radiator on the back wall, stage left: two manifolds, a row of columns, feet,
+// a valve with a wheel, and a pipe down into the floor. It stood under the window and it is still
+// standing now the window has gone, because a radiator is furniture: it is bolted to a wall, not
+// hung off an opening, and the only thing the opening ever gave it was the rectangle it was centred
+// in. It keeps that rectangle (x −1.95 to −1.05) as its own. The bar cart covers it from the front
+// in every frontal shot, which was true before the change and is why it costs the empty wall
+// nothing; Pepe still names it when he is asked (mind-room.js, and tools/_room-visit.mjs checks).
 function buildRadiator(P, M, w, zb) {
   const { x0, x1 } = w;
   const cx = (x0 + x1) / 2;

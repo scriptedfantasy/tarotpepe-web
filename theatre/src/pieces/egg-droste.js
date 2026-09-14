@@ -1,6 +1,10 @@
-// AN EGG, inside props: THE PICTURE OF THIS ROOM. The right frame on the back wall holds a picture
-// of the parlour as the home camera sees it — so the picture contains the frame, and the frame
-// contains the picture, and it goes down as far as the paper can hold it.
+// AN EGG, inside props: THE PICTURE OF THIS ROOM. The frame in the middle of the back wall, behind
+// his head, holds a picture of the parlour as the home camera sees it — so the picture contains the
+// frame, and the frame contains the picture, and it goes down as far as the paper can hold it.
+// (It was "the right frame" and it hung at x 0.510, sharing a band of plaster with the clock between
+// a shutter leaf at x -0.49 and the door architrave at 1.03. The user had the window taken out and
+// said where this goes: "place the room drawing in the middle behind pepe and the clock off to the
+// left." Its nail is x 0 now and the clock hangs out at -0.705, on the plaster the window had.)
 //
 // The user: "i should have a picture of tarotpepe's room and we should be able to scroll into it.
 // basically have infinity scroll that always scrolls into the picture which is the room which is
@@ -24,9 +28,10 @@
 // WHY THE FRAME CHANGES SHAPE WITH THE WINDOW. The zoom works because at the top of it the picture
 // EXACTLY fills the viewport, and a rectangle can only fill a viewport if it has the viewport's
 // aspect. So the sheet is cut to the drawing buffer's w/h and the moulding put round it — and where
-// on the wall that lands is NOT this file's business. props.js lays the row (§THE ROW, there): it
-// measures the clear plaster, sizes the picture and the gaps for the window in front of it, and
-// calls setSlot() with the frame's finished outer size and the nail to hang it on. This file draws
+// on the wall that lands is NOT this file's business. props.js lays the row (§THE ROW, there): the
+// nail is fixed at x 0 and what it still solves for the window in front of it is this picture's
+// SIZE — and, from the size, where the clock goes. It calls setSlot() with the frame's finished
+// outer size and the nail to hang it on. This file draws
 // the moulding, the sheet and the cords, and publishes where the sheet ended up.
 //
 // NOTHING ANNOUNCES IT. No label, no tag, no hover, no cursor: it is not registered with the switch
