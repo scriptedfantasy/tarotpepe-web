@@ -1,9 +1,15 @@
 #!/usr/bin/env node
-// WHAT IS ON THAT WALL, in world metres, so the picture beside the clock can be made as large as the
-// plaster allows without covering any of it. Reports the world AABB of everything the frame has to
-// live between, and then the largest box that clears them all.
+// WHAT IS ON THAT WALL, in world metres. Reports the world AABB of everything the row has to live
+// between, the patch of plaster Pepe's own silhouette covers from each shot, and — since the window
+// came out of the back wall and the user put the picture in the middle of it — WHERE EACH RESTING
+// PLATE STOPS ON THAT WALL, which is the edge that now decides how far left the clock may hang.
+//
+// The scan used to run x -0.05 to 1.35, which was the band between the window's downstage shutter
+// leaf and the door architrave: the only stretch anything hung on. There is no shutter leaf, the
+// picture is nailed at x 0 and the clock is out at -0.705, so it runs -2.0 to 1.35 now.
 //
 //   BASE=http://127.0.0.1:8736 node tools/_droste-where.mjs
+//   W=390 H=844 BASE=... node tools/_droste-where.mjs     # the frame that binds
 import { chromium } from 'playwright';
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:8736/';
@@ -47,7 +53,7 @@ const out = await page.evaluate(() => {
     const b = new T.Box3().setFromObject(o);
     if (!isFinite(b.min.x)) return;
     if (b.min.z > -1.9) return; // out in the room: the table, the rug, him
-    if (b.max.x < -0.05 || b.min.x > 1.35) return; // not over this stretch of wall
+    if (b.max.x < -2.0 || b.min.x > 1.35) return; // not over this stretch of wall
     if (b.max.y < 0.9 || b.min.y > 2.85) return; // not in the band a picture could hang in
     const w = b.max.x - b.min.x, h = b.max.y - b.min.y;
     if (w > 4 || h > 2.5) return; // the wall itself, the wallpaper, the cornice run
@@ -94,7 +100,33 @@ const out = await page.evaluate(() => {
     }
     shadow.__box = { x: [+b.min.x.toFixed(4), +b.max.x.toFixed(4)], y: [+b.min.y.toFixed(4), +b.max.y.toFixed(4)], z: [+b.min.z.toFixed(4), +b.max.z.toFixed(4)] };
   }
-  return { WALLZ, named, shadow, obstacles };
+  // WHERE THE FRAME STOPS ON THE WALL. The four NDC corners of each resting plate's own camera,
+  // carried to the plane of the back wall. On a phone this is the whole of the left-hand limit: at
+  // 390x844 the plate reaches x -0.9944 and a clock hung past that is cut in half or gone.
+  const frame = {};
+  if (C) {
+    const probe2 = new T.PerspectiveCamera(30, 1, 0.03, 60);
+    for (const name of C.restingShots ?? ['home', 'wide']) {
+      try {
+        C.place(name, probe2);
+      } catch {
+        continue;
+      }
+      const eye = probe2.position.clone();
+      const xs = [], ys = [];
+      for (const nx of [-1, 1])
+        for (const ny of [-1, 1]) {
+          const d = new T.Vector3(nx, ny, 0.5).unproject(probe2).sub(eye);
+          if (Math.abs(d.z) < 1e-9) continue;
+          const t = (WALLZ - eye.z) / d.z;
+          if (t < 0) continue;
+          xs.push(eye.x + d.x * t);
+          ys.push(eye.y + d.y * t);
+        }
+      if (xs.length === 4) frame[name] = { x: [+Math.min(...xs).toFixed(4), +Math.max(...xs).toFixed(4)], y: [+Math.min(...ys).toFixed(4), +Math.max(...ys).toFixed(4)] };
+    }
+  }
+  return { WALLZ, viewport: [window.innerWidth, window.innerHeight], frame, row: window.__theatre.pieces.props?.row ?? null, named, shadow, obstacles };
 });
 console.log(JSON.stringify(out, null, 1));
 await browser.close();
