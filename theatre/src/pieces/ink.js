@@ -847,14 +847,14 @@ export async function build(ctx) {
       drawInk({ cam, slot: 'main', w: dbW, h: dbH, dpr, seed, placed, out: last });
       if (last) vortexPass(last.texture, dpr, seed);
     } else {
-      const atHome = C?.atHome === true;
-      // WHERE THE SHEET WANTS ITS PIXELS. On the home plate (scrolled or not) it is on its way to
-      // filling the window and gets the drawing buffer. Anywhere else it is a small thing on a far
+      const atRest = C?.atRest === true;
+      // WHERE THE SHEET WANTS ITS PIXELS. On the resting plate (scrolled or not) it is on its way
+      // to filling the window and gets the drawing buffer. Anywhere else it is a small thing on a far
       // wall: the moulding's own box on the glass, doubled for the mip chain's sake, rounded up to
       // a power of two and never below 128 — four or five sizes over the life of a page, so the
       // allocation is not re-made every drawing.
       let pw = dbW, ph = dbH;
-      if (!atHome && !(C?.current === 'home' && !C?.moving)) {
+      if (!atRest && !(C?.current === C?.restingShot && !C?.moving)) {
         const b = D.hitBox?.();
         const want = Math.max(64, (b?.w ?? 0) * dpr * 2);
         pw = Math.max(128, Math.min(dbW, 2 ** Math.ceil(Math.log2(want))));
@@ -865,7 +865,7 @@ export async function build(ctx) {
       mat.map = (pr.read ? pr.b : pr.a).texture; // never the one about to be written
       const write = pr.read ? pr.a : pr.b;
 
-      if (atHome) {
+      if (atRest) {
         // ONE PASS. The drawing IS the picture: it lands in the buffer, the buffer goes to the glass.
         drawInk({ cam, slot: 'main', w: dbW, h: dbH, dpr, seed, placed, out: write });
         pr.read ^= 1;
@@ -874,7 +874,7 @@ export async function build(ctx) {
       } else {
         // TWO. The home view, on the twelves only, and then the frame the visitor is looking at.
         if (ctx.clock.stepped && C?.place) {
-          C.place('home', picCam);
+          C.place(C.restingShot ?? 'home', picCam);
           // a small sheet is a SMALL DRAWING, not a shrunken one: the pen is measured in css px, so
           // the reduced pass is told it is a window of its own size at dpr 1 rather than the same
           // window at a fraction of a device pixel, where the nib would fall under the raster and

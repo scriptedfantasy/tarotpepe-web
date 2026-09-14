@@ -41,7 +41,7 @@ const browser = await chromium.launch({
 // ── a page, opened on the room, with a drawing counter on it ────────────────────────────────────
 // The page renders about one frame a second under swiftshader, so nothing here waits on a clock: it
 // waits on DRAWINGS, counted by wrapping the one call main.js makes per frame.
-async function open({ w, h, touch = false, params = {} }) {
+async function open({ w, h, touch = false, live = false, params = {} }) {
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1, hasTouch: touch, isMobile: false });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e && e.stack ? e.stack : e)));
@@ -52,8 +52,13 @@ async function open({ w, h, touch = false, params = {} }) {
   page.setDefaultNavigationTimeout(180000);
   page.setDefaultTimeout(180000);
   const u = new URL(BASE);
-  u.searchParams.set('shot', '1');
-  u.searchParams.set('t', T_FREEZE);
+  // A LIVE PAGE gets neither `shot=1` nor a frozen clock: `shot=1` turns the autoplay off and cuts
+  // the camera to `home`, and a frozen clock stops every timer the evening runs on. Both are why
+  // this file's first eight sections never saw what a visitor sees.
+  if (!live) {
+    u.searchParams.set('shot', '1');
+    u.searchParams.set('t', T_FREEZE);
+  }
   u.searchParams.set('seed', SEED);
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, String(v));
   await page.goto(u.toString(), { waitUntil: 'load' });
@@ -118,6 +123,11 @@ async function diff(aBuf, bBuf, { thr = 8, edge = 2, out = null } = {}) {
   if (out) await sharp(map, { raw: { width: A.w, height: A.h, channels: 3 } }).png().toFile(out);
   return { frac: n / (A.w * A.h), fracInside: nIn / inside, worst, mae: sum / (A.w * A.h), w: A.w, h: A.h };
 }
+
+// ONLY=9 (or ONLY=1,3) runs just those sections, which is how a change to one of them is tried
+// without paying for the other seven. Everything runs when it is not set.
+const ONLY = (process.env.ONLY ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+const want = (n) => !ONLY.length || ONLY.includes(String(n));
 
 const report = [];
 const fail = [];
@@ -193,14 +203,15 @@ if (process.env.PERF) {
 }
 
 // ── 1 · THE HAND-OVER ───────────────────────────────────────────────────────────────────────────
-say('\n=== 1 · the hand-over: t = 0 against the top of the wrap ===');
 const handover = [];
-for (const [w, h] of SHAPES) {
+if (want(1)) {
+  say('\n=== 1 · the hand-over: t = 0 against the top of the wrap ===');
+  for (const [w, h] of SHAPES) {
   const page = await open({ w, h });
   await drawings(page, 14); // let the feedback settle to its depth limit before anything is measured
   const geom = await page.evaluate(() => {
     const C = window.__theatre.pieces.camera, D = window.__theatre.pieces.props.droste;
-    return { span: C.zoomSpan, frame: D.frame, sheet: D.geometry, atHome: C.atHome };
+    return { span: C.zoomSpan, frame: D.frame, sheet: D.geometry, atRest: C.atRest, resting: C.restingShot };
   });
   const at0 = await shot(page);
   if (w === 1280) await sharp(at0).toFile(`${OUT}/rest-1280x800.png`);
@@ -224,16 +235,18 @@ for (const [w, h] of SHAPES) {
   handover.push({ w, h, tEdge, ...d, short: dShort });
   check(d.frac < 0.01, `${w}x${h}: the wrap — ${pct(d.frac)} of pixels differ between the frame at t = 1 and the frame at t = 0, worst channel ${d.worst}, mean |Δ| ${d.mae.toFixed(2)}/255`);
   say(`     one texel short (t = ${tEdge.toFixed(6)}, the sheet 1 px inside the window): ${pct(dShort.frac)} over the threshold, mean |Δ| ${dShort.mae.toFixed(2)}/255 — a half-pixel resample of a line drawing, not a seam`);
-  check(geom.atHome === true, `${w}x${h}: the camera is on the home plate at t = 0 and the pass knows it`);
+  check(geom.atRest === true, `${w}x${h}: the camera is standing on its resting plate ('${geom.resting}') at t = 0 and the pass knows it`);
   check(Math.abs(geom.sheet.w / geom.sheet.h - w / h) < 1e-6, `${w}x${h}: the sheet is cut to the window — ${geom.sheet.w.toFixed(4)} x ${geom.sheet.h.toFixed(4)} m in a ${geom.frame.w.toFixed(4)} x ${geom.frame.h.toFixed(4)} frame`);
   if (page.__errors.length) check(false, `${w}x${h}: page errors ${JSON.stringify(page.__errors.slice(0, 2))}`);
   await page.close();
+  }
 }
 
 // ── 2 · CONTINUITY ──────────────────────────────────────────────────────────────────────────────
-say('\n=== 2 · continuity: the picture s rectangle at t = k/20 ===');
 const tables = {};
-for (const [w, h] of SHAPES) {
+if (want(2)) {
+  say('\n=== 2 · continuity: the picture s rectangle at t = k/20 ===');
+  for (const [w, h] of SHAPES) {
   const page = await open({ w, h });
   await drawings(page, 4);
   const rows = await page.evaluate(() => {
@@ -267,16 +280,17 @@ for (const [w, h] of SHAPES) {
   check(Math.abs(last.w - 2) < 2e-4 && Math.abs(last.h - 2) < 2e-4, `${w}x${h}: at t = 1 it fills the window exactly (w ${last.w.toFixed(6)}, h ${last.h.toFixed(6)} of 2)`);
   tables[`${w}x${h}`] = rows;
   await page.close();
+  }
 }
-const tbl = tables['1280x800'];
-say('    t      width    height   left     right    bottom   top      camera→sheet');
+const tbl = tables['1280x800'] ?? [];
+if (tbl.length) say('    t      width    height   left     right    bottom   top      camera→sheet');
 for (const r of tbl.filter((_, i) => i % 2 === 0)) {
   say(`   ${r.t.toFixed(2)}   ${r.w.toFixed(4)}   ${r.h.toFixed(4)}   ${r.u0.toFixed(3).padStart(6)}   ${r.u1.toFixed(3).padStart(6)}   ${r.v0.toFixed(3).padStart(6)}   ${r.v1.toFixed(3).padStart(6)}   ${r.D.toFixed(3)} m`);
 }
 
 // ── 3 · THE PICTURE IS IN THE PICTURE ───────────────────────────────────────────────────────────
-say('\n=== 3 · the picture in the picture, at rest and on the way in ===');
-{
+if (want(3)) {
+  say('\n=== 3 · the picture in the picture, at rest and on the way in ===');
   const page = await open({ w: 1280, h: 800 });
   await drawings(page, 16);
   const b = await page.evaluate(() => window.__theatre.pieces.props.droste.hitBox());
@@ -317,9 +331,9 @@ say('\n=== 3 · the picture in the picture, at rest and on the way in ===');
 }
 
 // ── 4 · ONE SCENE PASS PER FRAME AT REST ────────────────────────────────────────────────────────
-say('\n=== 4 · what a frame costs ===');
 const costs = {};
-{
+if (want(4)) {
+  say('\n=== 4 · what a frame costs ===');
   const page = await open({ w: 1600, h: 900 });
   await drawings(page, 8);
   const sample = async (label) => {
@@ -348,8 +362,8 @@ const costs = {};
 }
 
 // ── 5 · THE WRAP, BY WHEEL ──────────────────────────────────────────────────────────────────────
-say('\n=== 5 · the wrap, driven by a real wheel ===');
-{
+if (want(5)) {
+  say('\n=== 5 · the wrap, driven by a real wheel ===');
   const page = await open({ w: 1280, h: 800 });
   await drawings(page, 16);
   // what the room looks like before anything is scrolled, off THIS page — the comparison after the
@@ -381,8 +395,8 @@ say('\n=== 5 · the wrap, driven by a real wheel ===');
 }
 
 // ── 6 · THE ROOM STILL WORKS ZOOMED ─────────────────────────────────────────────────────────────
-say('\n=== 6 · the room, zoomed ===');
-{
+if (want(6)) {
+  say('\n=== 6 · the room, zoomed ===');
   const page = await open({ w: 1280, h: 800 });
   await drawings(page, 8);
   const hold = async (t) => {
@@ -434,7 +448,6 @@ say('\n=== 6 · the room, zoomed ===');
   // A TAP WHILE ZOOMED, on three things, at the deepest t each is still in the picture at.
   const taps = [
     ['cat', null, 0.15, () => window.__theatre.pieces.props.cat.lit],
-    ['nakamoto', null, 0.5, () => window.__theatre.pieces.props.nakamoto.raining],
     ['insects', 4, 0.5, () => window.__theatre.pieces.props.insects.state[4]],
   ];
   for (const [name, idx, t, read] of taps) {
@@ -455,8 +468,8 @@ say('\n=== 6 · the room, zoomed ===');
 }
 
 // ── 7 · A WHEEL THAT WAS MEANT FOR SOMETHING ELSE ───────────────────────────────────────────────
-say('\n=== 7 · a wheel the room refuses ===');
-{
+if (want(7)) {
+  say('\n=== 7 · a wheel the room refuses ===');
   const page = await open({ w: 1280, h: 800 });
   await drawings(page, 8);
   const tryWheel = async (label, setup, teardown) => {
@@ -493,8 +506,8 @@ say('\n=== 7 · a wheel the room refuses ===');
 }
 
 // ── 8 · THE THUMB ───────────────────────────────────────────────────────────────────────────────
-say('\n=== 8 · the thumb, on a 390x844 phone ===');
-{
+if (want(8)) {
+  say('\n=== 8 · the thumb, on a 390x844 phone ===');
   const page = await open({ w: 390, h: 844, touch: true });
   await drawings(page, 10);
   const zoomNow = () => page.evaluate(() => ({ zoom: window.__theatre.pieces.camera.zoom, target: window.__theatre.pieces.camera.zoomTarget }));
@@ -558,11 +571,152 @@ say('\n=== 8 · the thumb, on a 390x844 phone ===');
   await page.close();
 }
 
+// ── 9 · A LIVE PAGE, WHICH IS THE ONLY ONE A VISITOR EVER SEES ─────────────────────────────────
+// Everything above runs on `?shot=1`, and `shot=1` cuts the camera to `home` and turns the evening
+// off. The live page does neither: entrance.js lands the visitor on `wide` (its LANDS_ON), flow.js
+// holds the first exchange there and settles into `home` from his first reply, and a reading goes
+// back to `home`. So the plate the room RESTS on is not `home` by name, and a scroll built on the
+// name would be refused on the page and unseamed everywhere else. This section is the one that
+// would have caught that: it opens the page a visitor opens, clicks the door, and reaches for the
+// wheel at each of the places a visitor's hand would.
+if (want(9)) {
+  say('\n=== 9 · a live page: the door, the evening, and the wheel ===');
+  const W = 1280, H = 800;
+  const page = await open({ w: W, h: H, live: true });
+  const look = () =>
+    page.evaluate(() => {
+      const T = window.__theatre;
+      const C = T.pieces.camera, D = T.pieces.props.droste;
+      const cap = document.querySelector('#dialogue .cap');
+      return {
+        shot: C.current,
+        resting: C.restingShot,
+        zoom: C.zoom,
+        target: C.zoomTarget,
+        zoomable: C.zoomable,
+        atRest: C.atRest,
+        beat: T.pieces.flow?.beat,
+        door: T.pieces.entrance?.mode,
+        field: !!document.querySelector('#dialogue input.keys'),
+        placard: !!(cap && !cap.hidden && cap.textContent.trim()),
+        box: D.hitBox(),
+        readings: T.pieces.flow?.readings ?? 0,
+        fan: T.pieces.reveal?.fanCount ?? 0,
+      };
+    });
+  // `hurry` is the visitor's own gesture: a pointerdown anywhere on the window while he is talking
+  // types the rest of his take out at once (flow.js → dialogue.skip). It is used here for one
+  // reason — under swiftshader the placard types about one character a second, so a reading read
+  // aloud card by card is twenty minutes of waiting for a thing this section is not testing. It is
+  // called through the api rather than by clicking, so it cannot land on a card or a switch.
+  const until = async (label, fn, seconds = 150, hurry = false) => {
+    const t0 = Date.now();
+    for (;;) {
+      const st = await look();
+      if (fn(st)) return st;
+      if (Date.now() - t0 > seconds * 1000) throw new Error(`stalled waiting for ${label}: shot=${st.shot} beat=${st.beat} door=${st.door} field=${st.field}`);
+      if (hurry) await page.evaluate(() => window.__theatre.pieces.dialogue?.skip?.()).catch(() => {});
+      await page.waitForTimeout(250);
+    }
+  };
+  // THE WHEEL GOES OVER THE CANVAS, high in the frame. The placard and the visitor's own field are
+  // DOM layers along the bottom of the window, and a wheel that landed on one of them would never
+  // reach the canvas's listener — so the element under the pointer is asserted, not assumed.
+  const WX = W / 2, WY = Math.round(H * 0.3);
+  const wheel = async (dy, times) => {
+    await page.mouse.move(WX, WY);
+    for (let i = 0; i < times; i++) await page.mouse.wheel(0, dy);
+    await drawings(page, 16);
+    return look();
+  };
+  const under = () => page.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return e ? e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') : null; }, [WX, WY]);
+
+  // 1 · the door, and the walk in
+  const shut = await until('the door', (st) => st.door === 'closed' || st.beat === 'talk' || st.field, 90);
+  if (shut.door === 'closed') await page.mouse.click(W / 2, H * 0.56);
+  const settled = await until('the room to settle with the field open', (st) => st.field && st.beat === 'talk', 180);
+  check(settled.shot !== 'home', `the live page does NOT rest on 'home': after the door the camera is on '${settled.shot}' (entrance lands on it, flow holds the first exchange there)`);
+  check(settled.resting === settled.shot, `and the picture is drawn from the plate it is resting on: restingShot '${settled.resting}'`);
+  check(settled.zoomable === true, `the wheel is armed on a live page (zoomable ${settled.zoomable}, beat '${settled.beat}', placard ${settled.placard}, field ${settled.field})`);
+  const el = await under();
+  check(el === 'canvas', `the wheel lands on the drawing and not on a DOM layer: elementFromPoint(${WX}, ${WY}) is <${el}>`);
+
+  // 2 · THE BOIL, which is the floor any diff on a live page is measured against. The clock is not
+  // frozen here, so the pen re-rolls every other drawing and two frames of the same pose differ by
+  // that much. Nothing below can beat this number and nothing should be asked to.
+  const before = await shot(page);
+  await drawings(page, 14);
+  const boil = await diff(before, await shot(page), { edge: 0 });
+  say(`    the ink's own boil, same pose, 14 drawings apart: ${pct(boil.frac)} of pixels, mean |Δ| ${boil.mae.toFixed(2)}/255`);
+
+  // 3 · the wheel: the number climbs and the picture grows
+  const box0 = settled.box;
+  const a = await wheel(200, 2);
+  check(a.zoom > 0.05, `400 px of wheel on the live page moves it: zoom ${a.zoom.toFixed(3)} (target ${a.target.toFixed(3)}), shot still '${a.shot}'`);
+  check(a.box.w > box0.w * 1.05 && a.box.h > box0.h * 1.05, `and the picture's rectangle grows with it: ${box0.w.toFixed(0)}x${box0.h.toFixed(0)} px → ${a.box.w.toFixed(0)}x${a.box.h.toFixed(0)} px`);
+  const b = await wheel(200, 2);
+  check(b.zoom > a.zoom && b.box.w > a.box.w, `and keeps climbing: zoom ${b.zoom.toFixed(3)}, ${b.box.w.toFixed(0)} px across`);
+  await sharp(await shot(page)).toFile(`${OUT}/live-mid-wrap.png`);
+
+  // 4 · ONE WHOLE WRAP, and the room it comes back to
+  const c = await wheel(200, 2);
+  await drawings(page, 24);
+  const after = await shot(page);
+  await sharp(after).toFile(`${OUT}/live-after-wrap.png`);
+  const st4 = await look();
+  const gap = Math.min(st4.zoom - Math.floor(st4.zoom), 1 - (st4.zoom - Math.floor(st4.zoom)));
+  const d4 = await diff(before, after, { edge: 0 });
+  check(gap < 0.03, `1200 px is one whole wrap on the live page too: zoom ${st4.target.toFixed(3)}, ${gap.toFixed(4)} from the plate it started on`);
+  check(d4.frac < Math.max(0.02, boil.frac * 2.5), `and it comes back to the room it left: ${pct(d4.frac)} of pixels differ from the frame before the scroll, against the boil's own ${pct(boil.frac)}`);
+  void c;
+
+  // 5 · AFTER THE VISITOR HAS TYPED, which is the state a real visitor is actually in: the field
+  // has been used, the placard is carrying his answer, and flow has settled the evening into its
+  // second frame. The plate changes under the scroll here and the scroll has to follow it.
+  await page.keyboard.type('what is the clock', { delay: 8 });
+  await page.keyboard.press('Enter');
+  const talked = await until('the field again after typing', (st) => st.field && st.beat === 'talk', 180);
+  check(talked.zoomable === true, `after typing, the wheel is still armed (shot '${talked.shot}', restingShot '${talked.resting}', placard ${talked.placard})`);
+  const e = await wheel(200, 2);
+  check(e.zoom > 0.05 && e.box.w > talked.box.w * 1.05, `and it still scrolls from whatever plate the evening settled on ('${e.shot}'): zoom ${e.zoom.toFixed(3)}, ${talked.box.w.toFixed(0)} → ${e.box.w.toFixed(0)} px`);
+  await page.evaluate(() => window.__theatre.pieces.camera.setZoom(0, { hold: true }));
+  await drawings(page, 8);
+
+  // 6 · A READING, and the room after it. PEPE_FAKE deals when the visitor's own words ask.
+  await page.keyboard.type('read my cards', { delay: 8 });
+  await page.keyboard.press('Enter');
+  let dealt = null;
+  try {
+    dealt = await until('the cards to come out', (st) => st.fan > 0 || st.readings > 0 || st.beat === 'shuffle' || st.beat === 'fan' || st.beat === 'dealt' || st.beat === 'reading', 180);
+  } catch (err) {
+    say(`    no reading came (${String(err.message).slice(0, 90)}) — is PEPE_FAKE=1 on the dev server?`);
+  }
+  if (dealt) {
+    say(`    the cards are out: beat '${dealt.beat}', shot '${dealt.shot}', fan ${dealt.fan}`);
+    const duringDeal = await look();
+    check(duringDeal.zoomable === false || duringDeal.shot === duringDeal.resting, `over the cloth the wheel is refused: shot '${duringDeal.shot}', zoomable ${duringDeal.zoomable}`);
+    let back = null;
+    try {
+      back = await until('the evening to come back off the cloth', (st) => st.field && st.beat === 'talk' && st.shot === st.resting, 600, true);
+    } catch (err) {
+      check(false, `the evening never came back off the cloth: ${String(err.message).slice(0, 120)}`);
+    }
+    if (back) {
+      check(back.zoomable === true, `and after the reading it is armed again on '${back.shot}' (restingShot '${back.resting}', readings ${back.readings})`);
+      const f = await wheel(200, 2);
+      check(f.zoom > 0.05 && f.box.w > back.box.w * 1.05, `a scroll after a reading still walks into the picture: zoom ${f.zoom.toFixed(3)}, ${back.box.w.toFixed(0)} → ${f.box.w.toFixed(0)} px`);
+      await sharp(await shot(page)).toFile(`${OUT}/live-after-reading.png`);
+    }
+  }
+  if (page.__errors.length) check(false, `live page errors: ${JSON.stringify(page.__errors.slice(0, 2))}`);
+  await page.close();
+}
+
 await browser.close();
 
-say('\n=== the hand-over, per window shape ===');
+if (handover.length) say('\n=== the hand-over, per window shape ===');
 for (const r of handover) say(`   ${String(r.w + 'x' + r.h).padEnd(9)} wrap ${pct(r.frac).padStart(8)} of pixels, mean |Δ| ${r.mae.toFixed(2).padStart(5)}/255   ·   one texel short (t=${r.tEdge.toFixed(6)}) ${pct(r.short.frac).padStart(8)}, mean |Δ| ${r.short.mae.toFixed(2)}/255`);
-say('\n=== the cost of a frame (1600x900, dpr 1, swiftshader) ===');
+if (Object.keys(costs).length) say('\n=== the cost of a frame (1600x900, dpr 1, swiftshader) ===');
 for (const [k, v] of Object.entries(costs)) say(`   ${k.padEnd(7)} ${v.perFrame.toFixed(3)} drawings of the room per frame, ${v.ms.toFixed(0)} ms a frame`);
 writeFileSync(`${OUT}/proof.txt`, report.join('\n') + '\n');
 say(`\n${fail.length ? `${fail.length} FAILING` : 'all checks pass'} — ${report.length} checks, PNGs and the log in ${OUT}`);

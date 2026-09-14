@@ -185,11 +185,48 @@ export async function build(ctx) {
 
   const drosteOf = () => ctx.pieces?.props?.droste ?? null;
 
-  // The picture as the home plate sees it: D0 (camera to sheet), D1 (where it fills the window),
-  // and the sheet's half-height on the glass at home. Null while the frame has no size yet.
+  // ---- WHICH PLATE THE ROOM IS RESTING ON -----------------------------------------------------
+  // The scroll is a modifier on the frame the evening is actually watched from, and that is NOT
+  // `home` by name. entrance.js lands the visitor on `wide` (LANDS_ON — the user asked for the walk
+  // to end where the evening is watched from), flow.js holds the first exchange there and settles
+  // into `home` from his first reply, and a reading returns to `home`. A page opened by a tool sits
+  // on `home` because that is what main.js cuts to. All three are the same thing to this file: the
+  // plate the camera was last LEFT standing on.
+  //
+  // WHY THESE TWO AND NOT EVERY FLAT SHOT. Six of the shots in camera-shots.js are flat frontals on
+  // the room's axis and the arithmetic below would solve any of them — `pepe`, `table`, `door` and
+  // `threshold` included. The room does not REST on those. `pepe` is flow.js's own word for it,
+  // "punctuation inside a turn": the camera cuts to his face for one sentence of a turn and back to
+  // the frame the visitor answers in, a second and a half later. Adopting it as the plate would
+  // re-draw the picture on the wall from his face and back again on every line he says — a picture
+  // whose contents flicker with the cutting — and would arm the scroll for a second and a half at a
+  // time. `table`, `door` and `threshold` are a judging frame and two frames of the arrival. So the
+  // set is named here rather than derived, and the geometry is then CHECKED rather than assumed:
+  // a plate this file will solve a zoom from has to look straight down -z from its own x and y,
+  // with no lens roll and no sideways shift, or the end pose is not on the picture's normal.
+  const RESTING = ['home', 'wide'];
+  function flatPlate(name) {
+    const s = typeof name === 'string' ? shots[name] : null;
+    if (!s || !RESTING.includes(name)) return null;
+    const up = s.up ?? [0, 1, 0];
+    if (up[0] !== 0 || up[1] !== 1 || up[2] !== 0) return null;
+    if (s.look[0] !== s.pos[0] || s.look[1] !== s.pos[1] || !(s.look[2] < s.pos[2])) return null;
+    if ((s.shift?.[0] ?? 0) !== 0) return null;
+    return s;
+  }
+  // …and it is remembered ACROSS the shots that are not plates, because the picture on the wall has
+  // to be the frame the visitor will come back to. The camera going up on his face for a sentence
+  // does not change what is hanging on the wall.
+  let resting = 'home';
+  const noteResting = () => {
+    if (flatPlate(api.current)) resting = api.current;
+  };
+
+  // The picture as the resting plate sees it: D0 (camera to sheet), D1 (where it fills the window),
+  // and the sheet's half-height on the glass there. Null while the frame has no size yet.
   function zoomSpan() {
     const d = drosteOf();
-    const home = shots.home;
+    const home = flatPlate(resting) ?? shots.home;
     if (!d || !home) return null;
     const gm = d.geometry;
     if (!(gm.halfH > 1e-6)) return null;
@@ -231,7 +268,7 @@ export async function build(ctx) {
   // door, the notice card, and a pick (the fan arms the pointer and the camera is on `fan` for it,
   // but the flag is asked anyway — it costs nothing and it is the honest test).
   function zoomAllowed() {
-    if (held != null || move || api.current !== 'home') return false;
+    if (held != null || move || api.current !== resting) return false;
     const P = ctx.pieces?.props;
     if (P?.deck?.out || P?.cross?.out) return false;
     if (ctx.pieces?.help?.showing) return false;
@@ -245,10 +282,10 @@ export async function build(ctx) {
   const fract = (v) => v - Math.floor(v);
   function applyZoom() {
     const t = fract(zoomShown);
-    // t = 0 is the home plate itself and not an arithmetic approximation of it: the hand-over at
-    // the top of a wrap is measured against this frame, so it has to be the same floats.
+    // t = 0 is the resting plate itself and not an arithmetic approximation of it: the hand-over at
+    // the top of a wrap is measured against that frame, so it has to be the same floats.
     if (t === 0) {
-      applyPose(poseOf(shots.home));
+      applyPose(poseOf(shots[resting] ?? shots.home));
       return;
     }
     const s = zoomShot(t);
@@ -276,7 +313,7 @@ export async function build(ctx) {
     }
     // the sheet was re-cut for the new aspect a moment ago (props builds before this piece, so its
     // resize handler has already run); a held zoom is re-solved against the frame's new shape
-    if (!move && api.current === 'home' && zoomShown !== 0) applyZoom();
+    if (!move && api.current === resting && zoomShown !== 0) applyZoom();
   });
 
   // ---- moves ----
@@ -344,6 +381,7 @@ export async function build(ctx) {
     const from = fromShot == null ? currentPose() : poseOf(resolve(fromShot));
     const to = poseOf(resolve(toShot));
     api.current = typeof toShot === 'string' ? toShot : 'custom';
+    noteResting();
     const ways = (Array.isArray(via) ? via : [via]).filter((v) => v != null).map(pointOf);
     const pts = [from.pos.clone(), ...ways, to.pos.clone()];
     // two identical ends (a move to where we already are) would make a zero-length curve, which
@@ -394,8 +432,9 @@ export async function build(ctx) {
   // internal: no token bookkeeping (sequences and loops own their token)
   function jump(shot) {
     finish();
-    resetZoom(); // a cut is a cut: the room is at t = 0 wherever it lands, home included
+    resetZoom(); // a cut is a cut: the room is at t = 0 wherever it lands, the resting plate included
     api.current = typeof shot === 'string' ? shot : 'custom';
+    noteResting();
     applyPose(poseOf(resolve(shot)));
   }
   function startMove(shot, kind, duration) {
@@ -403,6 +442,7 @@ export async function build(ctx) {
     resetZoom(); // …and the rail leaves from the zoomed pose; see dolly() above
     const to = poseOf(resolve(shot));
     api.current = typeof shot === 'string' ? shot : 'custom';
+    noteResting();
     if (kind === 'cut') {
       applyPose(to);
       return Promise.resolve();
@@ -472,14 +512,24 @@ export async function build(ctx) {
     },
     // the pose at any t, solved but not applied — the continuity table is taken off this
     zoomShotAt: (t) => zoomShot(fract(t)),
-    // IS THE LIVE CAMERA STANDING ON THE HOME PLATE, TO THE FLOAT? ink.js asks once a frame, and a
-    // great deal hangs on the answer: when it is yes the frame about to be drawn IS the picture on
+    // IS THE LIVE CAMERA STANDING ON THE RESTING PLATE, TO THE FLOAT? ink.js asks once a frame, and
+    // a great deal hangs on the answer: when it is yes the frame about to be drawn IS the picture on
     // the back wall, so there is one scene pass and not two. Nothing is approximated here — the
-    // pose the camera is holding was copied out of poseOf(shots.home) and is compared against it.
-    get atHome() {
-      if (move || api.current !== 'home' || fract(zoomShown) !== 0) return false;
-      const p = poseOf(shots.home);
+    // pose the camera is holding was copied out of poseOf(shots[resting]) and is compared to it.
+    get atRest() {
+      if (move || api.current !== resting || fract(zoomShown) !== 0) return false;
+      const s = shots[resting];
+      if (!s) return false;
+      const p = poseOf(s);
       return cam.position.equals(p.pos) && cam.quaternion.equals(p.q) && cam.fov === p.fov && shift[0] === p.shift[0] && shift[1] === p.shift[1];
+    },
+    // the name of the plate the picture on the wall is drawn from, and the one a scroll walks into
+    get restingShot() {
+      return resting;
+    },
+    // the plates this file will solve a zoom from at all, for a tool that wants to assert the set
+    get restingShots() {
+      return [...RESTING];
     },
     // PUT ANOTHER CAMERA ON A NAMED SHOT, solved for this window. ink.js draws the picture on the
     // wall through one of these while the real camera is somewhere else entirely; it gets the same
