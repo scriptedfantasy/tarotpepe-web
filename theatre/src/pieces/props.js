@@ -126,21 +126,53 @@ export async function build(ctx) {
     rim: 0.022,
     corner: 0.0077, // how far a corner block stands proud of the moulding's outer edge
     minGap: 0.11,
+    // THE SHAPE OF THE SHEET ON A PORTRAIT WINDOW, and it is not the window's. The user: "for
+    // mobile, i think the picture on the wall should use the same width as desktop from afar, it
+    // can then just basically go to the mobile cutout as it zooms in closer." Cut to a phone's own
+    // 0.46:1 the picture was a letterbox slot on its end — 0.34 m of wall showing a stripe of the
+    // room — and a visitor across the room could not see it was a room at all. So upright windows
+    // get a LANDSCAPE picture at this ratio, which is 1280x800: the reference plate the rest of
+    // this file's numbers were measured on, and the shape a picture on a wall actually is.
+    // What it SHOWS is still the phone's own frame — the picture's plate is drawn from the resting
+    // camera's pose at the same vertical field and the same lens rise, just wider, so the phone's
+    // live frame is the centre crop of it. Scroll in and the wide picture converges on that crop:
+    // its height fills the window, its width runs off both sides equally, and the frame it hands
+    // over to is the frame the visitor was already looking at. ink.js and camera.js carry that.
+    landscape: 1.6,
   };
   // The row, solved for one window. Returns the clock's x, the picture's nail and the frame's outer
   // size, and the gap the three of them share.
-  function layRow(aspect) {
+  function layRow(aspect, buf = null) {
     const A = Math.max(0.05, aspect);
+    // AN UPRIGHT WINDOW GETS A LANDSCAPE PICTURE; a landscape one gets its own shape. The break is
+    // at square, which is where a picture cut to the window stops being a picture and starts being
+    // a slot — see `landscape` above.
+    //
+    // …AND ITS SHAPE IS SNAPPED TO THE DRAWING BUFFER'S OWN GRID, which is the difference between a
+    // seamless wrap and a blurred one. The phone's frame is the CENTRE CROP of the picture's plate,
+    // so at the top of a zoom the canvas reads a window of the plate's texels — and it only reads
+    // them whole if the plate is a whole number of texels wide AND the margin either side is a
+    // whole number too. A flat 1.6 gives neither: at 844 px of buffer it wants 1350.4 texels, the
+    // crop lands 0.07 of a texel off its grid, and every 1 px line in the drawing is resampled
+    // across two pixels. So the ratio is 1.6 rounded to the buffer — 1350/844 here — and nudged by
+    // one more texel when that would leave an odd margin. It is 1.6 to four decimal places and it
+    // costs nothing; what it buys is measured in tools/_droste-proof.mjs §1.
+    let picA = A >= 1 ? A : ROW.landscape;
+    if (A < 1 && buf && buf.w > 0 && buf.h > 0) {
+      let n = Math.round(buf.h * ROW.landscape);
+      if ((n - Math.round(buf.w)) % 2 !== 0) n += 1;
+      picA = n / buf.h;
+    }
     const clockW = ROW.clockR * 2;
     const band = ROW.right - ROW.left;
     const pad = ROW.corner * 2;
     const maxOuterW = band - clockW - 3 * ROW.minGap;
     const maxOuterH = ROW.top - ROW.floor - 0.0194; // …less a finger's clearance off his crown
     let sheetH = maxOuterH - pad - ROW.rim * 2;
-    let sheetW = sheetH * A;
+    let sheetW = sheetH * picA;
     if (sheetW + ROW.rim * 2 + pad > maxOuterW) {
       sheetW = maxOuterW - ROW.rim * 2 - pad;
-      sheetH = sheetW / A;
+      sheetH = sheetW / picA;
     }
     const outerW = sheetW + ROW.rim * 2 + pad;
     const outerH = sheetH + ROW.rim * 2 + pad;
@@ -155,16 +187,23 @@ export async function build(ctx) {
         h: sheetH + ROW.rim * 2,
       },
       sheet: { w: sheetW, h: sheetH },
+      picAspect: picA,
       outer: outerW,
       outerH,
       foot: ROW.top - outerH,
     };
   }
-  const rowAspect = () => {
+  // the drawing buffer, in device pixels, which is what the picture's shape is snapped to
+  const rowBuffer = () => {
     const v = new THREE.Vector2();
     ctx.renderer?.getDrawingBufferSize?.(v);
-    if (v.x > 0 && v.y > 0) return v.x / v.y;
-    return (ctx.size?.w || window.innerWidth || 1600) / (ctx.size?.h || window.innerHeight || 900);
+    if (v.x > 0 && v.y > 0) return { w: v.x, h: v.y };
+    const dpr = ctx.renderer?.getPixelRatio?.() ?? 1;
+    return { w: (ctx.size?.w || window.innerWidth || 1600) * dpr, h: (ctx.size?.h || window.innerHeight || 900) * dpr };
+  };
+  const rowAspect = () => {
+    const b = rowBuffer();
+    return b.w / b.h;
   };
   let clockObj = null, clockCords = null;
 
@@ -1041,18 +1080,18 @@ export async function build(ctx) {
   //     window      sheet            frame            nail            clock x   gap
   //     1280x800    0.761 x 0.475    0.805 x 0.519    0.510, 1.948    -0.195    0.110
   //     1600x900    0.761 x 0.428    0.805 x 0.472    0.510, 1.971    -0.195    0.110
-  //     390x844     0.340 x 0.736    0.384 x 0.780    0.580, 1.817    -0.055    0.250
-  // The landscape windows are held by the gap and are the same width as each other; the phone is
-  // held by the wall and is the tall one. Both stand 50.0 mm under the shop board, measured, and
-  // clear Pepe's own shadow on the plaster by 280 mm on a laptop and 19 mm on a phone. Against the
-  // 0.456 x 0.285 sheet this picture started the round at, the laptop's is two and two thirds the
-  // area and the phone's is six and a quarter.
-  const DROSTE = eggDroste(ctx, { group: g, slot: { ...layRow(rowAspect()).frame, z: WALL + 0.015, hookY: HOOK_Y } });
+  //     390x844     0.761 x 0.475    0.805 x 0.519    0.510, 1.948    -0.195    0.110
+  // The phone's row is the 1280x800 row, to the millimetre, because upright windows are hung with a
+  // landscape picture: the same object on the same nail whatever the visitor is holding. All three
+  // stand 50.0 mm under the shop board, measured, and clear Pepe's own shadow on the plaster by
+  // 280 mm. Against the 0.456 x 0.285 sheet this picture started the round at, every one of them is
+  // two and two thirds the area.
+  const DROSTE = eggDroste(ctx, { group: g, slot: { ...layRow(rowAspect(), rowBuffer()).frame, z: WALL + 0.015, hookY: HOOK_Y } });
   // …and the row is laid now and again on every resize, because the picture's width IS the window's
   // aspect: a wall that was even at 16:9 is not even on a phone unless the clock moves with it. The
   // clock is moved, never rebuilt, so egg-vortex.js's reference to it stays the reference it took.
   function relay() {
-    const row = layRow(rowAspect());
+    const row = layRow(rowAspect(), rowBuffer());
     if (clockObj) clockObj.position.x = row.clockX;
     if (clockCords) {
       for (const c of [...clockCords.children]) {
@@ -1178,7 +1217,7 @@ export async function build(ctx) {
     // THE ROW, solved for the window in front of it: the clock's x, the picture's nail and outer
     // size, and the gap the three of them share. A proof measures the evenness off this.
     get row() {
-      return { ...layRow(rowAspect()), band: [ROW.left, ROW.right], clockR: ROW.clockR, clockY: ROW.clockY };
+      return { ...layRow(rowAspect(), rowBuffer()), band: [ROW.left, ROW.right], clockR: ROW.clockR, clockY: ROW.clockY, buffer: rowBuffer() };
     },
     // the shop's board over Pepe's head. `mesh` is what a pointer is raycast against, `pivot` is
     // its hook line (rotate that and the board swings on its cord), and w/h are its size in metres.

@@ -144,6 +144,15 @@ precision highp float;
 precision highp int;
 uniform sampler2D tDepth, tNorm, tMisc, tAlbedo;
 uniform vec2 uRes;
+uniform vec2 uOffset;
+// WHERE THIS FRAME SITS IN THE FRAME IT IS PART OF, in device pixels. Everything the pen does that
+// is anchored to the SCREEN — the wobble that slides the seed map about, the pen's wander across its
+// own stroke, where it skips, the grain of the paper — is a function of the pixel's position, so two
+// renders of the same view at different widths put all of it in different places. On an upright
+// window the picture of this room is drawn at its own width (a phone's plate is 1.6 times as wide as
+// its window) and the window then shows the CENTRE of that plate, so the plate is told where its
+// pixels would fall in the window's own raster and the two agree, mark for mark. It is zero for any
+// pass that IS the window's frame, which is every pass on a landscape window.
 uniform float uNear, uFar, uSeed, uDpr, uWobble;
 uniform float uDepthThr, uCreaseThr, uCreaseWide;
 in vec2 vUv;
@@ -169,7 +178,7 @@ S tap(vec2 uv) {
 }
 float feat(S s) { return log(s.d) * 3.0 + fract(s.id * 0.618034) * 5.0 + s.m * 40.0 + dot(s.n, vec3(0.8, 0.6, 0.4)); }
 void main() {
-  vec2 px = vUv * uRes;
+  vec2 px = vUv * uRes + uOffset;
   vec2 uv = vUv + wobble(px / uDpr, uSeed, uWobble) * uDpr / uRes;
   vec2 o = uDpr / uRes;
   S c = tap(uv);
@@ -227,6 +236,7 @@ export const EXTEND_FRAG = /* glsl */ `
 precision highp float;
 uniform sampler2D tEdge;
 uniform vec2 uRes;
+uniform vec2 uOffset; // see EDGE_FRAG
 uniform float uDpr, uSeed, uOvershoot, uMerge, uThin, uStub, uStub2;
 in vec2 vUv;
 layout(location = 0) out vec4 outColor;
@@ -385,7 +395,7 @@ void main() {
   // How far THIS stroke runs past its end, in px. Keyed to where the stroke stands (so the four
   // sides of one rectangle overshoot by four different amounts) and re-rolled on twos with the
   // rest of the pen, so a held corner is never the same corner twice.
-  float side = dot(vUv * uRes / uDpr, vec2(-tg.y, tg.x));
+  float side = dot((vUv * uRes + uOffset) / uDpr, vec2(-tg.y, tg.x));
   float run = uOvershoot * (0.3 + 0.7 * hash21(vec2(floor(side / 7.0) + bq.b * 51.0, uSeed * 0.37)));
   if (d0 > run) { outColor = vec4(0.0); return; }
   outColor = vec4(0.9, bq.g, bq.b, 1.0);
@@ -397,6 +407,7 @@ precision highp float;
 precision highp int;
 uniform sampler2D tAlbedo, tNorm, tMisc, tDepth, tLit, tEdge, tWall, tFloor, tPaper;
 uniform vec2 uRes;
+uniform vec2 uOffset; // see EDGE_FRAG
 uniform float uDpr, uSeed, uNear, uFar, uHatchK, uLref, uLineBase, uLineSoft, uBreak, uPaperAmt, uHatchBoil;
 uniform float uPenWob;      // px the pen wanders ACROSS its own stroke, at ~8 px of wavelength
 uniform float uPenJit;      // ± fraction of the nib's radius, per stroke — no two the same weight
@@ -436,7 +447,7 @@ float softLit(vec2 uv, vec2 r) {
   return c;
 }
 void main() {
-  vec2 px = vUv * uRes;
+  vec2 px = vUv * uRes + uOffset;
   vec2 cssPx = px / uDpr;
   vec3 paperGrain = mix(vec3(1.0), texture(tPaper, cssPx / 512.0).rgb, uPaperAmt);
 

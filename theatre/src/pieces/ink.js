@@ -447,6 +447,7 @@ export async function build(ctx) {
       uFar: { value: 60 },
       uSeed: { value: 0 },
       uDpr: { value: 1 },
+      uOffset: { value: new THREE.Vector2() },
       uWobble: { value: params.wobble },
       uDepthThr: { value: params.depthThr },
       uCreaseThr: { value: params.creaseThr },
@@ -464,6 +465,7 @@ export async function build(ctx) {
       uRes: { value: new THREE.Vector2() },
       uDpr: { value: 1 },
       uSeed: { value: 0 },
+      uOffset: { value: new THREE.Vector2() },
       uOvershoot: { value: params.overshoot },
       uMerge: { value: params.merge },
       uThin: { value: params.thin },
@@ -498,6 +500,7 @@ export async function build(ctx) {
       uLineSoft: { value: params.lineSoft },
       uPenWob: { value: params.penWob },
       uPenJit: { value: params.penJit },
+      uOffset: { value: new THREE.Vector2() },
       uPlaced: { value: 0 },
       uBreak: { value: params.breakAmt },
       uPaperAmt: { value: params.paper },
@@ -701,7 +704,7 @@ export async function build(ctx) {
   // Passes 1..6, exactly as they always were. The only things that moved out of here are the shadow
   // map's `needsUpdate` and the vortex, both of which belong to the FRAME and not to the pass.
   const _res = new THREE.Vector2();
-  function drawInk({ cam, slot, w, h, dpr, seed, placed, out }) {
+  function drawInk({ cam, slot, w, h, dpr, seed, placed, out, offset = null }) {
     const rt = targetsFor(slot, w, h);
     _res.set(w, h);
     const prevOverride = scene.overrideMaterial;
@@ -728,6 +731,7 @@ export async function build(ctx) {
     eu.tMisc.value = rt.gbuf.textures[2];
     eu.tAlbedo.value = rt.gbuf.textures[0];
     eu.uRes.value.copy(_res);
+    eu.uOffset.value.set(offset ? offset[0] : 0, offset ? offset[1] : 0);
     eu.uNear.value = cam.near;
     eu.uFar.value = cam.far;
     eu.uSeed.value = seed;
@@ -743,6 +747,7 @@ export async function build(ctx) {
     const xu = extMat.uniforms;
     xu.tEdge.value = rt.edge.texture;
     xu.uRes.value.copy(_res);
+    xu.uOffset.value.set(offset ? offset[0] : 0, offset ? offset[1] : 0);
     xu.uDpr.value = dpr;
     xu.uSeed.value = seed;
     xu.uOvershoot.value = params.overshoot;
@@ -761,6 +766,7 @@ export async function build(ctx) {
     cu.tLit.value = rt.lit.texture;
     cu.tEdge.value = rt.ext.texture;
     cu.uRes.value.copy(_res);
+    cu.uOffset.value.set(offset ? offset[0] : 0, offset ? offset[1] : 0);
     cu.uDpr.value = dpr;
     cu.uSeed.value = seed;
     cu.uNear.value = cam.near;
@@ -847,20 +853,37 @@ export async function build(ctx) {
       drawInk({ cam, slot: 'main', w: dbW, h: dbH, dpr, seed, placed, out: last });
       if (last) vortexPass(last.texture, dpr, seed);
     } else {
-      const atRest = C?.atRest === true;
-      // WHERE THE SHEET WANTS ITS PIXELS. On the resting plate (scrolled or not) it is on its way
-      // to filling the window and gets the drawing buffer. Anywhere else it is a small thing on a far
-      // wall: the moulding's own box on the glass, doubled for the mip chain's sake, rounded up to
-      // a power of two and never below 128 — four or five sizes over the life of a page, so the
-      // allocation is not re-made every drawing.
-      let pw = dbW, ph = dbH;
-      if (!atRest && !(C?.current === C?.restingShot && !C?.moving)) {
+      // THE SHEET'S OWN SHAPE, which on an upright window is not the window's: a phone hangs a
+      // LANDSCAPE picture (props.js, THE ROW) drawn from its own resting pose at the same vertical
+      // field, so the phone's frame is the centre crop of the plate. Where the two shapes agree —
+      // every landscape window — the plate and the frame are the same picture and this pass draws
+      // one thing; where they differ they are two pictures and it has to draw both.
+      const picA = D.geometry?.aspect > 0 ? D.geometry.aspect : dbW / dbH;
+      const sameShape = Math.abs(picA - dbW / dbH) < 1e-6;
+      const atRest = C?.atRest === true && sameShape;
+      // WHERE THE SHEET WANTS ITS PIXELS. Standing on the resting plate (scrolled or not) it is on
+      // its way to filling the window, and its HEIGHT is the thing that has to be exact — the
+      // hand-over at the top of a wrap is the plate's centre pixels against the canvas's — so it
+      // carries the drawing buffer's own height and whatever width its shape makes of that.
+      // Anywhere else it is a small thing on a far wall: the moulding's box on the glass, doubled
+      // for the mip chain's sake, rounded up to a power of two and never below 128 — four or five
+      // sizes over the life of a page, so the allocation is not re-made every drawing.
+      // …AND IT CARRIES THAT HEIGHT AT REST AS WELL AS MID-SCROLL, which was tried the other way and
+      // measured. Dropping the plate to the picture's own 158 px while the visitor is not scrolling
+      // saves 0.10 ms of a 16.6 ms frame on a phone and costs the wrap: the picture INSIDE the
+      // picture is then drawn from a small plate at rest and from a full one at the top of a wrap,
+      // so 158 x 102 px of the frame change sharpness as it comes round — 2.6 % of the pixels
+      // against the 0.05 % the hand-over otherwise measures. The seam this whole piece exists to
+      // avoid is not worth a tenth of a millisecond.
+      let ph = dbH;
+      if (!(C?.current === C?.restingShot && !C?.moving)) {
         const b = D.hitBox?.();
         const want = Math.max(64, (b?.w ?? 0) * dpr * 2);
-        pw = Math.max(128, Math.min(dbW, 2 ** Math.ceil(Math.log2(want))));
-        ph = Math.max(1, Math.round((pw * dbH) / dbW));
+        const wq = Math.max(128, Math.min(dbW, 2 ** Math.ceil(Math.log2(want))));
+        ph = Math.max(1, Math.round(wq / picA));
       }
-      const full = pw === dbW && ph === dbH;
+      const pw = Math.max(1, Math.round(ph * picA));
+      const full = ph === dbH;
       const pr = pairAt(pw, ph);
       mat.map = (pr.read ? pr.b : pr.a).texture; // never the one about to be written
       const write = pr.read ? pr.a : pr.b;
@@ -874,7 +897,7 @@ export async function build(ctx) {
       } else {
         // TWO. The home view, on the twelves only, and then the frame the visitor is looking at.
         if (ctx.clock.stepped && C?.place) {
-          C.place(C.restingShot ?? 'home', picCam);
+          C.place(C.restingShot ?? 'home', picCam, picA);
           // a small sheet is a SMALL DRAWING, not a shrunken one: the pen is measured in css px, so
           // the reduced pass is told it is a window of its own size at dpr 1 rather than the same
           // window at a fraction of a device pixel, where the nib would fall under the raster and
@@ -885,7 +908,13 @@ export async function build(ctx) {
           // (G-buffer, lit, edge, extend, composite) is written from scratch at the top of each,
           // so there is nothing in them to protect. At 3200x1800 that is about 180 MB of render
           // target not allocated a second time at the one moment the room is working hardest.
-          drawInk({ cam: picCam, slot: full ? 'main' : 'pic', w: pw, h: ph, dpr: full ? dpr : 1, seed, placed, out: write });
+          // …and the main set is shared only when the plate really is the same size as the frame. A
+          // phone's plate is 1.6 times as wide as its window at the same height, so it gets a set of
+          // its own; a laptop's is the frame exactly and costs no second allocation.
+          // …and it is told where its pixels fall in the window's raster, so the grain, the boil
+          // and the pen's wander are the same marks in the crop the window will show.
+          const off = full ? [-(pw - dbW) / 2, -(ph - dbH) / 2] : null;
+          drawInk({ cam: picCam, slot: full && sameShape ? 'main' : 'pic', w: pw, h: ph, dpr: full ? dpr : 1, seed, placed, out: write, offset: off });
           pr.read ^= 1;
           mat.map = write.texture;
         }

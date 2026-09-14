@@ -144,6 +144,9 @@ export function eggDroste(ctx, { group, slot }) {
         halfH: size.h / 2,
         w: size.w,
         h: size.h,
+        // the sheet's own shape, which on an upright window is NOT the window's: ink.js draws the
+        // plate at this aspect and camera.js's end pose lets its width overflow
+        aspect: size.h > 0 ? size.w / size.h : 1,
       };
     },
     // the whole frame, for a tool that wants to crop it off the glass

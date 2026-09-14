@@ -144,7 +144,10 @@ const check = (ok, line) => {
 // room is asked for — and times the room at rest, held at half a wrap, and away from home.
 if (process.env.PERF) {
   const gpu = await chromium.launch({ headless: false, args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization'] });
-  const page = await gpu.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 2 });
+  // PERF_W/PERF_H/PERF_DPR override the window this is timed in; the default is the worst shape the
+  // room is asked for on a desktop, and `PERF_W=390 PERF_H=844 PERF_DPR=3` is the phone.
+  const PW = +(process.env.PERF_W ?? 1600), PH = +(process.env.PERF_H ?? 900), PDPR = +(process.env.PERF_DPR ?? 2);
+  const page = await gpu.newPage({ viewport: { width: PW, height: PH }, deviceScaleFactor: PDPR });
   page.setDefaultNavigationTimeout(180000);
   page.setDefaultTimeout(180000);
   const u = new URL(BASE);
@@ -181,7 +184,7 @@ if (process.env.PERF) {
     say(`   ${label.padEnd(26)} median ${r.median.toFixed(2)} ms, p90 ${r.p90.toFixed(2)} ms   (drawing buffer ${size[0]}x${size[1]}, dpr ${size[2]})`);
     return r;
   };
-  say('\n=== 0 · the cost of a frame on this machine s GPU, 1600x900 at dpr 2 ===');
+  say(`\n=== 0 · the cost of a frame on this machine s GPU, ${PW}x${PH} at dpr ${PDPR} ===`);
   await page.evaluate(() => window.__theatre.pieces.camera.cut('home'));
   const rest = await time('at rest, home, t = 0');
   await page.evaluate(() => window.__theatre.pieces.camera.setZoom(0.5, { hold: true }));
@@ -236,7 +239,11 @@ if (want(1)) {
   check(d.frac < 0.01, `${w}x${h}: the wrap — ${pct(d.frac)} of pixels differ between the frame at t = 1 and the frame at t = 0, worst channel ${d.worst}, mean |Δ| ${d.mae.toFixed(2)}/255`);
   say(`     one texel short (t = ${tEdge.toFixed(6)}, the sheet 1 px inside the window): ${pct(dShort.frac)} over the threshold, mean |Δ| ${dShort.mae.toFixed(2)}/255 — a half-pixel resample of a line drawing, not a seam`);
   check(geom.atRest === true, `${w}x${h}: the camera is standing on its resting plate ('${geom.resting}') at t = 0 and the pass knows it`);
-  check(Math.abs(geom.sheet.w / geom.sheet.h - w / h) < 1e-6, `${w}x${h}: the sheet is cut to the window — ${geom.sheet.w.toFixed(4)} x ${geom.sheet.h.toFixed(4)} m in a ${geom.frame.w.toFixed(4)} x ${geom.frame.h.toFixed(4)} frame`);
+  // A LANDSCAPE window hangs a picture of its own shape; an UPRIGHT one hangs a landscape picture
+  // (props.js, THE ROW) and what that picture shows is the window's frame with more room either
+  // side of it. So the shape to check against is the window's only when the window is not upright.
+  const wantA = w / h >= 1 ? w / h : geom.sheet.aspect; // upright: 1.6 snapped to the buffer's grid
+  check(Math.abs(geom.sheet.w / geom.sheet.h - wantA) < 1e-6 && Math.abs(wantA - (w / h >= 1 ? w / h : 1.6)) < 0.002, `${w}x${h}: the sheet is ${w / h >= 1 ? 'cut to the window' : `landscape ${wantA.toFixed(4)} on an upright window`} — ${geom.sheet.w.toFixed(4)} x ${geom.sheet.h.toFixed(4)} m in a ${geom.frame.w.toFixed(4)} x ${geom.frame.h.toFixed(4)} frame`);
   if (page.__errors.length) check(false, `${w}x${h}: page errors ${JSON.stringify(page.__errors.slice(0, 2))}`);
   await page.close();
   }
@@ -249,6 +256,7 @@ if (want(2)) {
   for (const [w, h] of SHAPES) {
   const page = await open({ w, h });
   await drawings(page, 4);
+  const picAspect = await page.evaluate(() => window.__theatre.pieces.props.droste.geometry.aspect);
   const rows = await page.evaluate(() => {
     const C = window.__theatre.pieces.camera, D = window.__theatre.pieces.props.droste;
     const s = C.zoomSpan;
@@ -272,12 +280,26 @@ if (want(2)) {
     if (!(rows[i].w > rows[i - 1].w - 1e-9) || !(rows[i].h > rows[i - 1].h - 1e-9)) mono = false;
   }
   for (const r of rows) {
-    if (r.u0 < -1 - 1e-6 || r.u1 > 1 + 1e-6 || r.v0 < -1 - 1e-6 || r.v1 > 1 + 1e-6) inside = false;
+    if (r.t >= 1) continue; // t = 1 IS the window's edge, on the axis that binds
+    if (r.v0 < -1 - 1e-6 || r.v1 > 1 + 1e-6) inside = false;
+    // the width only has to stay inside where the sheet is the window's own shape; a landscape
+    // picture on an upright window is meant to run off the sides as it converges
+    if (Math.abs(picAspect - w / h) < 1e-6 && (r.u0 < -1 - 1e-6 || r.u1 > 1 + 1e-6)) inside = false;
   }
   const last = rows[rows.length - 1];
+  // THE END POSE IS THE HEIGHT FILLING, and that is the rule at every window shape. Where the sheet
+  // is the window's own shape the width lands on the edges with it; where it is wider — an upright
+  // window's landscape picture — the width runs off BOTH SIDES EQUALLY and the window is left
+  // holding the centre crop, which is the frame the visitor was already looking at. So the check is
+  // the height to a fraction of a pixel, the width to the ratio of the two shapes, and the overflow
+  // symmetric to the same tolerance.
+  const over = rows[rows.length - 1];
+  const wantW = 2 * (Math.abs(picAspect - w / h) < 1e-6 ? 1 : picAspect / (w / h));
   check(mono, `${w}x${h}: the rectangle grows monotonically in both dimensions across 21 steps`);
-  check(inside, `${w}x${h}: no edge leaves the window on the wrong side at any step`);
-  check(Math.abs(last.w - 2) < 2e-4 && Math.abs(last.h - 2) < 2e-4, `${w}x${h}: at t = 1 it fills the window exactly (w ${last.w.toFixed(6)}, h ${last.h.toFixed(6)} of 2)`);
+  check(inside, `${w}x${h}: no edge is outside the window before t = 1 on the axis that binds`);
+  check(Math.abs(last.h - 2) < 2e-4, `${w}x${h}: at t = 1 its HEIGHT fills the window exactly (${last.h.toFixed(6)} of 2)`);
+  check(Math.abs(last.w - wantW) < 3e-4, `${w}x${h}: …and its width is ${last.w.toFixed(4)} against the ${wantW.toFixed(4)} its shape asks for`);
+  check(Math.abs(over.u0 + over.u1) < 3e-4, `${w}x${h}: the overflow is even — left ${over.u0.toFixed(4)}, right ${over.u1.toFixed(4)}`);
   tables[`${w}x${h}`] = rows;
   await page.close();
   }

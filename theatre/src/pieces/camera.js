@@ -535,7 +535,12 @@ export async function build(ctx) {
     // wall through one of these while the real camera is somewhere else entirely; it gets the same
     // pose, the same lens, the same rise and the same clipping planes, so what the sheet shows is
     // the home plate and not an approximation of it.
-    place(shot, other) {
+    // `aspect` widens (or narrows) the other camera WITHOUT touching the vertical field or the lens
+    // rise. That is the whole of the phone's picture: three.js's fov is the VERTICAL one and a view
+    // offset enters the vertical as +2·shift whatever the aspect is, so a plate drawn at 1.6 from a
+    // 0.46 pose is the phone's own frame with more room either side of it — and the phone's frame
+    // is exactly the centre crop of it, to the pixel, at the same vertical resolution.
+    place(shot, other, aspect = null) {
       const p = poseOf(resolve(shot));
       other.position.copy(p.pos);
       other.quaternion.copy(p.q);
@@ -543,8 +548,10 @@ export async function build(ctx) {
       other.fov = p.fov;
       other.near = cam.near;
       other.far = cam.far;
-      const w = ctx.size?.w || window.innerWidth || 1600, h = ctx.size?.h || window.innerHeight || 900;
-      other.aspect = w / h;
+      const h = ctx.size?.h || window.innerHeight || 900;
+      const A = aspect && aspect > 0 ? aspect : (ctx.size?.w || window.innerWidth || 1600) / h;
+      const w = A * h;
+      other.aspect = A;
       if (!p.shift[0] && !p.shift[1]) {
         if (other.view?.enabled) other.clearViewOffset();
       } else other.setViewOffset(w, h, p.shift[0] * w, p.shift[1] * h, w, h);
