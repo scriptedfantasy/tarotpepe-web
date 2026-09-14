@@ -7,8 +7,9 @@
 // under a sun on the left, a dark castle on a crag under lightning on the right.
 //
 // So: a small plain cross hangs on the frieze over the door. Click it and the weather comes in —
-// four strikes of lightning over six seconds, thunder rolling after each, the rain starting behind
-// the window on its own, the pendant swinging over the table, the room dropping a shade and a half.
+// four strikes of lightning over six seconds, thunder rolling after each, the rain coming on in the
+// room's own tone and in the sound of it, the pendant swinging over the table, the room dropping a
+// shade and a half.
 // The door swings open in six drawings. He says one line. Then the visitor takes a road, and the
 // room keeps the answer.
 //
@@ -121,20 +122,25 @@
 // wall — to better than a pixel from `wide` and from `door` as well.
 //
 // WHAT THE STORM IS MADE OF, AND ALMOST ALL OF IT IS SOMEBODY ELSE'S:
-//   THE RAIN AT THE WINDOW is egg-rain.js, called by its own api. The rain in the DOORWAY is that
-//     file's drawing — its nib, its slant, its stratified deal, four throws re-struck on the
-//     twelve — cut to the opening in egg-cross-draw.js, because there is no window to hang it on.
+//   THE RAIN is egg-rain.js, called by its own api — which since the back wall's window came out is
+//     the shade the room goes down by and the sound of it, and nothing drawn. The rain you can SEE
+//     is the DOORWAY's: that file's drawing — its nib, its slant, its stratified deal, four throws
+//     re-struck on the twelve — cut to the opening in egg-cross-draw.js, because there is no window
+//     to hang it on. That sentence was written when it meant "no window in the doorway"; it now
+//     means it of the whole room, and this egg is the only place the weather is drawn at all.
 //   THE LIGHT is two states injected into lighting.js's own table, `cross-storm` and `cross-flash`.
 //     The storm sits between egg-rain's `rain` and `evening` — the key down to 0.85 and cooled, the
 //     corners a notch deeper, the ink ramp opened two stops — and it is NOT evening: no lamp comes
-//     on and `night` stays false, or lighting.js would draw a cross-hatched sheet over the very
-//     glass the rain and the flash are behind. `pools` is held at −0.20 (the rain state's own
+//     on and `night` stays false, which is still right: a solid pane is night, and this is an
+//     afternoon that has gone over. `pools` is held at −0.20 (the rain state's own
 //     −0.18, and a whisker) because `pools` is what darkens the ground the table stands on, and
 //     that ground is the rug, which the user has said is already right.
-//   THE FLASH is one drawing, on both sides of the wall. Four sheets of bare paper, one cut to each
-//     pane, and a fifth cut to the doorway, snap on for a single 12 fps step: the rain vanishes,
-//     the glass and the opening go to white, and the whole room's tone goes up a shade on the same
-//     drawing because the light cuts to `cross-flash` for that drawing and back. Out at the
+//   THE FLASH is one drawing. A sheet of bare paper cut to the doorway snaps on for a single 12 fps
+//     step: the rain vanishes, the opening goes to white, and the whole room's tone goes up a shade
+//     on the same drawing because the light cuts to `cross-flash` for that drawing and back. (There
+//     were four more sheets, one to each pane of the back wall's casement. No casement, no sheets —
+//     and the strike now reads the same on a phone as on a laptop, which it never did, because that
+//     window was off the left of a phone's frame.) Out at the
 //     crossroads the same strike blanks the country to bare paper with a great fork of light down
 //     the sky. A flash that lasted two drawings would be a lamp.
 //   THE THUNDER is egg-cross-sound.js, on a fader of this piece's own hung on the sound context's
@@ -236,10 +242,10 @@ const SLAB = { in: 0.012, thick: 0.045 }; // the leaf sits 12 mm in front of the
 // the left-hand field, which is exactly what it is. 135 mm clears the lot with the warp on top.
 const PROUD = 0.135;
 
-// ---- egg-rain.js's own numbers for the window, for the same reason ---------------------------------
-const WIN = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.21 };
-const J = { f: 0.05, s: 0.042, rt: 0.05, rb: 0.075, bar: 0.013, barAt: 0.34, meet: 0.004, zf0: 0.03, zf1: 0.08, leafIn: 0.008 };
-const FLASH_OFF = 0.0125; // 2 mm outside the rain, and still under every stile and glazing bar
+// The back wall's casement used to be carried here — its rectangle, its joinery and the 12.5 mm the
+// flash stood off its glass — because the strike whitened its four panes as well as the doorway. The
+// window is out of the room and all three constants went with it. What is left of the strike is at
+// section 4 below.
 
 // ---- the storm, in drawings ------------------------------------------------------------------------
 // Counted in DRAWINGS and converted at the room's own fps, because everything hand-animated in this
@@ -307,7 +313,8 @@ const FAR = [360, 1080]; // the standing storm: a strike every 30 to 90 seconds
 
 // ---- the light. Two states, injected into lighting.js's own table (it publishes `states`). ---------
 // `cross-storm` is between egg-rain's `rain` and `evening`, and it is still the afternoon: no lamp,
-// no solid panes. `cross-flash` is the same room for ONE drawing with the sky in it.
+// no solid pane in the one window left. `cross-flash` is the same room for ONE drawing with the sky
+// in it.
 const STORM_LIGHT = {
   key: 0.85,
   keyColor: '#dfe6f2',
@@ -320,7 +327,7 @@ const STORM_LIGHT = {
   table: 0,
   floor: 0,
   catLamp: 1.4,
-  night: false, // or the panes go solid and there is nothing for the rain or the flash to be behind
+  night: false, // a solid pane is night, and the storm is an afternoon gone over
   ink: { tone: [0.01, 0.5, 1.0, 0.36], levels: [0.4, 0.66, 0.86, 0.4] },
 };
 const FLASH_LIGHT = {
@@ -450,8 +457,8 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   //     left-hand road buys, three seconds of the storm clearing while the visitor is still looking
   //     out at the country.
   //   THE STRIKE, standing in FRONT of both: one drawing of bare paper with a great fork of light
-  //     down the middle of it, so a strike blanks the picture out here exactly as it whitens the
-  //     four panes of the casement in the room behind.
+  //     down the middle of it, so a strike blanks the picture out here on the same drawing that
+  //     whitens the doorway and takes the room behind up a shade.
   const plate = new THREE.Group();
   plate.name = 'crossroads';
   plate.userData.noShadow = true;
@@ -612,39 +619,29 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     hinge.add(m);
   }
 
-  // ---- 4. the flash: one sheet of bare paper cut to each pane -------------------------------------
-  // egg-rain.js's arithmetic for the casement, and its rule: a sheet is cut to ONE PANE, so the
-  // drawing is bounded by the glass itself and there is no frame, no camera and no aspect at which
-  // it can land on a shutter or on the architrave.
+  // ---- 4. the flash, and what is left of it ------------------------------------------------------
+  // THIS GROUP IS EMPTY NOW, AND IT IS STILL THE THING THE STRIKE IS COUNTED BY. It used to hold four
+  // sheets of bare paper, one cut to each pane of the back wall's casement, on egg-rain's own
+  // arithmetic and its rule: a sheet is cut to ONE PANE, so the drawing is bounded by the glass and
+  // there is no camera or aspect at which it can land on a shutter or an architrave. The user had the
+  // window taken out of the room, so there are no panes and there is nothing for lightning to whiten
+  // there.
+  //
+  // WHAT A STRIKE STILL IS, WHICH IS NEARLY ALL OF IT. The light cuts to `cross-flash` for one
+  // drawing and back — the whole room goes up a stop and comes down, which is what a flash through a
+  // window does to a room and is the part a visitor actually reads — and `cross-doorflash` blanks the
+  // doorway's own sheet on the same drawing, which is the sky. The panes were the third of three and
+  // the only one a phone never saw: at 390x844 that window was off the left of the frame entirely.
+  // So the strike looks the same on a laptop as it does on a phone now, which it did not before.
+  //
+  // The group is kept, visible-flag and all, because `flashing` is published off it and the storm's
+  // own timing is read through it (tools/_egg-cross-proof.mjs asserts the strike on it). An empty
+  // group costs a matrix update on a drawing that is already blanking the doorway.
   const flash = new THREE.Group();
   flash.name = 'cross-flash';
   flash.visible = false;
   flash.userData.noShadow = true;
   root.add(flash);
-  {
-    const w = { ...WIN, ...(ctx.pieces.room?.window ?? WIN) };
-    if (!Number.isFinite(w.depth)) w.depth = WIN.depth;
-    const wzr = zb - w.depth;
-    const zl1 = wzr + J.zf1 - J.leafIn;
-    const gz = (wzr + J.zf0 + J.leafIn + zl1) / 2;
-    const xm = (w.x0 + w.x1) / 2;
-    const yt = w.y1 - J.f - (w.y1 - w.y0 - 2 * J.f) * J.barAt;
-    const FY0 = w.y0 + J.f + J.rb, FY1 = w.y1 - J.f - J.rt;
-    const leaves = [[w.x0 + J.f, xm - J.meet], [xm + J.meet, w.x1 - J.f]].map(([a, b]) => [a + J.s, b - J.s]);
-    const lights = [[yt + J.bar, FY1], [FY0, yt - J.bar]];
-    const pane = new THREE.MeshStandardMaterial({ color: PAPER, roughness: 1, metalness: 0 });
-    // hatch 0 and colorful: the pass shows this sheet exactly as painted, which is bare paper. That
-    // is the whole of the lightning — the tone of the room does the rest.
-    pane.userData.ink = { hatch: 0, lineWeight: 0, colorful: true };
-    pane.name = 'cross-pane';
-    for (const [lx0, lx1] of leaves)
-      for (const [ly0, ly1] of lights) {
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(lx1 - lx0 - 0.004, ly1 - ly0 - 0.004), pane);
-        m.castShadow = m.receiveShadow = false;
-        m.position.set((lx0 + lx1) / 2, (ly0 + ly1) / 2, gz + FLASH_OFF);
-        flash.add(m);
-      }
-  }
 
   // ---- 5. the pendant, on a pivot at the ceiling rose ------------------------------------------------
   // props.js builds the three-petal lamp in the room's own coordinates and adds it flat, so there is
@@ -851,7 +848,7 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   // a schedule restarted at each phase would have fired the first one three times over.
   let stormFrom = 0;
   let fired = -1; // the last strike index whose cue has gone
-  let flashF = -Infinity; // the drawing the panes went white on (the standing storm)
+  let flashF = -Infinity; // the drawing the strike landed on (the standing storm)
   let swayFrom = -1e9; // the drawing the pendant was set going on
   let swayTo = 1; // …and what its amplitude is scaled by (the clearing takes it to nothing)
   let nextFar = 0; // the standing storm: the drawing the next strike is due on
@@ -886,7 +883,7 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
 
   // the weather, handed over by props.js rather than fetched off ctx.pieces: `?cross=dark` is
   // answered while props is still building, and ctx.pieces.props does not exist until it has
-  // finished — which is how the first storm came out with a dry window.
+  // finished — which is how the first storm came out with no weather in it at all.
   const rain = () => RAIN ?? ctx.pieces.props?.rain ?? null;
 
   // ---- THE EXCURSION: THE ROOM WALKS OUT THROUGH ITS OWN DOOR ---------------------------------
@@ -1193,7 +1190,7 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
           lights('cross-storm');
         } else {
           // `cross-storm` is the door open on the WEATHER, seen from the room. Round 1 made this
-          // still a strike, with the panes and the opening white; that was the right still when the
+          // still a strike, with the opening white; that was the right still when the
           // doorway held a picture and there was nothing else to see in it. Now the doorway IS the
           // weather, and a state that whites it out shows nothing of the thing it is named for. The
           // strike is proved where it belongs — driven, one drawing at a time, in the proof.
@@ -1261,7 +1258,7 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
       const sf = drawn - stormFrom; // …and the same count from the click, for the strikes
 
       // the flash is ONE drawing, and the light cuts with it: the room's tone is up on the same
-      // drawing the panes go white, and back on the next. Nothing here fades.
+      // drawing the sky comes in, and back on the next. Nothing here fades.
       // …and the schedule stops the moment a path is taken. A visitor who chooses at drawing 30 is
       // three drawings inside the last strike's own beat, and a strike landing during the clearing
       // would re-take the light this piece has just handed back — the room would go dark again on

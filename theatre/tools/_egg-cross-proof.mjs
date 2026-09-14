@@ -408,8 +408,9 @@ if (doing('cross')) {
   console.log(`  ON A 390-WIDE PHONE   the cross ${box1(b2.tap)} — ${inFrame(b2.tap, ...PHONE) ? 'in frame' : 'OUTSIDE THE FRAME'}`);
   console.log(`                        the doorway ${box1(b2.door)} — ${inFrame(b2.door, ...PHONE) ? 'in frame' : 'OUTSIDE THE FRAME'}`);
   console.log('  (this is a fact about the ROOM and not about the egg: at 390 px the home plate holds');
-  console.log('   about x -1.1 to +1.1 m of the back wall, and the door runs 1.05 to 1.95. The window');
-  console.log('   egg-rain lives behind is outside the same frame on the other side.)');
+  console.log('   x -0.9944 to +0.9944 of the back wall, and the door runs 1.05 to 1.95, so the doorway');
+  console.log('   is just outside it. The window egg-rain used to be drawn on was outside the same frame');
+  console.log('   on the other side, and has since been taken out of the room altogether.)');
   console.log(`  THE SHEET ITSELF      ${b2.plate.w.toFixed(2)} x ${b2.plate.h.toFixed(2)} m, its centre at [${b2.plate.at.join(', ')}], the eye at [${b2.plate.eye.join(', ')}]`);
   console.log(`                        cut at ${b2.plate.ppm.toFixed(1)} px/m (${b2.plate.sheet.join(' x ')} px), nib ${b2.plate.pen} m`);
   console.log(`  THE ORIGINAL ON IT    ${b2.plate.pic.w.toFixed(2)} x ${b2.plate.pic.h.toFixed(2)} m, standing at u ${b2.plate.pic.u0}..${b2.plate.pic.u1}, v ${b2.plate.pic.v0}..${b2.plate.pic.v1} of the sheet`);
@@ -446,15 +447,17 @@ if (doing('storm')) {
   await settle(page);
   const strike = await world(page);
   await snap(page, `${OUT}/egg-cross-r4-strike.png`);
-  ok(strike.flashing, `on the first drawing the panes are white: a strike (stormFrame ${strike.stormFrame})`);
+  ok(strike.flashing, `on the first drawing the doorway goes white: a strike (stormFrame ${strike.stormFrame})`);
   ok(strike.light.state === 'cross-flash', `and the whole room's tone jumps with it — the light is "${strike.light.state}", key ${strike.light.key}`);
-  ok(strike.rain.on, `the rain started on its own, by egg-rain's own api (${strike.rain.layers} layer(s))`);
+  // …which since the back wall's window came out is the room's tone and the sound of it, and no
+  // strokes: the rain a visitor SEES during a storm is this egg's own, cut to the doorway.
+  ok(strike.rain.on, `the weather came on by egg-rain's own api (${strike.rain.layers} layer(s))`);
 
   await release(page, 1);
   await settle(page);
   const after1 = await world(page);
   ok(!after1.flashing && after1.light.state === 'cross-storm', `one drawing later it is over: flash ${after1.flashing}, light "${after1.light.state}", key ${after1.light.key}`);
-  ok(after1.light.key < before.light.key && !after1.light.night, `the storm sits between the rain and the night: key ${after1.light.key} against ${before.light.key} dry, and the panes are not solid`);
+  ok(after1.light.key < before.light.key && !after1.light.night, `the storm sits between the rain and the night: key ${after1.light.key} against ${before.light.key} dry, and it is not night`);
 
   // the swing. The leaf is off the jamb at drawing 8 and open at 20.
   await release(page, 6);
@@ -995,7 +998,7 @@ if (doing('dark')) {
   ok(shutOn.shot === 'home' && !shutOn.out, `the room cut back through the door first (camera "${shutOn.shot}")`);
   ok(shutOn.doorShown === false && shutOn.weather === false, 'the doorway is a door again');
   ok(shutOn.light.state === 'cross-storm', `the room is still under the storm's light ("${shutOn.light.state}", key ${shutOn.light.key})`);
-  ok(shutOn.rain.on && shutOn.rain.layers === 4, `and it is still raining behind the window (${shutOn.rain.layers} layers)`);
+  ok(shutOn.rain.on && shutOn.rain.layers === 4, `and it is still raining outside — the room's tone and the bed (${shutOn.rain.layers} layers)`);
 
   const sched = await page.evaluate(() => window.__theatre.pieces.props.cross.schedule.far);
   const due = await page.evaluate(() => ({ at: window.__theatre.pieces.props.cross.nextStrike, f: window.__theatre.pieces.props.cross.frame }));
