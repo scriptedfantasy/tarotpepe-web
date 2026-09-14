@@ -118,18 +118,6 @@ export const STORIES = [
     ],
   },
   {
-    id: 'mirror',
-    name: 'the mirror',
-    where: 'the round frame on the stage-left wall',
-    fact: 'He spent a year as a physicist at CERN and left because the particles were too predictable: everything they measured did exactly what was expected of it. The round mirror on the stage-left wall is the one instrument in the room that predicts nothing, and he likes it for that.',
-    keys: /\bmirror\b|\blooking[- ]glass\b|\bround (?:frame|glass|thing)\b|\bglass on the wall\b/,
-    lines: [
-      'I worked for a year among physicists. Everything they measured did exactly what they expected of it. That mirror has never once shown me what I expected, and that is why it is on the wall.',
-      'A mirror. I was at CERN for a year and left; the particles were too obedient. The glass predicts nothing at all, which I find restful.',
-      'It shows whoever looks and keeps no record. I spent a year somewhere everything was recorded. I prefer the mirror.',
-    ],
-  },
-  {
     id: 'tin',
     name: 'the tin',
     where: 'by the door, lettered PRENEZ',
@@ -221,16 +209,17 @@ const PLAIN = [
     /\bduct\b|\bconduit\b|\bcleats?\b|\bterminal box\b|\bcables?\b|\bwires?\b|\btrough\b/,
     ['The cable duct. The town\'s calls ran along that wall in it. It is empty now, and it is still screwed to the plaster.'],
   ],
-  // THE RIGHT FRAME, AND IT STANDS BEFORE THE CLOCK'S OWN LINE ON PURPOSE: PLAIN is walked in order
-  // and "the picture beside the clock" contains the word clock, so behind the clock's frame this
-  // answer would never be reached. It is a circuit diagram on a nail and it is also a cabinet door
+  // THE PICTURE ON THE STAGE-LEFT WALL, AND IT STANDS BEFORE THE CLOCK'S OWN LINE ON PURPOSE: PLAIN
+  // is walked in order and a visitor who asks about "the frame on the left" should not be handed
+  // whatever matches further down. It is a circuit diagram on a nail and it is also a cabinet door
   // with a conspiracy board behind it (src/pieces/egg-silvia.js), and the line gives none of that
   // away: he says what is hanging there and stops, the way he does about the sixty other things
-  // that came with the room. `pepe silvia` is in the keys because somebody will type the name
-  // before they have touched anything, and the honest answer to that is the same answer.
+  // that came with the room. It does not say there is nothing behind it, because there is.
+  // `pepe silvia` is in the keys because somebody will type the name before they have touched
+  // anything, and the honest answer to that is the same answer.
   [
-    /\bdiagram\b|\bcircuit\b|\bother frame\b|\bright frame\b|\bgrid\b|\bpicture beside the clock\b|\bframe beside the clock\b|\bpepe silvia\b|\bsilvia\b/,
-    ['a circuit diagram, beside the clock. it is a jack field drawn on paper, it was on the wall when i took the room, and there is nothing behind it.'],
+    /\bdiagram\b|\bcircuit\b|\bgrid\b|\bpicture on the left\b|\bframe on the left\b|\bleft(?:[- ]hand)? wall\b|\bpepe silvia\b|\bsilvia\b/,
+    ['A circuit diagram, on the wall to my left. It is a jack field drawn on paper. It was there when I took the room and I have never taken it down.'],
   ],
   [
     /\bclock\b|\bpendulum\b|\bseconds hand\b/,

@@ -600,14 +600,14 @@ function situation(b, names = []) {
       const c = clip(b.country, 60) || 'somewhere';
       return `The globe on the cabinet has just stopped turning, under the visitor's finger, on ${c}. You once had an affair there, on a holiday, years ago. Tell it in three sentences: where, what it was like, how it ended. Do not name the person.`;
     }
-    // PEPE SILVIA. The visitor opened the picture frame beside the clock and the wall behind him
-    // came up: fourteen pinned cards and photographs joined with red string (src/pieces/egg-silvia.js).
+    // PEPE SILVIA. The visitor opened the picture frame on the wall to his left and that wall came
+    // up: eighteen pinned cards and photographs joined with red string (src/pieces/egg-silvia.js).
     // The board is HIS, he has never mentioned it, and the note does not say whether any of it is
     // true. "The more certain the better" is the only direction here and it is the whole joke: the
     // room asks him to be sure, and a man who is sure about a name on some mail is the funniest
     // thing this set can produce. He does not turn round to look at it; he does not need to.
     case 'silvia':
-      return 'The picture frame beside the clock has swung open and the wall behind you is covered in your own pinned cards and photographs joined by red string, all of it about someone called Pepe Silvia. Say what you have found, in two or three sentences, in your own way: the more certain the better.';
+      return 'The picture frame on the wall to your left has swung open and that whole wall is covered in your own pinned cards and photographs joined by red string, all of it about someone called Pepe Silvia. Say what you have found, in two or three sentences, in your own way: the more certain the better.';
     case 'shuffle': {
       const about = b.about ? ` You took the reading to be about "${clip(b.about, 80)}".` : '';
       // the same wash, dealt the other way round: they offered to read for you and you took it

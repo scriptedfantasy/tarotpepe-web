@@ -1,5 +1,5 @@
-// AN EGG, inside props: PEPE SILVIA. The RIGHT frame on the back wall is a cabinet door, and what
-// is behind it is a wall.
+// AN EGG, inside props: PEPE SILVIA. The framed picture on the STAGE-LEFT wall is a cabinet door,
+// and the wall it hangs on is a conspiracy board.
 //
 // THE MEME. A man stands in front of a wall-sized board — pinned index cards, photographs,
 // newspaper clippings, all of it joined by red string — explaining, at length and with total
@@ -13,52 +13,95 @@
 // over itself, which is the only thing on that wall that is not orderly and is exactly the thing
 // that makes a board look mad. Nothing here winks. It is his handwriting on his wall.
 //
-// WHERE IT IS. The RIGHT frame of the row under the picture rail — the framed circuit diagram, the
-// jack field on paper, at x +0.46 — hung on the same nail, in the same 0.4 x 0.46 frame, on the
-// same cords, so the wall's symmetry against the clock and the Nakamoto card is untouched until
-// somebody touches it. The egg hangs it itself, the way egg-nakamoto.js hangs the left one, because
-// it needs the pointer arbiter and because the leaf has to swing.
+// WHERE IT IS, AND WHY IT MOVED. The user: "lets put the pepe silvia painting and mechanism where
+// the mirror currently is." The round frame on the stage-left wall — hung as a barometer, turned
+// into a mirror of frogs for a round, and taken down with this change — stood at x -2.58, y 1.95,
+// z 0.3, facing into the room. This picture takes that place: the same 0.4 x 0.46 frame the board
+// hung in on the back wall, on cords to a nail on this wall, and the eighteen sheets go on the
+// plaster round it instead of round the clock.
 //
-// THE SWING. The frame comes off the wall on a hinge at its LEFT edge, like a cabinet door, in six
-// drawings held on twos: one second (egg-cross.js's leaf, in this room's smaller version). HINGED
-// LEFT the leaf sweeps its free edge to the RIGHT and forward and never crosses x 0.26; the clock's
-// right-hand edge is at x 0.185, and hinged the other way this door would open straight across the
-// clock's face, which is the one thing on this wall that may never be covered. Where it stops is a
-// parallax measurement and it is written out at SWING, below.
+// EVERYTHING ELSE IN THIS FILE IS THE CONSEQUENCE OF ONE FACT: THAT WALL IS SEEN AT A RAKE. The
+// home lens stands at (0, 1.62, 6.4) and the plaster is the plane x = -2.6, so the wall is about
+// 67 degrees off the picture plane and every measurement on it comes in pairs. At the frame, on a
+// 1600 x 900 plate, a metre ALONG the wall is 111 px and a metre UP it is 278 — 2.5 : 1, measured
+// with tools/_egg-silvia-where.mjs, which is the tool that laid this egg out. It decides five
+// things, and the file is mostly those five things.
 //
-// THE BOARD. Eighteen drawn sheets, pinned to the plaster either side of the clock, over the right
-// bookcase and under the frames, one every three drawings, each with a tack going in ('tap') panned
-// to where that card is on the glass. Four and a half seconds of pinning; see CARD_EVERY for why it
-// is four a second and not the three the brief asked for.
+//   1. WHICH WINDOWS SEE THE WALL AT ALL. It recedes to the LEFT EDGE of the frame as it comes
+//      downstage, so what is in the picture is decided by the window's ASPECT and by nothing else:
+//                    the wall is in frame   the frame, 0.4 x 0.46, lands   of the 18 sheets
+//          1280 x 800    upstage of z -0.10   52 x 127 px at x -62: OUT       0 whole, 6 part, 12 out
+//          1600 x 900    upstage of z  0.55   58 x 143 px at x  10: in        14 whole, 4 part, 0 out
+//          1920 x 1080   upstage of z  0.55   70 x 172 px at x  12: in        14 whole, 4 part, 0 out
+//          390 x 844     none of it           56 x 138 px at x -568: OUT      0 whole, 0 part, 18 out
+//      So on a phone this egg is not in the picture and cannot be, and at 1280 x 800 the frame is
+//      out of shot and the board is a 22 px sliver down the left edge. That is the framing's
+//      business and not this egg's — it is the crop the mirror lived under before it — and the
+//      board is laid out to put its words where the most windows keep them: at 1600 x 900 it runs
+//      screen x 0 .. 105, at 1920 x 1080 x 0 .. 126, and at 1280 x 800 x 0 .. 22.
 //
-// WHERE THEY GO, AND EVERY ONE OF THESE IS MEASURED (tools/_egg-silvia-where.mjs prints the map of
-// what the home plate can actually see of that wall). It is not as free as it looks:
-//   · the window's downstage shutter leaf folds flat onto the plaster as far in as x = -0.49, so
-//     everything to the LEFT of that is behind a louvre and no card may go there. That is why the
-//     board leans right: there is a quarter of a metre of wall on his left and three quarters on
-//     his right, and the drawing has to live with it;
-//   · the door architrave takes everything past x = +1.03;
-//   · the two hung frames take y 1.79..2.29 between ±0.24 and ±0.68, and the sign board takes
-//     y 2.25..2.60 between ±0.68 (with help.js's own `?` tag hanging under it at x 0.50..0.70);
-//   · THE CLOCK takes x ±0.185 by y 1.685..2.245 and is never touched, by a card or by a length of
-//     string. The proof counts the red and black pixels inside its disc and the answer is none;
-//   · the six insects (egg-insects.js) live in this same band, and the cards go BEHIND them, three
-//     millimetres further back. A fly sitting on a pinned index card is a better drawing than a gap
-//     left in the board for it, and a pointer there still reaches the fly, because the arbiter
-//     takes whichever object the ray actually strikes.
+//   2. WHERE THE BOARD GOES. The clear plaster runs from the switchboard's downstage edge
+//      (z -0.335, egg-switchboard.js) to the press door, above the dado (y 0.97) and below the
+//      cable duct (room.js DUCT: y 2.30, 90 mm deep), with the frame in the middle of it. In this
+//      file that band is written in the WALL'S OWN x, which runs UPSTAGE from the frame's centre —
+//      egg-switchboard.js's convention on this same wall — so the band is x -0.25 .. +0.635 and
+//      the frame is x -0.2 .. +0.2. Nothing is pinned upstage of 0.635: that is the switchboard.
 //
-// HIS FACE IS NEVER COVERED AND CANNOT BE. Everything here is pinned to the plaster at z = -2.492;
-// he sits at z = -0.82, a metre and a half downstage of it. A card behind his head is hidden BY him.
-// The proof measures it anyway, because "never covered" is a claim and claims get measured.
+//   3. HOW FAR THE DOOR OPENS, AND IT IS NOT THE WAY IT OPENED ON THE BACK WALL. A leaf standing
+//      out from a raked wall stands IN FRONT OF THAT WALL, and covers far more of it than the hole
+//      it leaves. Swept at the home plate, hinged at the DOWNSTAGE edge (1600 x 900; 1920 x 1080
+//      agrees at every row):
+//          shut      face  6810 px2   stands in front of the wall back to z  0.014
+//          at  18    face 11370 px2   ...back to z -0.288     0.39 m of wall upstage of the frame
+//          at  20    face 11825 px2   ...back to z -0.320     the last angle that clears the board
+//          at  21    face 12047 px2   ...back to z -0.335     ON the switchboard
+//          at  67    face 18114 px2   ...back to z -0.768     a quarter of it, two of its six jacks
+//          at 140    face  5799 px2   ...back to z  0.098     its own rectangle, and 2 mm
+//          at 145    face  4095 px2   ...back to z  0.197
+//      The face is biggest at 67 degrees, square to the lens — and at 67 degrees the leaf lies over
+//      the jack column at z -0.55, which would take two of the switchboard's six switches off the
+//      pointer for as long as this board is up. Every angle from 21 to about 125 does some of that.
+//      So the door goes RIGHT BACK, to 140, where it stands in front of the rectangle it hung on
+//      AND NOTHING ELSE — z 0.098 against the frame's own upstage edge at z 0.100, two millimetres,
+//      a fifth of a screen pixel — and the whole upstage column of the wall is left to the cards.
+//      It is this room's own shutters' move: the casement's downstage leaf folds flat onto the
+//      plaster the same way. The three drawings in the middle of the swing do pass across the
+//      switchboard, because a door swinging does; the rule is about where it comes to rest.
 //
-// THE RED. The room's fourth colour, after his green and the fire's yellow and orange: #c8202e, the
-// string's, and it is on the string and on nothing else. It is a cool crimson on purpose — held
-// against the fire's #e0561d it has to read as a DIFFERENT colour and not as more fire, and held
-// against the paper it has to be a line and not a stain. It survives the ink pass for the reason
-// the Nakamoto card's green does: the sheet is `colorful`, so the pass shows it verbatim and
-// re-states only its achromatic marks at the room's own nib (ink-shaders.js, the colorful branch).
+//   4. WHICH EDGE IT IS HINGED ON, WHICH IS THE SAME SWEEP READ THE OTHER WAY. Hinged at the
+//      UPSTAGE edge the leaf turns its face AWAY as it opens: 6810 px2 shut, 1302 at 18 degrees,
+//      edge-on at 22, and its BACK to the lens for the whole of the rest of the swing, where from
+//      40 degrees on it also lies over the switchboard (at 140 it reaches back to z -1.15).
+//      Hinged DOWNSTAGE the face is turned to the lens at every angle up to 157. There is no
+//      reading of the measurement in which the upstage edge wins.
 //
-// THE STRING ITSELF is one sheet three millimetres in front of the cards, redrawn on every 12 fps
+//   5. HOW BIG THE LETTERING HAS TO BE. A metre along the wall is 111 px, so a 0.4 m card is 44 px
+//      on the glass and SILVIA on it is seven pixels a sort, under the eight the NAKAMOTO card in
+//      the frame on the back wall is set at and needs. The five sheets that carry words are
+//      therefore the BIG ones and they sit at the upstage end of the band, where every window that
+//      sees this wall at all keeps them; the thirteen that carry pictures and clippings are small
+//      and fill in round them. The measured figures are written against each card in SHEETS below.
+//      And THE PEN IS HEAVIER ON THIS WALL THAN ON THE BACK ONE, for the same reason: see NIB_M.
+//
+// THE BOARD. Eighteen drawn sheets, pinned to the plaster round the frame, one every three
+// drawings, each with a tack going in ('tap') panned to where that card is on the glass. Four and
+// a half seconds of pinning; see CARD_EVERY for why it is four a second and not the three the
+// brief asked for. Nothing may cover the switchboard, the wall shelf or its two jars, and nothing
+// does: the sheets stop at x 0.635 and the shelf stands at x 2.30, a metre and a half upstage of
+// the furthest tack. tools/_egg-silvia-proof.mjs measures both and raycasts the rest.
+//
+// HIS FACE IS NEVER COVERED AND CANNOT BE. Everything here is pinned to a wall two and a half
+// metres to his left; he sits at x 0, facing the lens. The proof measures it anyway, because
+// "never covered" is a claim and claims get measured.
+//
+// THE RED. The room's fourth colour, after his green and the fire's yellow and orange: #c8202e,
+// the string's, and it is on the string and on nothing else. It is a cool crimson on purpose —
+// held against the fire's #e0561d it has to read as a DIFFERENT colour and not as more fire, and
+// held against the paper it has to be a line and not a stain. It survives the ink pass for the
+// reason the Nakamoto card's green does: the sheet is `colorful`, so the pass shows it verbatim
+// and re-states only its achromatic marks at the room's own nib (ink-shaders.js).
+//
+// THE STRING ITSELF is one sheet four millimetres in front of the cards, redrawn on every 12 fps
 // step while the board is up — so it BOILS, which nothing else coloured in this room does.
 // Thirty lengths, one a drawing, pin to pin, and the route is written to cross itself a dozen
 // times. Each one SAGS, because a string pulled between two tacks does, and the sag is also how the
@@ -76,7 +119,7 @@
 // takes it exactly where it takes the globe's country: the open field is cut short, his line goes up
 // on the placard and the field opens again under it. The note is in server/pepe.mjs under `silvia`
 // and it is a statement of what is true, not a script. HE DOES NOT TURN ROUND — no react(), no cut,
-// no camera move — because the wall is behind him and a man who has built that board does not need
+// no camera move — because the wall is beside him and a man who has built that board does not need
 // to look at it. With no live voice he says nothing at all, which is the honest version.
 //
 // NOTHING ANNOUNCES ANY OF IT. No label, no glow, no tag. The cursor becomes a pointer over the
@@ -96,46 +139,48 @@ import * as O from './props-objects.js';
 export const STRING_RED = '#c8202e';
 
 // ---- the numbers ---------------------------------------------------------------------------------
+// THE WALL'S OWN COORDINATES, and every position below is written in them. The egg hangs in a group
+// turned a quarter turn onto the stage-left plaster — egg-switchboard.js's arrangement on this same
+// wall — so in this file:
+//     x runs UPSTAGE along the wall, from the frame's own centre line (world z = 0.3 - x)
+//     y is height off the floor, as everywhere else in the room
+//     z is how far a thing stands off the plaster, into the room
+// The band the board is allowed is x -0.25 .. +0.635 and y 0.975 .. 2.29; see the head of the file.
 const PPM = 660; // canvas px per metre of wall, for a sheet: about 3.6 texels to the screen pixel
-const STR_PPM = 500; // …and for the string's own sheet, which is 1.5 m wide and wants less
+const STR_PPM = 560; // …and for the string's own sheet, which is a metre wide and wants less
+// THE PEN, AND IT IS HEAVIER THAN THE BACK WALL'S. The room's nib is 2.1 px on the glass, and
+// 0.0115 m of THIS wall is 1.28 px, because a metre along it is 111 px against the back wall's 181.
+// 0.017 m is 1.9 px at 1600 x 900 and 2.3 px at 1920 x 1080, and it is the same fifth of a cap
+// height that 0.0115 m was of the back wall's lettering — so the letters are the room's own weight
+// and only the wall has changed. A stroke drawn ACROSS the rake is still the thicker of the two, at
+// 4.7 px, which is what a raked wall does to any drawing on it and is not something to correct:
+// anamorphic lettering would read from the home plate and from nowhere else in the film.
+const NIB_M = 0.017;
+const STR_NIB_M = 0.015; // …and a string is thinner than a drawn line, as it was before
 // HOW THE WALL IS STACKED, in millimetres off the plaster, and the order matters:
 //   6.0 .. 8.6   the eighteen sheets, each one a sixth of a millimetre in front of the one pinned
-//                before it. Cards on a board OVERLAP — four pairs of these do — and two coplanar
+//                before it. Cards on a board OVERLAP — nine pairs of these do — and two coplanar
 //                cut-outs at the same depth is a seam that flickers as the camera breathes. The
 //                stagger is also the order they went up in, which is the correct answer anyway.
-//  10.5          the string, over every card and under every fly
-//  12.0          the insects (egg-insects.js), which stay on top of the lot
-//  15.0          the frames on their nails
+//  10.5          the string, over every card
+//  35.0          the frame on its cords
 const OFF_CARD = 0.006;
 const CARD_STEP = 0.00015;
 const OFF_STRING = 0.0105;
 const MIN_TAP = 44; // px: what a thumb needs, whatever the frame measures on the glass
 
 // The swing, in degrees: over quickly, past itself, and back onto the catch. Six poses on twos is
-// one second of door, which is egg-cross.js's shape in a smaller room.
-//
-// IT ENDS AT SEVENTY-EIGHT, AND THAT IS A PARALLAX MEASUREMENT, NOT A TASTE. The leaf is hinged at
-// x 0.26 and is 0.4 m wide, so its free edge comes 0.4 m off the wall as it opens — and a thing
-// 0.4 m nearer this lens is drawn at a larger scale, so the open leaf's edge lands FURTHER RIGHT on
-// the glass than its position on the wall would suggest. Worked at the home plate (the camera at
-// z 2.55, the wall at −2.5, 181 px to the metre on the plaster and 196 at the leaf's free edge):
-//     shut       the leaf covers screen 687..759 px   (the frame, 72 px, as it has always been)
-//     at 48°     it covers 687..742                   (55 px: a door, and a fat one)
-//     at 66°     it covers 687..723                   (36 px)
-//     at 78°     it covers 687..707                   (20 px: a door thrown right back)
-// Every one of those pixels is a pixel of the card behind it, and the card behind it is the one the
-// whole egg is about. At 48° the aperture leaves 0.11 m of wall for a card that has to letter
-// SILVIA, which is three pixels a sort and is not a word. At 78° it leaves 0.30 m, which is eight
-// pixels a sort and reads at the plate — the figure NAKAMOTO is set at in the frame on the other
-// side of the clock. So the door goes right back, the way a cupboard door does when somebody is in
-// a hurry, and what is left of it on the glass is the sliver a door seen edge-on actually is.
-const SWING = [14, 38, 66, 86, 80, 78].map((d) => (d * Math.PI) / 180);
+// one second of door, which is egg-cross.js's shape in a smaller room. WHY IT ENDS AT A HUNDRED AND
+// FORTY, with the sweep it was read off, is item 3 at the head of this file: at 67 degrees the
+// leaf's face is biggest and it lies across a quarter of the switchboard; at 140 it stands in front
+// of the rectangle it hung on and nothing else, and the column of wall it used to hide goes to the
+// cards. The fifth pose overruns to 145, which also clears everything, and it settles back onto 140.
+const SWING = [25, 62, 100, 128, 145, 140].map((d) => (d * Math.PI) / 180);
 // …and shutting it is not that list backwards: backwards, the first drawing of the close is the
 // overrun, which is a door pulling itself further open on its way to shut. Five poses, no overrun.
-const CLOSE = [70, 52, 32, 14, 3].map((d) => (d * Math.PI) / 180);
+const CLOSE = [130, 100, 66, 30, 8].map((d) => (d * Math.PI) / 180);
 const REST = SWING[SWING.length - 1];
 const HOLD = 2; // a pose is held two drawings: the film's own twos
-
 const OPEN_SWING = SWING.length * HOLD; // 12 drawings: the leaf is on its catch
 const CARD0 = 4; // the first sheet goes up while the leaf is still moving
 // FOUR A SECOND, AND THE BRIEF ASKED FOR TWO OR THREE. The brief also asked for a dozen sheets or
@@ -191,58 +236,70 @@ function fill(g, pts, color = INK, { rng = Math.random, wobble = 0.6 } = {}) {
 }
 
 // ---- THE SHEETS ----------------------------------------------------------------------------------
-// Fourteen of them, in metres on the wall: where the centre is, how big it is, what is on it, and
-// which tilt it was pinned at. Nothing is square to the wall — a card pinned by one tack hangs a
-// degree or two off, and eighteen of them at eighteen angles is what tells the eye this was done by
-// a hand and not printed.
+// Eighteen of them, in the WALL'S metres (x upstage from the frame's centre, y off the floor): where
+// the centre is, how big it is, what is on it, and which tilt it was pinned at. Nothing is square to
+// the wall — a card pinned by one tack hangs a degree or two off, and eighteen of them at eighteen
+// angles is what tells the eye this was done by a hand and not printed.
 //
 // `pin` is where the tack goes, as a fraction of the sheet's own width and height from its centre:
 // almost always the top middle, which is where you put one tack.
+//
+// WHAT SETS EVERY NUMBER HERE is the rake (items 1, 2 and 5 at the head of the file). The three
+// rectangles of wall the board has are:
+//     the UPSTAGE COLUMN   x 0.205 .. 0.630, y 1.72 .. 2.175   beside the frame, above the shelf of
+//                                                              wall the open leaf leaves alone
+//     the WIDE SHELF       x -0.25 .. 0.630, y 0.975 .. 1.700  under the frame, the whole band
+//     the STRIP            x -0.25 .. 0.630, y 2.19 .. 2.29    between the frame's head and the duct
+// and the five cards that carry words take the upstage end of the first two, because that is the
+// part of this wall the narrow windows keep. The px-per-sort against each of them is measured on a
+// 1600 x 900 home plate, with the 1920 x 1080 figure in brackets: it is the card's inner width on
+// the glass divided by the sorts in its longest line, and eight is the figure the NAKAMOTO card in
+// the frame on the back wall reads at.
 const SHEETS = [
-  // ---- THE APERTURE. The card the picture was hung over, and the only one of the eighteen that is
-  // a whole sentence of an object: 0.30 x 0.20, which is a postcard, which is far too big for an
-  // index card and is exactly right for the one piece of evidence a man is certain of. It sits
-  // inside the frame's own rebate (x 0.282..0.638, y 1.832..2.248), so at rest the picture hides
-  // every millimetre of it, and it clears the thrown-back leaf on the glass by twelve pixels.
-  { id: 'silvia', x: 0.48, y: 2.05, w: 0.3, h: 0.2, tilt: -1.4, kind: 'card', lines: ['PEPE', 'SILVIA'], caps: [0.055, 0.055], rule: true, seed: 11 },
+  // ---- THE FIVE THAT CARRY WORDS, and they are the whole reason the rest is laid out as it is.
+  // Every one of them is as wide as the plaster it stands on allows, because on this wall width is
+  // the scarce axis and a card's width is the only thing px-per-sort answers to. PEPE SILVIA gets
+  // the one full-width band on the board — 0.52 m, which is a sheet of drawing paper and not an
+  // index card, and which is what a man writes the name on when he is certain.
+  //   px a sort at 1600 x 900 (1920 x 1080):  SILVIA 8.9 (10.7)   CAROL 7.6 (9.2)
+  //                                           NO SUCH 7.1 (8.5)   WHO IS 6.4 (7.7)   MAIL FOR 6.5 (7.9)
+  { id: 'silvia', x: 0.36, y: 1.545, w: 0.52, h: 0.31, tilt: -1.4, kind: 'card', lines: ['PEPE', 'SILVIA'], caps: [0.125, 0.125], rule: true, seed: 11 },
+  { id: 'carol', x: 0.423, y: 2.065, w: 0.39, h: 0.21, tilt: 2.2, kind: 'card', lines: ['CAROL', 'IN HR'], caps: [0.105, 0.105], rule: true, seed: 19 },
+  { id: 'who', x: 0.425, y: 1.845, w: 0.39, h: 0.21, tilt: -1.9, kind: 'card', lines: ['WHO IS', 'PEPE?'], caps: [0.1, 0.1], seed: 12 },
+  { id: 'mail', x: 0.355, y: 1.275, w: 0.5, h: 0.19, tilt: 1.6, kind: 'card', lines: ['MAIL FOR', 'SILVIA'], caps: [0.092, 0.092], seed: 28 },
+  { id: 'nosuch', x: 0.355, y: 1.075, w: 0.48, h: 0.18, tilt: -2.1, kind: 'card', lines: ['NO SUCH', 'NAME'], caps: [0.089, 0.089], rule: true, seed: 16 },
 
-  // ---- THE RIGHT-HAND COLUMN, over the bookcase: the only tall run of clear plaster on this wall.
-  // The sign board stops at x 0.68 and the door architrave starts at 1.03, so everything here lives
-  // in a column 0.32 m wide and every card in it is nearly as wide as the column.
-  { id: 'who', x: 0.845, y: 2.47, w: 0.3, h: 0.135, tilt: 2.2, kind: 'card', lines: ['WHO IS', 'PEPE?'], caps: [0.044, 0.05], seed: 12 },
-  { id: 'clip-a', x: 0.8, y: 2.3, w: 0.22, h: 0.145, tilt: -1.6, kind: 'clip', head: 'NO TRACE', seed: 13 },
-  { id: 'board', x: 0.9, y: 2.11, w: 0.17, h: 0.15, tilt: 2.8, kind: 'photo', subject: 'switchboard', seed: 14 },
-  { id: 'clip-b', x: 0.855, y: 1.92, w: 0.24, h: 0.18, tilt: 1.1, kind: 'clip', head: 'ADDRESSEE', seed: 15 },
+  // ---- THE STRIP between the frame's head (y 2.18) and the cable duct (y 2.30): a hundred
+  // millimetres of plaster running the length of the wall, and four letterbox sheets along it. The
+  // picture's own cords cross it, and they are 1.6 mm rods — a fifth of a screen pixel — so a card
+  // behind one is a card with a cord over it and nothing is lost.
+  { id: 'clip-a', x: 0.415, y: 2.242, w: 0.4, h: 0.095, tilt: -1.6, kind: 'clip', head: 'NO TRACE', seed: 13 },
+  { id: 'nums', x: 0.13, y: 2.238, w: 0.17, h: 0.09, tilt: 2, kind: 'card', lines: ['0944'], caps: [0.05], seed: 23 },
+  { id: 'board', x: -0.075, y: 2.244, w: 0.2, h: 0.095, tilt: -2.2, kind: 'photo', subject: 'switchboard', seed: 14 },
+  { id: 'year', x: -0.235, y: 2.238, w: 0.15, h: 0.09, tilt: 2.6, kind: 'card', lines: ['1971'], caps: [0.05], seed: 18 },
 
-  // ---- THE BAND RIGHT OF THE CLOCK, under the frames and over the vase, the cat and his shoulder.
-  // The six insects (egg-insects.js) are in here too and the cards go BEHIND them, a millimetre
-  // further back: a fly sitting on a pinned index card is a better drawing than a gap left for it.
-  { id: 'nosuch', x: 0.4, y: 1.71, w: 0.27, h: 0.13, tilt: 1.8, kind: 'card', lines: ['NO SUCH', 'NAME'], caps: [0.044, 0.044], rule: true, seed: 16 },
-  { id: 'clip-c', x: 0.635, y: 1.71, w: 0.19, h: 0.15, tilt: -2.4, kind: 'clip', head: 'MAIL ROOM', seed: 17 },
-  { id: 'year', x: 0.865, y: 1.71, w: 0.25, h: 0.11, tilt: 2.6, kind: 'card', lines: ['1971'], caps: [0.062], seed: 18 },
-  { id: 'carol', x: 0.375, y: 1.52, w: 0.27, h: 0.14, tilt: -1.9, kind: 'card', lines: ['CAROL', 'IN HR'], caps: [0.048, 0.048], seed: 19 },
-  { id: 'door', x: 0.6, y: 1.5, w: 0.15, h: 0.18, tilt: 2.2, kind: 'photo', subject: 'door', seed: 20 },
-  { id: 'q-b', x: 0.755, y: 1.53, w: 0.09, h: 0.115, tilt: -4, kind: 'query', seed: 21 },
-  { id: 'clip-d', x: 0.905, y: 1.5, w: 0.17, h: 0.2, tilt: 1.4, kind: 'clip', head: 'DEPT 6', seed: 22 },
-  { id: 'nums', x: 0.45, y: 1.31, w: 0.26, h: 0.115, tilt: 2, kind: 'card', lines: ['0944'], caps: [0.062], seed: 23 },
-  { id: 'frog', x: 0.71, y: 1.28, w: 0.155, h: 0.19, tilt: -2.6, kind: 'photo', subject: 'frog', seed: 24 },
-
-  // ---- LEFT OF THE CLOCK there is a quarter of a metre of wall and no more: the window's downstage
-  // shutter leaf folds flat onto the plaster at x = -0.49 and the Nakamoto frame takes everything
-  // above y 1.79. Three sheets, stacked, and they are why the board is not all on one side.
-  { id: 'q-a', x: -0.44, y: 1.72, w: 0.09, h: 0.115, tilt: 4.2, kind: 'query', seed: 25 },
-  { id: 'board2', x: -0.355, y: 1.5, w: 0.2, h: 0.17, tilt: -2.2, kind: 'photo', subject: 'switchboard', seed: 26 },
-  { id: 'clip-e', x: -0.375, y: 1.27, w: 0.19, h: 0.2, tilt: 2.4, kind: 'clip', head: 'NO ENTRY', seed: 27 },
-
-  // ---- AND ONE ACROSS THE MIDDLE, under the clock and over his head, which is the one place on
-  // this wall where a card is drawn and then hidden by the man standing in front of it. It is
-  // pinned there anyway: the board does not stop for him, and it is the card nearest the middle of
-  // the picture, which is where a phone's narrower frame is looking.
-  { id: 'mail', x: -0.07, y: 1.58, w: 0.3, h: 0.12, tilt: -1.5, kind: 'card', lines: ['MAIL FOR', 'SILVIA'], caps: [0.042, 0.042], seed: 28 },
+  // ---- THE DOWNSTAGE HALF, which is the part of the wall the frame's own rectangle stands over
+  // and the part a 1280 x 800 window has already cut off. Nine sheets, small and overlapping, which
+  // is what a board looks like where nobody had to read anything. clip-d and clip-b run OFF the
+  // left of the picture on purpose: a board that stops inside the frame is a board the size of the
+  // frame, and this one is not.
+  { id: 'board2', x: -0.055, y: 1.615, w: 0.19, h: 0.175, tilt: -2.2, kind: 'photo', subject: 'switchboard', seed: 26 },
+  { id: 'clip-d', x: -0.215, y: 1.56, w: 0.14, h: 0.185, tilt: 1.4, kind: 'clip', head: 'DEPT 6', seed: 22 },
+  { id: 'frog', x: -0.055, y: 1.43, w: 0.15, h: 0.175, tilt: -2.6, kind: 'photo', subject: 'frog', seed: 24 },
+  { id: 'clip-b', x: -0.19, y: 1.34, w: 0.15, h: 0.175, tilt: 1.1, kind: 'clip', head: 'ADDRESSEE', seed: 15 },
+  { id: 'door', x: -0.055, y: 1.235, w: 0.15, h: 0.185, tilt: 2.2, kind: 'photo', subject: 'door', seed: 20 },
+  { id: 'clip-e', x: -0.195, y: 1.12, w: 0.15, h: 0.175, tilt: 2.4, kind: 'clip', head: 'NO ENTRY', seed: 27 },
+  { id: 'clip-c', x: -0.06, y: 1.055, w: 0.16, h: 0.16, tilt: -2.4, kind: 'clip', head: 'MAIL ROOM', seed: 17 },
+  { id: 'q-b', x: 0.055, y: 1.29, w: 0.09, h: 0.115, tilt: -4, kind: 'query', seed: 21 },
+  { id: 'q-a', x: 0.055, y: 1.075, w: 0.09, h: 0.115, tilt: 4.2, kind: 'query', seed: 25 },
 ];
-// THE ORDER THEY GO UP IN. Not left to right and not a sweep: a man pinning a board works out from
-// the thing that started it, and the eye should have to follow him about the wall.
-const ORDER = ['silvia', 'who', 'nosuch', 'clip-e', 'clip-a', 'carol', 'clip-d', 'mail', 'board', 'q-a', 'frog', 'year', 'clip-c', 'q-b', 'board2', 'door', 'clip-b', 'nums'];
+// THE ORDER THEY GO UP IN, AND THE WORDS GO UP LAST. It is the order a man actually builds one of
+// these in — the clippings and the photographs are the work, the name written out is the
+// conclusion — and it is also the only stacking that keeps the lettering clean: a sheet pinned
+// later lies in FRONT of one pinned earlier (see CARD_STEP), so with PEPE SILVIA pinned eighteenth
+// nothing on this wall can ever be over the word. Pinned first, a first cut of this board had two
+// clippings and a number card lying across the middle of PEPE.
+const ORDER = ['clip-d', 'clip-b', 'board2', 'door', 'clip-c', 'clip-e', 'frog', 'q-b', 'q-a', 'board', 'year', 'clip-a', 'nums', 'who', 'carol', 'nosuch', 'mail', 'silvia'];
 
 // THE STRING'S ROUTE, pin to pin, by id. THIRTY lengths, and the shape of the list is the point.
 // The first twenty are SHORT HOPS between neighbours — the string a man runs while he is still
@@ -250,43 +307,44 @@ const ORDER = ['silvia', 'who', 'nosuch', 'clip-e', 'clip-a', 'carol', 'clip-d',
 // the wall, which is what he does at two in the morning when he has decided the whole thing joins
 // up. Twenty short and ten long is a web; thirty of either on its own is a diagram.
 //
-// NOTHING CROSSES THE CLOCK. Every pin is outside its disc and every run between two of them was
-// checked against it, the pendulum's bob included (it hangs to y 1.685 on the room's axis, and the
-// nearest length of string passes 25 mm under it and sags further). tools/_egg-silvia-proof.mjs
-// counts the red inside the dial and the answer is none.
+// NOTHING LEAVES THE BAND. Every pin is inside x -0.29 .. 0.63 and every run between two of them
+// stays there, because a run between two points inside a rectangle is inside it; the sag only ever
+// takes a length DOWN, and the lowest pin is at y 1.13 with 0.16 m of clear plaster under it before
+// the dado. tools/_egg-silvia-proof.mjs raycasts the switchboard and counts the red inside the
+// shelf of jars, and the answer to both is none.
 const ROUTE = [
   // the short hops
-  ['who', 'clip-a'],
-  ['clip-a', 'board'],
-  ['board', 'clip-b'],
-  ['clip-b', 'year'],
-  ['year', 'clip-d'],
-  ['clip-d', 'q-b'],
-  ['q-b', 'frog'],
-  ['frog', 'nums'],
-  ['nums', 'carol'],
-  ['carol', 'mail'],
-  ['mail', 'q-a'],
-  ['q-a', 'board2'],
-  ['board2', 'clip-e'],
-  ['clip-e', 'carol'],
-  ['silvia', 'nosuch'],
-  ['nosuch', 'clip-c'],
-  ['clip-c', 'door'],
-  ['door', 'carol'],
-  ['nosuch', 'mail'],
-  ['clip-c', 'year'],
-  // and the long runs, which are the ones that cross
-  ['silvia', 'who'],
-  ['silvia', 'nums'],
-  ['silvia', 'clip-d'],
-  ['who', 'nums'],
-  ['clip-b', 'nosuch'],
-  ['clip-d', 'nosuch'],
-  ['q-b', 'clip-c'],
-  ['frog', 'door'],
-  ['mail', 'nums'],
+  ['clip-a', 'carol'],
+  ['carol', 'who'],
+  ['who', 'silvia'],
+  ['silvia', 'mail'],
+  ['mail', 'nosuch'],
+  ['nosuch', 'q-a'],
+  ['q-a', 'q-b'],
+  ['q-b', 'door'],
+  ['door', 'clip-c'],
+  ['clip-c', 'clip-e'],
+  ['clip-e', 'clip-b'],
+  ['clip-b', 'frog'],
+  ['frog', 'board2'],
+  ['board2', 'clip-d'],
+  ['clip-d', 'board'],
   ['board', 'year'],
+  ['board', 'nums'],
+  ['nums', 'clip-a'],
+  ['frog', 'door'],
+  ['clip-d', 'clip-b'],
+  // and the long runs, which are the ones that cross
+  ['silvia', 'carol'],
+  ['silvia', 'clip-a'],
+  ['silvia', 'clip-d'],
+  ['silvia', 'q-b'],
+  ['carol', 'nosuch'],
+  ['who', 'mail'],
+  ['nums', 'q-a'],
+  ['board', 'clip-c'],
+  ['year', 'clip-b'],
+  ['frog', 'nosuch'],
 ];
 
 // ---- one sheet, drawn ------------------------------------------------------------------------------
@@ -302,15 +360,12 @@ function sheetCanvas(S) {
   const rng = mulberry32(S.seed * 977 + 13);
   const M = (m) => m * PPM;
   const x0 = PAD, y0 = PAD, pw = w - PAD * 2, ph = h - PAD * 2;
-  // THE PEN, AND IT IS THE ROOM'S AND NOT THIS CARD'S. The ink pass throws away any mark with no
-  // dark neighbour a nib away, and egg-insects.js measured that threshold on this very wall: 0.0128
-  // metres. A first cut of these cards lettered them at 0.0022 m — a beautiful 1.8 px hairline on a
-  // 198 px canvas — and at the home plate every word on the board came back a mid grey, because
-  // 0.0022 m of wall is half a screen pixel and half a screen pixel is not a mark. So the pen here
-  // is 0.0115 m, which is 7.6 canvas px and 2.1 px on the glass: the same weight the entrance door
-  // is drawn at, which is the benchmark. Everything inside a drawing (a photograph's panels, a
-  // clipping's ruled text) is 0.7 of it and no finer.
-  const nib = M(0.0115);
+  // THE PEN, AND IT IS THE ROOM'S AND NOT THIS CARD'S — but it is measured on THIS wall, which is
+  // raked, so it is not the back wall's number. See NIB_M above: 0.017 m is 1.9 px across the rake
+  // at 1600 x 900, which is the weight the entrance door is drawn at and the benchmark the ink pass
+  // keeps. Everything inside a drawing (a photograph's panels, a clipping's ruled text) is 0.7 of
+  // it and no finer.
+  const nib = M(NIB_M);
   const fine = nib * 0.7;
 
   // THE PAPER. A card is a solid white shape and the drawing sits on it; the canvas outside it is
@@ -336,12 +391,17 @@ function sheetCanvas(S) {
   }
 
   if (S.kind === 'card') {
-    // THE LETTERING, in the sign hand, one line under another and each one fitted to the card.
-    // Nothing is set at half weight to make it fit: a line that will not go is set smaller.
+    // THE LETTERING, in the sign hand, one line under another. Nothing is set at half weight to make
+    // it fit: a line that will not go is set smaller — AND THE WHOLE CARD COMES DOWN WITH IT, which
+    // is the one change this wall asked for. A man letters a card in one hand, so the size is the
+    // size the LONGEST line will take and the short lines are simply shorter. Fitted line by line
+    // instead, PEPE stood a third taller than SILVIA under it, which is a card printed and not
+    // written. The cap is also held inside its own line's band, so a two-line card is two lines.
     const n = S.lines.length;
     const inner = pw - M(0.022) * 2;
+    const band = (ph / n) * 0.92;
+    const capH = Math.min(band, ...S.lines.map((ln, i) => signFit(ln, inner, { capH: M(S.caps[i]), tracking: 0.12, pen: nib })));
     for (let i = 0; i < n; i++) {
-      const capH = signFit(S.lines[i], inner, { capH: M(S.caps[i]), tracking: 0.12, pen: nib });
       const cy = y0 + ph * ((i + 0.5) / n) + (n > 1 ? (i - (n - 1) / 2) * M(0.004) : 0);
       signCaps(g, S.lines[i], x0 + pw / 2, cy, { capH, tracking: 0.12, pen: nib, rng, seed: S.seed * 7 + i });
     }
@@ -497,29 +557,46 @@ function drawPhoto(g, subject, x, y, w, h, rng, nib, fine = nib * 0.7) {
 }
 
 // ---- THE BUILD -------------------------------------------------------------------------------------
-export function eggSilvia(ctx, { group, switches, slot, wallZ }) {
-  const { x, y, w, h, z, hookY } = slot;
+export function eggSilvia(ctx, { group, switches, slot }) {
+  const { wall, z: frameZ, y, w, h, off, hookY } = slot;
 
-  // ---- 1. the frame, on a hinge at its left edge ---------------------------------------------------
-  // The picture itself is props.js's own `diagram` plate, built by the same call with the same seed
-  // it was hung with, so the wall at rest is the wall that was there. All that is new is the pivot
-  // it hangs in and the fact that the pivot can turn.
+  // ---- 0. the wall's own group ----------------------------------------------------------------------
+  // A quarter turn onto the stage-left plaster, with the origin on the frame's own centre line, so
+  // that everything below is written in the wall's coordinates and not in the room's: local +x runs
+  // UPSTAGE (world z = frameZ - x), local +z stands off the plaster into the room. It is
+  // egg-switchboard.js's arrangement on this same wall, and it is what lets the sheets, the string
+  // and the leaf be laid out as a flat drawing instead of as three-dimensional bookkeeping.
+  const wallG = new THREE.Group();
+  wallG.name = 'silvia-wall';
+  wallG.position.set(wall, 0, frameZ);
+  wallG.rotation.y = Math.PI / 2;
+  group.add(wallG);
+
+  // ---- 1. the frame, on a hinge at its DOWNSTAGE edge ------------------------------------------------
+  // The picture is props.js's own `diagram` plate, built by the same call with the same seed the
+  // back wall's right-hand frame was hung with: the egg changed walls and took its picture with it.
+  // The hinge is the leaf's downstage edge (local x -w/2) and a positive swing is a NEGATIVE
+  // rotation about the wall's own y, so the free edge comes forward into the room and downstage and
+  // the front of the leaf stays turned towards the lens. Which edge, and why, is item 4 at the head
+  // of this file; how far it goes round is item 3.
   const hinge = new THREE.Group();
   hinge.name = 'silvia-frame';
-  hinge.position.set(x - w / 2, y, z);
+  hinge.position.set(-w / 2, y, off);
   const leaf = O.pictureFrame({ w, h, kind: 'diagram', seed: 100, ornate: true });
   leaf.position.set(w / 2, 0, 0);
   hinge.add(leaf);
-  group.add(hinge);
+  wallG.add(hinge);
   // the cords stay on the nail. A picture that is also a cabinet door is a picture with cords on it;
-  // taking them off when it opens would be the drawing explaining the joke.
-  O.hangCords(group, x, y + h / 2, w / 2 - 0.02, hookY, z - 0.003);
+  // taking them off when it opens would be the drawing explaining the joke. The nail is driven under
+  // the cable duct and not at the picture rail: room.js runs a 90 mm trough along this wall at
+  // y 2.30, and a cord to the rail at 2.58 would be threaded through it.
+  O.hangCords(wallG, 0, y + h / 2, w / 2 - 0.02, hookY, off - 0.003);
 
   // ---- 2. the eighteen sheets ----------------------------------------------------------------------
   const board = new THREE.Group();
   board.name = 'silvia-board';
   board.userData.noShadow = true;
-  group.add(board);
+  wallG.add(board);
 
   const byId = Object.create(null);
   const sheets = [];
@@ -532,8 +609,8 @@ export function eggSilvia(ctx, { group, switches, slot, wallZ }) {
     tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.anisotropy = Math.max(tex.anisotropy || 1, ctx.renderer?.capabilities?.getMaxAnisotropy?.() ?? 1);
     // colorful: the pass shows the drawing verbatim and re-states its achromatic marks at the room's
-    // own nib. lineWeight 0: no second contour drawn round a flat card. hatch 0.02: a sheet facing
-    // the visitor takes no wash. egg-insects.js's three numbers, for egg-insects.js's reasons.
+    // own nib. lineWeight 0: no second contour drawn round a flat card. hatch 0.02: a sheet pinned
+    // flat to a wall takes no wash. egg-insects.js's three numbers, for egg-insects.js's reasons.
     const mat = inkMaterial({ color: '#ffffff', map: tex, hatch: 0.02, lineWeight: 0, colorful: true });
     mat.alphaTest = 0.5;
     mat.transparent = false;
@@ -542,7 +619,7 @@ export function eggSilvia(ctx, { group, switches, slot, wallZ }) {
     m.name = `silvia-sheet-${S.id}`;
     m.castShadow = false;
     m.receiveShadow = false;
-    m.position.set(S.x, S.y, wallZ + OFF_CARD + k * CARD_STEP);
+    m.position.set(S.x, S.y, OFF_CARD + k * CARD_STEP);
     m.rotation.z = (S.tilt * Math.PI) / 180;
     m.visible = false;
     board.add(m);
@@ -557,8 +634,9 @@ export function eggSilvia(ctx, { group, switches, slot, wallZ }) {
 
   // ---- 3. the string, on one sheet of its own -------------------------------------------------------
   // It spans everything the board reaches and a hand's width past it, so a length of string that
-  // sags below a pin has somewhere to sag to.
-  const SX0 = -0.56, SX1 = 1.06, SY0 = 1.1, SY1 = 2.6;
+  // sags below a pin has somewhere to sag to, and it is in the wall's coordinates like everything
+  // else here: x -0.34 .. 0.70 upstage, y 0.90 .. 2.34 off the floor.
+  const SX0 = -0.34, SX1 = 0.62, SY0 = 0.9, SY1 = 2.34;
   const SW = Math.round((SX1 - SX0) * STR_PPM), SH = Math.round((SY1 - SY0) * STR_PPM);
   const strCanvas = makeCanvas(SW, SH);
   const str2d = strCanvas.getContext('2d');
@@ -576,14 +654,14 @@ export function eggSilvia(ctx, { group, switches, slot, wallZ }) {
   string.name = 'silvia-string';
   string.castShadow = false;
   string.receiveShadow = false;
-  string.position.set((SX0 + SX1) / 2, (SY0 + SY1) / 2, wallZ + OFF_STRING);
+  string.position.set((SX0 + SX1) / 2, (SY0 + SY1) / 2, OFF_STRING);
   string.visible = false;
   board.add(string);
 
   // wall metres → the string sheet's own px
   const sx = (mx) => ((mx - SX0) / (SX1 - SX0)) * SW;
   const sy = (my) => ((SY1 - my) / (SY1 - SY0)) * SH;
-  const NIB = Math.max(3, 0.0105 * STR_PPM); // 10.5 mm of string: 1.9 px at the home plate, the entrance door's own pen
+  const NIB = Math.max(3, STR_NIB_M * STR_PPM); // 15 mm of string: 1.7 px across the rake at the home plate
 
   // ONE LENGTH OF STRING. It is not a straight line: it is pulled between two tacks and it sags,
   // and a hand's wobble rides on the sag. `slack` swells the sag — that is the whole of what
@@ -682,9 +760,9 @@ export function eggSilvia(ctx, { group, switches, slot, wallZ }) {
   }
 
   // ---- 4. the leaf's angle --------------------------------------------------------------------------
-  // Hinged at the LEFT edge, so a positive swing is a NEGATIVE rotation about y: the free edge comes
-  // forward into the room and to the right, away from the clock, and the front of the leaf stays
-  // turned towards a lens that is standing two metres to its left.
+  // Hinged at the leaf's DOWNSTAGE edge, so a positive swing is a NEGATIVE rotation about the wall's
+  // own y: the free edge comes forward into the room and downstage, and the face of the leaf stays
+  // turned towards the lens the whole way round. Item 4 at the head of this file is the measurement.
   const setAngle = (theta) => {
     hinge.rotation.y = -theta;
   };
