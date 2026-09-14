@@ -48,8 +48,9 @@
 //
 //   the lamp's own shade, because that is where the hand was;
 //   the shelf boards either side of him, because that is what is nearest and it is full of paper;
-//   the cabinets outboard of those, then the curtain and the doorway, which are the room's two
-//     openings and the two tallest paper things in it;
+//   the cabinets outboard of those — the cart on the left carrying two of them since the window and
+//     its curtain came out of the room — and the doorway, which is the one opening left and still
+//     the tallest paper thing in here;
 //   the floor either side of the table, which is where a fire this size actually stands;
 //   and the near edge of the cloth, the last thing between the fire and the lens.
 //
@@ -311,8 +312,9 @@ export function drawFlame(hand, pose, ch, pen) {
 // which of the two it starts on.
 //
 // THE SIZES ARE THE PANEL'S, and they are the round's whole point. A seated frog is 1.37 m of this
-// room; the two on the floor are 1.95 and stand a head above him, the doorway's is 1.7, the
-// curtain's 1.15. Nothing here is a shelf ornament any more: the smallest of the twelve is the one
+// room; the two on the floor are 1.95 and stand a head above him, the doorway's is 1.7, and the one
+// that used to be the curtain's is still 1.15 on the cart it came down onto. Nothing here is a shelf
+// ornament any more: the smallest of the twelve is the one
 // on the lampshade at 0.30 m, and even that is 60 px of the home plate.
 //
 // WHAT THEY MAY NOT DO. Not one of them comes near his face. He measures px 535–745 across and
@@ -339,8 +341,9 @@ const SEATS = [
   { at: 'room', p: [0.72, 1.02, -2.17], h: 0.52, ppm: 187, hand: 0, phase: 0 },
   { at: 'room', p: [-1.02, 1.02, -2.17], h: 0.62, ppm: 187, hand: 0, phase: 1 },
   { at: 'room', p: [1.02, 1.02, -2.17], h: 0.62, ppm: 187, hand: 1, phase: 0 },
-  // THE TWO CABINETS OUTBOARD OF THEM. The bar cart on the window side (props.js: 0.96 x 0.42,
-  // top 0.8, at the window's own centre x -1.5, z WALL + 0.48, so it runs -1.98 to -1.02) and the
+  // THE TWO CABINETS OUTBOARD OF THEM. The bar cart stage left (props.js: 0.96 x 0.42, top 0.8, at
+  // x -1.5 — which was the window's centre line and is now just where the cart stands — z WALL +
+  // 0.48, so it runs -1.98 to -1.02) and the
   // PTT's spares press on the door side (0.54 wide, 1.5 tall, at x W/2 - 0.31 = 2.29, running 2.02
   // to 2.56). The cart's tongue stands at its far left end, well clear of the radio at cart-local
   // x 0.25; the press's stands on its top board inboard of the MIEL jar, which is at unit-local
@@ -348,11 +351,21 @@ const SEATS = [
   // the home plate are the only ones the floor pair does not already fill.
   { at: 'room', p: [-1.9, 0.8, -2.02], h: 1.0, ppm: 191, hand: 2, phase: 0 },
   { at: 'room', p: [2.32, 1.5, -2.34], h: 0.9, ppm: 184, hand: 1, phase: 1 },
-  // THE ROOM'S TWO OPENINGS, which are the two tallest paper things in it. The curtain inside the
-  // window architrave (x -1.95 to -1.05, sill 1.04) stands above the cart, which is the only reason
-  // it can be seen at all; the doorway's is the whole height of a person and stands in the opening
-  // (x 1.05 to 1.95), set to the far side of it so the floor tongue in front does not swallow it.
-  { at: 'room', p: [-1.58, 1.04, -2.44], h: 1.15, ppm: 186, hand: 0, phase: 1 },
+  // THE BACK WALL HAS ONE OPENING NOW, AND THE LEFT-HAND TONGUE HAD TO COME OFF THE WALL. It stood
+  // at x -1.58 on the window sill at 1.04, burning the curtain inside that architrave — the taller
+  // of the room's two paper things, and the only reason it could be seen at all was that it stood
+  // above the cart. The user had the window taken out ("i'd also like to remove the window in the
+  // back left"), so the architrave, the sill and the curtain are all gone and a 1.15 m tongue at
+  // those coordinates would have been fire standing on bare plaster, which is the one thing the
+  // twelve of these never do: every one of them is planted on something that would burn.
+  // So it comes DOWN onto the cart it was already standing over — its inboard end, x -1.12, at the
+  // top board's 0.8 — where the bottles and the board itself are what is alight. It keeps its
+  // height, its pen and its hand, so it is the same tongue in the same column of the home plate,
+  // 240 mm lower. It stays at THIS POSITION IN THE LIST: the proof crops tongue index 9 and counts
+  // twelve, and both are counted in array order.
+  // The doorway's is the whole height of a person and stands in the opening (x 1.05 to 1.95), set to
+  // the far side of it so the floor tongue in front does not swallow it.
+  { at: 'room', p: [-1.12, 0.8, -2.02], h: 1.15, ppm: 186, hand: 0, phase: 1 },
   { at: 'room', p: [1.72, 0.0, -2.42], h: 1.7, ppm: 183, hand: 2, phase: 0 },
   // THE FLOOR, EITHER SIDE OF THE TABLE, and these are the panel. 1.95 m of tongue standing on the
   // rug at z -0.55, which is 485 px of the home plate's 800 and reaches to y 160 — a head above him

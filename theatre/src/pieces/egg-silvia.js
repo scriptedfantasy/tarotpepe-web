@@ -64,8 +64,12 @@
 //      So the door goes RIGHT BACK, to 140, where it stands in front of the rectangle it hung on
 //      AND NOTHING ELSE — z 0.098 against the frame's own upstage edge at z 0.100, two millimetres,
 //      a fifth of a screen pixel — and the whole upstage column of the wall is left to the cards.
-//      It is this room's own shutters' move: the casement's downstage leaf folds flat onto the
-//      plaster the same way. The three drawings in the middle of the swing do pass across the
+//      It was this room's own shutters' move when it was measured: the back wall's casement had two
+//      louvred leaves and its downstage one folded flat onto the plaster the same way, its outer
+//      edge standing at x -0.50. That window has since been taken out of the room and the move is
+//      now the stage-right casement's, whose leaves fold back to world z -0.50 and z -2.50 on that
+//      wall — the same hinge, the same 140 degrees, read along z instead of along x. The three
+//      drawings in the middle of the swing do pass across the
 //      switchboard, because a door swinging does; the rule is about where it comes to rest.
 //
 //   4. WHICH EDGE IT IS HINGED ON, WHICH IS THE SAME SWEEP READ THE OTHER WAY. Hinged at the

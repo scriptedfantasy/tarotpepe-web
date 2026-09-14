@@ -15,7 +15,7 @@ const REGIONS = [
   ['side walls, above 2.2 m', 0, 0, W, 260],
   ['back wall behind his head', 660, 240, 290, 190],
   ['the door', 990, 90, 220, 560],
-  ['the window + shutters', 280, 90, 340, 560],
+  ['the cart wall (was the window)', 280, 90, 340, 560],
   ['the table + Pepe', 600, 400, 420, 300],
   ['stage-right wall, low', 1400, 260, 200, 380],
 ];

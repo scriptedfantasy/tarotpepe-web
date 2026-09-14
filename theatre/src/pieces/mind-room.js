@@ -95,7 +95,7 @@ export const STORIES = [
   {
     id: 'radio',
     name: 'the radio',
-    where: 'on the test table under the window, dark',
+    where: 'on the test table against the wall stage left, dark',
     fact: 'It works and he does not switch it on. He was in a crypto cabal for a while and left it, disillusioned with how easily it could be corrupted: a room where everybody talked at once and had agreed by morning, and nothing said in it survived the week. The radio states that by being silent in the corner of every frame.',
     keys: /\bradio\b|\bradiola\b|\bwireless\b|^set$/,
     lines: [
@@ -234,12 +234,18 @@ const PLAIN = [
     ['A radiator. It knocks at seven and again at eleven, and it came with the room.'],
   ],
   [
+    // THE WINDOW HE HAS IS THE ONE ON THE RIGHT-HAND WALL. There were two and the one behind him was
+    // taken out; he is not going to be caught describing a wall he is sitting in front of. The cable
+    // is still outside it — room.js drives the lead-in through that window's head now — so the
+    // second sentence is the same sentence it always was, about the window that is left.
     /\bwindow\b|\bshutters?\b|\bsill\b/,
-    ['A window and two shutters. The black cable outside it goes down the wall and stops at nothing.'],
+    ['One window, on the right, with two shutters. The black cable outside it goes down the wall and stops at nothing.'],
   ],
   [
+    // Curtains: there are none. There were, on the window that has gone, and they were two inches
+    // short. He does not volunteer the history; he answers what is in the room.
     /\bcurtains?\b/,
-    ['Curtains. They are two inches short for that window and that is not my doing.'],
+    ['No curtains. The shutters do it, and they do it badly.'],
   ],
   [
     /\bdoor\b|\benamel plate\b|\bentr[ée]e interdite\b|\bletter ?plate\b|\bspyhole\b/,
@@ -262,6 +268,8 @@ const PLAIN = [
     ['Battery jars, fuses, cord tips, and one bottle of marc. It was the spares press. I have added exactly one thing to it.'],
   ],
   [
+    // "bench under the window" is kept as a key though the window has gone: a visitor who remembers
+    // the room that way still gets the right answer, and nothing else in this table wants the phrase.
     /\bcart\b|\btrolley\b|\btest table\b|\bworkbench\b|\bbench under the window\b/,
     ['The test table. It has wheels, which is more than the rest of the furniture can say.'],
   ],
