@@ -230,7 +230,12 @@ export function drawInsect(kind, pose, strike) {
 const WALL_SPOTS = [
   [-0.42, 1.74],
   [-0.16, 1.46],
-  [0.12, 1.76], // …and clear of the pendulum, which swings on the room's axis down to y 1.79
+  // Dropped 30 mm this round, from 1.76, and it is the only thing on this wall the picture of the
+  // room moved. Re-laid for two objects instead of three (props.js, THE ROW) the picture is 0.78 m
+  // wide at 16:9 and its bottom rail lands on 1.8023; this sheet topped out at 1.818 and would have
+  // been 16 mm behind it. 1.73 puts it on the same line as the sheet at [0.62, 1.73], which has
+  // always cleared that rail by 14 mm, and further from the pendulum rather than nearer.
+  [0.12, 1.73],
   [0.35, 1.46],
   [0.62, 1.73],
   [0.86, 1.44],

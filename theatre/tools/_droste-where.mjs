@@ -29,7 +29,7 @@ const out = await page.evaluate(() => {
     return { x: [+b.min.x.toFixed(4), +b.max.x.toFixed(4)], y: [+b.min.y.toFixed(4), +b.max.y.toFixed(4)], z: [+b.min.z.toFixed(4), +b.max.z.toFixed(4)] };
   };
   const named = {};
-  for (const n of ['sign-board', 'vase', 'nakamoto-frame', 'droste-frame', 'help-card', 'mushroom-lamp']) named[n] = box(scene.getObjectByName(n));
+  for (const n of ['sign-board', 'vase', 'droste-frame', 'help-card', 'mushroom-lamp']) named[n] = box(scene.getObjectByName(n));
   named.clock = box(P.group.userData.wallClock);
   named.tag = box(H?.tag);
   named.sign = box(P.sign?.mesh);

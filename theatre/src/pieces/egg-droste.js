@@ -10,8 +10,8 @@
 // ping-pongs two render targets, the picture's map is the one that was finished last, and the one
 // being written has this picture in it showing the one before. That is the whole of the recursion —
 // nothing is painted, nothing is faked, and the nesting goes as deep as the pixels do (at the home
-// plate on a 1280x800 window the sheet is 83 px across, the picture inside it 5 px, and the third
-// is a third of a pixel and is simply grey — scroll in and the same three come back at every size).
+// plate on a 1280x800 window the sheet is 121 px across, the picture inside it 11 px, the third
+// one, and the fourth a tenth of one — scroll in and the same four come back at every size).
 //
 // AND IT IS NOT RE-INKED. The sheet passes through the composite verbatim (ink-shaders.js, the
 // `verbatim` branch): no contour of its own, no hatch, no tone from the lamp, no paper grain. It
@@ -19,20 +19,15 @@
 // print a second set of lines a hair beside the first, and at the top of a zoom, where the sheet
 // fills the window, the seam between the drawing and the drawing it is a picture of would be the
 // one thing in the room that gave the trick away. The frame's own moulding is geometry and is inked
-// exactly as the Nakamoto card's moulding is.
+// like any other frame's.
 //
 // WHY THE FRAME CHANGES SHAPE WITH THE WINDOW. The zoom works because at the top of it the picture
 // EXACTLY fills the viewport, and a rectangle can only fill a viewport if it has the viewport's
-// aspect. So the sheet is cut to the drawing buffer's w/h and the moulding is put round it, bounded
-// by the box props.js hangs it in: landscape windows get a wide, short picture on the nail, a phone
-// gets a tall, narrow one. That box is 0.5 x 0.46 m, measured off the wall rather than chosen —
-// props.js says at length which object decides each of its four edges, and tools/_droste-where.mjs
-// prints every world box on that stretch of plaster. With a 0.022 m rim:
-//   1280x800   sheet 0.456 x 0.285  frame 0.500 x 0.329   (83 x 52 px of sheet at the home plate)
-//   1600x900   sheet 0.456 x 0.257  frame 0.500 x 0.301
-//   390x844    sheet 0.192 x 0.416  frame 0.236 x 0.460
-// The nail is at x +0.51, y 2.04, and the frame never grows past that box, so the row against the
-// clock keeps the 67 mm of plaster either side of it that it has always had.
+// aspect. So the sheet is cut to the drawing buffer's w/h and the moulding put round it — and where
+// on the wall that lands is NOT this file's business. props.js lays the row (§THE ROW, there): it
+// measures the clear plaster, sizes the picture and the gaps for the window in front of it, and
+// calls setSlot() with the frame's finished outer size and the nail to hang it on. This file draws
+// the moulding, the sheet and the cords, and publishes where the sheet ended up.
 //
 // NOTHING ANNOUNCES IT. No label, no tag, no hover, no cursor: it is not registered with the switch
 // arbiter at all, because there is nothing to click. A visitor finds it by scrolling, or does not.
@@ -40,17 +35,20 @@ import * as THREE from 'three';
 import * as O from './props-objects.js';
 import { inkMaterial } from '../core/strokes.js';
 
-// the same rim and the same depth every other frame in this row is built with (egg-nakamoto.js
-// says the same thing about its own; if O.pictureFrame's numbers move, these move with them)
+// the same rim and the same depth every frame on this wall has been built with; if O.pictureFrame's
+// numbers move, these move with them
 const RIM = 0.022;
 const DEPTH = 0.028;
-// how far in front of the moulding's mid-plane the sheet sits, in metres. The Nakamoto card's
-// number, so the two sheets in the row stand at the same depth in their rebates.
+// how far in front of the moulding's mid-plane the sheet sits, in metres: the depth every sheet in
+// a frame on this wall has sat at in its rebate.
 const SHEET_Z = DEPTH / 2 - 0.008;
 
 export function eggDroste(ctx, { group, slot }) {
   const M = O.materials();
-  const { x, y, w: MAXW, h: MAXH, z, hookY } = slot;
+  const { z, hookY } = slot;
+  // the nail and the frame's OUTER size, in metres. props.js owns all four and re-lays them on
+  // every resize; nothing in this file decides any of them.
+  let x = slot.x, y = slot.y, frameW = slot.w, frameH = slot.h;
 
   // THE SHEET'S MATERIAL, and it is the only one in the set flagged `verbatim`. White, because the
   // map is a finished frame and a material colour would tint it; lineWeight 0, because the sheet's
@@ -71,14 +69,6 @@ export function eggDroste(ctx, { group, slot }) {
   let sheet = null;
   const size = { w: 0, h: 0, frameW: 0, frameH: 0, aspect: 0 };
 
-  const drawingAspect = () => {
-    const v = new THREE.Vector2();
-    ctx.renderer?.getDrawingBufferSize?.(v);
-    if (v.x > 0 && v.y > 0) return v.x / v.y;
-    const w = ctx.size?.w || window.innerWidth || 1600, h = ctx.size?.h || window.innerHeight || 900;
-    return w / h;
-  };
-
   function clear() {
     for (const c of [...g.children]) {
       g.remove(c);
@@ -91,20 +81,14 @@ export function eggDroste(ctx, { group, slot }) {
     }
   }
 
-  // Build the moulding round a sheet of the window's own shape. The sheet is as large as the
-  // 0.4 x 0.46 box allows once the rim is taken off both ways, so one of the two dimensions is
-  // always at its stop and the other follows the aspect.
+  // Build the moulding round the sheet. The sheet is whatever is left of the frame once the rim is
+  // taken off both ways; props.js has already cut the frame to the window's aspect.
   function rebuild() {
-    const A = Math.max(0.05, drawingAspect());
-    let w = MAXW - RIM * 2;
-    let h = w / A;
-    if (h > MAXH - RIM * 2) {
-      h = MAXH - RIM * 2;
-      w = h * A;
-    }
-    if (Math.abs(w - size.w) < 1e-6 && Math.abs(h - size.h) < 1e-6) return false;
+    const w = frameW - RIM * 2, h = frameH - RIM * 2;
+    if (!(w > 0.01 && h > 0.01)) return false;
+    if (Math.abs(w - size.w) < 1e-6 && Math.abs(h - size.h) < 1e-6 && Math.abs(x - g.position.x) < 1e-6 && Math.abs(y - g.position.y) < 1e-6) return false;
     clear();
-    const frameW = w + RIM * 2, frameH = h + RIM * 2;
+    g.position.set(x, y, z);
     const fm = M.frame;
     const top = O.box(frameW, RIM, DEPTH, fm);
     top.position.set(0, frameH / 2 - RIM / 2, 0);
@@ -134,13 +118,21 @@ export function eggDroste(ctx, { group, slot }) {
     size.h = h;
     size.frameW = frameW;
     size.frameH = frameH;
-    size.aspect = A;
+    size.aspect = w / h;
     return true;
   }
   rebuild();
-  ctx.on?.('resize', () => rebuild());
 
   return {
+    // WHERE THE ROW PUTS IT. props.js calls this at build and on every resize with the nail and the
+    // frame's outer size it has just solved; nothing is rebuilt unless one of the four moved.
+    setSlot(next) {
+      x = next.x ?? x;
+      y = next.y ?? y;
+      frameW = next.w ?? frameW;
+      frameH = next.h ?? frameH;
+      return rebuild();
+    },
     // what ink.js binds its finished buffer to
     material: mat,
     get mesh() {
@@ -162,6 +154,10 @@ export function eggDroste(ctx, { group, slot }) {
     // the whole frame, for a tool that wants to crop it off the glass
     get frame() {
       return { x, y, z, w: size.frameW, h: size.frameH, rim: RIM, depth: DEPTH, aspect: size.aspect };
+    },
+    // the gap either side of it, for a tool that wants to check the row is even
+    get nail() {
+      return [x, y, z];
     },
     // the moulding's box on the glass, projected from the LIVE camera — a proof crops this
     hitBox() {

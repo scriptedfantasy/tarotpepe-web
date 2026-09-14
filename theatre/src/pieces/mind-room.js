@@ -73,7 +73,6 @@ export const STORIES = [
     where: 'the left frame on the back wall, over the switchboard',
     fact: 'It was on the wall when he took the room; he did not hang it and has not taken it down. It shows a woman seated at this switchboard, who worked it for thirty years, and he does not know her name. His own mother was a systems operator at DARPA and rarely spoke about the work. Nobody photographed his mother. He never says the two facts are connected and they are the reason the room is what it is. Visitors assume the woman is his mother; she is not, and he corrects them flatly.',
     // RETIRED (round 10): the photograph came off the wall when the left frame became the
-    // Nakamoto card (egg-nakamoto.js). No key, so nothing asks for it; the entry stays for the record.
     keys: /$^/,
     lines: [
       'That was on the wall when I took the room. She worked this board for thirty years. I do not know her name. My mother did the same job in another country, and nobody took a picture of her.',
@@ -163,22 +162,6 @@ export const STORIES = [
       'I was twelve. A hamburger company let a boy into its menu board and I left one item on it all morning. That is the card. I have never been asked what the item was.',
       'The framed card is a canteen menu. I was twelve and their board had no lock on it. One item, four hours. It is the first thing I published.',
       'A menu card in a frame. I altered it at twelve, from a bedroom, and it stood all morning. People frame the first thing they publish.',
-    ],
-  },
-  {
-    id: 'nakamoto',
-    name: 'the Nakamoto card',
-    where: 'the left frame on the back wall, over his shoulder',
-    // The keys are deliberately narrow. `resolve()` walks the STORIES before it walks the guard
-    // that hands anything card-shaped back to the table, so a pattern with a bare \bcard\b in it
-    // would steal every question a visitor asks about the three cards in front of them. Nothing
-    // here fires unless the line names Nakamoto, names a rare pepe, or points at the wall.
-    fact: 'It is the Nakamoto Card: the first Rare Pepe, issued in 2016 on Counterparty, one card of a numbered set, and the reason every card printed after it is called rare. It shows a grey-haired frog in spectacles in front of falling code, and it is captioned as the creator of Bitcoin. It carries a rareness score of 97. He does not say whether he is the man in the picture and he does not say that he is not.',
-    keys: /\bnakamoto\b|\brare pepe\b|\brarepepe\b|\bcounterparty\b|\bthe card (?:on|behind|in the frame|in that frame)\b|\bcard on the wall\b|\bframed card behind\b|\btrading card\b|\brareness\b|\b(?:picture|image|frame|portrait|photo(?:graph)?) behind you\b|\bframe (?:over|behind) your (?:shoulder|head)\b/,
-    lines: [
-      'The Nakamoto card. The first of them, 2016, issued on a chain that also carried grain futures. It is captioned as the creator of Bitcoin. I have never said either way.',
-      'That is a Nakamoto card. It was the first rare pepe, and everything called rare since is called rare because of it. The score at the bottom is 97, which was somebody\'s opinion.',
-      'A trading card in a frame, from 2016. The first one. The man in it is the creator of Bitcoin, and he is wearing my spectacles, which I would rather you did not dwell on.',
     ],
   },
 ];
