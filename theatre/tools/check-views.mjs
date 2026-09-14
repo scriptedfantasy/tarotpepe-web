@@ -16,7 +16,7 @@ const VIEWS = {
   reveal: ['dealt', 'turning', 'revealed', 'fan', 'shuffle', 'fanning', 'pick', 'gather', 'deal', 'turn'],
   lighting: ['default', 'evening', 'lamp'],
   sound: ['default'],
-  camera: ['home', 'wide', 'pepe', 'table', 'spread', 'door', 'fan', 'crossroads'],
+  camera: ['home', 'wide', 'pepe', 'table', 'spread', 'door', 'fan', 'crossroads', 'zoom-half', 'zoom-deep'],
   entrance: ['closed', 'opening', 'open'],
   titles: ['title', 'chapter', 'closing', 'hidden'],
   dialogue: ['greeting', 'question', 'reading', 'farewell'],

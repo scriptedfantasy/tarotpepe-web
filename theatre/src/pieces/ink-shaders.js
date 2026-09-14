@@ -73,7 +73,12 @@ uniform float uHasMap;
 uniform vec3 uColor;
 uniform float uAlphaTest;
 uniform float uLodBias;  // how much sharper than the hardware would the pen looks at a drawing
-uniform float uPacked;   // colorful*128 + hatchIdx*8, already /255
+uniform float uPacked;   // colorful*128 + hatchIdx*8 + verbatim, already /255
+// 1 = this surface's map is ALREADY A COMPOSED FRAME of this pass (egg-droste.js's picture of the
+// room). Everything else in the set is painted in linear working colour and is encoded to sRGB on
+// its way into the G-buffer; a finished frame is sRGB bytes already, and encoding it twice would
+// wash it out by exactly the amount that makes the top of a zoom not match the bottom of it.
+uniform float uVerbatim;
 uniform float uLineW;    // the material's own lineWeight, 0..2 — see gMisc.a below
 uniform float uId;       // 0..65535
 uniform float uDist;     // object distance to camera, metres
@@ -97,7 +102,8 @@ void main() {
   vec4 tex = uHasMap > 0.5 ? texture(uMap, vUv, uLodBias) : vec4(1.0);
   if (tex.a < uAlphaTest) discard;
   vec3 n = normalize(gl_FrontFacing ? vNormalW : -vNormalW);
-  gAlbedo = vec4(toSRGB(uColor * tex.rgb), uPacked);
+  vec3 albedo = uColor * tex.rgb;
+  gAlbedo = vec4(uVerbatim > 0.5 ? clamp(albedo, 0.0, 1.0) : toSRGB(albedo), uPacked);
   float idLo = mod(uId, 256.0), idHi = floor(uId / 256.0);
   gNorm = vec4(octEncode(n), idLo / 255.0, idHi / 255.0);
   float dl = clamp(log2(max(uDist, 0.25) / 0.25) / 8.0, 0.0, 1.0); // 0.25..64 m, 16 bit
@@ -472,9 +478,24 @@ void main() {
   int drawMode = uMode >= 9 ? 1 : uMode;
   int packed = int(alb.a * 255.0 + 0.5);
   bool colorful = packed >= 128;
+  bool verbatim = (packed & 1) == 1;
   float hatchW = float((packed >> 3) & 15) / 14.0;
   float zc = texture(tDepth, vUv).x;
   bool bg = zc >= 0.99999;
+
+  // THE PICTURE OF THIS ROOM PASSES STRAIGHT THROUGH (src/pieces/egg-droste.js). Its map is a
+  // finished frame of this very pass: every contour in it has been fitted and laid down, the tone
+  // is already strokes, the grain is already on the paper. Anything done to it here would be a
+  // second drawing over the first — and at the top of a zoom, where that sheet fills the window,
+  // the drawing on the sheet and the drawing it is a picture of have to be the same pixels. The
+  // colorful branch is not strict enough for that: it re-states a colourful surface's achromatic
+  // marks at the room's own nib, which is exactly what would print a second set of black lines a
+  // hair beside the first and put a seam through the hand-over. So: no contour, no tone, no hatch,
+  // no fill, no grain. The frame's own moulding is geometry and is inked like any other frame's.
+  if (verbatim && !bg && uMode < 3) {
+    outColor = vec4(alb.rgb, 1.0);
+    return;
+  }
 
   // ── what the surface's own drawing says here ────────────────────────────────────────────────
   // Read the albedo over two rings, at radii too far apart for a regular pattern (louvres, a weave,
@@ -948,6 +969,23 @@ void main() {
   vec3 col = mix(base, uInk, ink);
   col *= paperGrain;
   outColor = vec4(col, 1.0);
+}
+`;
+
+// ── the blit ─────────────────────────────────────────────────────────────────────────────────
+// At rest the composed frame lands in a render target rather than on the canvas, because the room
+// has a picture of itself in it and that picture's texture IS this frame (src/pieces/egg-droste.js
+// ping-pongs a pair of them). This copies it to the canvas afterwards. `textureLod(…, 0.0)` and
+// nothing else: the pair carries a mip chain for the picture's sake, and a blit that let the
+// hardware choose a level would hand the canvas a half-resolution frame at the one moment the
+// drawing has to be exact. At 1:1 a linear tap at a texel's centre is that texel, to the bit.
+export const COPY_FRAG = /* glsl */ `
+precision highp float;
+uniform sampler2D tSrc;
+in vec2 vUv;
+layout(location = 0) out vec4 outColor;
+void main() {
+  outColor = vec4(textureLod(tSrc, vUv, 0.0).rgb, 1.0);
 }
 `;
 

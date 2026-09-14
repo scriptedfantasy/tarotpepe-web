@@ -293,11 +293,11 @@ export async function build(ctx) {
     cutField();
   });
 
-  // ---- THE WALL BEHIND HIM IS A CONSPIRACY BOARD -------------------------------------------------
-  // The visitor opens the right-hand picture frame (src/pieces/egg-silvia.js), it swings like a
-  // cabinet door, and over the next six seconds fourteen pinned cards and photographs go up across
-  // the back wall and are joined with red string. When the last length is tied the room says so,
-  // once, and he is asked what he has found.
+  // ---- THE WALL TO HIS LEFT IS A CONSPIRACY BOARD ------------------------------------------------
+  // The visitor opens the picture frame on the stage-left wall (src/pieces/egg-silvia.js), it swings
+  // like a cabinet door, and over the next seven seconds eighteen pinned cards and photographs go up
+  // that wall and are joined with red string. When the last length is tied the room says so, once,
+  // and he is asked what he has found.
   //
   // IT IS THE GLOBE'S SHAPE, with three subtractions, and each of them is the joke:
   //   NO react(). The wall is BEHIND him and he does not turn round. A man who has built that board

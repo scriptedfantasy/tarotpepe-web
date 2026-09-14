@@ -55,7 +55,7 @@ import * as THREE from 'three';
 const PAPER = '#f8f9f4';
 const INK = '#0d0e0d';
 import { makeTiles, makePaperGrain } from './ink-tiles.js';
-import { GBUF_VERT, GBUF_FRAG, QUAD_VERT, EDGE_FRAG, EXTEND_FRAG, COMPOSITE_FRAG, DESPECKLE_FRAG } from './ink-shaders.js';
+import { GBUF_VERT, GBUF_FRAG, QUAD_VERT, EDGE_FRAG, EXTEND_FRAG, COMPOSITE_FRAG, DESPECKLE_FRAG, COPY_FRAG } from './ink-shaders.js';
 import { VORTEX_FRAG } from './egg-vortex-shader.js';
 
 export const meta = {
@@ -316,10 +316,20 @@ export async function build(ctx) {
   white1x1.needsUpdate = true;
 
   // ── render targets ──
-  const size = new THREE.Vector2();
-  let rt = null;
+  // TWO SETS, not one, because this pass now draws the room TWICE on some frames: once from the
+  // camera the visitor is looking through, and once from the home plate, for the picture of this
+  // room that hangs on the back wall (src/pieces/egg-droste.js). Each set remembers its own size —
+  // the main one is the drawing buffer, the picture's is only as large as the picture is on the
+  // glass — so the two do not thrash each other's allocations between passes.
+  const size = new THREE.Vector2(); // the MAIN pass's size: what the vortex and the canvas are
+  const sets = { main: null, pic: null };
+  function targetsFor(slot, w, h) {
+    const cur = sets[slot];
+    if (cur && cur.w === w && cur.h === h) return cur;
+    if (cur) for (const t of Object.values(cur)) t?.dispose?.();
+    return (sets[slot] = makeTargets(w, h));
+  }
   function makeTargets(w, h) {
-    if (rt) for (const t of Object.values(rt)) t.dispose?.();
     const depthTexture = new THREE.DepthTexture(w, h, THREE.UnsignedIntType);
     depthTexture.format = THREE.DepthFormat;
     const gbuf = new THREE.WebGLRenderTarget(w, h, { count: 3, depthTexture, depthBuffer: true, stencilBuffer: false });
@@ -340,8 +350,7 @@ export async function build(ctx) {
     const comp = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false, stencilBuffer: false });
     comp.texture.minFilter = comp.texture.magFilter = THREE.NearestFilter;
     comp.texture.generateMipmaps = false;
-    rt = { gbuf, lit, edge: mk(), ext: mk(), comp };
-    size.set(w, h);
+    return { gbuf, lit, edge: mk(), ext: mk(), comp, w, h };
   }
 
   // ── G-buffer override material ──
@@ -355,6 +364,7 @@ export async function build(ctx) {
       uColor: { value: new THREE.Color(1, 1, 1) },
       uAlphaTest: { value: 0 },
       uLodBias: { value: params.texSharp },
+      uVerbatim: { value: 0 },
       uPacked: { value: 0 },
       uLineW: { value: 1 },
       uId: { value: 0 },
@@ -376,12 +386,19 @@ export async function build(ctx) {
     const ink = (m && m.userData && m.userData.ink) || {};
     const colorful = ink.colorful ? 1 : 0;
     const hatchIdx = Math.round(clamp(ink.hatch ?? 0.5, 0, 1) * 14);
-    u.uPacked.value = (colorful * 128 + hatchIdx * 8) / 255;
+    // BIT 0 IS THE PICTURE OF THIS ROOM and the only material in the set that sets it. Its map is a
+    // finished frame of this pass, so it wants none of what follows: not the sRGB encode on its way
+    // into the G-buffer (it is encoded already), and not a mip bias that would sharpen a drawing
+    // which is not a drawing of marks but a photograph of one. See ink-shaders.js, `verbatim`.
+    const verbatim = ink.verbatim ? 1 : 0;
+    u.uVerbatim.value = verbatim;
+    u.uPacked.value = (colorful * 128 + hatchIdx * 8 + verbatim) / 255;
     // lineWeight rides in gMisc.a at the full eight bits, 0..2 (0 = no line of its own; a cut-out
     // whose outline is already in its own drawing asks for ~0.25 and gets a whisper). It used to be
     // three bits of quarter-steps in gAlbedo.a, which rounded Pepe's 1.15 up to 1.25 without saying
     // so — a quarter-pixel of thick-and-thin nobody asked for. There is no quantisation now.
     u.uLineW.value = clamp(ink.lineWeight ?? 1, 0, 2);
+    u.uLodBias.value = verbatim ? 0 : params.texSharp;
     const map = m && m.map && m.map.isTexture ? m.map : null;
     u.uHasMap.value = map ? 1 : 0;
     u.uMap.value = map || white1x1;
@@ -605,35 +622,89 @@ export async function build(ctx) {
     return vortexRT;
   }
 
-  function render(ctx) {
-    const cam = ctx.camera;
-    renderer.getDrawingBufferSize(_size);
-    if (!rt || _size.x !== size.x || _size.y !== size.y) makeTargets(_size.x, _size.y);
-    const dpr = renderer.getPixelRatio();
-    // TWO HANDS, ONE DRAWING — the same split the entrance door draws with.
-    // `seed` is the PEN: which strike of the drawing this is. It steps six times a second (the
-    // 12 fps clock, on twos), and everything that shapes a MARK rides on it — how far a contour
-    // wanders off its ideal line, how heavily it is laid down, where the nib stands inside the
-    // pixel, how far it runs past a corner, when it skips. That is the boil: the same drawing
-    // struck again, so a held line is never the same line twice.
-    // `placed` is where the MARKS WERE PUT: which run of a receding pattern survives, where a
-    // patch of hatch ends raggedly. It depends on the drawing's number and on nothing else — not
-    // on the clock — so the tone does not crawl. A boil that moves tone is a fizz, and it reads
-    // worse than no boil at all.
-    const seed = Math.floor(ctx.clock.frame / 2) + ctx.seed * 101;
-    const placed = 17 + ctx.seed * 101;
+  // ── THE PICTURE OF THIS ROOM, AND WHAT IT COSTS ────────────────────────────────────────────────
+  // The frame beside the clock holds a live picture of the parlour as the home camera sees it
+  // (src/pieces/egg-droste.js), and the visitor can scroll into it (src/pieces/camera.js). That
+  // picture's texture is THIS PASS'S OWN OUTPUT, fed back: two buffers, ping-ponged, so the sheet is
+  // always showing the one that was finished last and this pass is always writing the other. Nothing
+  // ever samples the target it is writing, which is the one rule a feedback has.
+  //
+  // AND IT IS ONE SCENE PASS PER FRAME AT REST. When the camera is standing on the home plate and
+  // the visitor has not scrolled, the frame being drawn IS the picture on the wall — the same pose,
+  // the same lens, the same pen — so the composite lands in the buffer and the buffer is blitted to
+  // the canvas. There is no second drawing to pay for, and the recursion costs a texture copy.
+  //   Anywhere else — the fan, his face, the spread, the crossroads, or the home plate mid-scroll —
+  //   the home view genuinely is a second picture and has to be drawn: once per DRAWING (the 12 fps
+  //   step) rather than once per frame, and at no more resolution than the sheet takes up on the
+  //   glass. While the visitor is scrolling the sheet is on its way to filling the window, so there
+  //   the buffer is the drawing buffer's own size and the hand-over at the top of the wrap is exact
+  //   to the pixel.
+  // Shadows are struck ONCE PER FRAME whichever of those it is: `needsUpdate` is set at the top of
+  // render() and the first G-buffer pass of the frame consumes it.
+  const copyMat = new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    vertexShader: QUAD_VERT,
+    fragmentShader: COPY_FRAG,
+    uniforms: { tSrc: { value: null } },
+    depthTest: false,
+    depthWrite: false,
+  });
+  function copy(tex, target) {
+    copyMat.uniforms.tSrc.value = tex;
+    fullscreen(copyMat, target);
+  }
+  // the pair. `read` says which of the two the sheet is showing; the other is the one being drawn.
+  let pair = null;
+  const picCam = new THREE.PerspectiveCamera(30, 1, 0.03, 60);
+  function pairAt(w, h) {
+    if (pair && pair.w === w && pair.h === h) return pair;
+    const mk = () => {
+      const t = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false, stencilBuffer: false });
+      // A MIP CHAIN, and it is the one thing in this pass that is allowed to average ink with paper.
+      // At the home plate the sheet is 137 px across on a 1280 px window and its map is a 1280 px
+      // frame: without a chain that is a tenth-scale point sample, which is not a small drawing of
+      // the room, it is a field of sparkle. With one it is what a photograph of a drawing looks like
+      // reduced — which is what a picture on a wall IS. Magnified, at the top of a zoom, level 0 is
+      // sampled at exactly 1:1 and a linear tap at a texel's centre returns that texel.
+      t.texture.minFilter = THREE.LinearMipmapLinearFilter;
+      t.texture.magFilter = THREE.LinearFilter;
+      t.texture.generateMipmaps = true;
+      t.texture.wrapS = t.texture.wrapT = THREE.ClampToEdgeWrapping;
+      return t;
+    };
+    const next = { a: mk(), b: mk(), w, h, read: 0 };
+    const prevTarget = renderer.getRenderTarget();
+    if (pair) {
+      // a change of size is not a blank drawing: carry the last finished frame across both buffers
+      const src = (pair.read ? pair.b : pair.a).texture;
+      copy(src, next.a);
+      copy(src, next.b);
+      pair.a.dispose();
+      pair.b.dispose();
+    } else {
+      // …and the first frame of all opens on bare paper rather than on whatever the driver left
+      renderer.getClearColor(_clear);
+      const prevAlpha = renderer.getClearAlpha();
+      renderer.setClearColor(compMat.uniforms.uPaper.value, 1);
+      for (const t of [next.a, next.b]) {
+        renderer.setRenderTarget(t);
+        renderer.clear(true, false, false);
+      }
+      renderer.setClearColor(_clear, prevAlpha);
+    }
+    renderer.setRenderTarget(prevTarget);
+    pair = next;
+    return pair;
+  }
 
-    const prevRT = renderer.getRenderTarget();
-    renderer.getClearColor(_clear);
-    const prevAlpha = renderer.getClearAlpha();
+  // ── one drawing of the room, from one camera, into one target ────────────────────────────────
+  // Passes 1..6, exactly as they always were. The only things that moved out of here are the shadow
+  // map's `needsUpdate` and the vortex, both of which belong to the FRAME and not to the pass.
+  const _res = new THREE.Vector2();
+  function drawInk({ cam, slot, w, h, dpr, seed, placed, out }) {
+    const rt = targetsFor(slot, w, h);
+    _res.set(w, h);
     const prevOverride = scene.overrideMaterial;
-    const prevBg = scene.background;
-    const prevAutoUpdate = renderer.shadowMap.autoUpdate;
-
-    // shadows once per frame, not once per pass
-    renderer.shadowMap.autoUpdate = false;
-    renderer.shadowMap.needsUpdate = true;
-    scene.background = null;
 
     // 1. G-buffer
     gMat.uniforms.uCamRot.value.setFromMatrix4(cam.matrixWorld);
@@ -649,7 +720,6 @@ export async function build(ctx) {
     renderer.setRenderTarget(rt.lit);
     renderer.render(scene, cam);
     scene.overrideMaterial = prevOverride;
-    scene.background = prevBg;
 
     // 3. edges
     const eu = edgeMat.uniforms;
@@ -657,7 +727,7 @@ export async function build(ctx) {
     eu.tNorm.value = rt.gbuf.textures[1];
     eu.tMisc.value = rt.gbuf.textures[2];
     eu.tAlbedo.value = rt.gbuf.textures[0];
-    eu.uRes.value.copy(size);
+    eu.uRes.value.copy(_res);
     eu.uNear.value = cam.near;
     eu.uFar.value = cam.far;
     eu.uSeed.value = seed;
@@ -672,7 +742,7 @@ export async function build(ctx) {
     // 4. overshoot
     const xu = extMat.uniforms;
     xu.tEdge.value = rt.edge.texture;
-    xu.uRes.value.copy(size);
+    xu.uRes.value.copy(_res);
     xu.uDpr.value = dpr;
     xu.uSeed.value = seed;
     xu.uOvershoot.value = params.overshoot;
@@ -682,7 +752,7 @@ export async function build(ctx) {
     xu.uStub2.value = params.stubBoth;
     fullscreen(extMat, rt.ext);
 
-    // 5. composite to the canvas
+    // 5. composite
     const cu = compMat.uniforms;
     cu.tAlbedo.value = rt.gbuf.textures[0];
     cu.tNorm.value = rt.gbuf.textures[1];
@@ -690,12 +760,12 @@ export async function build(ctx) {
     cu.tDepth.value = rt.gbuf.depthTexture;
     cu.tLit.value = rt.lit.texture;
     cu.tEdge.value = rt.ext.texture;
-    cu.uRes.value.copy(size);
+    cu.uRes.value.copy(_res);
     cu.uDpr.value = dpr;
     cu.uSeed.value = seed;
     cu.uNear.value = cam.near;
     cu.uFar.value = cam.far;
-    const cssH = size.y / dpr;
+    const cssH = h / dpr;
     cu.uHatchK.value = cssH / (1024 * Math.tan(THREE.MathUtils.DEG2RAD * cam.fov * 0.5));
     cu.uLref.value = params.lref;
     cu.uLineBase.value = params.lineBase;
@@ -717,28 +787,114 @@ export async function build(ctx) {
     cu.uTone.value.set(...params.tone);
     cu.uCamPos.value.setFromMatrixPosition(cam.matrixWorld);
     if (params.letterbox) {
-      const frameAspect = size.x / size.y;
+      const frameAspect = w / h;
       const bar = Math.max(0, (1 - frameAspect / params.letterbox) / 2);
       cu.uLetterbox.value.set(bar, bar);
     } else cu.uLetterbox.value.set(0, 0);
+
     // 6. despeckle. The probe buffers (3..8, 11) are raw readouts and are shown untouched; the
     // three judged states and the two halves that add up to lines-only all go through the sieve,
     // so what is measured is what is shown.
-    // …and where the sieve puts the finished frame: the canvas, unless the vortex is running
-    const last = vortex.active ? vortexTarget(_size.x, _size.y) : null;
-    const sieve = mode < 3 || mode === 9 || mode === 10;
-    if (sieve) {
+    if (mode < 3 || mode === 9 || mode === 10) {
       fullscreen(compMat, rt.comp);
       const du = despeckleMat.uniforms;
       du.tSrc.value = rt.comp.texture;
-      du.uRes.value.copy(size);
+      du.uRes.value.copy(_res);
       du.uDpr.value = dpr;
-      fullscreen(despeckleMat, last);
-    } else fullscreen(compMat, last);
-    // 7. the vortex, if the clock has been clicked (egg-vortex.js). While it is idle there is no
-    // seventh pass at all: the sieve wrote straight to the canvas and render() is over.
-    if (last) vortexPass(last.texture, dpr, seed);
+      fullscreen(despeckleMat, out);
+    } else fullscreen(compMat, out);
+  }
 
+  function render(ctx) {
+    const cam = ctx.camera;
+    renderer.getDrawingBufferSize(_size);
+    const dbW = _size.x, dbH = _size.y;
+    size.set(dbW, dbH);
+    const dpr = renderer.getPixelRatio();
+    // TWO HANDS, ONE DRAWING — the same split the entrance door draws with.
+    // `seed` is the PEN: which strike of the drawing this is. It steps six times a second (the
+    // 12 fps clock, on twos), and everything that shapes a MARK rides on it — how far a contour
+    // wanders off its ideal line, how heavily it is laid down, where the nib stands inside the
+    // pixel, how far it runs past a corner, when it skips. That is the boil: the same drawing
+    // struck again, so a held line is never the same line twice.
+    // `placed` is where the MARKS WERE PUT: which run of a receding pattern survives, where a
+    // patch of hatch ends raggedly. It depends on the drawing's number and on nothing else — not
+    // on the clock — so the tone does not crawl. A boil that moves tone is a fizz, and it reads
+    // worse than no boil at all.
+    const seed = Math.floor(ctx.clock.frame / 2) + ctx.seed * 101;
+    const placed = 17 + ctx.seed * 101;
+
+    const prevRT = renderer.getRenderTarget();
+    renderer.getClearColor(_clear);
+    const prevAlpha = renderer.getClearAlpha();
+    const prevBg = scene.background;
+    const prevAutoUpdate = renderer.shadowMap.autoUpdate;
+
+    // shadows once per FRAME, not once per pass — and not once per DRAWING either: the first
+    // G-buffer render below consumes this, whichever of the two pictures it belongs to.
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
+    scene.background = null;
+
+    const C = ctx.pieces?.camera ?? null;
+    const D = ctx.pieces?.props?.droste ?? null;
+    const mat = D?.material ?? null;
+    const last = vortex.active ? vortexTarget(dbW, dbH) : null;
+
+    if (!mat) {
+      // no picture on the wall (a page built with ?only=, or props having failed): the pass is what
+      // it always was, straight to the canvas
+      drawInk({ cam, slot: 'main', w: dbW, h: dbH, dpr, seed, placed, out: last });
+      if (last) vortexPass(last.texture, dpr, seed);
+    } else {
+      const atHome = C?.atHome === true;
+      // WHERE THE SHEET WANTS ITS PIXELS. On the home plate (scrolled or not) it is on its way to
+      // filling the window and gets the drawing buffer. Anywhere else it is a small thing on a far
+      // wall: the moulding's own box on the glass, doubled for the mip chain's sake, rounded up to
+      // a power of two and never below 128 — four or five sizes over the life of a page, so the
+      // allocation is not re-made every drawing.
+      let pw = dbW, ph = dbH;
+      if (!atHome && !(C?.current === 'home' && !C?.moving)) {
+        const b = D.hitBox?.();
+        const want = Math.max(64, (b?.w ?? 0) * dpr * 2);
+        pw = Math.max(128, Math.min(dbW, 2 ** Math.ceil(Math.log2(want))));
+        ph = Math.max(1, Math.round((pw * dbH) / dbW));
+      }
+      const full = pw === dbW && ph === dbH;
+      const pr = pairAt(pw, ph);
+      mat.map = (pr.read ? pr.b : pr.a).texture; // never the one about to be written
+      const write = pr.read ? pr.a : pr.b;
+
+      if (atHome) {
+        // ONE PASS. The drawing IS the picture: it lands in the buffer, the buffer goes to the glass.
+        drawInk({ cam, slot: 'main', w: dbW, h: dbH, dpr, seed, placed, out: write });
+        pr.read ^= 1;
+        copy(write.texture, last);
+        if (last) vortexPass(last.texture, dpr, seed);
+      } else {
+        // TWO. The home view, on the twelves only, and then the frame the visitor is looking at.
+        if (ctx.clock.stepped && C?.place) {
+          C.place('home', picCam);
+          // a small sheet is a SMALL DRAWING, not a shrunken one: the pen is measured in css px, so
+          // the reduced pass is told it is a window of its own size at dpr 1 rather than the same
+          // window at a fraction of a device pixel, where the nib would fall under the raster and
+          // the room would arrive as grey.
+          // …and it SHARES THE MAIN SET when it is the same size, which it is the whole time the
+          // visitor is scrolling. The two drawings are strictly sequential — the home view is
+          // finished into the pair before the visitor's frame starts — and every intermediate
+          // (G-buffer, lit, edge, extend, composite) is written from scratch at the top of each,
+          // so there is nothing in them to protect. At 3200x1800 that is about 180 MB of render
+          // target not allocated a second time at the one moment the room is working hardest.
+          drawInk({ cam: picCam, slot: full ? 'main' : 'pic', w: pw, h: ph, dpr: full ? dpr : 1, seed, placed, out: write });
+          pr.read ^= 1;
+          mat.map = write.texture;
+        }
+        drawInk({ cam, slot: 'main', w: dbW, h: dbH, dpr, seed, placed, out: last });
+        if (last) vortexPass(last.texture, dpr, seed);
+      }
+    }
+
+    scene.background = prevBg;
     renderer.setRenderTarget(prevRT);
     renderer.setClearColor(_clear, prevAlpha);
     renderer.shadowMap.autoUpdate = prevAutoUpdate;

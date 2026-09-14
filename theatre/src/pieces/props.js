@@ -39,6 +39,7 @@ import { buildFine } from './egg-fine.js';
 import { eggNakamoto } from './egg-nakamoto.js';
 
 import { eggSilvia } from './egg-silvia.js';
+import { eggDroste } from './egg-droste.js';
 
 import { eggPeep } from './egg-peep.js';
 
@@ -377,21 +378,11 @@ export async function build(ctx) {
     // framed image behind pepe should be a nakamoto card." Same nail, same 0.4 x 0.46 frame, same
     // cords — only the sheet inside it changed, so the row against the clock is what it was. The
     // egg hangs it itself, at the foot of this file, because it needs the pointer arbiter.
-    // …and the RIGHT frame is a plain picture on a nail again. PEPE SILVIA had it for a round — the
-    // circuit diagram on a hinge, with a conspiracy board behind it — and has gone to the
-    // stage-left wall, where the user asked for it (src/pieces/egg-silvia.js). What hangs here is
-    // what hung here before that round, to the seed and the millimetre.
-    const rowA = [[0.46, 0.4, 0.46, 'diagram', true]];
-    let seed = 100;
-    const hang = (list, y) => {
-      for (const [x, w, h, kind, ornate] of list) {
-        const f = O.pictureFrame({ w, h, kind, seed: seed++, ornate });
-        f.position.set(x, y, WALL + 0.015);
-        g.add(f);
-        O.hangCords(g, x, y + h / 2, w / 2 - 0.02, HOOK_Y, WALL + 0.012);
-      }
-    };
-    hang(rowA, 2.04);
+    // …and the RIGHT frame is THE PICTURE OF THIS ROOM (src/pieces/egg-droste.js). PEPE SILVIA had
+    // the nail for a round — the circuit diagram on a hinge, with a conspiracy board behind it — and
+    // has gone to the stage-left wall, where the user asked for it (src/pieces/egg-silvia.js). The
+    // picture is hung at the foot of this file, by its egg, because ink.js and camera.js both need
+    // the object; the nail moved 50 mm right for it and the reason is written there.
     const clock = O.wallClock({ r: 0.185 });
     clock.position.set(0, 2.06, WALL + 0.03);
     g.add(clock);
@@ -639,6 +630,13 @@ export async function build(ctx) {
       // for the tools: which switch the pointer is on, by name
       get hovered() {
         return hovered?.name ?? null;
+      },
+      // IS THERE A SWITCH UNDER THIS POINT? The same test a pointerdown gets — the drawing first,
+      // then the thumb margins — asked without an event and without touching the hover. camera.js
+      // asks it before it lets a one-finger drag become a scroll: a thumb that landed on the cat
+      // is the cat's, and the room does not get to take it off the animal.
+      at(clientX, clientY) {
+        return pick({ clientX, clientY })?.name ?? null;
       },
       update() {
         if (!pending) return;
@@ -955,6 +953,34 @@ export async function build(ctx) {
   // The slot is the one the operator's photograph hung in, to the millimetre: the row against the
   // clock is unchanged and only the sheet in the frame is new.
   const NAKAMOTO = eggNakamoto(ctx, { group: g, switches: SWITCHES, slot: { x: -0.46, y: 2.04, w: 0.4, h: 0.46, z: WALL + 0.015, hookY: HOOK_Y } });
+  // ---- THE PICTURE OF THIS ROOM in the right frame (src/pieces/egg-droste.js). ----------------
+  // The sheet inside it is cut to the window's own aspect (landscape on a laptop, upright on a
+  // phone) and the moulding is put round that; what is in it is this room, live, drawn by the same
+  // pen, and in it the same picture again. See THE SCROLL in src/pieces/camera.js.
+  //
+  // THE BOX IT HANGS IN, AND WHY IT IS THAT BOX. The user, having seen it: "its amazing, but please
+  // increase the size of the picture a bit." The wall was measured round it rather than guessed
+  // (tools/_droste-where.mjs prints every world box on this stretch of plaster) and it gives one
+  // answer sideways and a different one up and down:
+  //   · SIDEWAYS there is room. The clock's right edge is at x 0.185 and the door architrave takes
+  //     everything past 1.03, so the frame goes from 0.4 to 0.5 wide and the NAIL MOVES RIGHT from
+  //     0.46 to 0.51 — which is not an arbitrary 50 mm. At 0.51 a 0.5-wide frame's left edge lands
+  //     on 0.2523, and the Nakamoto frame's right edge is on -0.2523: the two pictures keep exactly
+  //     the same 67 mm of plaster either side of the clock that this row has always had. Its right
+  //     edge is at 0.7677, a quarter of a metre clear of the architrave.
+  //   · UP AND DOWN THERE IS NONE, and 0.58 was asked for. The shop board's bottom edge is at
+  //     2.2649 and an insect sheet sits at x 0.562..0.678, y 1.672..1.788 (egg-insects.js WALL_SPOTS
+  //     [0.62, 1.73]; its own comment says that row is placed just under the pendulum's 1.79, so
+  //     the band was already full before this picture asked for it). Between them is 0.477 m, and
+  //     0.46 plus the corner blocks is 0.4754 of it. That is not a number this round chose — it is
+  //     the line the whole row hangs on, and the Nakamoto frame occupies it to the millimetre. Any
+  //     frame wide enough to be worth having crosses that insect, so moving the nail buys nothing:
+  //     the only slots that clear it are 0.357 m and 0.332 m wide, both narrower than the 0.4 the
+  //     picture already had. It stays at 0.46 and the height cap is the wall's, not the brief's.
+  // On a 1280x800 window that is a sheet of 0.456 x 0.285 m against the 0.356 x 0.222 it was —
+  // 28 % larger on each side, 64 % more picture. On a phone it is unchanged, because upright is the
+  // direction the wall has nothing left to give.
+  const DROSTE = eggDroste(ctx, { group: g, slot: { x: 0.51, y: 2.04, w: 0.5, h: 0.46, z: WALL + 0.015, hookY: HOOK_Y } });
   // ---- PEPE SILVIA on the stage-left wall, and the wall it hangs on (src/pieces/egg-silvia.js). ---
   // The user: "lets put the pepe silvia painting and mechanism where the mirror currently is." So
   // the picture hangs where the round frame hung — x -2.58 plus the row's own 15 mm of stand-off,
@@ -1071,6 +1097,11 @@ export async function build(ctx) {
     // glass (which moves as it swings) and the box a thumb is given. `sheetBox(id)` is any one
     // card's box; `red` is the string's colour, which is the room's fourth.
     silvia: SILVIA,
+    // THE PICTURE OF THIS ROOM, in the frame beside the clock. `geometry` is where the sheet is in
+    // world metres (centre, half-extents) — which is what camera.js solves the zoom from — `frame`
+    // is the whole moulding's size for this window's aspect, `material` is the surface ink.js binds
+    // its finished buffer to, and hitBox() is the moulding's box on the glass from the live camera.
+    droste: DROSTE,
     // the shop's board over Pepe's head. `mesh` is what a pointer is raycast against, `pivot` is
     // its hook line (rotate that and the board swings on its cord), and w/h are its size in metres.
     // help.js hangs its own tag under the pivot and tips it when the pointer is over the board.
@@ -1134,7 +1165,7 @@ export async function build(ctx) {
       NAKAMOTO.setState(name);
       // `silvia-open` is the right frame swung open on the whole board — eighteen pinned sheets and
       // every length of red string tied. Every other name is a picture on a wall nobody has touched.
-      SILVIA.setState(name);
+      SILVIA?.setState(name);
       // `peep-fallen` is the toad on the boards in front of the press; every other name has him
       // standing on the shelf, which is where a reload always puts him
       PEEP.setState(name);
@@ -1169,7 +1200,7 @@ export async function build(ctx) {
       RAIN?.update(ctx);
       FINE.update(ctx);
       NAKAMOTO.update(ctx);
-      SILVIA.update(ctx);
+      SILVIA?.update(ctx);
       PEEP.update(ctx);
       KONAMI.update(ctx);
       DECK_OUT.update(ctx);

@@ -37,7 +37,9 @@
       html, body { margin: 0; height: 100%; background: #0d0a08; overflow: hidden; }
       body { font-family: var(--futura); color: var(--paper); -webkit-font-smoothing: antialiased; }
       #stage { position: fixed; inset: 0; }
-      #stage canvas { display: block; width: 100%; height: 100%; }
+      /* the room's own scroll is the zoom into the picture on the back wall (camera.js): the
+         browser does not get the gesture first, on any of the three ways in */
+      #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       /* DOM layers, drawn over the WebGL frame. Pieces own their own child nodes. */
       #overlay { position: fixed; inset: 0; pointer-events: none; }
       #overlay > * { position: absolute; inset: 0; }

@@ -179,7 +179,7 @@ function scripted({ beat, user, slug, position, question, spread = [], focus = n
     // THE DECK LAID OUT: what it is for. Keyless, flow.js puts PROMPTS.deck up itself.
     case 'deck':
       return { text: '', offered: false };
-    // PEPE SILVIA: the wall behind him has just gone up (src/pieces/egg-silvia.js) and the empty
+    // PEPE SILVIA: the wall to his left has just gone up (src/pieces/egg-silvia.js) and the empty
     // string is the whole answer. There is nothing written for it and there is not going to be: the
     // line is a man explaining a conspiracy board he built himself, which is a different speech
     // every time or it is not worth having. Keyless the wall goes up in silence, which is funnier

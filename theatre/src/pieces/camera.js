@@ -39,10 +39,11 @@
 // drops (shows more floor) while the camera keeps looking straight ahead.
 import * as THREE from 'three';
 import { buildShots } from './camera-shots.js';
+import { tanHalf } from './camera-frame.js';
 
 export const meta = {
   name: 'camera',
-  judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'crossroads', 'track', 'whip'] },
+  judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'crossroads', 'track', 'whip', 'zoom-half', 'zoom-deep'] },
   files: ['src/pieces/camera.js', 'src/pieces/camera-shots.js', 'src/pieces/camera-frame.js', 'src/pieces/camera-plan.js'],
 };
 
@@ -133,6 +134,136 @@ export async function build(ctx) {
   function currentPose() {
     return { pos: cam.position.clone(), q: cam.quaternion.clone(), fov: cam.fov, shift: [...shift] };
   }
+
+  // ---- THE SCROLL ---------------------------------------------------------------------------
+  // The room has a picture of itself on the back wall (src/pieces/egg-droste.js) and the visitor can
+  // scroll INTO it. The user: "basically have infinity scroll that always scrolls into the picture
+  // which is the room which is the picture which is the room etc etc."
+  //
+  // IT IS A MODIFIER ON `home` AND NOTHING ELSE. `zoom` is an unbounded real; its fractional part
+  // t is the pose. At t = 0 the camera is on the home plate, to the bit — there is a short-circuit
+  // below that hands back the solved shot rather than a pose arithmetic happens to land on, because
+  // the whole trick rests on those two frames being the same frame. As t runs to 1 the camera walks
+  // up the picture's own normal until the picture EXACTLY fills the window, and because the picture
+  // is a live frame of the home plate, the frame at t → 1 IS the frame at t = 0. Then t wraps to 0
+  // and nothing has happened. Scrolling the other way wraps to t → 1, which is the room seen from
+  // inside its own picture — it works in both directions for the same reason.
+  //
+  // THE GEOMETRY, and it is only as complicated as it is because of the lens rise. The back wall is
+  // square to the home camera (every frontal shot in this file is), so the end of the walk is the
+  // camera standing on the picture's normal through its centre, flat, with no rise at all, at the
+  // distance D1 = halfH / tan(fov/2) where the sheet's height fills the vertical field. It fills the
+  // width at the same moment because the sheet is cut to the window's aspect — that is what
+  // egg-droste.js re-cuts it for on every resize.
+  //   DISTANCE is exponential in t: D(t) = D0·(D1/D0)^t. That makes the picture's height on the
+  //   glass grow as h0^(1-t) — a constant rate of zoom per unit of t, so a flick reads as one
+  //   movement rather than as a lunge at the end.
+  //   THE SCREEN CENTRE of the picture runs LINEARLY from where it sits at home to the middle of
+  //   the window, and the lens rise runs linearly to zero with it. Those two, plus D(t), are enough
+  //   to solve the camera's x and y at every t: put the picture's projected centre where it is
+  //   supposed to be and read the camera's position off it.
+  // Swept at t = k/20 (tools/_droste-proof.mjs): the projected rectangle grows monotonically in both
+  // dimensions at every window shape, and every edge of it stays inside the window until it lands on
+  // it at t = 1. It cannot do otherwise: with the centre at S·(1-t) and the half-extent at h0^(1-t),
+  // the far edge is S·s + h0^s in s = 1-t, which is 1 at s = 0, less than 1 at s = 1, and convex.
+  //
+  // ON THE TWELVES. The dolly gets one new position per DRAWING and so does this: a smooth zoom
+  // would be the only smooth thing in a stop-motion room. The visitor's wheel moves a TARGET; the
+  // shown number closes 45 % of the gap on each stepped frame, so a flick drifts for four or five
+  // drawings and settles. 45 % puts a flick within a twentieth of its mark in five drawings — under
+  // half a second — which is a hand letting go of a wheel, not a tween.
+  const ZOOM_CLOSE = 0.45; // of the gap to the target, per drawing
+  const WHEEL_WRAP = 1200; // px of wheel for one whole wrap (the brief's number)
+  // …and a trackpad PINCH arrives as ctrl+wheel in deltas an order of magnitude smaller than a
+  // scroll's, so it gets its own gain. 300 px of pinch for a wrap is about one full spread of the
+  // fingers on a Mac trackpad.
+  const PINCH_WRAP = 300;
+  const DRAG_WRAP = 700; // px of one-finger drag for a wrap: ~0.8 of a 844 px phone
+  const DRAG_SLOP = 12; // px before a touch that started on nothing becomes a scroll
+  let zoomTarget = 0, zoomShown = 0;
+  let pendingZoom = null; // ?zoom=<t>, spent on the first update; see the foot of this file
+
+  const drosteOf = () => ctx.pieces?.props?.droste ?? null;
+
+  // The picture as the home plate sees it: D0 (camera to sheet), D1 (where it fills the window),
+  // and the sheet's half-height on the glass at home. Null while the frame has no size yet.
+  function zoomSpan() {
+    const d = drosteOf();
+    const home = shots.home;
+    if (!d || !home) return null;
+    const gm = d.geometry;
+    if (!(gm.halfH > 1e-6)) return null;
+    const T0 = tanHalf(home.fov ?? 30);
+    const D0 = home.pos[2] - gm.centre[2];
+    const D1 = gm.halfH / T0;
+    if (!(D0 > 0) || !(D1 > 0) || D1 >= D0) return null;
+    return { gm, home, T0, D0, D1, h0: D1 / D0 };
+  }
+
+  // The pose at t, as a shot the rest of this file already knows how to apply.
+  function zoomShot(t) {
+    const s = zoomSpan();
+    if (!s) return null;
+    const { gm, home, T0, D0, D1 } = s;
+    const A = aspect();
+    const [px, py, pz] = gm.centre;
+    const sx0 = home.shift?.[0] ?? 0, sy0 = home.shift?.[1] ?? 0;
+    const D = D0 * Math.pow(D1 / D0, t);
+    // where the sheet's centre sits on the glass at home, in NDC. The view offset enters u and v
+    // with opposite signs: three.js moves the frustum's LEFT edge by +offsetX and its TOP edge by
+    // -offsetY, which is why a rise (+y) lifts a point in v and a sideways shift lowers it in u.
+    const u0 = (px - home.pos[0]) / (D0 * T0 * A) - 2 * sx0;
+    const v0 = (py - home.pos[1]) / (D0 * T0) + 2 * sy0;
+    const k = 1 - t;
+    const sx = sx0 * k, sy = sy0 * k;
+    return {
+      pos: [px - (u0 * k + 2 * sx) * D * T0 * A, py - (v0 * k - 2 * sy) * D * T0, pz + D],
+      look: [px - (u0 * k + 2 * sx) * D * T0 * A, py - (v0 * k - 2 * sy) * D * T0, pz],
+      fov: home.fov ?? 30,
+      shift: [sx, sy],
+    };
+  }
+
+  // WHEN THE ROOM WILL TAKE A SCROLL AT ALL. It is the home plate's modifier, so: the camera has to
+  // be on home, standing still, and nobody may be holding it. On top of that, four things in this
+  // room own the camera or the pointer while they are out, and a wheel during any of them is a
+  // wheel the visitor meant for that thing: the deck laid on the cloth, the crossroads outside the
+  // door, the notice card, and a pick (the fan arms the pointer and the camera is on `fan` for it,
+  // but the flag is asked anyway — it costs nothing and it is the honest test).
+  function zoomAllowed() {
+    if (held != null || move || api.current !== 'home') return false;
+    const P = ctx.pieces?.props;
+    if (P?.deck?.out || P?.cross?.out) return false;
+    if (ctx.pieces?.help?.showing) return false;
+    // the fan's own flag, which lives on the piece that owns the pointer rather than on reveal's
+    // front door (reveal-pick.js; camera-shots.js reads `_fan` the same way for the same reason)
+    const F = ctx.pieces?.reveal?._fan;
+    if (F?.armed || F?.picking) return false;
+    return !!zoomSpan();
+  }
+
+  const fract = (v) => v - Math.floor(v);
+  function applyZoom() {
+    const t = fract(zoomShown);
+    // t = 0 is the home plate itself and not an arithmetic approximation of it: the hand-over at
+    // the top of a wrap is measured against this frame, so it has to be the same floats.
+    if (t === 0) {
+      applyPose(poseOf(shots.home));
+      return;
+    }
+    const s = zoomShot(t);
+    if (s) applyPose(poseOf(s));
+  }
+  function resetZoom() {
+    zoomTarget = 0;
+    zoomShown = 0;
+  }
+  // …and the tools' way in: a held t, with no drift, on whatever the camera is doing now.
+  function holdZoom(t) {
+    zoomTarget = zoomShown = t;
+    applyZoom();
+  }
+
   // A new window shape is a new set of frames. Rebuild them, and put the camera back on the one it
   // is holding — unless it is mid-move, where the two poses it is blending were solved for the old
   // window and the move finishes in the shape it started in.
@@ -143,6 +274,9 @@ export async function build(ctx) {
       applyShift(shift[0], shift[1]);
       cam.updateProjectionMatrix();
     }
+    // the sheet was re-cut for the new aspect a moment ago (props builds before this piece, so its
+    // resize handler has already run); a held zoom is re-solved against the frame's new shape
+    if (!move && api.current === 'home' && zoomShown !== 0) applyZoom();
   });
 
   // ---- moves ----
@@ -202,6 +336,11 @@ export async function build(ctx) {
   //   frame but a flat sheet, where a wide lens shows nothing at all.
   function dolly(fromShot, toShot, seconds = 2, { via = [], ease = [0.25, 0.25], fovEase = [0.72, 1] } = {}) {
     finish();
+    // A move away from home LEAVES FROM WHERE THE VISITOR SCROLLED TO — `currentPose()` is the live
+    // camera and that is the zoomed one — and the number goes back to zero, so the way home is the
+    // home plate. Zeroing it does not move anything: only applyZoom() does, and it is now blocked
+    // by the move this call is about to start.
+    resetZoom();
     const from = fromShot == null ? currentPose() : poseOf(resolve(fromShot));
     const to = poseOf(resolve(toShot));
     api.current = typeof toShot === 'string' ? toShot : 'custom';
@@ -255,11 +394,13 @@ export async function build(ctx) {
   // internal: no token bookkeeping (sequences and loops own their token)
   function jump(shot) {
     finish();
+    resetZoom(); // a cut is a cut: the room is at t = 0 wherever it lands, home included
     api.current = typeof shot === 'string' ? shot : 'custom';
     applyPose(poseOf(resolve(shot)));
   }
   function startMove(shot, kind, duration) {
     finish();
+    resetZoom(); // …and the rail leaves from the zoomed pose; see dolly() above
     const to = poseOf(resolve(shot));
     api.current = typeof shot === 'string' ? shot : 'custom';
     if (kind === 'cut') {
@@ -294,6 +435,72 @@ export async function build(ctx) {
     current: 'home',
     get holding() {
       return held;
+    },
+    // ---- the scroll, for the tools and for anything that wants to know ------------------------
+    // `zoom` is the number the picture is actually AT (the shown one): a tool that measures a frame
+    // measures this. `zoomTarget` is where the visitor's last flick pointed it. They differ for the
+    // four or five drawings a flick takes to settle and are equal at rest.
+    get zoom() {
+      return zoomShown;
+    },
+    get zoomTarget() {
+      return zoomTarget;
+    },
+    // the fractional part: the pose, in [0, 1)
+    get zoomPhase() {
+      return fract(zoomShown);
+    },
+    get zoomable() {
+      return zoomAllowed();
+    },
+    // set the TARGET; the shown number walks to it on the twelves. `{ hold: true }` puts both there
+    // at once, which is what ?zoom= and the judging states want — a still does not drift.
+    setZoom(t, { hold = false } = {}) {
+      if (!Number.isFinite(t)) return false;
+      if (hold) {
+        holdZoom(t);
+        return true;
+      }
+      zoomTarget = t;
+      return true;
+    },
+    // what the walk is solved from, for a proof that wants to check the arithmetic without a page:
+    // the two distances and the sheet's half-height on the glass at home.
+    get zoomSpan() {
+      const s = zoomSpan();
+      return s ? { D0: s.D0, D1: s.D1, h0: s.h0, fov: s.home.fov, halfW: s.gm.halfW, halfH: s.gm.halfH, centre: [...s.gm.centre] } : null;
+    },
+    // the pose at any t, solved but not applied — the continuity table is taken off this
+    zoomShotAt: (t) => zoomShot(fract(t)),
+    // IS THE LIVE CAMERA STANDING ON THE HOME PLATE, TO THE FLOAT? ink.js asks once a frame, and a
+    // great deal hangs on the answer: when it is yes the frame about to be drawn IS the picture on
+    // the back wall, so there is one scene pass and not two. Nothing is approximated here — the
+    // pose the camera is holding was copied out of poseOf(shots.home) and is compared against it.
+    get atHome() {
+      if (move || api.current !== 'home' || fract(zoomShown) !== 0) return false;
+      const p = poseOf(shots.home);
+      return cam.position.equals(p.pos) && cam.quaternion.equals(p.q) && cam.fov === p.fov && shift[0] === p.shift[0] && shift[1] === p.shift[1];
+    },
+    // PUT ANOTHER CAMERA ON A NAMED SHOT, solved for this window. ink.js draws the picture on the
+    // wall through one of these while the real camera is somewhere else entirely; it gets the same
+    // pose, the same lens, the same rise and the same clipping planes, so what the sheet shows is
+    // the home plate and not an approximation of it.
+    place(shot, other) {
+      const p = poseOf(resolve(shot));
+      other.position.copy(p.pos);
+      other.quaternion.copy(p.q);
+      other.up.set(0, 1, 0).applyQuaternion(p.q);
+      other.fov = p.fov;
+      other.near = cam.near;
+      other.far = cam.far;
+      const w = ctx.size?.w || window.innerWidth || 1600, h = ctx.size?.h || window.innerHeight || 900;
+      other.aspect = w / h;
+      if (!p.shift[0] && !p.shift[1]) {
+        if (other.view?.enabled) other.clearViewOffset();
+      } else other.setViewOffset(w, h, p.shift[0] * w, p.shift[1] * h, w, h);
+      other.updateProjectionMatrix();
+      other.updateMatrixWorld();
+      return other;
     },
     // `jump: false` takes the hold WITHOUT moving the camera — which is what a piece that is about
     // to WALK to the held shot needs. The hold has to be on before the first drawing of the move,
@@ -389,7 +596,12 @@ export async function build(ctx) {
             await startMove('pepe', 'whip');
           }
         })();
-      } else api.cut(name in shots ? name : 'home');
+      } else if (name === 'zoom-half' || name === 'zoom-deep') {
+      // the walk into the picture, held: half way, and one drawing short of the wrap. Both are cut
+      // to home first, so the number is applied to the plate it is a modifier on.
+      api.cut('home');
+      holdZoom(name === 'zoom-deep' ? 0.95 : 0.5);
+    } else api.cut(name in shots ? name : 'home');
     },
     update(ctx) {
       // THE BEAT MOVES THE PLATE. A card landing in the reading row is what earns that slot its
@@ -411,6 +623,26 @@ export async function build(ctx) {
           const to = poseOf(shots.fan), from = move ? move.to : currentPose();
           if (from.pos.distanceTo(to.pos) > 0.004 || Math.abs(from.fov - to.fov) > 0.08) startMove('fan', 'open', OPEN_S);
         }
+      }
+      // THE SCROLL, one new position per DRAWING. Nothing here runs on a tick the paper did not
+      // turn over, and nothing runs at all unless the camera is standing on the home plate with
+      // nobody else holding it — a wheel during a pick, a deck, a crossroads or the notice is a
+      // wheel that was meant for one of those, and it has already been refused at the listener.
+      if (zoomAllowed()) {
+        if (pendingZoom != null) {
+          holdZoom(pendingZoom);
+          pendingZoom = null;
+        }
+        if (zoomShown !== zoomTarget && ctx.clock.stepped) {
+          const gap = zoomTarget - zoomShown;
+          zoomShown = Math.abs(gap) < 1e-4 ? zoomTarget : zoomShown + gap * ZOOM_CLOSE;
+          applyZoom();
+        }
+      } else if (zoomShown !== 0 || zoomTarget !== 0) {
+        // the camera went somewhere (or something took it) by a road that did not come through
+        // jump/startMove/dolly — the entrance's hand-rolled arrival is one. Same rule: the room is
+        // at t = 0 when it comes back.
+        resetZoom();
       }
       if (!move) return;
       const m = move;
@@ -438,6 +670,120 @@ export async function build(ctx) {
     },
   };
   applyPose(poseOf(shots.home));
+
+  // ---- WHAT THE VISITOR SCROLLS WITH ----------------------------------------------------------
+  // Three ways in, and none of them announces itself. There is no cursor on the picture, no tag, no
+  // hint: the scroll IS the discovery, and a visitor who never touches the wheel never learns that
+  // the room has a picture of itself in it.
+  //
+  // Every one of them moves the TARGET and nothing else. The pose is stepped in update(), on the
+  // twelves, so a flick of the wheel is four or five drawings of drift and then a stop — the same
+  // arithmetic whether the flick came from a mouse, a trackpad or a thumb.
+  const glass = ctx.renderer?.domElement ?? null;
+
+  // THE WHEEL. deltaMode 1 is lines and 2 is pages; both are normalised to px so a Firefox line
+  // scroll and a Chrome pixel scroll cover the same ground. DOWN zooms IN, which is the direction
+  // the whole gesture reads in: the page you are looking at goes away from you and the picture in
+  // it comes towards you.
+  const wheelPx = (ev) => ev.deltaY * (ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? (ctx.size?.h || 800) : 1);
+  glass?.addEventListener(
+    'wheel',
+    (ev) => {
+      // A TRACKPAD PINCH arrives here as ctrl+wheel, and the browser would answer it by zooming the
+      // PAGE — the canvas and the placard and all — which is never what the visitor meant on a
+      // full-window scene. It is refused whether or not the room will take the scroll.
+      if (ev.ctrlKey) ev.preventDefault();
+      if (!zoomAllowed()) return;
+      ev.preventDefault();
+      // …and the pinch's sign is the other way round from the wheel's: spreading the fingers gives
+      // a NEGATIVE deltaY and means bigger, which is the direction every other pinch on the machine
+      // goes. Its deltas are an order of magnitude smaller, hence its own gain.
+      zoomTarget += ev.ctrlKey ? -wheelPx(ev) / PINCH_WRAP : wheelPx(ev) / WHEEL_WRAP;
+    },
+    { passive: false }
+  );
+
+  // THE THUMB. Two fingers pinch; one finger drags. `touch-action: none` on the canvas (index.html)
+  // is what stops the browser taking the gesture first.
+  //
+  // A PINCH IS A RATIO, not a distance: doubling the spread of the fingers doubles the picture on
+  // the glass, wherever the zoom already was. The picture's height on the glass goes as h0^(1-t),
+  // so a factor of `r` in size is ln(r) / ln(1/h0) of a wrap — 0.235 of one at 1280x800, where the
+  // sheet is a nineteenth of the window's height at home.
+  //
+  // A ONE-FINGER DRAG only ever becomes a scroll if it began on NOTHING: not on a switch (the
+  // arbiter is asked, so a thumb that landed on the cat is the cat's), not on a DOM layer (the
+  // placard, the notice, the titles — the test is that the touch started on the canvas itself), and
+  // not while the fan is armed for a pick. Then it has to travel 12 px before it counts, and the
+  // 12 px are subtracted when it does, so nothing jumps at the moment it takes over. Under that it
+  // is a tap and the tap belongs to whatever is under it.
+  let pinch = null, drag = null, pinched = false;
+  const touchDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const onNothing = (touch) => {
+    if (!glass || touch.target !== glass) return false;
+    if (ctx.pieces?.reveal?._fan?.armed) return false;
+    return !ctx.pieces?.props?.switches?.at?.(touch.clientX, touch.clientY);
+  };
+  glass?.addEventListener(
+    'touchstart',
+    (ev) => {
+      const t = ev.touches;
+      if (t.length >= 2 && zoomAllowed()) {
+        const s = zoomSpan();
+        pinch = s ? { d0: Math.max(1, touchDist(t)), z0: zoomTarget, span: Math.log(1 / s.h0) } : null;
+        pinched = !!pinch;
+        drag = null;
+      } else if (t.length === 1 && !pinched && zoomAllowed() && onNothing(t[0])) {
+        drag = { y0: t[0].clientY, z0: zoomTarget, live: false };
+      }
+    },
+    { passive: true }
+  );
+  glass?.addEventListener(
+    'touchmove',
+    (ev) => {
+      const t = ev.touches;
+      if (pinch && t.length >= 2) {
+        if (!zoomAllowed()) return;
+        zoomTarget = pinch.z0 + Math.log(Math.max(1, touchDist(t)) / pinch.d0) / pinch.span;
+        return;
+      }
+      if (!drag || t.length !== 1) return;
+      if (!zoomAllowed()) {
+        drag = null;
+        return;
+      }
+      const moved = drag.y0 - t[0].clientY; // up is positive: up = scroll down = in
+      if (!drag.live) {
+        if (Math.abs(moved) < DRAG_SLOP) return;
+        drag.live = true;
+        // THE SLOP IS SPENT, NOT BANKED, and it is taken off the START of the drag rather than off
+        // where the finger has got to. Rebasing to the finger's current position throws away every
+        // pixel it travelled before this handler ran, which on a touch that arrives as one big move
+        // is the whole gesture: it went live and reported the 12 px of slop as the whole of it.
+        drag.y0 -= Math.sign(moved) * DRAG_SLOP;
+      }
+      zoomTarget = drag.z0 + (drag.y0 - t[0].clientY) / DRAG_WRAP;
+    },
+    { passive: true }
+  );
+  const endTouch = (ev) => {
+    if (ev.touches.length < 2) pinch = null;
+    if (ev.touches.length === 0) {
+      drag = null;
+      pinched = false;
+    }
+  };
+  glass?.addEventListener('touchend', endTouch, { passive: true });
+  glass?.addEventListener('touchcancel', endTouch, { passive: true });
+
+  // ?zoom=<t> holds the walk at t with no drift, for a still. It is NOT applied here: main.js cuts
+  // the camera to a shot after every piece is built (the judged view's, or home in ?shot=1 mode),
+  // and a cut is a cut — it would take the number straight back to zero. So it is parked and spent
+  // on the first update, which is the first tick after that cut.
+  const askedZoom = ctx.params?.get?.('zoom');
+  pendingZoom = askedZoom != null && askedZoom !== '' && Number.isFinite(+askedZoom) ? +askedZoom : null;
+
   return api;
 }
 
