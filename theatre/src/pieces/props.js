@@ -660,17 +660,43 @@ export async function build(ctx) {
         }
       }
       if (best) return best;
-      // then the margins, which are what make either of them reachable on a phone
+      // THEN THE MARGINS, which are what make a small thing reachable on a phone — and they are
+      // MARGINS, not hit areas. Two rules, and the room learnt both the hard way when the visitor
+      // could scroll INTO the picture on the back wall and the camera started walking through the
+      // furniture (src/pieces/camera.js, THE SCROLL).
+      //
+      //  · A BOX WITH THE LENS INSIDE IT IS NOT A BOX. Every one of these is the projection of an
+      //    object's eight corners, and `project()` on a corner BEHIND the camera divides by a
+      //    negative w and lands it on the far side of the frame. Once the camera is level with the
+      //    table the squared deck has corners on both sides of the lens and its box measures
+      //    13912 x 33305 px — the whole window and then some. Measured, at t = 0.5 on a 1280x800
+      //    window: every egg in the room answered `deck`, which is exactly the fault the user
+      //    reported ("when not at the perfect scroll position the easter egg clicks dont work
+      //    well, it often clicks to a wrong place"). So a margin has to be the size of a margin: a
+      //    box bigger than a quarter of the window is not one, and is refused.
+      //  · AND THE SNUGGEST BOX WINS, not the nearest object. Ranking by distance to the lens is
+      //    what let a near, sprawling box take a point that sat inside a far, tight one; it is also
+      //    the wrong question. The margin is there to catch a thumb that missed by a few pixels, so
+      //    the thing it missed is the thing whose box fits it closest. Distance is kept only to
+      //    break a tie between two boxes of the same size.
+      const vw = glass.clientWidth || 1, vh = glass.clientHeight || 1;
+      const areaCap = vw * vh * 0.25;
+      let bestArea = Infinity;
+      bestD = Infinity;
       for (const c of list) {
         if (c.enabled && !c.enabled()) continue;
         if (c.hit) continue; // its own test already said no
         const b = c.tapBox();
-        if (!b || px < b.x || px > b.x + b.w || py < b.y || py > b.y + b.h) continue;
+        if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y) || !Number.isFinite(b.w) || !Number.isFinite(b.h)) continue;
+        if (b.w <= 0 || b.h <= 0 || b.w * b.h > areaCap) continue;
+        if (px < b.x || px > b.x + b.w || py < b.y || py > b.y + b.h) continue;
         const o = c.object();
         if (!o) continue;
+        const area = b.w * b.h;
         const d = o.getWorldPosition(at).distanceTo(ctx.camera.position);
-        if (d < bestD) {
+        if (area < bestArea - 0.5 || (area <= bestArea + 0.5 && d < bestD)) {
           best = c;
+          bestArea = area;
           bestD = d;
         }
       }

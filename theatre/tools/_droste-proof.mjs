@@ -775,6 +775,109 @@ if (want(9)) {
   await page.close();
 }
 
+// ── 10 · THE EGGS, WITH THE ROOM SCROLLED PART-WAY IN ──────────────────────────────────────────
+// The user, on the live site: "when not at the perfect scroll position the easter egg clicks dont
+// work well fyi, it often clicks to a wrong place." It was the arbiter's margin loop (props.js): the
+// boxes it ranks are the projection of an object's eight corners, a corner BEHIND the lens lands on
+// the far side of the frame, and the scroll walks the camera through the table at about t = 0.45 —
+// so the squared deck's box measured 13912 x 33305 px and every egg in the room answered `deck`.
+// This section is that fault, on the page the visitor has.
+say('\n=== 10 · the eggs, scrolled part-way in ===');
+if (want(10)) {
+  const W = 1280, H = 800;
+  const page = await open({ w: W, h: H, live: true });
+  const look = () =>
+    page.evaluate(() => {
+      const T = window.__theatre;
+      return { shot: T.pieces.camera.current, zoom: T.pieces.camera.zoom, target: T.pieces.camera.zoomTarget, beat: T.pieces.flow?.beat, door: T.pieces.entrance?.mode, field: !!document.querySelector('#dialogue input.keys') };
+    });
+  const until = async (label, fn, seconds = 180) => {
+    const t0 = Date.now();
+    for (;;) {
+      const st = await look();
+      if (fn(st)) return st;
+      if (Date.now() - t0 > seconds * 1000) throw new Error(`stalled waiting for ${label}`);
+      await page.waitForTimeout(250);
+    }
+  };
+  const shut = await until('the door', (st) => st.door === 'closed' || st.field, 90);
+  if (shut.door === 'closed') await page.mouse.click(W / 2, H * 0.56);
+  await until('the room to settle', (st) => st.field && st.beat === 'talk', 180);
+
+  // …to a SETTLED t = 0.3, driven by the wheel the visitor uses
+  await page.mouse.move(W / 2, Math.round(H * 0.3));
+  await page.mouse.wheel(0, 360);
+  await drawings(page, 26);
+  const at3 = await look();
+  check(Math.abs(at3.zoom - 0.3) < 0.02, `settled part-way in: zoom ${at3.zoom.toFixed(3)} on '${at3.shot}'`);
+
+  // WHAT THE ARBITER ANSWERS OVER EACH EGG'S OWN CENTRE. `switches.at()` is the same test a
+  // pointerdown gets — the drawing first, then the thumb margins — asked without the event, so this
+  // is the click's answer with none of the side effects. Every egg is asked BEFORE any of them is
+  // worked, because firing one changes the room and half of them gate themselves while they run.
+  // Three of the four are not click-driven anyway: the lamp is worked by resting the pointer on it,
+  // the globe by flicking it. What "the click goes to the right place" means for all four is this
+  // answer, and it is the number that was wrong.
+  const centreOf = (name) =>
+    page.evaluate((n) => {
+      const o = window.__theatre.pieces.props[n];
+      const bx = o?.hitBox?.();
+      if (!bx || !Number.isFinite(bx.x) || bx.w <= 0) return null;
+      return { x: bx.x + bx.w / 2, y: bx.y + bx.h / 2, w: bx.w, h: bx.h };
+    }, name);
+  const asks = (x, y) => page.evaluate(([px, py]) => window.__theatre.pieces.props.switches.at(px, py), [x, y]);
+
+  for (const name of ['cat', 'fine', 'globe', 'vase']) {
+    const c = await centreOf(name);
+    if (!c || c.x < 0 || c.x > W || c.y < 0 || c.y > H) {
+      check(false, `${name}: its centre is off the glass at t = ${at3.zoom.toFixed(2)} (${c ? `${c.x | 0},${c.y | 0}` : 'no box'})`);
+      continue;
+    }
+    const who = await asks(c.x, c.y);
+    check(who === name, `at t = ${at3.zoom.toFixed(2)} the arbiter answers '${who}' over the ${name}'s own centre (${c.x | 0},${c.y | 0}, box ${c.w | 0}x${c.h | 0})`);
+  }
+
+  // …and the whole road, once, on the one egg that is a plain toggle with nothing behind it.
+  {
+    const c = await centreOf('cat');
+    const before = await page.evaluate(() => window.__theatre.pieces.props.cat.lit);
+    await page.mouse.click(c.x, c.y);
+    await drawings(page, 8);
+    const after = await page.evaluate(() => window.__theatre.pieces.props.cat.lit);
+    check(after !== before, `…and a real click at ${c.x | 0},${c.y | 0} lights the cat (${before} → ${after})`);
+  }
+
+  // AND DURING THE SETTLE, which is the case the report is really about: a trackpad keeps feeding
+  // ticks, the shown number is still walking to the target, and the camera moves one drawing at a
+  // time under the pointer. A click one drawing after a tick has to hit what was on the glass when
+  // it was clicked — so the box is re-read at that instant and the click aimed at where it is NOW.
+  await page.mouse.move(W / 2, Math.round(H * 0.3));
+  await page.mouse.wheel(0, 120);
+  await drawings(page, 1);
+  const mid = await look();
+  const c2 = await centreOf('cat');
+  if (c2 && c2.x > 0 && c2.x < W && c2.y > 0 && c2.y < H) {
+    const who = await asks(c2.x, c2.y);
+    const before = await page.evaluate(() => window.__theatre.pieces.props.cat.lit);
+    await page.mouse.click(c2.x, c2.y);
+    await drawings(page, 8);
+    const after = await page.evaluate(() => window.__theatre.pieces.props.cat.lit);
+    check(who === 'cat' && after !== before, `one drawing after a wheel tick, mid-settle (shown ${mid.zoom.toFixed(3)} walking to ${mid.target.toFixed(3)}): the arbiter answers '${who}' and the click fires it (${before} → ${after})`);
+  } else {
+    check(false, `mid-settle: the cat's centre is off the glass (${c2 ? `${c2.x | 0},${c2.y | 0}` : 'no box'})`);
+  }
+
+  // …and the deck, which is the thing that was eating the clicks: once the lens is level with the
+  // cloth it has no square on the glass at all, which is the honest answer for an object the camera
+  // is standing inside.
+  await page.evaluate(() => window.__theatre.pieces.camera.setZoom(0.5, { hold: true }));
+  await drawings(page, 8);
+  const deck = await page.evaluate(() => window.__theatre.pieces.props.deck.hitBox?.() ?? null);
+  check(deck === null, `at t = 0.5 the lens is inside the squared deck and it reports no box (${JSON.stringify(deck)})`);
+  if (page.__errors.length) check(false, `page errors: ${JSON.stringify(page.__errors.slice(0, 2))}`);
+  await page.close();
+}
+
 await browser.close();
 
 if (handover.length) say('\n=== the hand-over, per window shape ===');

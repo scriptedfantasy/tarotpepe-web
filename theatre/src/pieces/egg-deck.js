@@ -620,6 +620,7 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
 
   // ── the deck's own square on the glass ───────────────────────────────────────────────────────
   const MIN_TAP = 44;
+  const _camSpace = new THREE.Vector3(); // camera space, for the near-plane test in hitBox
   function hitBox() {
     const deck = deckOf();
     if (!deck) return null;
@@ -627,9 +628,21 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
     const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
     const xs = [], ys = [];
     const h = deck.userData.height ?? 0.04;
+    // …AND IF THE LENS IS INSIDE THE STACK THERE IS NO SQUARE ON THE GLASS. `project()` on a corner
+    // behind the camera divides by a negative w and throws it out to the far side of the frame, so
+    // the eight corners of a stack the camera is level with enclose the whole window and more. The
+    // visitor can walk the camera through this table now — the scroll into the picture on the back
+    // wall passes the cloth at about t = 0.45 (src/pieces/camera.js) — so this is reachable, and at
+    // t = 0.5 it measured 13912 x 33305 px and took every click in the room. A corner in front of
+    // the near plane or nothing: an object the camera is standing in is not something to tap.
+    ctx.camera.updateMatrixWorld();
+    const near = ctx.camera.near;
     for (const dx of [-CARD.w / 2, CARD.w / 2]) for (const dy of [0, h]) for (const dz of [-CARD.h / 2, CARD.h / 2]) {
       _p.set(dx, dy, dz);
-      deck.localToWorld(_p).project(ctx.camera);
+      deck.localToWorld(_p);
+      _camSpace.copy(_p).applyMatrix4(ctx.camera.matrixWorldInverse);
+      if (-_camSpace.z <= near) return null; // this corner is level with the lens or behind it
+      _p.project(ctx.camera);
       xs.push(((_p.x + 1) / 2) * W);
       ys.push(((1 - _p.y) / 2) * H);
     }
