@@ -230,23 +230,22 @@ const PLAIN = [
   [/\bcat\b|\banimal\b/, ['The cat. It was here before I was and nobody has asked it to leave.', 'A cat asleep on a dead exchange. It is not mine and it does not know that.']],
   [/\brug\b|\bcarpet\b/, ['A rug. It is mine, and it is the only soft thing between me and a floor that was bolted down.']],
   [
-    // THE TALL CASE, and it stands HERE for two orderings at once. PLAIN is walked in order, so it
-    // is before the radiator's line, which is what "the case over the radiator" would otherwise
-    // answer; and it is before the low cases' line, because a visitor who says "the bookshelf" or
+    // THE TALL CASE, and it stands HERE because PLAIN is walked in order: it is before the low
+    // cases' line, because a visitor who says "the bookshelf" or
     // "the tall case" means the thing that fills the wall stage left and not the two knee-high ones
     // beside him. The low cases keep every other word — bookcase, shelf, shelves, books, spines —
     // and are answered on all of them further down. The register is the one the other sixty objects
     // get: what it is, whose it is, and no biography.
     /\btall case\b|\bbook ?shelf\b|\bbook ?case by the (?:cart|trolley)\b|\bbig shelf\b|\bshelving\b|\bcase over the radiator\b|\bcase on the left\b/,
     [
-      'The tall case. It stands over the radiator, it came with the room, and the books in it are mine.',
+      'The tall case. It stands on the floor, it came with the room, and the books in it are mine.',
       'That case was the exchange\'s and it was empty when I got here. What is in it now I carried up the stairs.',
     ],
   ],
-  [
-    /\bradiator\b/,
-    ['A radiator. It knocks at seven and again at eleven, and it came with the room.'],
-  ],
+  // THE RADIATOR is not in this list any more. It stood on the plaster under the tall case and it
+  // went out of the room when that case came down onto the floor in front of it (props.js, room.js).
+  // A visitor who asks after it is answered by ABSENT at the foot of this file, which is where
+  // everything this room has not got is answered.
   [
     // THE WINDOW HE HAS IS THE ONE ON THE RIGHT-HAND WALL. There were two and the one behind him was
     // taken out; he is not going to be caught describing a wall he is sitting in front of. The cable
@@ -357,7 +356,10 @@ const ABSENT = [
   [/\btelephones?\b|\bthe phone\b|\ba phone\b/, ['There is no telephone. This was the exchange; they took every telephone with them when they went.']],
   [/\btelevision\b|\btv\b|\bscreens?\b|\bcomputers?\b|\bmonitor\b/, ['Nothing in this room has a screen in it. That is not a principle; it is the lease.']],
   [/\bmirrors?\b/, ['There is no mirror. Nobody has ever asked for one twice.']],
-  [/\bfireplaces?\b|\bthe fire\b|\bstove\b/, ['No fireplace. There is a radiator, and it makes a noise instead of heat.']],
+  [/\bfireplaces?\b|\bthe fire\b|\bstove\b/, ['No fireplace. There is no radiator either, since you ask. The room is heated by the season.']],
+  // THE RADIATOR. It was bolted to the plaster stage left and it came out of the room with the tall
+  // case's legs; this is where the question goes now.
+  [/\bradiators?\b|\bheating\b|\bheater\b/, ['There is no radiator. There was, under the case, and it knocked at seven and again at eleven. I do not miss the knocking.']],
   [/\bpianos?\b|\bguitar\b|\bgramophone\b|\brecord player\b/, ['There is no piano. There is a radio that does not get switched on, which is quieter still.']],
   [/\bbed\b|\bkitchen\b|\bbathroom\b|\btoilet\b|\bthe lavatory\b/, ['Not in here. That is all upstairs, and it is a bed, a kettle and a window looking at another window.'],],
   [/\bwi.?fi\b|\binternet\b|\bsignal\b|\belectricity in here\b/, ['Nothing in this room is connected to anything. It used to be connected to the whole town.']],

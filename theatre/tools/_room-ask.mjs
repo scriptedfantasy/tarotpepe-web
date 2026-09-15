@@ -49,7 +49,9 @@ for (const [id, lines] of HITS) {
 console.log(`  ${hits - bad}/${hits} of the ten resolved`);
 
 // ---- 2. an object with no story -----------------------------------------------------------------
-const PLAINS = ['what is the radiator', 'tell me about the cat', 'what is that switchboard', 'why do you keep a siphon', 'the rug', 'what is that clock', 'what is the wallpaper', 'tell me about the hat stand'];
+// the radiator was one of these until it came out of the room with the tall case's legs; it is an
+// ABSENT now and it is asked for below
+const PLAINS = ['what is the tall case', 'tell me about the cat', 'what is that switchboard', 'why do you keep a siphon', 'the rug', 'what is that clock', 'what is the wallpaper', 'tell me about the hat stand'];
 let plainBad = 0;
 console.log('\nAN OBJECT WITH NO STORY');
 for (const line of PLAINS) {
@@ -62,7 +64,7 @@ for (const line of PLAINS) {
 console.log(`  ${PLAINS.length - plainBad}/${PLAINS.length} identified plainly`);
 
 // ---- 3. not in the room --------------------------------------------------------------------------
-const ABSENTS = ['is there a chair', 'do you have a telephone', 'where is the mirror', 'is that a television', 'do you have a piano', 'is there a fireplace'];
+const ABSENTS = ['is there a chair', 'do you have a telephone', 'where is the mirror', 'is that a television', 'do you have a piano', 'is there a fireplace', 'what is the radiator'];
 let absBad = 0;
 console.log('\nNOT IN THE ROOM');
 for (const line of ABSENTS) {

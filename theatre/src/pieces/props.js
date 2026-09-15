@@ -7,10 +7,14 @@
 // and three bottles on it, a potted palm, hand-lettered signs, a rug, a doormat, a cat on the right
 // bookcase, the three-petal pendant of the kitchen frame.
 // THE ONE THING ABOVE WAIST HEIGHT ON THE BACK WALL IS THE TALL CASE, stage left, and the user
-// asked for it by name — "can we add a bookshelf instead of the bare wall". It stands over the
-// radiator on the stretch the window came out of, from the dado to the head line of the room's
-// openings, and it carries the books, the radio and the VIN bottle. It is what balances the door
-// and the press at the other end; the plaster either side of Pepe's head is as bare as it ever was.
+// asked for it by name — "can we add a bookshelf instead of the bare wall". It runs the whole
+// height of the stretch the window came out of, from a plinth on the boards to the head line of the
+// room's openings, and it carries the books, the radio and the VIN bottle. It is what balances the
+// door and the press at the other end; the plaster either side of Pepe's head is as bare as it ever
+// was. It stood on four legs over the radiator for two rounds and the user, looking at that foot:
+// "why is the bottom part of the book shelf black? it should be the same as above. and it should be
+// filled with stuff." So the legs and the toe rail are gone, the radiator with them, and the case is
+// a full-height piece of furniture with five bays in it — see THE TALL CASE below.
 // TWO OF THESE WORK. The radio on the case plays (round 8) and the cat is a lamp (round 9): click
 // it and the black mass goes white. Both are at the foot of this file, under THE SWITCHES, THE
 // RADIO and THE CAT. Neither announces itself — the cursor over the object is the whole affordance.
@@ -69,7 +73,8 @@ export async function build(ctx) {
   // the door. The window's own rectangle does not survive here any more either: it survived one
   // round as CART, because the bar cart was centred on it, and the cart has since been taken out of
   // the room. What stands on that stretch now is the tall case, and the case is solved from the
-  // radiator and the clock rather than from a window nobody can see (see THE TALL CASE below).
+  // floor, the corner and the clock rather than from a window nobody can see (see THE TALL CASE
+  // below). The radiator that was under it has gone out of the room with the case's legs.
   const room = ctx.pieces.room ?? {};
   const door = room.door ?? { x0: 1.05, x1: 1.95, y0: 0, y1: 2.45, top: 2.12 };
   const railY = room.bands?.rail?.[0] ?? 2.6;
@@ -349,15 +354,21 @@ export async function build(ctx) {
   // among the books, with the VIN bottle and the radio that went up there first. `barCart` stays in
   // props-objects.js, unbuilt, the way `curtainSet`, `floorLamp` and `hatStand` do.
   //
-  // WHAT THAT UNCOVERS, and it is the only thing about this that is not a straight gain: THE
-  // RADIATOR. It is bolted to this plaster at y 0.164..0.814 (room.js) and the cart stood in front
-  // of it, which is why three rounds of notes say it is never the thing being looked at. It is now
-  // the thing under the case, between its two black legs, with bare floorboards either side — nine
-  // fat columns and a valve wheel, which is a drawing this stretch of wall can carry and which says
-  // what the room is heated by. Pepe still answers for it (mind-room.js).
+  // AND THE RADIATOR IS GONE, WITH THE LEGS THAT STOOD OVER IT. For two rounds the case stood on
+  // four 40 mm posts from the dado to the floor with a toe rail between the front pair, and the
+  // iron — nine fat columns at y 0.164..0.814 (room.js) — stood under it between them. The user,
+  // looking at that foot: "why is the bottom part of the book shelf black? it should be the same as
+  // above. and it should be filled with stuff." They are right about what it was. Two black posts, a
+  // black rail and a black radiator between them is 0.9 m of solid ink under 1.5 m of drawing, and
+  // from the home plate it read as a plinth the height of a man rather than as a case standing over
+  // a heater. So the legs and the rail have come out and the carcase has come DOWN TO THE FLOOR on
+  // the 70 mm plinth every other case in this room stands on, and the radiator has come out of the
+  // room with them: there is no wall left for it (the case's back is flush with the skirting) and a
+  // radiator drawn behind a lined case back is a radiator nobody sees. room.js no longer builds one
+  // and Pepe no longer answers for one (mind-room.js).
   //
-  // WHAT IS ON THIS STRETCH NOW: the case, the radiator under it, the clock on the plaster to the
-  // right, and floor.
+  // WHAT IS ON THIS STRETCH NOW: the case, floor to head line, and the clock on the plaster to the
+  // right of it.
 
   // ---- THE TALL CASE, on the plaster the window left ---------------------------------------------
   // The user, looking at the stretch the window came out of: "can we add a bookshelf instead of the
@@ -366,22 +377,19 @@ export async function build(ctx) {
   //
   // WHERE IT MAY STAND, and every edge of it is something else's edge (tools/_shelf-where.mjs
   // prints the whole stretch; these are its numbers):
-  //   x -1.955 … -1.089  THE RADIATOR, which is bolted to this plaster and is not going anywhere
-  //             (room.js: columns and manifolds x -1.896..-1.110, the valve and its wheel out to
-  //             -1.955 on the left, the return pipe to -1.089 on the right, y 0..0.814, z -2.455 to
-  //             -2.310). A case cannot stand on a radiator and it will not stand through one, so
-  //             this case stands OVER it — see the legs below — and the iron is still there under
-  //             the bottom board, which is where a radiator in a room like this ends up.
   //   x -1.035  THE LEFT LOW BOOKCASE's own top board. That is the hard edge on the right: the case
   //             stops at -1.06, which leaves 25 mm of daylight between two runs of shelving. Any
   //             further right and the two of them read as one long fitment across the whole wall,
   //             which is the thing this room has never done.
-  //   x -2.42   THE WALL SHELF on the stage-left wall (w 0.6, d 0.16, hung at 1.3, running z -2.6 to
-  //             -2.0) reaches this far out into the corner with two jars on it. The case stops at
-  //             -2.10, 320 mm short of it, so the corner keeps its air and the jars keep their
-  //             silhouette.
-  //   y  0.905  THE DADO. The carcase starts on the dado band's own bottom line, which is where the
-  //             room's one horizontal already is, and stands on four legs from there to the floor.
+  //   x -2.42   THE CORNER. The stage-left wall is at -2.6 and its skirting and dado stand 36 mm
+  //             proud of it; the case stops at -2.10, which leaves half a metre of floor and
+  //             wainscot in the angle. It kept that air when a wall shelf hung over the corner and
+  //             it keeps it now the shelf has gone.
+  //   y  0      THE BOARDS. The carcase stands on the floor on a 70 mm plinth — `shelfUnit`'s own
+  //             default foot, which is what the two low cases and the press stand on — so the one
+  //             solid-ink area at the bottom of this case is a plinth a hand deep, and not the
+  //             0.9 m of legs, toe rail and radiator it used to be. It started on the dado at 0.905
+  //             for one reason only: a radiator was in the way. There is no radiator now.
   //   y  2.45   THE HEAD LINE of every opening in this room (the door's y1 and the old window's
   //             head, both 2.45). The picture rail starts at 2.6, so there is 150 mm of papered
   //             field over the top board and the case is under the rail, not into it.
@@ -409,20 +417,35 @@ export async function build(ctx) {
   const CASE = {
     x0: -2.1,
     x1: -1.06,
-    foot: 0.905, // the dado band's bottom: where the carcase starts and the legs take over
+    foot: 0, // the floorboards: the carcase stands on them, on the plinth below
+    plinth: 0.07, // `shelfUnit`'s own foot, and the two low cases' and the press's
     top: 2.45,
     d: 0.26,
     thick: 0.022,
-    leg: 0.04,
     // THE BOARDS ARE UNEVEN AND THEY ARE UNEVEN FOR A REASON: what stands in each bay decided its
-    // height. 1.458 m of clear case, three boards' worth of it taken by the boards themselves:
+    // height. 2.298 m of clear case now, five boards' worth of it taken by the boards themselves:
+    //   0.082 → 0.498   0.416  the jars' bay, and the big spines. The toe rail over the plinth is
+    //                          what things stand on down here, at 0.082.
+    //   0.520 → 0.948   0.428  folios, and the tin. The two lowest bays are the two the case grew
+    //                          when it came off its legs (see THE FOURTH BAY, AND THE FIFTH below).
     //   0.970 → 1.420   0.450  the bottle bay. VIN is 0.398 tall (the tallest thing that has ever
     //                          stood on the cart this case replaced), so this is a bottle and a hand.
     //   1.442 → 2.092   0.650  the set's bay. The radio measures 0.42 x 0.26 x 0.18 and its aerial
     //                          rises 0.622 off the board it stands on and leans 0.41 to the right,
     //                          so this is the only bay in the room a wireless fits in standing up.
     //   2.114 → 2.428   0.314  books, and nothing else: a run of spines under the top board.
-    boards: [0.97, 1.442, 2.114],
+    //
+    // THE FOURTH BAY, AND THE FIFTH. The brief for this change asked for one bay under the bottle
+    // bay and it has to be two, and the reason is a measurement. Off the legs the case gains
+    // 0.905 m of height and the plinth and its toe rail take 82 mm of that, so ONE bay there is
+    // 0.866 m in the clear — nearly twice the tallest bay above it (0.650) and two and a half times
+    // the shortest. Nothing in this room fills it: `bookRow`'s chunky spines top out at 0.30
+    // (props-objects.js), so a single bay would have been a third full with half a metre of paper
+    // over the books, which is the fault the user was pointing at turned upside down. Two boards
+    // give 0.416 and 0.428, which are the two bays the case already had either side of the bottle
+    // bay's 0.450 — so the bottom of this case is now the same case, repeated, which is what "it
+    // should be the same as above" asks for.
+    boards: [0.52, 0.97, 1.442, 2.114],
   };
   {
     const w = CASE.x1 - CASE.x0;
@@ -439,41 +462,29 @@ export async function build(ctx) {
       d: CASE.d,
       thick: CASE.thick,
       boards: CASE.boards.map((y) => y - CASE.foot),
-      plinth: 0, // it has legs instead; a plinth would sit on the radiator's feet
+      // THE PLINTH IS THE ONE BLACK AREA AT THE FOOT OF THIS CASE, and 70 mm is the whole of it.
+      // The round-1 critic asks every prop in this room for one solid dark and one bare light; a
+      // case standing on the floor has its dark at the floor, in a band a hand deep, with a 12 mm
+      // toe rail struck over it. That is what the two low cases and the press have always done and
+      // it is what the legs and the rail were standing in for.
+      plinth: CASE.plinth,
       back: true,
     });
     unit.position.set(cx, CASE.foot, cz);
     unit.name = 'tall-case';
     g.add(unit);
-    // THE LEGS, and they are the reason this case works at all. Four solid-ink posts 40 mm square
-    // from the dado to the floor, one at each corner of the carcase: the front pair stand at
-    // z -2.24 to -2.20, 70 mm in FRONT of the radiator's front face, and the back pair at -2.46 to
-    // -2.42, outboard of the iron at x -2.10..-2.06 and -1.10..-1.06 and 24 mm upstage of the
-    // return pipe. Nothing touches anything. The toe rail between the front pair is the black area
-    // the room asks every prop for — a case on legs with no toe is a table. It is 40 mm deep and it
-    // sits at the front pair, so the black the eye gets at the foot of this case is a line at the
-    // floor with the radiator's own nine columns standing behind it.
-    for (const sx of [-1, 1]) {
-      for (const sz of [-1, 1]) {
-        const leg = O.box(CASE.leg, CASE.foot, CASE.leg, M.solid);
-        leg.position.set(cx + sx * (w / 2 - CASE.leg / 2), CASE.foot / 2, cz + sz * (CASE.d / 2 - CASE.leg / 2));
-        g.add(leg);
-      }
-    }
-    const toe = O.box(w - CASE.leg * 2, 0.06, CASE.leg, M.solid);
-    toe.position.set(cx, 0.03, cz + CASE.d / 2 - CASE.leg / 2);
-    g.add(toe);
 
     // WHAT IS IN IT, and the whole of this block is the user's second note: "its a bit empty the
     // bookshelf, fill it… you can place the items on it in it." So every bay now carries a RUN OF
     // SPINES from one side, the cart's own things stand among them, and what is left between is a
     // hand's air and not a half-empty board. The room's shelf rule is unchanged and is the reason
     // the runs are runs: books read as one mass of alternating black and paper at four metres, and
-    // objects read as silhouettes against it. Six standing things across three bays is the most this
-    // case will take before it stops being a bookcase and starts being a display cabinet.
+    // objects read as silhouettes against it. Nine standing things across five bays: the six the
+    // case already carried, and the three the two new bays took in (see THE TWO BAYS AT THE FOOT,
+    // below the bottle bay). Much past that it stops being a bookcase and starts being a cabinet.
     //
     // THE LAYOUT, in the unit's own x (-0.498 to 0.498 is the clear width between the sides):
-    //   bottom  books -0.498..-0.31 | siphon -0.255 | MARC -0.15 | PILE -0.045 | books 0.04..0.30 |
+    //   bottle  books -0.498..-0.31 | siphon -0.255 | MARC -0.15 | PILE -0.045 | books 0.04..0.30 |
     //           VIN 0.42.  The three vessels are three silhouettes on purpose — a tall thin cylinder
     //           with a black head, a corked bottle, a square jar — and the 83 mm of air before VIN
     //           is what keeps the one bottle a visitor can work standing on its own.
@@ -485,7 +496,10 @@ export async function build(ctx) {
     //           board 230 deep, 60 mm tall under a bay 314 clear: it fits lying down, which is what
     //           a newspaper does, and it closes the run with a horizontal.
     const { x0, x1, z0 } = unit.userData.inner; // -0.498 … 0.498 local, the lining at z -0.12
-    const [b0, b1, b2] = CASE.boards.map((y) => y - CASE.foot);
+    // the toe rail's own top, which is the floor of the lowest bay: `shelfUnit` sets the plinth
+    // 0..0.07 and strikes a 12 mm rail over it, so a jar down here stands at 0.082
+    const bTOE = CASE.plinth + 0.012;
+    const [bJ, b0, b1, b2] = CASE.boards.map((y) => y - CASE.foot);
     // `extras` is bookRow's licence to put a flat stack or a jar in among the spines, and two runs
     // here are refused it. A run of 200 mm or less: at that width the dice can spend the whole run
     // on one jar, which is what the first draw of the set's right-hand run did — a 220 mm board with
@@ -554,6 +568,45 @@ export async function build(ctx) {
     wineObj.rotation.y = 0.11;
     wineObj.name = 'vin-bottle';
     unit.add(wineObj);
+
+    // ---- THE TWO BAYS AT THE FOOT, and they are dealt LAST on purpose -------------------------
+    // Every book above this line was dealt off `shelfRng` in the order it is written, so two new
+    // rows put in at the top of the block would have re-dealt the bottle bay, the set's bay and the
+    // top bay — different titles, different blacks, a different aerial crossing a different run.
+    // They are dealt here instead and the three bays the case already had are the three bays it
+    // already had, to the spine. (It is the same rule the case's own seed was given for: see ITS
+    // OWN PEN above.)
+    //
+    //   0.082  books -0.498..-0.198 | SUCRE -0.14 | ANIS -0.03 | books 0.05..0.498
+    //          The two jars came off the wall shelf on the stage-left wall, which goes with the
+    //          window in the next change. Same two objects, same labels, same seeds — a paper jar
+    //          lettered SUCRE and a black squat one lettered ANIS — so what has happened to them is
+    //          that they have been carried across the room and put in a bookcase, which is what
+    //          happens to jars. They stand at the bottom because that is where the deep things go
+    //          and because a black jar is the dark this bay wants at floor level.
+    //   0.520  books -0.498..-0.078 | THÉ 0.02 | books 0.10..0.498
+    //          One tin, and it is the only thing in this case that is not out of the exchange or
+    //          off the cart. A 0.428 bay wants one silhouette and not three: the run either side of
+    //          it is 420 and 398 mm of spines, which is the longest unbroken run in the case and
+    //          the thing that makes the foot of it read as books from the door.
+    const jars = [
+      [-0.14, { kind: 'jar', name: 'SUCRE', h: 0.12, scale: 1.15, seed: 401 }],
+      [-0.03, { kind: 'squat', name: 'ANIS', dark: true, bodyH: 0.13, scale: 1.15, seed: 402 }],
+    ];
+    shelfBooks(x0, x0 + 0.30, bTOE, 0.42);
+    shelfBooks(x0 + 0.548, x1, bTOE, 0.42);
+    for (const [lx, spec] of jars) {
+      const o = O.shelfItem(spec, shelfRng);
+      o.position.set(lx, bTOE, 0.01);
+      o.rotation.y = (shelfRng() - 0.5) * 0.4;
+      unit.add(o);
+    }
+    shelfBooks(x0, x0 + 0.42, bJ, 0.36);
+    shelfBooks(x0 + 0.598, x1, bJ, 0.36);
+    const tin = O.shelfItem({ kind: 'tin', name: 'THÉ', h: 0.13, scale: 1.2, seed: 403 }, shelfRng);
+    tin.position.set(0.02, bJ, 0.01);
+    tin.rotation.y = (shelfRng() - 0.5) * 0.3;
+    unit.add(tin);
   }
   {
     const stool = new THREE.Group();
@@ -733,23 +786,14 @@ export async function build(ctx) {
   {
     const x = -W / 2 + 0.02;
     const rot = Math.PI / 2;
+    // …AND ITS TWO JARS HAVE GONE INTO THE TALL CASE, on the bottom bay it grew when it came off
+    // its legs (see THE TWO BAYS AT THE FOOT). The board itself is still on its two brackets and it
+    // is bare, which it will be for exactly one change: the whole of this stretch of wall goes to
+    // the wide window next.
     const shelf = O.wallShelf({ w: 0.6, d: 0.16 });
     shelf.position.set(x, 1.3, -2.3);
     shelf.rotation.y = rot;
     g.add(shelf);
-    shelf.add(
-      O.row({
-        x0: -0.26,
-        x1: 0.26,
-        y: 0.01,
-        z: 0.08,
-        rng,
-        items: [
-          { kind: 'jar', name: 'SUCRE', h: 0.12, scale: 1.15, seed: 401 },
-          { kind: 'squat', name: 'ANIS', dark: true, bodyH: 0.13, scale: 1.15, seed: 402 },
-        ],
-      }),
-    );
   }
 
   // ---- the stage-right wall: a small round picture, upstage of the window ---------------------------

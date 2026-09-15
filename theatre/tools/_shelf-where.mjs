@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // WHAT IS ON THE SHELF END OF THE BACK WALL, in world metres, and where each resting plate stops on
 // that wall. The stretch the window left bare runs from the stage-left corner (x -2.6) to the
-// clock's box (x -0.89), and what stands in it is the TALL CASE, the radiator bolted to the plaster
-// under it (room.js, x -1.955..-1.089, y 0..0.814) and the clock above. This prints every mesh whose
+// clock's box (x -0.89), and what stands in it is the TALL CASE, floor to head line on its own
+// plinth, and the clock on the plaster beside it. (A radiator stood under the case while the case
+// stood on legs; both have gone.) This prints every mesh whose
 // box touches the stretch, so nothing can be put there that goes through anything else, and then the
 // two switches in the case — the radio and the VIN bottle — measured on the glass window by window.
 //

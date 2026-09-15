@@ -1,6 +1,6 @@
 // PIECE: room — the parlour set itself: floorboards, three papered walls with wainscot, dado,
 // picture rail, frieze and cornice, a panelled door with a transom light stage right, one tall
-// shuttered window — on the stage-right wall — a column radiator on the plaster stage left, a
+// shuttered window — on the stage-right wall — a
 // plain ceiling. Frontal, symmetrical, drawn with a pen: the geometry carries the
 // drawing (real slats, real panels, real mouldings — the ink pass draws lines where there are
 // edges), the textures carry only the PATTERN of what things are made of.
@@ -12,9 +12,16 @@
 // picture rail run through it as they do everywhere else on this wall, and the room's one window is
 // the stage-right one. What went with it: the reveal, the architrave, the sill, the casement and
 // its glass, the two shutter leaves, the telephone LEAD-IN through the head — and, in props.js, the
-// curtains. What did NOT go is the radiator, which is furniture and not joinery: it stands where it
-// stood — under the tall case props.js has since put over it — and Pepe still answers for it when
-// he is asked (mind-room.js).
+// curtains.
+//
+// AND THE RADIATOR HAS GONE TOO, ONE CHANGE LATER. It survived the window because it is furniture
+// and not joinery, and it stood on that plaster under the tall case props.js put over it, between
+// the case's four legs. The user, looking at that foot: "why is the bottom part of the book shelf
+// black? it should be the same as above." The case now stands on the floor on a plinth, flush with
+// the skirting — so there is no wall left in front of the iron and nothing to see of it — and 0.9 m
+// of solid ink at the bottom of that corner was the fault being pointed at. `buildRadiator` has
+// gone with it and Pepe no longer answers for one (mind-room.js). The room is heated by nothing,
+// which is a thing this building would do.
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
@@ -164,12 +171,6 @@ export async function build(ctx) {
   // The room's window, on the stage-right wall; its u axis is world z (u = z). It carries the same
   // joinery the back wall's did, which is why `buildWindow` is still here and still general.
   const sideWin = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.21 };
-  // Where the radiator stands. It used to be handed the window's own rectangle and centred under
-  // it; the window is gone and the radiator is not, so it carries the numbers itself. Same x, same
-  // width, same wall: it stands UNDER the tall case now (props.js: x −2.10 to −1.06, carcase from
-  // the dado at 0.905, on four legs that clear this rectangle at both ends), and between those legs
-  // it is finally a thing the room can see — the bar cart that hid it for four rounds is gone.
-  const radiator = { x0: -1.95, x1: -1.05 };
   // Downstage on each side wall, level with the visitor's shoulder, a second door: the way in from
   // the landing (stage right) and the door of a press (stage left). They sit in the stretch of side
   // wall that only the long door/window/track shots see — in those the lens is a metre from the
@@ -271,7 +272,6 @@ export async function build(ctx) {
   buildTerminalBox(P, M, hx, 0.12);
 
   // ---- the openings ----
-  buildRadiator(P, M, radiator, zb);
   buildDoor(P, M, door, zb);
   buildSwitch(P, M, door.x0 - 0.1 - 0.16, 1.22, zb);
   // a mouse hole in the skirting, stage right of the door: an arch of solid hatch
@@ -486,45 +486,6 @@ function buildShutterLeaf(P, M, x0, x1, y0, y1, z0, z1, side, jit = Math.random)
   // a shutter dog holding the leaf open (small hook near the outer bottom corner)
   const dogX = side < 0 ? x0 + 0.05 : x1 - 0.05;
   P.box(0.05, 0.02, 0.05, dogX, y0 + 0.08, z1 + 0.02, M.metal, { cast: true });
-}
-
-// A cast-iron column radiator on the back wall, stage left: two manifolds, a row of columns, feet,
-// a valve with a wheel, and a pipe down into the floor. It stood under the window and it is still
-// standing now the window has gone, because a radiator is furniture: it is bolted to a wall, not
-// hung off an opening, and the only thing the opening ever gave it was the rectangle it was centred
-// in. It keeps that rectangle (x −1.95 to −1.05) as its own. The bar cart covered it from the front
-// in every frontal shot for four rounds; the cart has gone and the tall case stands over it on legs,
-// so nine columns and a valve wheel are now the drawing under that case and the only thing in the
-// frame between the floorboards and the books. Pepe names it when he is asked (mind-room.js).
-function buildRadiator(P, M, w, zb) {
-  const { x0, x1 } = w;
-  const cx = (x0 + x1) / 2;
-  const width = x1 - x0 - 0.16, y0 = 0.17, y1 = 0.8;
-  const z0 = zb + 0.05, depth = 0.13;
-  // nine fat columns, not fourteen thin ones: at the wide shot a 53 mm pitch fell to a dozen screen
-  // pixels and the stack turned into a barcode. Wider columns, wider gaps, one line each.
-  const n = 9;
-  const pitch = width / n;
-  for (let i = 0; i < n; i++) {
-    const x = cx - width / 2 + pitch * (i + 0.5);
-    P.box(pitch * 0.62, y1 - y0 - 0.1, depth, x, (y0 + y1) / 2, z0 + depth / 2, M.iron, { receive: true });
-  }
-  // manifolds top and bottom
-  P.box(width + 0.02, 0.05, depth + 0.01, cx, y1 - 0.025, z0 + depth / 2, M.iron, { receive: true });
-  P.box(width + 0.02, 0.05, depth + 0.01, cx, y0 + 0.025, z0 + depth / 2, M.iron, { receive: true });
-  // feet
-  for (const x of [cx - width / 2 + 0.08, cx + width / 2 - 0.08]) {
-    P.box(0.04, y0, 0.08, x, y0 / 2, z0 + depth / 2, M.iron);
-    P.box(0.08, 0.018, 0.14, x, 0.009, z0 + depth / 2, M.iron);
-  }
-  // valve with a wheel on the left, a pipe into the floor on the right
-  const vx = cx - width / 2 - 0.04, vy = y0 + 0.025;
-  P.cylinder(0.014, 0.014, 0.09, vx, vy, z0 + depth / 2, M.iron, { rz: Math.PI / 2, segments: 10 });
-  P.cylinder(0.034, 0.034, 0.014, vx - 0.03, vy, z0 + depth / 2, M.iron, { rz: Math.PI / 2, segments: 12 });
-  P.cylinder(0.011, 0.011, vy, vx - 0.03, vy / 2, z0 + depth / 2, M.iron, { segments: 10 });
-  const px = cx + width / 2 + 0.03;
-  P.cylinder(0.011, 0.011, vy, px, vy / 2, z0 + depth / 2, M.iron, { segments: 10 });
-  P.cylinder(0.014, 0.014, 0.06, px - 0.02, vy, z0 + depth / 2, M.iron, { rz: Math.PI / 2, segments: 10 });
 }
 
 // THE CABLE DUCT. The one thing the PTT screwed to the walls that was not worth taking away: a
