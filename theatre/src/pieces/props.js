@@ -615,14 +615,39 @@ export async function build(ctx) {
       const a = (i / 3) * Math.PI * 2 + 0.5;
       stool.add(O.rod([Math.cos(a) * 0.1, 0.29, Math.sin(a) * 0.1], [Math.cos(a) * 0.15, 0, Math.sin(a) * 0.15], 0.012, M.solid));
     }
-    // The palm is set far enough out and upstage that the home shot crops it away entirely and the
-    // wide keeps it whole behind the floor lamp: standing level with the lamp the two of them were
-    // one tangle of black spikes at the left edge, and a frond tip poking into the home frame is
-    // scribble with no body to it.
-    stool.position.set(-W / 2 + 0.24, 0, -1.3);
+    // ---- WHICH SIDE OF THE ROOM IT STANDS ON, AND IT HAS CHANGED SIDES ------------------------
+    // The user: "place the plant on the right hand side." It stood at (-2.36, -1.30) against the
+    // stage-left plaster for every round there has been a palm, a hand's width off the wall, set
+    // upstage so the home shot cropped it and the wide kept it whole.
+    //
+    // THE MIRROR OF THAT POINT IS NOT FREE. (2.36, -1.30) is dead in front of the stage-right
+    // WINDOW: that opening runs z -1.95 to -1.05 with a sill board that oversails to x 2.470 at
+    // y 0.900..1.040 and an apron and two brackets under it, and this palm's fronds stand from
+    // 0.31 to 1.62. The pot would be under the sill and the fronds through it. So the plant is
+    // mirrored ACROSS but not ALONG: same 0.24 m off the wall, moved downstage to where that wall
+    // is plain.
+    //
+    // WHERE IT GOES, z -0.30, and every edge of that is somebody else's (room.js):
+    //   z -0.500  THE DOWNSTAGE SHUTTER LEAF of the side window, folded flat over the plaster from
+    //             -0.96 to -0.50 and standing 36 mm proud. The stool is r 0.17 and its upstage edge
+    //             is at -0.47, which is 30 mm clear of the leaf's end — and clear is the point: a
+    //             black palm in front of a louvred shutter is one tangle of black spikes, which is
+    //             the note the floor lamp was taken out of this room for.
+    //   z  0.095  THE TERMINAL BOX'S CONDUIT, which drops the wall at x 2.572 on three saddles to
+    //             the floor. The stool's downstage edge is at -0.13, 225 mm short of it.
+    //   z  0.800  the way-in door's architrave. Not close; it is here because it is the next thing.
+    //   x  1.600  THE RUG's edge. The stool stands 2.19 to 2.53 and never touches it: this palm has
+    //             always stood on bare boards and it still does.
+    //   z -0.128  WHERE A 1280x800 `home` PLATE STOPS on this wall (tools/_left-wall-where.mjs
+    //             prints the same line for either side; the room is symmetrical about x 0). At
+    //             -0.30 the pot is inside that by 170 mm, so unlike the left-hand position this one
+    //             is IN the conversation shot and not only in the wide. That is the change the user
+    //             asked for as much as the side is: the plant is now something the visitor sees
+    //             while they are talking to him.
+    stool.position.set(W / 2 - 0.24, 0, -0.3);
     g.add(stool);
     const p = O.plant({ rng, leaves: 8, kind: 'palm', scale: 1.15 });
-    p.position.set(-W / 2 + 0.24, 0.31, -1.3);
+    p.position.set(W / 2 - 0.24, 0.31, -0.3);
     g.add(p);
   }
 
