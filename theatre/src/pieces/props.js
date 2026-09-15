@@ -41,6 +41,7 @@ import { eggVase } from './egg-vase.js';
 import { eggRain, rainState } from './egg-rain.js';
 
 import { buildFine } from './egg-fine.js';
+import { eggDark } from './egg-dark.js';
 
 
 import { eggDroste } from './egg-droste.js';
@@ -55,7 +56,7 @@ import { eggCross } from './egg-cross.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'dark', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js'],
 };
 
@@ -1387,6 +1388,14 @@ export async function build(ctx) {
   grateAt.position.set(FP.grate.x, FP.grate.y, FP.grate.z);
   g.add(grateAt);
   const FINE = buildFine(ctx, { group: g, switches: SWITCHES, grate: grateAt, opening: FP.opening, face: FP.face });
+  // ---- THE DARK, and the lamp behind him is its switch now ---------------------------------------
+  // The user, in the same breath as moving the fire off it: "clicking the light behind Pepe should
+  // lead to the whole room turning black - the only thing the user should see is Pepe's eyes and
+  // his mouth." So the mushroom lamp keeps exactly one switch, as it always had; what it does is
+  // different. It is all in src/pieces/egg-dark.js, and what it needs from this file is the lamp to
+  // point at and the arbiter above - the room going out is the INK PASS's own branch and not a
+  // thing this piece could do by hiding anything.
+  const DARK = eggDark(ctx, { switches: SWITCHES, lamp: g.getObjectByName('mushroom-lamp') });
   // ---- THE PICTURE OF THIS ROOM in the right frame (src/pieces/egg-droste.js). ----------------
   // The sheet inside it is cut to the window's own aspect (landscape on a laptop, upright on a
   // phone) and the moulding is put round that; what is in it is this room, live, drawn by the same
@@ -1469,6 +1478,12 @@ export async function build(ctx) {
     // long the pointer has rested on the lamp, and hitBox/tapBox are the LAMP's box on the glass
     // and the box a thumb is given — the lamp is the switch; the flames are not touchable.
     fine: FINE,
+    // THE DARK, on the lamp behind him. `on` is whether the room is out, `toggle()` works the lamp
+    // as a click does (the cut on the next 12 fps drawing, with the click on the click), `set(on)`
+    // puts it there for a still with neither, `held` how long it has been out, `box` and `grow` are
+    // the mask his face is kept by, and hitBox/tapBox are the lamp's box on the glass and the box
+    // a thumb is given. `?dark=1` and the `dark` state hold it for the tools.
+    dark: DARK,
     // PEEP THE TOAD, the knock-off on the press's middle bay. `clicks` is how many times he has
     // been pressed, `fallen` whether he is on the floor, `click()` presses him as a visitor does
     // (croak, rock, and on the fifth the fall), `set(fallen)` puts him on the shelf or the floor
@@ -1574,6 +1589,9 @@ export async function build(ctx) {
       rainState(RAIN, name);
       // `fine-burning` is the dozen flames alight; every other name is a room that is fine
       FINE.setState(name);
+      // `dark` is the room painted out with his eyes and his mouth left on it; every other name is
+      // a room with the lights on, which is where a reload always puts it
+      DARK.setState(name);
       // `peep-fallen` is the toad on the boards in front of the press; every other name has him
       // standing on the shelf, which is where a reload always puts him
       PEEP.setState(name);
@@ -1605,6 +1623,7 @@ export async function build(ctx) {
       VASE?.update(ctx);
       RAIN?.update(ctx);
       FINE.update(ctx);
+      DARK.update(ctx);
       PEEP.update(ctx);
       KONAMI.update(ctx);
       DECK_OUT.update(ctx);

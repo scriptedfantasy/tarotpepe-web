@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 const VIEWS = {
   ink: ['default', 'lines-only', 'tone-only'],
   room: ['default'],
-  props: ['default', 'cat-lit', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'],
+  props: ['default', 'cat-lit', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'dark', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'],
   table: ['default'],
   pepe: ['default'],
   pepeAnim: ['idle', 'talk', 'gesture', 'consider'],

@@ -153,8 +153,13 @@ export function letter(g, text, x, y, { size = 48, color = INK, rng = Math.rando
 // Shared flat material for ink-world surfaces: white paper that the ink pass will draw over.
 // `color` may be a hex for selective-colour objects (Pepe, the cards). `hatch` 0..1 asks the ink
 // pass for more tone; `lineWeight` scales outlines. These are read via userData by the ink piece.
-export function inkMaterial({ color = PAPER, map = null, hatch = 0.5, lineWeight = 1, colorful = false, roughness = 0.9, side = THREE.FrontSide, transparent = false, opacity = 1 } = {}) {
+// `keep` is the room-goes-dark flag (src/pieces/egg-dark.js). It rides in the G-buffer's own packed
+// byte and it means one thing: when the visitor puts the room out, THIS surface's drawing is still
+// drawn and everything else in the frame is painted solid ink. Exactly eight materials in the set
+// set it — his two pupils, the ink round his eyes, his two lids and his three mouths — and nothing
+// else ever should: the whole of that egg is that his face is the only thing left.
+export function inkMaterial({ color = PAPER, map = null, hatch = 0.5, lineWeight = 1, colorful = false, keep = false, roughness = 0.9, side = THREE.FrontSide, transparent = false, opacity = 1 } = {}) {
   const m = new THREE.MeshStandardMaterial({ color, map, roughness, metalness: 0, side, transparent, opacity });
-  m.userData.ink = { hatch, lineWeight, colorful };
+  m.userData.ink = { hatch, lineWeight, colorful, keep };
   return m;
 }

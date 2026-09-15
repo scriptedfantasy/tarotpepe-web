@@ -73,7 +73,7 @@ uniform float uHasMap;
 uniform vec3 uColor;
 uniform float uAlphaTest;
 uniform float uLodBias;  // how much sharper than the hardware would the pen looks at a drawing
-uniform float uPacked;   // colorful*128 + hatchIdx*8 + verbatim, already /255
+uniform float uPacked;   // colorful*128 + hatchIdx*8 + keep*2 + verbatim, already /255
 // 1 = this surface's map is ALREADY A COMPOSED FRAME of this pass (egg-droste.js's picture of the
 // room). Everything else in the set is painted in linear working colour and is encoded to sRGB on
 // its way into the G-buffer; a finished frame is sRGB bytes already, and encoding it twice would
@@ -426,6 +426,26 @@ uniform vec4 uLevels;       // darkness thresholds for tone levels 1..3, then th
 uniform vec4 uTone;         // lit luminance that is fully dark, fully lit; max darkness from light; grazing amount
 uniform vec3 uCamPos;
 uniform vec2 uLetterbox;    // fraction of height covered by each bar (top, bottom)
+// ── THE DARK (src/pieces/egg-dark.js) ──────────────────────────────────────────────────────────
+// The user: "clicking the light behind Pepe should lead to the whole room turning black — the only
+// thing the user should see is Pepe's eyes and his mouth." This is where that happens, and it is
+// three uniforms and eleven lines: the room is not hidden, it is PAINTED OUT. Every mesh is still
+// in the scene, every light is still on, the G-buffer and the lit pass and the edge pass all run
+// exactly as they do on any other drawing; the composite simply refuses to lay down anything but
+// ink outside a mask, and the mask is his face.
+//   uDark      0, or 1 while the room is out
+//   uDarkBox   his head's box on the glass in uv, grown — outside it there is nothing to look for
+//              and the pixel goes straight to ink, which is the whole of the cost of this branch
+//   uDarkGrow  how far, in css px, the mask is DILATED off the marks that carry the flag. The flag
+//              is on his eight face cut-outs and those are his PUPILS, the ink round his eyes, his
+//              lids and his mouths — marks, not areas. The white of an eye is on the head's own
+//              sheet and carries no flag, so without the dilation the dark would leave two black
+//              discs and a line on a black field, which is nothing at all. Grown by a few pixels
+//              the mask closes over the sclera between the eye-ink and the pupil and the eye comes
+//              back whole: paper white, black pupil, black lid line, drawn by the room's own pen.
+uniform float uDark;
+uniform vec4 uDarkBox;
+uniform float uDarkGrow;
 in vec2 vUv;
 layout(location = 0) out vec4 outColor;
 ${NOISE}
@@ -493,6 +513,30 @@ void main() {
   float hatchW = float((packed >> 3) & 15) / 14.0;
   float zc = texture(tDepth, vUv).x;
   bool bg = zc >= 0.99999;
+
+  // ── THE DARK. Everything that is not his face is ink, and it is decided here, before a single
+  // mark is fitted: a pixel that fails this test costs one texture fetch and a return. Inside the
+  // box the flag is looked for over a small disc — 25 taps at the corners of a 5 x 5 grid, the ones
+  // outside the unit circle skipped — and a pixel that finds one anywhere in that disc is drawn
+  // exactly as it would have been drawn with the lights on. That is the point: the eye is not
+  // re-drawn white on black, it is the SAME DRAWING, and what is round it is ink instead of paper.
+  if (uDark > 0.5 && uMode < 3) {
+    float keep = 0.0;
+    if (vUv.x >= uDarkBox.x && vUv.x <= uDarkBox.z && vUv.y >= uDarkBox.y && vUv.y <= uDarkBox.w) {
+      vec2 st = (uDarkGrow * uDpr) / uRes;
+      for (int j = -2; j <= 2; j++)
+        for (int i = -2; i <= 2; i++) {
+          vec2 o = vec2(float(i), float(j)) * 0.5;
+          if (dot(o, o) > 1.0001) continue;
+          int q = int(texture(tAlbedo, vUv + o * st).a * 255.0 + 0.5);
+          keep = max(keep, float((q >> 1) & 1));
+        }
+    }
+    if (keep < 0.5) {
+      outColor = vec4(uInk, 1.0);
+      return;
+    }
+  }
 
   // THE PICTURE OF THIS ROOM PASSES STRAIGHT THROUGH (src/pieces/egg-droste.js). Its map is a
   // finished frame of this very pass: every contour in it has been fitted and laid down, the tone

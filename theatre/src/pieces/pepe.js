@@ -166,8 +166,16 @@ export async function build(ctx) {
   // head; at lineWeight 0 the edge pass drops their seed entirely, so no line is drawn round a
   // pupil or a mouth that is already drawn.
   const textures = [];
-  const cutMat = (layer, { hatch = 0.02, lineWeight = 0 } = {}) => {
-    const mat = inkMaterial({ color: '#ffffff', colorful: true, hatch, lineWeight, roughness: 1 });
+  // `keep` is the flag that survives the dark (src/core/strokes.js, src/pieces/egg-dark.js). It is
+  // set on every head overlay and on nothing else in this file or in the room: the two pupils, the
+  // ink round the eyes, the two closed lids and the three mouths. When the visitor puts the room
+  // out, those eight cut-outs are what is still drawn — his eyes and his mouth on a black field —
+  // and the head they are drawn over goes to ink with the rest of the parlour. The mouth cut-outs
+  // carry paper as well as line, which is why a mouth reads at all against the black; the eyes'
+  // whites are on the HEAD's own sheet and are recovered by the composite's dilation, not by a
+  // flag (see ink-shaders.js, THE DARK).
+  const cutMat = (layer, { hatch = 0.02, lineWeight = 0, keep = false } = {}) => {
+    const mat = inkMaterial({ color: '#ffffff', colorful: true, hatch, lineWeight, keep, roughness: 1 });
     mat.alphaTest = 0.5;
     mat.name = layer;
     const p = ctx.assets.texture(`/pepe/${L[layer].file}`).then((t) => {
@@ -259,7 +267,7 @@ export async function build(ctx) {
   const headMats = [];
   for (const [name, z] of overlayOrder) {
     hg = layerGeometry(L[name], A.neck, z, m, hg);
-    headMats.push(cutMat(name, name === 'head' ? {} : { hatch: 0, lineWeight: 0 }));
+    headMats.push(cutMat(name, name === 'head' ? {} : { hatch: 0, lineWeight: 0, keep: true }));
   }
   const headMesh = new THREE.Mesh(toBuffer(hg), headMats);
   headMesh.name = 'headMesh';

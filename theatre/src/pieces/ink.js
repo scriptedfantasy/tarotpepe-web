@@ -391,8 +391,13 @@ export async function build(ctx) {
     // into the G-buffer (it is encoded already), and not a mip bias that would sharpen a drawing
     // which is not a drawing of marks but a photograph of one. See ink-shaders.js, `verbatim`.
     const verbatim = ink.verbatim ? 1 : 0;
+    // BIT 1 IS WHAT SURVIVES THE DARK. Eight materials in the whole set carry it — his pupils, the
+    // ink round his eyes, his lids and his mouths (pepe.js, `cutMat`) — and while the room is out
+    // the composite paints ink over every pixel whose neighbourhood has none of it. Bits 3..6 are
+    // the hatch index, bit 7 colourful, bit 0 verbatim; bit 2 is still free.
+    const keep = ink.keep ? 2 : 0;
     u.uVerbatim.value = verbatim;
-    u.uPacked.value = (colorful * 128 + hatchIdx * 8 + verbatim) / 255;
+    u.uPacked.value = (colorful * 128 + hatchIdx * 8 + keep + verbatim) / 255;
     // lineWeight rides in gMisc.a at the full eight bits, 0..2 (0 = no line of its own; a cut-out
     // whose outline is already in its own drawing asks for ~0.25 and gets a whisper). It used to be
     // three bits of quarter-steps in gAlbedo.a, which rounded Pepe's 1.15 up to 1.25 without saying
@@ -518,6 +523,9 @@ export async function build(ctx) {
       uTone: { value: new THREE.Vector4(...params.tone) },
       uCamPos: { value: new THREE.Vector3() },
       uLetterbox: { value: new THREE.Vector2(0, 0) },
+      uDark: { value: 0 },
+      uDarkBox: { value: new THREE.Vector4(0, 0, 1, 1) },
+      uDarkGrow: { value: 3 },
     },
     depthTest: false,
     depthWrite: false,
@@ -571,6 +579,15 @@ export async function build(ctx) {
     core: 24, // css px: inside this the whirl turns rigidly
     norm: 1, // css px: the sheet's far corner from the dial, where the whirl is nothing
   };
+  // ── THE DARK: the room painted out, leaving his eyes and his mouth ─────────────────────────────
+  // src/pieces/egg-dark.js writes these on the 12 fps step and this pass reads them; nothing else in
+  // the room touches them. `on` false costs exactly one uniform assignment a drawing — the branch in
+  // the composite is `uDark > 0.5` and it is the first thing after the packed byte is unpacked.
+  // `box` is his head on the glass in uv (x0, y0, x1, y1, y UP, the composite's own convention), and
+  // `grow` is the dilation in css px. The egg solves both off the puppet every drawing, because he
+  // breathes and leans and the camera moves.
+  const dark = { on: false, box: [0, 0, 1, 1], grow: 3 };
+
   let vortexMat = null, vortexRT = null;
   function vortexPass(srcTex, dpr, seed) {
     if (!vortexMat) {
@@ -792,6 +809,9 @@ export async function build(ctx) {
     cu.uLevels.value.set(...params.levels);
     cu.uTone.value.set(...params.tone);
     cu.uCamPos.value.setFromMatrixPosition(cam.matrixWorld);
+    cu.uDark.value = dark.on ? 1 : 0;
+    cu.uDarkBox.value.set(dark.box[0], dark.box[1], dark.box[2], dark.box[3]);
+    cu.uDarkGrow.value = dark.grow;
     if (params.letterbox) {
       const frameAspect = w / h;
       const bar = Math.max(0, (1 - frameAspect / params.letterbox) / 2);
@@ -934,6 +954,8 @@ export async function build(ctx) {
     render,
     // the uniform block egg-vortex.js drives; `active` false is the whole of the off switch
     vortex,
+    // …and the one egg-dark.js drives; `on` false is the whole of ITS off switch
+    dark,
     tiles: { wall: wallTiles, floor: floorTiles, paper: paperGrain },
     setLetterbox(ratio) {
       params.letterbox = ratio || null;
