@@ -1,3 +1,15 @@
+// ROUND 5: IT IS NOT ON THE WALL ANY MORE. The user: "we should keep the clock centered on the wall
+// over pepe - the room image instead should be in a photo frame where the cat now stands." So this
+// is a small framed photograph STANDING on the top of the right-hand low bookcase, on a strut,
+// where the cat sat: 0.259 x 0.178 of frame instead of 0.805 x 0.519 of picture, and the cat has
+// gone across the room into the tall case. NOTHING IN THE TRICK CHANGED. The sheet is still square
+// to the back wall - it has to be, because camera.js's zoom walks up its own normal and assumes
+// that normal is the room's +z - it is still cut to the window's aspect, ink.js still binds the
+// same finished buffer to it, and the wrap at the top of the walk is still the same frame. What
+// changed is that the walk now ends 0.250 m from a photograph on a bookcase instead of 0.886 m from
+// a picture on plaster, and that it swings sideways to x 0.817 on the way, which is measured in
+// tools/_droste-where.mjs and reported as what the visitor sees.
+//
 // AN EGG, inside props: THE PICTURE OF THIS ROOM. The frame in the middle of the back wall, behind
 // his head, holds a picture of the parlour as the home camera sees it — so the picture contains the
 // frame, and the frame contains the picture, and it goes down as far as the paper can hold it.
@@ -50,7 +62,10 @@ const SHEET_Z = DEPTH / 2 - 0.008;
 
 export function eggDroste(ctx, { group, slot }) {
   const M = O.materials();
-  const { z } = slot;
+  // `z` and `stand` are taken ONCE and are not re-laid: `setSlot` takes x, y, w and h, which are the
+  // window's business, and the depth of a thing standing on a shelf is not. `stand` is the height of
+  // the board it stands on, or 0 for a frame on a wall — it is what the strut is drawn down to.
+  const { z, stand = 0 } = slot;
   // the nail and the frame's OUTER size, in metres. props.js owns all four and re-lays them on
   // every resize; nothing in this file decides any of them.
   let x = slot.x, y = slot.y, frameW = slot.w, frameH = slot.h;
@@ -114,6 +129,32 @@ export function eggDroste(ctx, { group, slot }) {
     sheet.castShadow = false;
     sheet.position.z = SHEET_Z;
     g.add(sheet);
+    // ---- THE STRUT, which is what makes this a photograph and not a picture -------------------
+    // The user: "the room image instead should be in a photo frame where the cat now stands." A
+    // frame on a bookcase top is not hung, it is PROPPED, and the two lines that say so are the leg
+    // raked back from the bottom rail and the shadow line where it meets the board. Without them
+    // the thing reads as a rectangle floating over a shelf, which is the one thing a picture of this
+    // room must not look like — it is already a rectangle doing something odd.
+    //
+    // It is drawn BEHIND the sheet and below its own bottom rail, so no part of it is inside the
+    // rectangle the camera's zoom walks into: the leg's top is at -frameH/2 + RIM and it rakes back
+    // to the board. At the frame's own 0.178 m it is a 0.10 m leg at about 25 degrees, which is what
+    // a photo frame's strut is. It takes the room's ink like any other joinery and casts nothing:
+    // a cast shadow off a 6 mm batten is a smudge at this size.
+    if (stand > 0) {
+      const foot = stand - (g.position.y - frameH / 2); // the board, in the frame's own y
+      const leg = O.box(RIM * 0.5, Math.abs(foot) + RIM, DEPTH * 0.35, M.frame);
+      leg.position.set(0, -frameH / 2 + RIM * 0.5 + foot / 2, -DEPTH * 0.9);
+      leg.rotation.x = -0.42;
+      leg.castShadow = false;
+      g.add(leg);
+      // …and the bottom rail is thickened at the back into a foot, which is the line that puts the
+      // whole thing ON the board rather than a millimetre over it
+      const heel = O.box(frameW * 0.55, RIM * 0.6, DEPTH * 0.5, M.frame);
+      heel.position.set(0, -frameH / 2 + RIM * 0.3, -DEPTH * 0.45);
+      heel.castShadow = false;
+      g.add(heel);
+    }
     size.w = w;
     size.h = h;
     size.frameW = frameW;

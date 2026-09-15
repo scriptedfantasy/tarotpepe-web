@@ -33,7 +33,8 @@ import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 import { Parts, subtractRect, makeWarp } from './room-build.js';
-import { wallpaperTexture, wainscotTexture, floorTexture, grainTexture, plainTexture, ghostTexture, enamelTexture, cardTexture } from './room-textures.js';
+// `ghostTexture` is still in room-textures.js and is deliberately not imported: see THE GHOST HAS GONE.
+import { wallpaperTexture, wainscotTexture, floorTexture, grainTexture, plainTexture, enamelTexture, cardTexture } from './room-textures.js';
 
 export const meta = {
   name: 'room',
@@ -52,27 +53,34 @@ const BAND = {
   cornice: [2.98, 3.1],
 };
 
-// THE GHOST. The rectangle of wallpaper the tall multiple stood against until the automatic
-// exchange came in and it was unbolted for scrap. Its head is at 1.78: that was set when the picture
-// row hung at y 2.04 with 0.46 m frames, whose bottom edge was 1.81, and 1.78 cleared it by 30 mm.
-// The row has been re-hung twice since and the head has stayed, because what it is now is the line
-// the picture's own foot comes down past — see the width below. His head sits at 1.24, well inside,
-// which is the whole point of the rectangle: the room frames him with the shape of what is not
-// there any more.
-// Its width is 0.78, and that is a measurement too, though not the one it used to be. It was ±0.48,
-// set by the window's downstage shutter leaf standing at x −0.50; the window is gone and so is the
-// leaf, and what bounds the rectangle now is the thing that hangs over it. THE PICTURE OF THIS ROOM
-// is nailed at x 0 (props.js, THE ROW) and its foot comes down to 1.680 on a laptop and 1.728 at
-// 16:9 — below this rectangle's head at 1.78 at every window shape the room is judged in, because
-// the row solves the picture's height from Pepe's crown and never gets back up to 1.78. So the head
-// of the ghost is BEHIND the picture, always, and the only question is how much of it shows either
-// side. The picture's outer edge is at its narrowest ±0.3977 (a square window, where the height
-// binds before the width does), so ±0.39 is under it by 8 mm at the worst aspect and under it by
-// 20 at the shapes that ship. What the room sees of the ghost is its two long sides and its foot,
-// running out from behind the picture down to the dado: a picture hung over an old scar, which is
-// what it is. A rectangle any wider would push its own head out past the frame as two short stubs
-// of tone with nothing to explain them.
-const GHOST = { x0: -0.39, x1: 0.39, y0: 0.97, y1: 1.78 };
+// THE GHOST HAS GONE, AND IT WENT WITH THE PICTURE THAT WAS HANGING OVER IT.
+//
+// What it was: the rectangle of wallpaper the tall multiple stood against until the automatic
+// exchange came in and it was unbolted for scrap - 0.78 x 0.81 of unfaded paper at x +/-0.39,
+// y 0.97..1.78, cut out of the papered field and laid back 0.6 mm proud so that nothing about the
+// geometry said a rectangle was there. The rectangle itself was never the drawing. What the eye
+// actually got of it was its HARDWARE: four bolt holes, each a filled disc with a burst of pulled
+// plaster round it, and two cut cable ends at the top where the multiple's tails were sheared off
+// flush (room-textures.js, `ghostTexture`).
+//
+// And that hardware was only ever ACCEPTABLE because a picture hung over it. This file said so
+// itself, in the comment that used to stand here: "A rectangle any wider would push its own head
+// out past the frame as two short stubs of tone with nothing to explain them." The user has now
+// moved the picture off this wall onto a bookcase top - "the room image instead should be in a
+// photo frame where the cat now stands" - and the head of the rectangle came out from behind it
+// exactly as predicted: two cable stubs and two bolt-bursts, floating on bare plaster under the
+// clock, at the one place on this wall the film wants nothing at all. Rendered and looked at, they
+// read as scribble and not as history.
+//
+// The rectangle could have been shortened to hide its head behind Pepe instead, and that was tried
+// on paper: his crown casts onto this plaster at 1.4001 from the `pepe` shot but only 1.2934 from
+// `wide`, so a head low enough to hide at one plate stands clear of him at another, and the cable
+// ends are drawn from the top edge and would have come down with it onto his own silhouette. There
+// is no height that works at all three shapes. So it is out, and the wall behind him is what the
+// film has always asked that wall to be: bare plaster, with one clock on it.
+//
+// `ghostTexture` stays in room-textures.js, unbuilt, the way `barCart`, `curtainSet`, `floorLamp`
+// and `hatStand` stay in props-objects.js.
 
 // The cable duct: a wooden trough along both side walls with an iron cleat every 0.9 m. 2.30 is
 // its UNDERSIDE, which is the line the camera sees — it is always below it — and it is also what
@@ -155,8 +163,7 @@ export async function build(ctx) {
   // opposite of what a ghost is. 0 tells the pass to draw no line round this thing at all; the
   // sheet's own marks still come through the map, and the boundary is then a change of tone with
   // nothing drawn on it. The rectangle is stated by four bolt holes and by the paper, or not at all.
-  M.ghost = mat('ghost', ghostTexture(GHOST), { hatch: 0.3, lineWeight: 0 });
-  M.ghost.userData.uvRect = { u0: GHOST.x0, u1: GHOST.x1, v0: GHOST.y0, v1: GHOST.y1 };
+  // (the ghost's own sheet is not made any more: see THE GHOST HAS GONE at the head of this file)
   M.plate = mat('plate', enamelTexture({ w: PLATE.x1 - PLATE.x0, h: PLATE.y1 - PLATE.y0 }), { hatch: 0.35, lineWeight: 1 });
   M.plate.userData.uvRect = { u0: PLATE.x0, u1: PLATE.x1, v0: PLATE.y0, v1: PLATE.y1 };
   M.card = mat('card', cardTexture({ w: CARD.x1 - CARD.x0, h: CARD.y1 - CARD.y0 }), { hatch: 0.18, lineWeight: 1 });
@@ -284,7 +291,7 @@ export async function build(ctx) {
   const uEnd = zb + D + overrun;
   const walls = [
     // back wall: u = x, plane at z = zb facing +z
-    { u0: -hx, u1: hx, holes: [door], bands: backBands, ghost: GHOST, place: (u, y, w, h, m, out = 0) => P.plane(w, h, u, y, zb + out, m, { receive: true }) },
+    { u0: -hx, u1: hx, holes: [door], bands: backBands, place: (u, y, w, h, m, out = 0) => P.plane(w, h, u, y, zb + out, m, { receive: true }) },
     // stage-left wall: u = z, plane at x = -hx facing +x
     { u0: zb, u1: uEnd, holes: [sideWinL, sideDoorL], bands: sideBands, place: (u, y, w, h, m) => P.plane(w, h, -hx, y, u, m, { ry: Math.PI / 2, receive: true }) },
     // stage-right wall: u = z, plane at x = +hx facing -x
@@ -295,17 +302,10 @@ export async function build(ctx) {
       const [y0, y1] = BANDS[band];
       let rects = [{ x0: wall.u0, x1: wall.u1, y0, y1 }];
       for (const h of wall.holes) rects = subtractRect(rects, h);
-      // the ghost is cut out of the papered field and laid back in with its own sheet: same plane,
-      // same normal, same depth, so nothing about the geometry says a rectangle is there
+      // no wall carries a `ghost` any more; the mechanism is left because it is three lines and it
+      // is how any let-in panel would be built on any of these walls
       if (wall.ghost && band === 'field') rects = subtractRect(rects, wall.ghost);
       for (const r of rects) wall.place((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2, r.x1 - r.x0, r.y1 - r.y0, m);
-    }
-    if (wall.ghost) {
-      const { x0, x1, y0, y1 } = wall.ghost;
-      // 0.6 mm proud of the paper it is let into — not enough to be a step (the pen's depth test
-      // needs 1.5 mm before it calls anything a silhouette) but enough that the pass, deciding
-      // which of two touching surfaces owns the boundary, always picks the one that says "no line".
-      wall.place((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0, M.ghost, 0.0006);
     }
   }
 

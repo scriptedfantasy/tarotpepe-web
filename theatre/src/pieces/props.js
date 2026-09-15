@@ -89,115 +89,97 @@ export async function build(ctx) {
   const FLUSH = WALL + 0.04; // furniture backs sit just in front of the skirting
   const HOOK_Y = railY - 0.02;
 
-  // ---- THE ROW UNDER THE PICTURE RAIL ----------------------------------------------------------
-  // TWO THINGS HANG ON THIS WALL: THE PICTURE OF THIS ROOM, in the middle, behind Pepe; and the
-  // CLOCK, off to the left on the plaster the window used to take. Nothing else is on it at all. It
-  // is bare on purpose and the user asked for it three times — "lets remove the nakamoto painting
-  // entirely, gives us more space for the clock and the room picture", "remove the insects
-  // entirely, that wall is too messy anyway", and then the one that made this row: "i'd also like
-  // to remove the window in the back left, we can then place the room drawing in the middle behind
-  // pepe and the clock off to the left."
+  // ---- THE BACK WALL, AND THE PICTURE HAS COME OFF IT ------------------------------------------
+  // The user: "we should keep the clock centered on the wall over pepe - the room image instead
+  // should be in a photo frame where the cat now stands. you can put the cat in the book shelf on
+  // the left."
   //
-  // SO THE PICTURE'S NAIL IS NOT SOLVED ANY MORE — IT IS x 0, AND EVERYTHING ELSE IS SOLVED FROM IT.
-  // That is the whole difference this round. The row used to be a band with two things dealt into
-  // it three gaps wide; the user has now said where one of them goes, so the band is gone and the
-  // clock hangs off the picture's own edge.
+  // So ONE thing hangs on this wall now and it is the CLOCK, dead centre over him, under the shop
+  // board, where a clock in a room like this hangs. The PICTURE OF THIS ROOM is not a picture on a
+  // wall any more: it is a small framed photograph STANDING on the top of the right-hand low
+  // bookcase, on a strut, where the cat sat. And the cat has gone across the room into the tall
+  // case (see THE CAT at the foot of this file).
   //
-  // THE EDGES, every one measured rather than assumed (tools/_droste-where.mjs prints every world
-  // box on this stretch and the shadow Pepe throws on it from each shot):
-  //   x  0      THE NAIL. Centred on the room, which is centred on him, which is the point: the
-  //             picture of this room hangs behind the man in it. It is also the sign board's own
-  //             centre (that board runs -0.66 to 0.6733) and the pendant's, so the wall now has one
-  //             vertical axis and three things on it.
-  //   x -0.9944 THE PHONE'S OWN FRAME, and this is the edge that decides where the clock can go. At
-  //             390x844 the resting plates reach only this far along the back wall — `home` and
-  //             `wide` both, to four decimals, because at that aspect the fit is the same — where a
-  //             laptop at 1280x800 reaches -3.5445 and runs off the end of the room. So the left of
-  //             this wall is not the corner at -2.6 and is not a shutter leaf any more: it is a line
-  //             a metre out, and anything hung past it is a thing a visitor on a phone never sees
-  //             and cannot reach. The clock is the VORTEX's switch (egg-vortex.js) and a thumb has
-  //             to land on it, so this is a hard edge and not a preference.
-  //   x  1.03   the door architrave takes everything past it. Nothing is hung there now; it is kept
-  //             because it is still where the plaster stops.
-  //   y  2.2649 the shop board's bottom edge. The row used to tuck 12.8 mm BEHIND it — the board
-  //             hangs in front, so it cut the frame's top rail — and the user, looking at that
-  //             corner: "give the painting a bit spacing to the top tarot - reading - 3 cards
-  //             sign." The frame's topmost point, which is its corner blocks and not its rail, now
-  //             stands 50 mm clear at 2.2149, and the board's drop shadow falls on plaster.
-  //   y  1.4001 PEPE'S OWN HEAD, and moving the picture to x 0 is what made this edge bite. He sits
-  //             1.6 m in front of this wall, so his silhouette covers a patch of it larger than he
-  //             is: cast from the `pepe` shot his crown lands on the plaster at 1.4001 and his
-  //             shoulders reach x ±0.70 (from `home` and `wide` it is 1.3138 and 1.2934 at x ±0.58).
-  //             The picture used to hang at x 0.51, outboard of all of that, and the floor was belt
-  //             and braces. At x 0 the picture is dead centre of his shadow and the only thing
-  //             keeping it off his head is this line. It clears it by 280 mm at the shapes that
-  //             ship and by 19.4 mm at the worst aspect the solve allows.
+  // WHAT THAT COSTS AND WHAT IT BUYS. The picture was 0.805 x 0.519 on the plaster; on a bookcase
+  // top it is 0.259 x 0.178, a third of the width, because a bookcase top is 0.37 m wide and a
+  // photograph standing on one is the size of a photograph. The zoom is untouched by that - it is
+  // solved from the sheet's own half-height (camera.js, zoomSpan) and simply ends nearer: the walk
+  // used to stop 0.886 m off the wall and now stops 0.250 m off a photograph, which is a hand's
+  // breadth. What it buys is the wall: the clock is where the user wants it and the plaster either
+  // side of his head is as bare as the film asks for.
   //
-  // SO THE PICTURE HANGS FROM A LINE AND NOT FROM A NAIL HEIGHT. Its height changes with the window
-  // (its shape is the window's shape), so a fixed centre would walk its top edge up and down under
-  // the shop board and lose the 50 mm. `top` is the fixed thing and the nail is solved from it.
-  // 0.7954 m of clear wall between the two lines, of which the frame with its corner blocks takes
-  // 0.78 at most; then the width follows the aspect, and where the width would take more than
-  // `picOuter`, the width is capped and the height follows IT instead.
+  // ---- THE CLOCK -------------------------------------------------------------------------------
+  //   x  0      dead centre, which is the room's own axis, the sign board's centre and the
+  //             pendant's. It hung here for every round before the window came out and it is back.
+  //   y  2.06   unchanged, and it is the number the dial's 0.185 radius was chosen against: the
+  //             clock runs 1.875 to 2.245.
+  //   NO CORDS, AND THAT IS A MEASUREMENT AND NOT A STYLE. Every other frame on this wall goes back
+  //             to the picture rail on a pair of them and this clock did too while it hung out at
+  //             x -0.705, clear of the shop board. The board is 1.32 m wide on a pivot at 2.595 and
+  //             its sheet covers y 2.2649..2.5950 across x +/-0.66, so a cord from the dial's top at
+  //             2.245 to the hook line at 2.58 is 20 mm of visible cord and 315 mm of cord BEHIND
+  //             the board. That is not a drawing. It hangs on a nail nobody can see, which is what
+  //             the picture of this room did on this same axis before it came off the wall.
   //
-  // THE PICTURE DID NOT GET BIGGER WHEN THE WINDOW WENT, AND THAT IS A DECISION. Taking the shutter
-  // leaf off the left of the band widened the plaster by 1.5 m, and the old solve — which sized the
-  // picture from whatever the band could spare — would have grown it to a mural on the strength of
-  // a window being removed a metre away from it. So the cap is now a NUMBER and not a remainder:
-  // 0.82, which is exactly what the old band allowed, so the picture is the same object it was
-  // yesterday on the same aspect. Sheet 0.761 x 0.475, frame 0.805 x 0.519, at 1280x800.
+  // ---- THE PHOTOGRAPH, ON THE BOOKCASE TOP -----------------------------------------------------
+  // It is UPRIGHT AND SQUARE TO THE BACK WALL, and that is not a preference: camera.js's zoom walks
+  // up the sheet's own normal and its end pose assumes that normal is the room's +z (THE SCROLL).
+  // Turn the frame five degrees for charm and the hand-over at the top of a wrap stops being exact.
   //
-  // THE GAP FLOOR IS 0.11 AND IT IS STILL THE ONLY TASTE IN THIS BLOCK. It is the spacing this row
-  // was hung at two layouts ago (it solved to 0.1170) rounded off: the tightest the wall has been
-  // seen at and looked right at. It now sets the one free number left, the clock's x — and the
-  // arithmetic comes out better than it had any right to. The clock's right edge stands 0.11 off
-  // the picture's outer corner blocks, which puts its left edge at -0.89, which is 0.1044 inside the
-  // phone's frame at -0.9944. Two clearances either side of the clock, 110 mm and 104 mm, differing
-  // by 6 mm — near enough even that solving for exactly even (it is x -0.7022) would be arguing
-  // with the wall about a millimetre and a half. The air reads; the arithmetic is not the point.
+  // WHERE ITS FOUR EDGES ARE, and three of them are somebody else's (tools/_droste-where.mjs):
+  //   x  0.680  THE BOOKCASE'S OWN LEFT SIDE. The case stands x 0.68..1.02 with a top board that
+  //             oversails to 0.665..1.035; the frame's left edge is pinned to the carcase, so the
+  //             thing stands ON the case and not over the edge of it.
+  //   x  0.954  WHAT A PHONE CAN SEE. At 390x844 the resting plates stop at x 0.9944 on the wall
+  //             plane and at 0.9743 at this frame's own depth - the frame is 140 mm nearer the lens
+  //             than the plaster, and a nearer thing runs off the side of a picture sooner. The
+  //             brief for this change is that a phone must see the frame WHOLE, so the right edge is
+  //             that line less 20 mm. The case's own right side, at 1.02, is 46 mm outside a phone's
+  //             frame and could never have held it.
+  //   y  1.020  the bookcase's top board, which is the floor this thing stands on.
+  //   z -2.360  the sheet's plane: 100 mm forward of the case's lining at -2.46 and 180 mm behind
+  //             its front edge, which is where a photograph on a shelf stands - back from the edge,
+  //             with its strut behind it.
+  // 0.274 m of outer width is what is left between the two x lines, and the height follows the
+  // sheet's aspect, which is the window's business exactly as it was on the wall.
   const ROW = {
-    picX: 0, // THE NAIL: the user's own instruction, "in the middle behind pepe"
-    picOuter: 0.82, // the widest the frame's corner blocks may span — held from the old band
-    phoneLeft: -0.9944, // where a 390x844 resting plate stops on this wall; the clock must clear it
-    right: 1.03,
-    top: 2.2149, // the frame's corner blocks hang under this line, 50 mm below the shop board
-    floor: 1.4001, // Pepe's crown, cast onto this wall from the closest shot that holds him
-    clockR: 0.185,
+    clockX: 0, // the user's own instruction: "keep the clock centered on the wall over pepe"
     clockY: 2.06,
+    clockR: 0.185,
+    // the right-hand low bookcase, which is where the cat sat
+    shelfTop: 1.02, // its top board
+    shelfZ: -2.36, // the sheet's plane, set back from the front edge
+    shelfL: 0.68, // the carcase's left side: the frame's own left edge
+    shelfR: 0.954, // …and a phone's frame at this depth, less 20 mm
     rim: 0.022,
     corner: 0.0077, // how far a corner block stands proud of the moulding's outer edge
-    minGap: 0.11,
-    // THE SHAPE OF THE SHEET ON A PORTRAIT WINDOW, and it is not the window's. The user: "for
-    // mobile, i think the picture on the wall should use the same width as desktop from afar, it
-    // can then just basically go to the mobile cutout as it zooms in closer." Cut to a phone's own
-    // 0.46:1 the picture was a letterbox slot on its end — 0.34 m of wall showing a stripe of the
-    // room — and a visitor across the room could not see it was a room at all. So upright windows
-    // get a LANDSCAPE picture at this ratio, which is 1280x800: the reference plate the rest of
-    // this file's numbers were measured on, and the shape a picture on a wall actually is.
-    // What it SHOWS is still the phone's own frame — the picture's plate is drawn from the resting
+    phoneRight: 0.9743, // where a 390x844 resting plate stops at z -2.36; measured, not assumed
+    // THE SHAPE OF THE SHEET ON A PORTRAIT WINDOW, and it is not the window's. The user, when this
+    // was still on the wall: "for mobile, i think the picture on the wall should use the same width
+    // as desktop from afar, it can then just basically go to the mobile cutout as it zooms in
+    // closer." Cut to a phone's own 0.46:1 the picture is a letterbox slot on its end. So upright
+    // windows get a LANDSCAPE picture at this ratio, which is 1280x800: the reference plate the
+    // rest of this file's numbers were measured on, and the shape a photograph actually is.
+    // What it SHOWS is still the phone's own frame - the picture's plate is drawn from the resting
     // camera's pose at the same vertical field and the same lens rise, just wider, so the phone's
-    // live frame is the centre crop of it. Scroll in and the wide picture converges on that crop:
-    // its height fills the window, its width runs off both sides equally, and the frame it hands
-    // over to is the frame the visitor was already looking at. ink.js and camera.js carry that.
+    // live frame is the centre crop of it. ink.js and camera.js carry that.
     landscape: 1.6,
   };
-  // The row, solved for one window. The picture's nail is fixed (ROW.picX); what this returns is its
-  // SIZE, which is still the window's business, and the clock's x, which follows from the size.
+  // The photograph, solved for one window. Where it stands is fixed; what this returns is its SIZE,
+  // which is still the window's business, and the clock's x, which no longer depends on it at all.
   function layRow(aspect, buf = null) {
     const A = Math.max(0.05, aspect);
     // AN UPRIGHT WINDOW GETS A LANDSCAPE PICTURE; a landscape one gets its own shape. The break is
     // at square, which is where a picture cut to the window stops being a picture and starts being
-    // a slot — see `landscape` above.
+    // a slot - see `landscape` above.
     //
     // …AND ITS SHAPE IS SNAPPED TO THE DRAWING BUFFER'S OWN GRID, which is the difference between a
     // seamless wrap and a blurred one. The phone's frame is the CENTRE CROP of the picture's plate,
-    // so at the top of a zoom the canvas reads a window of the plate's texels — and it only reads
+    // so at the top of a zoom the canvas reads a window of the plate's texels - and it only reads
     // them whole if the plate is a whole number of texels wide AND the margin either side is a
-    // whole number too. A flat 1.6 gives neither: at 844 px of buffer it wants 1350.4 texels, the
-    // crop lands 0.07 of a texel off its grid, and every 1 px line in the drawing is resampled
-    // across two pixels. So the ratio is 1.6 rounded to the buffer — 1350/844 here — and nudged by
-    // one more texel when that would leave an odd margin. It is 1.6 to four decimal places and it
-    // costs nothing; what it buys is measured in tools/_droste-proof.mjs §1.
+    // whole number too. A flat 1.6 gives neither. So the ratio is 1.6 rounded to the buffer and
+    // nudged by one more texel when that would leave an odd margin. It is 1.6 to four decimal
+    // places; what it buys is measured in tools/_droste-proof.mjs.
     let picA = A >= 1 ? A : ROW.landscape;
     if (A < 1 && buf && buf.w > 0 && buf.h > 0) {
       let n = Math.round(buf.h * ROW.landscape);
@@ -205,31 +187,22 @@ export async function build(ctx) {
       picA = n / buf.h;
     }
     const pad = ROW.corner * 2;
-    const maxOuterH = ROW.top - ROW.floor - 0.0194; // …less a finger's clearance off his crown
-    let sheetH = maxOuterH - pad - ROW.rim * 2;
-    let sheetW = sheetH * picA;
-    if (sheetW + ROW.rim * 2 + pad > ROW.picOuter) {
-      sheetW = ROW.picOuter - ROW.rim * 2 - pad;
-      sheetH = sheetW / picA;
-    }
-    const outerW = sheetW + ROW.rim * 2 + pad;
+    // THE WIDTH IS THE BINDING DIMENSION HERE, which is the other way round from the wall. On the
+    // plaster the picture hung between the shop board and Pepe's own shadow and its HEIGHT was what
+    // ran out first; on a bookcase top there is a metre and a half of bare plaster above it and
+    // 0.274 m of shelf, so the width is the number and the height follows the aspect.
+    const outerW = ROW.shelfR - ROW.shelfL;
+    const sheetW = outerW - ROW.rim * 2 - pad;
+    const sheetH = sheetW / picA;
     const outerH = sheetH + ROW.rim * 2 + pad;
-    // THE CLOCK HANGS OFF THE PICTURE'S OUTER CORNER, one gap to the left of it, and then the phone's
-    // frame is asked whether that was allowed. It always is at the shapes that ship — the tightest
-    // is 104.4 mm of margin — but the clamp is kept because `picOuter` and `minGap` are numbers a
-    // later round may move, and the one thing that must never happen is a clock cut in half by the
-    // edge of a phone: the vortex is worked by putting a thumb on its dial. If the clamp ever bites,
-    // the gap to the picture closes instead, and the picture does not move, because the user put it
-    // where it is.
-    const wanted = ROW.picX - outerW / 2 - ROW.minGap - ROW.clockR;
-    const clockX = Math.max(wanted, ROW.phoneLeft + ROW.clockR);
+    const x = (ROW.shelfL + ROW.shelfR) / 2;
     return {
-      gap: ROW.picX - outerW / 2 - (clockX + ROW.clockR), // what is actually between the two
-      phoneMargin: clockX - ROW.clockR - ROW.phoneLeft, // …and what is left outside the clock
-      clockX,
+      clockX: ROW.clockX,
+      gap: 0, // nothing hangs beside the clock any more
+      phoneMargin: ROW.phoneRight - ROW.shelfR, // what is left outside the frame on a phone
       frame: {
-        x: ROW.picX,
-        y: ROW.top - outerH / 2, // hung from the top line, not from a fixed centre
+        x,
+        y: ROW.shelfTop + outerH / 2, // it STANDS on the board: the foot is the board
         w: sheetW + ROW.rim * 2,
         h: sheetH + ROW.rim * 2,
       },
@@ -237,7 +210,7 @@ export async function build(ctx) {
       picAspect: picA,
       outer: outerW,
       outerH,
-      foot: ROW.top - outerH,
+      foot: ROW.shelfTop,
     };
   }
   // the drawing buffer, in device pixels, which is what the picture's shape is snapped to
@@ -328,16 +301,12 @@ export async function build(ctx) {
       gl.position.set(0, caseH, 0.02);
       bc.add(gl);
       globeObj = gl;
-    } else {
-      // the cat, asleep on top of the bookcase, facing the room. Round 9: it is a lamp, and the
-      // switch is at the foot of this file under THE CAT. Nothing about where it stands changed.
-      const cat = O.cat();
-      cat.position.set(0.0, caseH, 0.0);
-      cat.rotation.y = -0.2;
-      cat.name = 'cat';
-      bc.add(cat);
-      catObj = cat;
     }
+    // …AND THE RIGHT-HAND CASE'S TOP IS EMPTY OF ANIMALS. The cat sat on it for every round since
+    // round 9 and the user has moved it: "the room image instead should be in a photo frame where
+    // the cat now stands. you can put the cat in the book shelf on the left." So what stands on this
+    // board now is the PHOTOGRAPH (the slot at the foot of this file), and the cat is in the tall
+    // case on the stage-left wall, in the bay at 0.520 — see THE CAT'S BAY there.
   }
 
   // ---- stage left on the back wall: the tall case, and nothing in front of it --------------------
@@ -600,12 +569,36 @@ export async function build(ctx) {
       o.rotation.y = (shelfRng() - 0.5) * 0.4;
       unit.add(o);
     }
-    shelfBooks(x0, x0 + 0.42, bJ, 0.36);
-    shelfBooks(x0 + 0.598, x1, bJ, 0.36);
+    // ---- THE CAT'S BAY, and it is this one because it is the only one with the room ------------
+    // The user: "you can put the cat in the book shelf on the left." The case has five bays and
+    // four of them are spoken for by the measurement:
+    //     0.082 .. 0.498  0.416  the jars' bay. A cat here sits on the plinth's own rail with its
+    //                            ears at 0.34, under a board, at ANKLE HEIGHT — a thumb has to
+    //                            reach it and this is the one bay a hand does not go to.
+    //     0.520 .. 0.948  0.428  THIS ONE. 0.428 clear against a cat 0.259 tall, so it sits with a
+    //                            hand's air over its ears; its head lands at 0.78, which is the
+    //                            height of the table it is across the room from. The only other
+    //                            thing in the bay is the THÉ tin, and a tin is not a switch.
+    //     0.970 .. 1.420  0.450  the bottle bay: the VIN bottle is a switch and stands at local
+    //                            0.42. Two switches in one bay is two tap boxes a hand's width
+    //                            apart and the arbiter having to choose between them.
+    //     1.442 .. 2.092  0.650  the set's bay: the RADIO is a switch and fills it.
+    //     2.114 .. 2.428  0.314  under the top board, and too shallow for a cat that sits up.
+    // So the cat sits at local x 0.36 — world -1.22 — at the right-hand end of the folio bay, with
+    // the tin and a run of spines to its left and 138 mm of board to its right. It faces a quarter
+    // turn into the room, which is what it did on the bookcase top.
+    shelfBooks(x0, x0 + 0.34, bJ, 0.36);
     const tin = O.shelfItem({ kind: 'tin', name: 'THÉ', h: 0.13, scale: 1.2, seed: 403 }, shelfRng);
-    tin.position.set(0.02, bJ, 0.01);
+    tin.position.set(-0.09, bJ, 0.01);
     tin.rotation.y = (shelfRng() - 0.5) * 0.3;
     unit.add(tin);
+    shelfBooks(x0 + 0.58, x0 + 0.80, bJ, 0.36);
+    const cat = O.cat();
+    cat.position.set(0.36, bJ, 0.04);
+    cat.rotation.y = 0.25;
+    cat.name = 'cat';
+    unit.add(cat);
+    catObj = cat;
   }
   {
     const stool = new THREE.Group();
@@ -792,7 +785,7 @@ export async function build(ctx) {
     // The picture is hung at the foot of this file, by its egg, because ink.js and camera.js both
     // need the object; the clock is built here and `layRow` puts both of them where they go.
     const clock = O.wallClock({ r: ROW.clockR });
-    clock.position.set(0, ROW.clockY, WALL + 0.03);
+    clock.position.set(ROW.clockX, ROW.clockY, WALL + 0.03);
     g.add(clock);
     clockObj = clock;
     clockCords = new THREE.Group();
@@ -1404,31 +1397,28 @@ export async function build(ctx) {
   // HOW BIG AND WHERE are THE ROW's, at the head of this build. The nail is x 0 at every shape —
   // the user put it there — and what the window's aspect still decides is the picture's height, and
   // through the height the clock's x. What it comes to, measured (tools/_droste-where.mjs):
-  //     window      sheet            frame            nail           clock x   gap    phone margin
-  //     1280x800    0.761 x 0.475    0.805 x 0.519    0.000, 1.948    -0.705   0.110    0.104
-  //     1600x900    0.761 x 0.428    0.805 x 0.472    0.000, 1.971    -0.705   0.110    0.104
-  //     390x844     0.761 x 0.475    0.805 x 0.519    0.000, 1.948    -0.705   0.110    0.104
-  // The picture is the same object and the same size it was before the window came out; what moved
-  // is where it hangs (from x 0.510 to x 0, dead centre) and where the clock hangs (from x -0.195 to
-  // x -0.705, out onto the plaster the window had). The phone's row is the 1280x800 row, to the
-  // millimetre, because upright windows are hung with a landscape picture: the same object on the
-  // same nail whatever the visitor is holding. All three stand 50.0 mm under the shop board and
-  // clear Pepe's own shadow on the plaster by 280 mm — which now matters, because at x 0 the picture
-  // hangs inside that shadow's own width instead of outboard of it.
-  const DROSTE = eggDroste(ctx, { group: g, slot: { ...layRow(rowAspect(), rowBuffer()).frame, z: WALL + 0.015, hookY: HOOK_Y } });
+  //     window      sheet            frame            standing at      top     phone margin
+  //     1280x800    0.215 x 0.134    0.259 x 0.178    0.817, 1.117    1.2135    0.0203
+  //     1600x900    0.215 x 0.121    0.259 x 0.165    0.817, 1.110    1.2005    0.0203
+  //     390x844     0.215 x 0.134    0.259 x 0.178    0.817, 1.117    1.2135    0.0203
+  // The phone's frame is the 1280x800 frame to the millimetre, because upright windows are given a
+  // landscape picture: the same photograph whatever the visitor is holding.
+  //
+  // `z` IS TAKEN ONCE AND CANNOT BE RELAID. egg-droste.js destructures it at build (`const { z } =
+  // slot`) and `setSlot` takes x, y, w and h and nothing else — which is right, because the depth of
+  // a thing standing on a shelf is not a function of the window. It is passed here and only here.
+  const DROSTE = eggDroste(ctx, { group: g, slot: { ...layRow(rowAspect(), rowBuffer()).frame, z: ROW.shelfZ, stand: ROW.shelfTop } });
   // …and the row is laid now and again on every resize, because the picture's width IS the window's
   // aspect: a wall that was even at 16:9 is not even on a phone unless the clock moves with it. The
   // clock is moved, never rebuilt, so egg-vortex.js's reference to it stays the reference it took.
+  // THE CLOCK DOES NOT MOVE ANY MORE. It hung off the picture's own outer corner while the two of
+  // them shared this wall, so a resize that re-cut the picture also slid the clock; the picture is
+  // on a bookcase now and the clock is on the room's axis, which is a number no window shape can
+  // change. What still relays is the PHOTOGRAPH, because its width is still the window's aspect.
+  // `clockCords` is kept as an empty group so nothing that reached for it has to learn that it has
+  // gone — see THE CLOCK at the head of this build for why there are no cords in it.
   function relay() {
     const row = layRow(rowAspect(), rowBuffer());
-    if (clockObj) clockObj.position.x = row.clockX;
-    if (clockCords) {
-      for (const c of [...clockCords.children]) {
-        clockCords.remove(c);
-        c.geometry?.dispose?.();
-      }
-      O.hangCords(clockCords, row.clockX, ROW.clockY + ROW.clockR, 0.1, HOOK_Y, WALL + 0.012);
-    }
     DROSTE?.setSlot?.(row.frame);
     return row;
   }
@@ -1535,8 +1525,19 @@ export async function build(ctx) {
     // with the window's shape is the picture's SIZE and, from that, the clock's x. `gap` is what
     // stands between the clock and the picture's corner blocks and `phoneMargin` what is left
     // outside the clock before a 390x844 plate runs out of wall. A proof measures both off this.
+    // THE ROW, solved for the window in front of it. It is not a row on a wall any more: the clock
+    // is on the room's axis and the picture is a photograph standing on a bookcase, so what this
+    // returns is the photograph's size (which is still the window's business), the shelf it stands
+    // on, and the clock's fixed place. A tool reads it; nothing at runtime does.
     get row() {
-      return { ...layRow(rowAspect(), rowBuffer()), band: [ROW.phoneLeft, ROW.right], picX: ROW.picX, clockR: ROW.clockR, clockY: ROW.clockY, buffer: rowBuffer() };
+      return {
+        ...layRow(rowAspect(), rowBuffer()),
+        shelf: [ROW.shelfL, ROW.shelfR, ROW.shelfTop, ROW.shelfZ],
+        phoneRight: ROW.phoneRight,
+        clockR: ROW.clockR,
+        clockY: ROW.clockY,
+        buffer: rowBuffer(),
+      };
     },
     // the shop's board over Pepe's head. `mesh` is what a pointer is raycast against, `pivot` is
     // its hook line (rotate that and the board swings on its cord), and w/h are its size in metres.
@@ -1562,12 +1563,17 @@ export async function build(ctx) {
     lamps: {
       table: new THREE.Vector3(-0.36, 0.82 + 0.2, chest.position.z + 0.02),
       pendant: new THREE.Vector3(0, 2.5, 0),
-      // The cat's lamp, round 9, and it is the only practical in the room with a switch on it. The
-      // bulb is inside the cat, on the right-hand bookcase top (0.85, 1.02 + the cat's own body) —
-      // put a hand's width behind its centre, in the 10 cm between its back and the plaster, so
-      // what the light has to work with is the wall and not the room. lighting.js douses it with
-      // the rest and follows `cat.lit`.
-      cat: new THREE.Vector3(0.85, caseH + 0.14, FLUSH + 0.14 - 0.08),
+      // The cat's lamp, round 9, and it is the only practical in the room with a switch on it. It
+      // sat on the right-hand bookcase top for four rounds and the user has moved the animal into
+      // the tall case on the stage-left wall, so the bulb has gone with it: inside the cat, on the
+      // case's folio board at world (-1.22, 0.52), a hand's width up into its body and set BACK
+      // towards the lining. What the light has to work with in there is the case's own lining and
+      // the spines either side of it rather than a wall — which is the same bargain it had on the
+      // bookcase top (the plaster behind it) made in a smaller box, and it is why the range on the
+      // light in lighting.js is 0.55 m and not a room's worth. lighting.js douses it with the rest
+      // and follows `cat.lit`; it carries its own copy of this vector as a fallback and that copy
+      // has been moved too.
+      cat: new THREE.Vector3(-1.22, 0.52 + 0.14, -2.33 + 0.04 - 0.06),
     },
     // `radio-off` / `radio-a` / `radio-b` / `radio-c` put the needle on a stop for a still, and
     // `cat-lit` is the cat's lamp switched on. Every other name is the room as it stands — which

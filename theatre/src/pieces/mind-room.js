@@ -192,23 +192,22 @@ const PLAIN = [
     /\bduct\b|\bconduit\b|\bcleats?\b|\bterminal box\b|\bcables?\b|\bwires?\b|\btrough\b/,
     ['The cable duct. The town\'s calls ran along that wall in it. It is empty now, and it is still screwed to the plaster.'],
   ],
-  // THE PICTURE OF THIS ROOM, in the frame beside the clock (src/pieces/egg-droste.js). It is a
-  // picture of the parlour, hanging in the parlour, and in it is the same picture again — all of
-  // which is true and none of which he explains. He says what is on the nail the way he says what
-  // the barometer is: if the visitor has not scrolled into it yet, nothing here tells them they
-  // can, and if they have, the line is the plain description of what they were just inside.
+  // THE PICTURE OF THIS ROOM (src/pieces/egg-droste.js), AND IT IS NOT ON THE WALL ANY MORE. The
+  // user moved it: "the room image instead should be in a photo frame where the cat now stands." So
+  // it is a small framed photograph standing on the right-hand bookcase top, and the lines say that
+  // and nothing else. It is a photograph of the parlour, standing in the parlour, and in it is the
+  // same photograph again — all of which is true and none of which he explains. If the visitor has
+  // not scrolled into it yet, nothing here tells them they can; if they have, the line is the plain
+  // description of what they were just inside.
   //
-  // IT STANDS BEFORE THE DIAGRAM'S LINE, which is the same ordering trick the diagram plays on the
-  // clock. PLAIN is walked in order; "the picture beside the clock" contains the word clock, and it
-  // now also contains the frame the diagram used to hang in. The nail is this picture's, so the
-  // phrase is this picture's; the diagram keeps `diagram`, `circuit`, `right frame`, `grid` and its
-  // own name and is answered on every one of them.
+  // `picture beside the clock` is kept in the keys because it is what a visitor who remembers the
+  // wall will type, and the honest answer to that is this answer.
   [
-    /\bpicture of (?:the|this|your) room\b|\bpainting\b|\bpicture in the picture\b|\broom in the picture\b|\b(?:picture|frame) beside the clock\b|\bframed picture\b/,
+    /\bphotograph of (?:the|this|your) room\b|\bpicture of (?:the|this|your) room\b|\bpainting\b|\bpicture in the picture\b|\broom in the picture\b|\b(?:picture|frame) beside the clock\b|\bframed (?:picture|photograph|photo)\b|\bphoto frame\b/,
     [
-      'A picture of this room. It hangs in this room, so the room is in it, and so is the picture. It goes down as far as the paper does.',
-      'That is the room. The one you are standing in. It was on the nail when I took the place and I have never worked out who stood where to make it.',
-      'A picture of the parlour, on the parlour wall. Look closely and it is in there too.',
+      'A photograph of this room. It stands in this room, so the room is in it, and so is the photograph. It goes down as far as the paper does.',
+      'That is the room. The one you are standing in. It was in the drawer when I took the place and I have never worked out who stood where to make it.',
+      'A photograph of the parlour, on the bookcase in the parlour. Look closely and it is in there too.',
     ],
   ],
   // THE WALL TO HIS LEFT, AND IT STANDS BEFORE THE WINDOW'S OWN LINE ON PURPOSE: PLAIN is walked
@@ -224,9 +223,15 @@ const PLAIN = [
   ],
   [
     /\bclock\b|\bpendulum\b|\bseconds hand\b/,
-    ['The exchange clock. It kept the time the women here were paid by, to the minute. It still keeps it; nothing in this room is urgent any more.'],
+    [
+      'The exchange clock. It kept the time the women here were paid by, to the minute. It still keeps it; nothing in this room is urgent any more.',
+      'The clock, over my head. It is the only thing on that wall and it is the only thing in this room that is still doing its job.',
+    ],
   ],
-  [/\bcat\b|\banimal\b/, ['The cat. It was here before I was and nobody has asked it to leave.', 'A cat asleep on a dead exchange. It is not mine and it does not know that.']],
+  // THE CAT is in the tall case now and not on the bookcase top: the user moved it to make room for
+  // the photograph ("you can put the cat in the book shelf on the left"). Both lines are his own and
+  // neither of them ever said where it was; the second one did, and it has been re-aimed at the bay.
+  [/\bcat\b|\banimal\b/, ['The cat. It was here before I was and nobody has asked it to leave.', 'A cat sitting in a bookcase, on the left. It is not mine and it does not know that.']],
   [/\brug\b|\bcarpet\b/, ['A rug. It is mine, and it is the only soft thing between me and a floor that was bolted down.']],
   [
     // THE TALL CASE, and it stands HERE because PLAIN is walked in order: it is before the low

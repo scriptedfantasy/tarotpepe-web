@@ -61,7 +61,7 @@ const LAMPS_FALLBACK = {
   floor: new THREE.Vector3(-2.1, 1.45, -0.2),
   table: new THREE.Vector3(-0.36, 1.02, -2.29),
   pendant: new THREE.Vector3(0, 2.5, 0),
-  cat: new THREE.Vector3(0.85, 1.16, -2.4),
+  cat: new THREE.Vector3(-1.22, 0.66, -2.35), // in the tall case's folio bay; props.js owns the real one
 };
 // The stage-right window's own rectangle, in that wall's plane (u = world z), for the frame where
 // the room piece failed to build and there is nothing to ask. It used to be the BACK wall's window,

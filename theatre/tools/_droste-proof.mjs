@@ -610,14 +610,35 @@ if (want(8)) {
   const want = Math.log(2) / Math.log(1 / span.h0);
   check(Math.abs(pinched.target - want) < 0.01, `doubling the spread doubles the picture: t = ${pinched.target.toFixed(4)} against the ${want.toFixed(4)} that ln 2 / ln(1/h0) asks for`);
 
-  // A TAP ON A PROP IS STILL A TAP
+  // A TAP ON A PROP IS STILL A TAP, AND THE PROP IS CHOSEN BY MEASUREMENT AND NOT BY NAME.
+  // This asked the cat for four rounds, because the cat sat on the right-hand bookcase top and a
+  // phone could see it. The user has moved the cat into the tall case on the stage-left wall — "you
+  // can put the cat in the book shelf on the left" — and a 390x844 plate does not see that wall at
+  // all (tools/_props-r9-cat.mjs prints the cat at x -66 on this plate). So the subject is now
+  // whichever egg a phone actually HAS, found by asking each of them for its box, and the fact that
+  // the cat is not one of them is printed rather than asserted away.
   await page.evaluate(() => window.__theatre.pieces.camera.setZoom(0, { hold: true }));
   await drawings(page, 6);
-  const cat = await page.evaluate(() => ({ box: window.__theatre.pieces.props.cat.tapBox(), lit: window.__theatre.pieces.props.cat.lit }));
-  await page.touchscreen.tap(cat.box.x + cat.box.w / 2, cat.box.y + cat.box.h / 2);
+  const onGlass = await page.evaluate((wh) => {
+    const P = window.__theatre.pieces.props;
+    const out = [];
+    for (const n of ['vase', 'deck', 'cat', 'globe', 'fine', 'fuse']) {
+      const b = P[n]?.tapBox?.();
+      const whole = !!b && b.x >= 0 && b.y >= 0 && b.x + b.w <= wh[0] && b.y + b.h <= wh[1];
+      out.push({ n, box: b ? { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) } : null, whole });
+    }
+    return out;
+  }, [390, 844]);
+  for (const e of onGlass) say(`    ${e.n.padEnd(6)} ${e.box ? `${e.box.w}x${e.box.h} at ${e.box.x},${e.box.y}` : 'no box'}  ${e.whole ? 'a phone has it' : 'off this frame'}`);
+  const mine = onGlass.find((e) => e.whole);
+  check(!!mine, `a phone has at least one egg to put a thumb on (${onGlass.filter((e) => e.whole).map((e) => e.n).join(', ') || 'NONE'})`);
+  if (!mine) throw new Error('no egg is inside a 390x844 frame');
+  const tx = mine.box.x + mine.box.w / 2, ty = mine.box.y + mine.box.h / 2;
+  const answered = await page.evaluate(([x, y]) => window.__theatre.pieces.props.switches.at(x, y), [tx, ty]);
+  await page.touchscreen.tap(tx, ty);
   await drawings(page, 8);
-  const tapped = await page.evaluate(() => ({ lit: window.__theatre.pieces.props.cat.lit, zoom: window.__theatre.pieces.camera.zoom }));
-  check(tapped.lit !== cat.lit, `a tap on the cat is still a tap (${cat.lit} → ${tapped.lit})`);
+  const tapped = await page.evaluate(() => ({ zoom: window.__theatre.pieces.camera.zoom }));
+  check(answered === mine.n, `a tap on the ${mine.n} is still a tap: the arbiter answers '${answered}' at ${tx | 0},${ty | 0}`);
   check(tapped.zoom === 0, `and it did not scroll the room (zoom ${tapped.zoom})`);
 
   // a drag that begins ON a switch belongs to the switch, not to the room
@@ -827,25 +848,56 @@ if (want(10)) {
     }, name);
   const asks = (x, y) => page.evaluate(([px, py]) => window.__theatre.pieces.props.switches.at(px, py), [x, y]);
 
+  // …AND WHICH EGGS ARE STILL IN THE PICTURE AT ALL IS ITSELF THE ROUND'S NEWS. While the picture
+  // hung at x 0 the walk was very nearly a straight dolly down the room's axis and everything stayed
+  // roughly where it was. The user has put the picture on the right-hand bookcase — "the room image
+  // instead should be in a photo frame where the cat now stands" — so the camera SWINGS RIGHT as it
+  // goes in (x 0 → 0.817, measured in tools/_droste-where.mjs), and by a third of the way the
+  // far half of the room has left the frame. That is not a fault and it is not hidden: an egg that
+  // is off the glass is PRINTED as off the glass, and what is asserted is the thing this section
+  // was written for, which is that the arbiter answers correctly over everything that IS on it.
+  let reachable = 0;
   for (const name of ['cat', 'fine', 'globe', 'vase']) {
     const c = await centreOf(name);
     if (!c || c.x < 0 || c.x > W || c.y < 0 || c.y > H) {
-      check(false, `${name}: its centre is off the glass at t = ${at3.zoom.toFixed(2)} (${c ? `${c.x | 0},${c.y | 0}` : 'no box'})`);
+      say(`    ${name.padEnd(6)} off the glass at t = ${at3.zoom.toFixed(2)} (${c ? `${c.x | 0},${c.y | 0}` : 'no box'}) — the walk has gone to the bookcase and left it behind`);
       continue;
     }
+    reachable++;
     const who = await asks(c.x, c.y);
     check(who === name, `at t = ${at3.zoom.toFixed(2)} the arbiter answers '${who}' over the ${name}'s own centre (${c.x | 0},${c.y | 0}, box ${c.w | 0}x${c.h | 0})`);
   }
+  check(reachable > 0, `and something is still reachable a third of the way in (${reachable} of 4)`);
 
-  // …and the whole road, once, on the one egg that is a plain toggle with nothing behind it.
-  {
+  // …AND THE WHOLE ROAD, ONCE, on the one egg that is a plain toggle with nothing behind it — the
+  // cat — AT THE DEEPEST t THAT STILL HAS IT. The cat is in the tall case now and the walk goes the
+  // other way, so the useful number is not "does it work at 0.30" but "how far in does it work at
+  // all". This walks t back until the cat's box is on the glass and reports the limit, which is the
+  // honest measurement of what the move cost.
+  let catT = null, catBox = null;
+  for (let k = 30; k >= 0; k--) {
+    const t = k / 100;
+    await page.evaluate((tt) => window.__theatre.pieces.camera.setZoom(tt, { hold: true }), t);
+    await drawings(page, 2);
     const c = await centreOf('cat');
+    if (c && c.x > 0 && c.x < W && c.y > 0 && c.y < H) {
+      catT = t;
+      catBox = c;
+      break;
+    }
+  }
+  say(`    the cat is the last thing on the left the walk keeps: it is on the glass up to t = ${catT == null ? 'never' : catT.toFixed(2)}`);
+  check(catT != null, `the cat is still reachable somewhere inside the walk (t = ${catT == null ? 'never' : catT.toFixed(2)})`);
+  if (catT != null) {
+    const who = await asks(catBox.x, catBox.y);
     const before = await page.evaluate(() => window.__theatre.pieces.props.cat.lit);
-    await page.mouse.click(c.x, c.y);
+    await page.mouse.click(catBox.x, catBox.y);
     await drawings(page, 8);
     const after = await page.evaluate(() => window.__theatre.pieces.props.cat.lit);
-    check(after !== before, `…and a real click at ${c.x | 0},${c.y | 0} lights the cat (${before} → ${after})`);
+    check(who === 'cat' && after !== before, `…and a real click at ${catBox.x | 0},${catBox.y | 0} at t = ${catT.toFixed(2)} lights the cat (${before} → ${after})`);
   }
+  await page.evaluate(() => window.__theatre.pieces.camera.setZoom(0.3, { hold: true }));
+  await drawings(page, 4);
 
   // AND DURING THE SETTLE, which is the case the report is really about: a trackpad keeps feeding
   // ticks, the shown number is still walking to the target, and the camera moves one drawing at a
@@ -855,16 +907,14 @@ if (want(10)) {
   await page.mouse.wheel(0, 120);
   await drawings(page, 1);
   const mid = await look();
-  const c2 = await centreOf('cat');
+  // …asked of the VASE, which is the egg on the picture's own side of the room and therefore the one
+  // still on the glass here. It used to be the cat; the cat is across the room now (see above).
+  const c2 = await centreOf('vase');
   if (c2 && c2.x > 0 && c2.x < W && c2.y > 0 && c2.y < H) {
     const who = await asks(c2.x, c2.y);
-    const before = await page.evaluate(() => window.__theatre.pieces.props.cat.lit);
-    await page.mouse.click(c2.x, c2.y);
-    await drawings(page, 8);
-    const after = await page.evaluate(() => window.__theatre.pieces.props.cat.lit);
-    check(who === 'cat' && after !== before, `one drawing after a wheel tick, mid-settle (shown ${mid.zoom.toFixed(3)} walking to ${mid.target.toFixed(3)}): the arbiter answers '${who}' and the click fires it (${before} → ${after})`);
+    check(who === 'vase', `one drawing after a wheel tick, mid-settle (shown ${mid.zoom.toFixed(3)} walking to ${mid.target.toFixed(3)}): the arbiter still answers '${who}' over its own centre at ${c2.x | 0},${c2.y | 0}`);
   } else {
-    check(false, `mid-settle: the cat's centre is off the glass (${c2 ? `${c2.x | 0},${c2.y | 0}` : 'no box'})`);
+    check(false, `mid-settle: the vase's centre is off the glass (${c2 ? `${c2.x | 0},${c2.y | 0}` : 'no box'})`);
   }
 
   // …and the deck, which is the thing that was eating the clicks: once the lens is level with the

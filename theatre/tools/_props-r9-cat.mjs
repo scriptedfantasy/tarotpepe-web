@@ -229,9 +229,24 @@ console.log('\nA POINTER ON THE CAT  (1280x800, home; the sound piece is live �
   console.log(`  a click on the radio    `, JSON.stringify({ station: `${st0} → ${after.station}`, cat: after.lit }));
   ok(after.station !== st0 && after.lit === tapped.lit, 'a click on the radio moves the radio and leaves the cat where it was');
 
-  // do the boxes even overlap? (they must not, or the nearer-object rule is doing real work)
-  const overlap = !(rbox.x + rbox.w < box.x || box.x + box.w < rbox.x || rbox.y + rbox.h < box.y || box.y + box.h < rbox.y);
-  console.log(`  the two boxes overlap?  ${overlap ? 'YES — the nearer object takes the tap' : 'no (they are at opposite ends of the room)'}`);
+  // DO THE BOXES OVERLAP, AND NOW IT IS A REAL QUESTION. The cat sat on the right-hand bookcase
+  // top for four rounds and the radio is on the tall case across the room, so this used to be two
+  // objects at opposite ends of a wall and the test was a formality. The user has moved the cat INTO
+  // that same case — "you can put the cat in the book shelf on the left" — so it now shares its
+  // carcase with the two other switches in it: the RADIO on the board two bays up and the VIN
+  // BOTTLE on the board one bay up. All three tap boxes are grown to a thumb's 44 px, so this is
+  // asked of all three and not of one.
+  const wbox = await page.evaluate(() => window.__theatre.pieces.props.wine.tapBox());
+  const tap = await page.evaluate(() => window.__theatre.pieces.props.cat.tapBox());
+  const rtap = await page.evaluate(() => window.__theatre.pieces.props.radio.tapBox());
+  const hit = (a, b) => !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y);
+  const gapY = (a, b) => Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.h, b.y + b.h));
+  console.log(`  the cat's tap box       ${tap.w.toFixed(0)} x ${tap.h.toFixed(0)} at ${tap.x.toFixed(0)},${tap.y.toFixed(0)}`);
+  console.log(`  the radio's             ${rtap.w.toFixed(0)} x ${rtap.h.toFixed(0)} at ${rtap.x.toFixed(0)},${rtap.y.toFixed(0)}   ${gapY(tap, rtap).toFixed(0)} px of clear glass between them`);
+  console.log(`  the bottle's            ${wbox.w.toFixed(0)} x ${wbox.h.toFixed(0)} at ${wbox.x.toFixed(0)},${wbox.y.toFixed(0)}   ${gapY(tap, wbox).toFixed(0)} px`);
+  ok(!hit(tap, rtap), `the cat's thumb box and the RADIO's do not overlap, three bays apart in one case (${gapY(tap, rtap).toFixed(0)} px clear)`);
+  ok(!hit(tap, wbox), `…nor the VIN BOTTLE's, one bay up (${gapY(tap, wbox).toFixed(0)} px clear)`);
+  const overlap = hit(rbox, box);
 
   console.log('  page errors             ', page.__errors.length ? page.__errors : 'none');
   ok(page.__errors.length === 0, 'no page errors');
