@@ -544,6 +544,93 @@ console.log('\nTHE HOLD  (1280x800, home, a real pointer put on the lamp and lef
   await page.close();
 }
 
+// ---- 2b. THE SPREAD: the order, the cadence, and the drawing he says it on --------------------
+// The user, watching the twelve go up together: "starting the fire is illogical in terms of how the
+// fire evolves from the fireplace. it should be jumping from the fireplace to the center, in
+// multiple steps, not just one." So this section watches the fire cross the room A DRAWING AT A
+// TIME, through the same gate the rest of this file uses, and writes down which seat took light on
+// which drawing. Nothing is asked of the piece's own idea of itself: `lit` is read back out of
+// `flameBox(i)`, which returns null for a tongue that is not burning, so what is counted is what is
+// DRAWN.
+if (doing('spread')) {
+  await fresh();
+  console.log('\nTHE SPREAD  (1280x800, home, one drawing at a time from a real click on the grate)');
+  const [W, H] = PLATE;
+  const page = await open(W, H, '&now=21:12');
+  const meta = await page.evaluate(() => {
+    const F = window.__theatre.pieces.props.fine;
+    return { order: F.order, sayAt: F.sayAt, every: F.every, seats: F.seats, where: F.where };
+  });
+  const grate = await page.evaluate(() => window.__theatre.pieces.props.fine.tapBox());
+  const gx0 = Math.max(0, grate.x), gx1 = Math.min(W, grate.x + grate.w);
+  const lx = (gx0 + gx1) / 2, ly = grate.y + grate.h / 2;
+  // …and the DISTANCES the order is supposed to be, measured here off the seats the piece
+  // publishes rather than trusted from the file: the grate's own seat is order[0].
+  const g = meta.seats[meta.order[0]];
+  const dist = (s) => Math.hypot(s[0] - g[0], s[2] - g[2]);
+  const byDistance = meta.seats.map((s, i) => [dist(s), i]).sort((a, b) => a[0] - b[0]).map(([, i]) => i);
+  console.log('  the order, and what it measures on the floor plan:');
+  meta.order.forEach((seat, k) => console.log(`    jump ${String(k).padStart(2)}  seat ${String(seat).padStart(2)}  ${String(meta.where[seat]).padEnd(6)} ${dist(meta.seats[seat]).toFixed(3)} m`));
+  ok(
+    JSON.stringify(meta.order) === JSON.stringify(byDistance),
+    `the order IS the floor plan, nearest first: ${JSON.stringify(meta.order)}`,
+  );
+
+  const read = () =>
+    page.evaluate(() => {
+      const F = window.__theatre.pieces.props.fine;
+      return { lit: F.lit, full: F.full, on: Array.from({ length: F.count }, (_, i) => F.flameBox(i) !== null) };
+    });
+  await gate(page);
+  await page.mouse.click(lx, ly);
+  const up = [];
+  let fullAt = -1;
+  let was = [];
+  for (let d = 0; d < meta.every * meta.seats.length + 6; d++) {
+    await release(page, 1);
+    const m = await read();
+    for (let i = 0; i < m.on.length; i++) if (m.on[i] && !was[i]) up.push([d, i]);
+    if (m.full && fullAt < 0) fullAt = up.length - 1;
+    was = m.on;
+    if (up.length >= meta.seats.length) break;
+  }
+  console.log(`  the seats took light, in drawings from the click: ${up.map(([d, i]) => `${i}@${d}`).join(' ')}`);
+  ok(
+    JSON.stringify(up.map(([, i]) => i)) === JSON.stringify(meta.order),
+    `and they took light IN THAT ORDER, out from the grate (${up.map(([, i]) => i).join(',')})`,
+  );
+  const gaps = up.slice(1).map(([d], k) => d - up[k][0]);
+  console.log(`  drawings between one jump and the next: ${gaps.join(' ')}   (the piece asks for ${meta.every})`);
+  ok(
+    gaps.every((v) => v === meta.every),
+    `every jump is ${meta.every} drawings after the one before it — half a second, and the same half second every time`,
+  );
+  const took = up[up.length - 1][0] - up[0][0];
+  ok(took === meta.every * (meta.seats.length - 1), `and the whole room is alight ${(took / 12).toFixed(2)} s after the grate caught`);
+  console.log(`  he said it on jump ${fullAt} — ${meta.where[meta.order[fullAt]]}, ${dist(meta.seats[meta.order[fullAt]]).toFixed(3)} m from the grate`);
+  ok(fullAt === meta.sayAt, `HE SAYS IT WHEN THE FIRE REACHES THE TABLE: jump ${fullAt}, not on the click and not at the twelfth`);
+  ok(meta.where[meta.order[fullAt]] === 'table', `…and the seat that jump landed on is the one standing on the cloth (${meta.where[meta.order[fullAt]]})`);
+
+  // ---- and out again, far side first --------------------------------------------------------
+  await page.mouse.click(lx, ly);
+  const down = [];
+  was = (await read()).on;
+  for (let d = 0; d < meta.every * meta.seats.length + 12; d++) {
+    await release(page, 1);
+    const m = await read();
+    for (let i = 0; i < m.on.length; i++) if (!m.on[i] && was[i]) down.push(i);
+    was = m.on;
+    if (down.length >= meta.seats.length) break;
+  }
+  console.log(`  and they went out in the order: ${down.join(' ')}`);
+  ok(
+    JSON.stringify(down) === JSON.stringify([...meta.order].reverse()),
+    `a second click takes them out THE SAME WAY IN REVERSE — the press by the door first, the grate last (${down.join(',')})`,
+  );
+  ok(page.__errors.length === 0, `the spread threw nothing${page.__errors.length ? ': ' + page.__errors[0] : ''}`);
+  await page.close();
+}
+
 // ---- 3. the room, with the fire and without it, at the same instant of the drawing ------------------
 // The room is re-struck on every 12 fps step, so two frames taken a moment apart differ in tens of
 // thousands of pixels before anything is set alight. `&t=2.5` freezes the boil and `&now=21:12`
@@ -742,18 +829,19 @@ console.log('\nHIS LINE  (1280x800, a whole evening, no ?view: the door, the gre
   const lx = (gx0 + gx1) / 2, ly = grate.y + grate.h / 2;
   console.log(`  the target on the glass  x ${lx.toFixed(0)} y ${ly.toFixed(0)}  (of a box ${grate.w.toFixed(0)} x ${grate.h.toFixed(0)} at ${grate.x.toFixed(0)}, cut to ${(gx1 - gx0).toFixed(0)} px wide by the frame)`);
   await page.mouse.click(lx, ly);
-  // …and released a drawing at a time until ELEVEN are up. It used to be a flat run(101), which was
-  // the hold's own arithmetic: thirty-six drawings of a pointer resting on the lamp and then one
-  // tongue every six. A click skips the hold — it sets the counter straight to HOLD_F — so the
-  // dozen is up in sixty-six drawings and not a hundred and two, and the number to stop at is the
-  // piece's own count and not a stopwatch.
+  // …and released a drawing at a time until the fire is ONE JUMP SHORT OF THE TABLE. The line is no
+  // longer the twelfth tongue's: the fire jumps outward from the grate a seat every half second and
+  // he says it when it reaches his own cloth, which is the third seat along (egg-fine.js, SAY_AT).
+  // So the drawing to stop on is the one before that, and the number to stop at is the piece's own
+  // count of jumps and not a stopwatch.
+  const sayAt = await page.evaluate(() => window.__theatre.pieces.props.fine.sayAt);
   for (let guard = 0; guard < 140; guard++) {
-    if ((await page.evaluate(() => window.__theatre.pieces.props.fine.lit)) >= 11) break;
+    if ((await page.evaluate(() => window.__theatre.pieces.props.fine.lit)) >= sayAt) break;
     await run(1);
   }
-  const at11 = { lit: await page.evaluate(() => window.__theatre.pieces.props.fine.lit), text: await placardText(page) };
-  ok(at11.lit === 11 && !at11.text.includes('This is fine.'), `eleven tongues and he has said nothing: the line waits for the LAST one (${at11.lit} alight)`);
-  await run(6); // …and the twelfth, which is at most six drawings behind the eleventh
+  const before = { lit: await page.evaluate(() => window.__theatre.pieces.props.fine.lit), text: await placardText(page) };
+  ok(before.lit === sayAt && !before.text.includes('This is fine.'), `the fire is out of the grate and across the rug and he has said nothing: the line waits for the TABLE (${before.lit} alight)`);
+  await run(6); // …and the jump onto the cloth, which is six drawings behind the one before it
   // the flow takes the event, cuts the field short and hands the line to dialogue.ask; that is a
   // frame or two of the page's own loop
   await page.waitForFunction(() => (window.__asks ?? []).includes('This is fine.'), null, { timeout: 120000 }).catch(() => {});
@@ -798,9 +886,17 @@ console.log('\nHIS LINE  (1280x800, a whole evening, no ?view: the door, the gre
   // reach it and the fire cannot be started from there. What is under test is the flow's
   // rule, not the egg's arithmetic — the egg's is proved above, twelve tongues at a time — so the
   // event it would emit is emitted, at the real beat, with the real field open.
-  await page.mouse.click(lx, ly); // a second click puts it out
-  await run(8);
-  ok((await page.evaluate(() => window.__theatre.pieces.props.fine.lit)) === 0, 'a second click on the grate and the room is fine again');
+  // A SECOND CLICK PUTS IT OUT THE WAY IT CAME IN: back down the order, far side first, a seat
+  // every six drawings and the grate last. That is 66 drawings and not the eight this asked for
+  // when the twelve went out together, so it is released until the room is out rather than for a
+  // fixed count — the cadence itself is proved a drawing at a time in THE SPREAD above.
+  await page.mouse.click(lx, ly);
+  for (let guard = 0; guard < 100; guard++) {
+    if ((await page.evaluate(() => window.__theatre.pieces.props.fine.lit)) === 0) break;
+    await run(2);
+  }
+  await run(3); // …and the last wisp
+  ok((await page.evaluate(() => window.__theatre.pieces.props.fine.lit)) === 0, 'a second click on the grate and the room goes out the way it came in, seat by seat');
   await page.evaluate(() => {
     const i = document.querySelector('#dialogue input');
     i.value = 'read my cards';

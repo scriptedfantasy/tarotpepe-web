@@ -4,6 +4,25 @@
 // start along the shelves, he does not react at all, and the placard says nothing. Move the pointer
 // and they go out."
 //
+// ROUND 4: IT JUMPS, AND IT JUMPS OUTWARD. The user, watching round 3 go up: "starting the fire is
+// illogical in terms of how the fire evolves from the fireplace. it should be jumping from the
+// fireplace to the center, in multiple steps, not just one." They are right about what it was: the
+// twelve came up on a fixed list in the order they happened to be written, which was an order about
+// the COMPOSITION of the frame and not about the room. A fire does not compose; it spreads, and it
+// spreads outward from where it is.
+//
+// So the order is MEASURED now and not chosen: every seat's distance from the grate ON THE FLOOR
+// PLAN, nearest first. See ORDER below for the table. What falls out of the measurement is the
+// sentence the user asked for, and it is better than a written one would have been — the fireplace
+// is DOWNSTAGE on the stage-left wall, so the nearest thing to it is not the case on the back wall
+// but the rug beside the table, and the fire goes for the middle of the room before it goes for the
+// shelves. It is on his cloth by the second jump and at the far door last.
+//
+// AND HE SAYS IT WHEN IT REACHES THE TABLE, not when the room is finished. `This is fine.` used to
+// wait for the twelfth tongue, which was six or seven seconds of a man saying nothing while his
+// parlour went up. It goes now on the drawing the tongue on the cloth catches — the fire has
+// reached HIM — and the other nine come up round the line. See SAY_AT.
+//
 // ROUND 3: IT COMES OUT OF THE FIREPLACE. The user, having had one put on the stage-left wall: "the
 // fire easter egg should not originate from the light behind Pepe, but from the fireplace." So the
 // switch is the GRATE and no longer the lamp — click the black hole under the mantel and the first
@@ -55,20 +74,16 @@
 //
 // HOW IT IS WORKED. A CLICK on the grate, like every other switch in this room (the lamp before it
 // was a hover-and-hold until the user said the hover sucks, and then a click). One click and the
-// first tongue catches on the next drawing, the rest one every half second until a dozen are
-// burning, in the order a fire would actually take the room —
+// first tongue catches in the grate on the next drawing, and then the fire JUMPS: one seat every
+// six drawings — half a second — in the order of their distance from the grate, so the room is
+// entirely alight six and a half seconds after the click. Each tongue GROWS where it lands rather
+// than arriving whole (CATCH, below), and each jump throws the crackle cue panned to the place it
+// has just taken, so the fire can be heard crossing the room as well as seen.
 //
-//   the grate itself, because that is where the hand was and where a fire in a room starts;
-//   the shelf boards either side of him, because that is what is nearest and it is full of paper;
-//   the cabinets outboard of those — the tall case on the left carrying two of them, having taken
-//     them off the cart when the cart went, which took them off the window when the window went —
-//     and the doorway, which is the one opening left and still the tallest paper thing in here;
-//   the floor either side of the table, which is where a fire this size actually stands;
-//   and the near edge of the cloth, the last thing between the fire and the lens.
-//
-// A SECOND CLICK and every flame shrinks over half a second to a last wisp and is gone, and the cue
-// stops. (`HOLD_F` below is kept as the number the catching counts from: a click sets the counter
-// straight to it, so the first tongue is on the next drawing and nothing else here had to move.)
+// A SECOND CLICK and it goes out THE SAME WAY IN REVERSE: the press by the door first, the doorway
+// next, back across the room seat by seat on the same half second, and the grate last — each tongue
+// shrinking to a wisp over its own last three drawings. A fire does not stop everywhere at once
+// either.
 //
 // HOW A FLAME IS DRAWN. Two sheets each, and exactly one of them is shown at a time, swapped on
 // every 12 fps step: that is the room's own boil doing the flickering, so a flame is alive for the
@@ -87,12 +102,17 @@
 //
 // api (published as props.fine):
 //   burning        true while anything is alight (the flag `props:fine` carries)
-//   full           the LAST tongue has caught — what flow.js's one line hangs off
-//   lit            how many of the twelve are alight just now
+//   full           THE FIRE HAS REACHED THE TABLE (the third jump) — what flow.js's one line hangs
+//                  off. It used to mean the twelfth tongue; see ORDER and SAY_AT.
+//   lit            how far along ORDER the fire is: how many seats have caught, counting back down
+//                  again while it goes out
+//   order          the twelve seats in the order they catch, as indices into `seats`
+//   sayAt          which jump he says it on
 //   count          twelve
 //   colours        { yellow, orange }: the two plates, for a proof that wants to name them
 //   metres         how tall each of the twelve is, for the same reason
 //   set(on)        for a still: all of them, or none, with no hold, no cue and nothing to wait for
+//   hold(n)        for a still: the nth jump, n of the twelve up at full size. `?fine=<n>`
 //   hitBox()       the fireplace OPENING's box on the glass, in px
 //   tapBox()       the box a thumb is actually given (≥ 44 px, grown about the same centre)
 //   held           how long the pointer has been down on the grate, in seconds
@@ -113,9 +133,18 @@ import { mulberry32 } from '../core/rng.js';
 // second the two are the same number; on one that does not, the fire takes as long as the rest of
 // the drawing does, which is the correct answer and the one a stop-motion camera would give.
 const HOLD_F = 36; // what the catching counts from; a click sets the counter straight to it
-const EVERY_F = 6; // drawings between one flame and the next (0.5 s)
-const OUT_F = 6; // drawings to shrink the lot to nothing (0.5 s)
-const CRACKLE_EVERY = 4; // drawings between one firing of the cue and the next (see LENGTH.crackle)
+const EVERY_F = 6; // drawings between one jump and the next (0.5 s), going up AND coming down
+const OUT_F = 3; // drawings a tongue takes to shrink to nothing where it stands (0.25 s)
+const CRACKLE_EVERY = 4; // drawings between one firing of the running cue and the next
+// A TONGUE GROWS WHERE IT LANDS. Round 3 gave a flame ONE drawing at two thirds and then it was up,
+// which is a cut and reads as one: at half a second between jumps, twelve cuts in a row is a slide
+// show. Three drawings of growth is a quarter of a second, so a tongue is still coming up when the
+// next one lands and the room reads as one fire spreading rather than as twelve fires starting.
+// It is still a ROW OF DRAWINGS and not a tween — four sizes, each held a twelfth of a second —
+// which is the rule the whole film is drawn to.
+const CATCH = [0.34, 0.62, 0.86];
+// …and the same in reverse on the way out: a tongue that is going out is two drawings of wisp.
+const WISP = [0.66, 0.3];
 const MIN_TAP = 44; // px: what a thumb needs, whatever the opening measures on the glass
 
 // ---- THE SECOND COLOUR IN THE ROOM ---------------------------------------------------------------
@@ -426,6 +455,40 @@ const SEATS = [
   { at: 'table', p: [-0.4, 0.762, 0.57], h: 0.5, ppm: 267, hand: 2, phase: 1 },
 ];
 
+// ---- THE ORDER THEY CATCH IN, AND IT IS A MEASUREMENT ------------------------------------------
+// Every seat's distance from the GRATE on the FLOOR PLAN - x and z, the y ignored, because a fire
+// crossing a room does not care how high the shelf is - nearest first. The seats themselves have
+// not moved and this array is indices into SEATS above, which is why the table in SEATS still reads
+// in the order the frame is composed in and the fire reads in the order the room burns in.
+//
+//     jump  seat                            metres from the grate
+//       0   the grate                        0.000
+//       1   the floor, stage left            1.619
+//       2   the cloth, near edge             2.151   <- THE TABLE. This is where he says it.
+//       3   the tall case, outboard          2.212
+//       4   the tall case, inboard           2.525
+//       5   the left bookcase, outboard      2.563
+//       6   the left bookcase, inboard       2.755
+//       7   the floor, stage right           3.437
+//       8   the right bookcase, inboard      3.822
+//       9   the right bookcase, outboard     4.075
+//      10   the doorway                      4.805
+//      11   the press, by the door           5.300
+//
+// WHAT THE MEASUREMENT SAYS, and it is the thing that could not have been written down: the
+// fireplace is on the stage-left wall and DOWNSTAGE on it, two and a half metres from the lens, so
+// the nearest burnable thing to it is not the case behind him - that is 2.2 m away across the
+// corner - it is the rug beside the table at 1.6. The fire therefore goes for the MIDDLE of the
+// room first and works outward to the shelves, which is exactly the "jumping from the fireplace to
+// the center" the user asked for, and it is also simply what the floor plan says.
+const ORDER = [0, 9, 11, 5, 7, 3, 1, 10, 2, 4, 8, 6];
+// WHEN HE SAYS IT. The third jump, which is the tongue standing on his own cloth: the fire has
+// reached the table. `full` is the flag flow.js hangs `This is fine.` off (PROMPTS.fine) and it now
+// means THAT and not "the twelfth tongue" - waiting for the twelfth was six and a half seconds of a
+// man watching his parlour go up in silence, and the joke is that he says it while it is still
+// arriving. Nothing about the hook, the beat or the line changed; only the drawing it goes on.
+const SAY_AT = 2;
+
 export function buildFine(ctx, { group, switches, grate, opening, face }) {
   const root = new THREE.Group();
   root.name = 'fine';
@@ -487,7 +550,7 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
     if (s.ry) g.rotation.y = s.ry;
     g.visible = false;
     root.add(g);
-    return { i, group: g, sheets, foot, sheet, aspect: s.aspect ?? ASPECT, phase: s.phase, at: s.at, lit: false, from: 0 };
+    return { i, group: g, sheets, foot, sheet, aspect: s.aspect ?? ASPECT, phase: s.phase, at: s.at, lit: false, from: 0, out: -1 };
   });
   group.add(root);
 
@@ -496,11 +559,15 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
   let hovering = false, pressing = false;
   let drawn = 0; // drawings this piece has been given, ever: what the flicker and the wisps run on
   let steps = 0; // …and how many of them the fire has been on for. Zero when it has not.
-  let lit = 0; // how many are alight
-  let outFrom = -1; // the drawing they started going out on, -1 while nothing is going out
+  // HOW FAR ALONG THE ORDER THE FIRE IS, and it is one number going up and the same number coming
+  // down. `lit` is how many of ORDER have caught; on the way out it counts back down, so a second
+  // click does not need a second machine - it needs the same list read from the other end.
+  let lit = 0;
+  let jumpAt = -1e9; // the drawing the last jump landed on: the half second is counted off this
   let burning = false;
-  let full = false; // the LAST tongue has caught: the one thing he is told about (see `say`)
+  let full = false; // THE FIRE HAS REACHED THE TABLE: the one thing he is told about (see `say`)
   let crackleAt = -99;
+  let jumped = -99; // …and the drawing a jump last threw its own cue, so the running one holds off
   // LIT BY HAND, WHICH IS NOT THE SAME AS BURNING. `set(true)` is for a still — the `fine-burning`
   // judging state, a tool's control frame — and a still has to HOLD. Without this latch the very
   // next drawing sees that the fire is not on, starts the going-out and has the frame bare
@@ -522,11 +589,26 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
   const douse = () => {
     for (const f of flames) {
       f.lit = false;
+      f.out = -1;
       f.group.visible = false;
     }
     lit = 0;
-    outFrom = -1;
+    jumpAt = -1e9;
     full = false;
+  };
+  // A TONGUE CATCHES, and this is the whole of a jump: it is lit, it is told which drawing it
+  // landed on so it can grow from it, and the crackle is thrown WHERE IT LANDED and not where the
+  // fire's middle is. That last part is the round's own note - the fire can be heard crossing the
+  // room because each jump is a separate sound in a separate place.
+  const catchAt = (fl) => {
+    fl.lit = true;
+    fl.out = -1;
+    fl.from = drawn;
+    fl.group.visible = true;
+    setSize(fl, CATCH[0]);
+    if (byHand) return;
+    jumped = drawn;
+    ctx.pieces.sound?.play?.('crackle', { gain: 0.85, pan: panOf(fl) });
   };
   // WHAT GOES ON THE BUS, AND IT IS THREE THINGS AND NOT TWO. It caught; the LAST tongue caught;
   // it went out. The middle one is the round's addition and it is the only one anybody acts on:
@@ -539,8 +621,16 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
     burning = next;
     ctx.emit?.('props:fine', { burning, n: lit, full: false });
   }
-  // where the fire is on the glass, as a pan: the shelf on the right of the room crackles on the
-  // right. Taken off the flames that are actually alight, so it walks across as the fire spreads.
+  // where ONE tongue is on the glass, as a pan: a jump onto the press by the door crackles hard
+  // right, a jump into the grate crackles hard left. This is what each jump's own cue is panned to.
+  function panOf(fl) {
+    const W = ctx.size?.w || window.innerWidth;
+    if (!W) return 0;
+    const v = new THREE.Vector3().copy(fl.foot).project(ctx.camera);
+    return Math.max(-1, Math.min(1, v.x));
+  }
+  // …and where the fire as a WHOLE is, which is what the running cue underneath it is panned to.
+  // Taken off the flames that are actually alight, so it walks across as the fire spreads.
   function pan() {
     const W = ctx.size?.w || window.innerWidth;
     if (!W) return 0;
@@ -597,7 +687,12 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
   const toggle = () => {
     want = !want;
     byHand = false; // a hand on the glass takes the fire off a tool and puts it back on the clock
-    steps = want ? HOLD_F : 0; // no hold: the first tongue is on the next drawing
+    steps = 0;
+    // …AND THE JUMP CLOCK IS RESET TO LONG AGO, so the first thing that happens after a click
+    // happens on the NEXT DRAWING and not half a second later. Going up that is the grate catching;
+    // coming down it is the press by the door going out. Either way the visitor's click is answered
+    // at the film's own rate and not at a stopwatch's.
+    jumpAt = -1e9;
     hovering = pressing = want;
   };
   switches?.add?.({
@@ -639,6 +734,10 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
     colours: { yellow: PLATE_Y, orange: PLATE_O },
     // where each of the twelve stands, for the tools
     seats: flames.map((f) => f.foot.toArray().map((n) => +n.toFixed(3))),
+    // …and the order they catch in, as indices into that: measured off the floor plan, see ORDER
+    order: [...ORDER],
+    sayAt: SAY_AT,
+    every: EVERY_F,
     where: flames.map((f, i) => SEATS[i].at),
     metres: SEATS.map((s) => s.h),
     hitBox,
@@ -663,23 +762,33 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
     // It says nothing on the bus either — a still is not an event, and the line on the placard
     // belongs to a visitor who clicked the grate, not to a screenshot.
     set(on = true) {
+      api.hold(on ? flames.length : 0);
+    },
+    // THE nth JUMP, HELD. `?fine=4` is the room four jumps along the order: four tongues up, every
+    // one of them at full size, nothing growing and nothing about to move. It is what a tool takes
+    // a still of and what the report's contact sheet is made of.
+    hold(n = flames.length) {
+      const k = Math.max(0, Math.min(flames.length, n | 0));
       hovering = pressing = want = false;
       steps = 0;
-      outFrom = -1;
       crackleAt = -99;
-      byHand = !!on;
-      if (on) {
-        lit = flames.length;
-        for (const f of flames) {
-          f.lit = true;
-          f.from = -1e9; // lit long ago: no catching beat in a still
-          f.group.visible = true;
-          setSize(f, 1);
-          show(f, (ctx.clock.frame + f.phase) % 2);
-        }
-      } else douse();
-      burning = !!on;
-      full = !!on;
+      jumped = -99;
+      byHand = k > 0;
+      douse();
+      byHand = k > 0;
+      for (let j = 0; j < k; j++) {
+        const f = flames[ORDER[j]];
+        f.lit = true;
+        f.out = -1;
+        f.from = -1e9; // lit long ago: no catching beat in a still
+        f.group.visible = true;
+        setSize(f, 1);
+        show(f, (ctx.clock.frame + f.phase) % 2);
+      }
+      lit = k;
+      jumpAt = -1e9;
+      burning = k > 0;
+      full = k > SAY_AT;
     },
     // `fine-burning` is the dozen alight for a still; every other name is a room that is fine
     setState(name = 'default') {
@@ -689,50 +798,65 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
     // catching, the going out and the crackle are all on the same 12 fps grid as the pendulum.
     update() {
       drawn++;
-      if (want) {
-        // came back before the last wisp had gone: it simply catches again where it was
-        outFrom = -1;
+      // ---- THE SPREAD, one seat every half second, out from the grate --------------------------
+      // `lit` walks UP the order while the fire is on and back DOWN it when it is not, and both
+      // walks are on the same six drawings. Nothing here is a tween: a jump happens on a drawing or
+      // it does not, and between jumps the only thing moving is the tongue that last landed, coming
+      // up through CATCH.
+      if (want && !byHand) {
         steps++;
-        const n = steps < HOLD_F ? 0 : Math.min(flames.length, 1 + Math.floor((steps - HOLD_F) / EVERY_F));
-        for (let i = lit; i < n; i++) {
-          flames[i].lit = true;
-          flames[i].from = drawn;
-          flames[i].group.visible = true;
+        if (lit === 0) {
+          // the click's own drawing: the grate catches and the half second starts from here
+          catchAt(flames[ORDER[0]]);
+          lit = 1;
+          jumpAt = drawn;
+          say(true);
+        } else if (lit < flames.length && drawn - jumpAt >= EVERY_F) {
+          catchAt(flames[ORDER[lit]]);
+          lit++;
+          jumpAt = drawn;
         }
-        if (n > lit) lit = n;
-        if (lit > 0) say(true);
-        // …and the one drawing anybody else in the building is told about: the last tongue has
-        // caught, the room is entirely alight, and somebody may now have something to say.
-        if (lit >= flames.length && !full) {
+        // …AND THE ONE DRAWING ANYBODY ELSE IN THE BUILDING IS TOLD ABOUT: the fire has reached the
+        // TABLE. flow.js takes it where it takes the globe's country and puts `This is fine.` on the
+        // placard. Once per burning, and `full` is cleared only by the room going out.
+        if (lit > SAY_AT && !full) {
           full = true;
           ctx.emit?.('props:fine', { burning: true, n: lit, full: true });
         }
-      } else if (!byHand) {
+      } else if (!want && !byHand) {
         steps = 0;
-        if (lit > 0) {
-          if (outFrom < 0) outFrom = drawn;
-          // …and gone on the sixth. Five drawings of wisp and a bare frame is half a second, and it
-          // is counted so that the FIRST drawing after the pointer left is already smaller: a frame
-          // that shows exactly what the last one showed is a frame in which nothing happened, and
-          // the visitor has just taken their hand away and is looking for something to happen.
-          if (drawn - outFrom >= OUT_F - 1) {
-            douse();
-            say(false);
-            return;
-          }
+        if (lit > 0 && drawn - jumpAt >= EVERY_F) {
+          // BACK DOWN THE ORDER, far side first. The tongue is not deleted here: it is told which
+          // drawing it began going out on and it shrinks to a wisp over the next three, which is
+          // why the room empties the way it filled and not like a light being switched off.
+          const fl = flames[ORDER[lit - 1]];
+          fl.out = drawn;
+          lit--;
+          jumpAt = drawn;
+          if (lit === 0) say(false);
         }
       }
-      if (!lit) return;
-      // the going-out, as a row of drawings and not a tween: the sheet is a size, held for a
-      // twelfth of a second, and the last one is a wisp
-      const u = outFrom < 0 ? 1 : Math.max(0, 1 - (drawn - outFrom + 1) / OUT_F);
+      // a tongue that has finished going out is gone
+      for (const fl of flames) {
+        if (fl.lit && fl.out >= 0 && drawn - fl.out >= WISP.length) {
+          fl.lit = false;
+          fl.out = -1;
+          fl.group.visible = false;
+        }
+      }
+      if (!flames.some((f) => f.lit)) {
+        if (!byHand) full = false;
+        return;
+      }
       for (const fl of flames) {
         if (!fl.lit) continue;
-        // A FLAME CATCHES BEFORE IT BURNS. Its first drawing is two thirds the size, held one step,
-        // then it is up. One drawing, not a ramp: a thing that grows smoothly is the only
-        // continuous thing in the film and this is not going to be it.
-        const caught = drawn - fl.from === 0 ? 0.64 : 1;
-        setSize(fl, u * caught);
+        // A FLAME GROWS WHERE IT LANDS, and shrinks where it stands. Three drawings up and two
+        // down, each held a twelfth of a second: a row of sizes and not a ramp, which is the rule
+        // every moving thing in this film is drawn to.
+        const age = drawn - fl.from;
+        const dying = fl.out >= 0 ? drawn - fl.out : -1;
+        const u = dying >= 0 ? (WISP[dying] ?? 0) : age < CATCH.length ? CATCH[age] : 1;
+        setSize(fl, u);
         // THE FLICKER IS ON THE ROOM'S OWN CLOCK, not on this piece's count of drawings, and the
         // difference matters in exactly one place: a frozen frame. `?t=2.5` holds clock.frame still
         // and calls every piece's update on every tick, so a private counter would flip the sheet
@@ -745,11 +869,17 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
       // little over that — the buzz's own arithmetic (sound-voices.js, LENGTH.crackle). It grows
       // with the fire because twelve of them are more than one, and it stops on the frame the last
       // wisp goes, because that is when there is nothing burning.
-      if (!byHand && outFrom < 0 && drawn - crackleAt >= CRACKLE_EVERY) {
+      // …and it holds off on the drawing a JUMP threw its own, so the two are never one noise.
+      if (!byHand && want && drawn - jumped >= 2 && drawn - crackleAt >= CRACKLE_EVERY) {
         crackleAt = drawn;
         ctx.pieces.sound?.play?.('crackle', { gain: 0.55 + (0.45 * lit) / flames.length, pan: pan() });
       }
     },
   };
+  // `?fine=<n>` holds the nth JUMP for a tool: the room n seats along the order, every tongue at
+  // full size and nothing moving. `?fine=4` is four of the twelve, `?fine=12` the whole room, and
+  // `?fine=0` a room that is fine.
+  const held = ctx.params?.get?.('fine');
+  if (held != null && held !== '' && Number.isFinite(+held)) api.hold(+held);
   return api;
 }
