@@ -8,7 +8,11 @@
 //
 //   node tools/_props-r8-radio.mjs               # measure + drive
 //   node tools/_props-r8-radio.mjs 390 760       # one window
+//   BASE=http://127.0.0.1:8739 node tools/_props-r8-radio.mjs
 import { chromium } from 'playwright';
+
+// BASE lets a builder in their own worktree point this at their own port, as tools/shot.mjs does
+const BASE = (process.env.BASE ?? 'http://127.0.0.1:5173').replace(/\/$/, '');
 
 const only = process.argv.slice(2).map(Number).filter(Number.isFinite);
 const WINDOWS = only.length === 2 ? [only] : [[1600, 900], [390, 760], [360, 800]];
@@ -29,7 +33,7 @@ for (const [W, H] of WINDOWS) {
   const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1, hasTouch: true });
   page.on('pageerror', (e) => console.log('ERR', String(e).slice(0, 300)));
   await page.route('**/@vite/client', stub);
-  await page.goto('http://127.0.0.1:5173/?view=props&state=default&shot=1', { waitUntil: 'load', timeout: 180000 });
+  await page.goto(`${BASE}/?view=props&state=default&shot=1`, { waitUntil: 'load', timeout: 180000 });
   await page.waitForFunction('window.__theatreReady === true', null, { timeout: 180000 });
   for (const shot of SHOTS) {
     const m = await page.evaluate((s) => {
@@ -54,7 +58,7 @@ for (const [W, H] of WINDOWS) {
   page.on('pageerror', (e) => console.log('ERR', String(e).slice(0, 300)));
   await page.route('**/@vite/client', stub);
   // ?view=props runs the room without the flow, and WITHOUT ?shot=1 the sound piece is live
-  await page.goto('http://127.0.0.1:5173/?view=props&state=default', { waitUntil: 'load', timeout: 180000 });
+  await page.goto(`${BASE}/?view=props&state=default`, { waitUntil: 'load', timeout: 180000 });
   await page.waitForFunction('window.__theatreReady === true', null, { timeout: 180000 });
   await page.evaluate(() => {
     window.__radio = [];
@@ -111,7 +115,7 @@ for (const q of ['', '&tune=a', '&tune=c', '&tune=0', '&tune=nonsense']) {
   const page = await browser.newPage({ viewport: { width: 1200, height: 700 }, deviceScaleFactor: 1 });
   page.on('pageerror', (e) => console.log('ERR', String(e).slice(0, 300)));
   await page.route('**/@vite/client', stub);
-  await page.goto(`http://127.0.0.1:5173/?view=props&state=default${q}`, { waitUntil: 'load', timeout: 180000 });
+  await page.goto(`${BASE}/?view=props&state=default${q}`, { waitUntil: 'load', timeout: 180000 });
   await page.waitForFunction('window.__theatreReady === true', null, { timeout: 180000 });
   await page.waitForTimeout(1500);
   const before = await page.evaluate(() => ({ station: window.__theatre.pieces.props.radio.station, tune: window.__theatre.pieces.sound.tune?.id ?? null }));

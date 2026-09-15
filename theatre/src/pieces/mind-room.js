@@ -95,7 +95,7 @@ export const STORIES = [
   {
     id: 'radio',
     name: 'the radio',
-    where: 'on the test table against the wall stage left, dark',
+    where: 'on the middle board of the tall case against the wall stage left, dark',
     fact: 'It works and he does not switch it on. He was in a crypto cabal for a while and left it, disillusioned with how easily it could be corrupted: a room where everybody talked at once and had agreed by morning, and nothing said in it survived the week. The radio states that by being silent in the corner of every frame.',
     keys: /\bradio\b|\bradiola\b|\bwireless\b|^set$/,
     lines: [
@@ -230,6 +230,20 @@ const PLAIN = [
   [/\bcat\b|\banimal\b/, ['The cat. It was here before I was and nobody has asked it to leave.', 'A cat asleep on a dead exchange. It is not mine and it does not know that.']],
   [/\brug\b|\bcarpet\b/, ['A rug. It is mine, and it is the only soft thing between me and a floor that was bolted down.']],
   [
+    // THE TALL CASE, and it stands HERE for two orderings at once. PLAIN is walked in order, so it
+    // is before the radiator's line, which is what "the case over the radiator" would otherwise
+    // answer; and it is before the low cases' line, because a visitor who says "the bookshelf" or
+    // "the tall case" means the thing that fills the wall stage left and not the two knee-high ones
+    // beside him. The low cases keep every other word — bookcase, shelf, shelves, books, spines —
+    // and are answered on all of them further down. The register is the one the other sixty objects
+    // get: what it is, whose it is, and no biography.
+    /\btall case\b|\bbook ?shelf\b|\bbook ?case by the (?:cart|trolley)\b|\bbig shelf\b|\bshelving\b|\bcase over the radiator\b|\bcase on the left\b/,
+    [
+      'The tall case. It stands over the radiator, it came with the room, and the books in it are mine.',
+      'That case was the exchange\'s and it was empty when I got here. What is in it now I carried up the stairs.',
+    ],
+  ],
+  [
     /\bradiator\b/,
     ['A radiator. It knocks at seven and again at eleven, and it came with the room.'],
   ],
@@ -260,7 +274,7 @@ const PLAIN = [
     /\bbookcases?\b|\bshelf\b|\bshelves\b|\bbooks\b|\bthose books\b|\bbook row\b|\bspines?\b/,
     [
       'Books. Six of them are about cards. The rest are the post office\'s manuals and the town\'s old directories.',
-      'Two low bookcases and what was left in them. I brought perhaps five of those.',
+      'Two low cases and a tall one, and what was left in them. I brought perhaps five of those.',
     ],
   ],
   [
