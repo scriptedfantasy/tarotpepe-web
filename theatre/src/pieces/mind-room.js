@@ -286,8 +286,10 @@ const PLAIN = [
     /\bnewspapers?\b|\ble soir\b|\bpaper on the\b|\bcourrier\b/,
     ['Newspapers. I keep them for the weather page, which is wrong about as often as I am.'],
   ],
+  // THE HEADSET, on the case's middle board. The hat stand's words used to share this line, from
+  // the rounds when the headset hung on it; the stand is gone and those words are ABSENT's now.
   [
-    /\bhat ?stand\b|\bcoat\b|\bscarf\b|\bumbrella\b|\bcane\b|\bboater\b|\bhat\b|\bheadset\b|\bearpieces?\b/,
+    /\bheadset\b|\bearpieces?\b/,
     ['An operator\'s headset, on the shelf beside the radio. It is the exchange\'s and it still works, which is two things it has over me.'],
   ],
   [
@@ -360,6 +362,13 @@ const ABSENT = [
   [/\bbed\b|\bkitchen\b|\bbathroom\b|\btoilet\b|\bthe lavatory\b/, ['Not in here. That is all upstairs, and it is a bed, a kettle and a window looking at another window.'],],
   [/\bwi.?fi\b|\binternet\b|\bsignal\b|\belectricity in here\b/, ['Nothing in this room is connected to anything. It used to be connected to the whole town.']],
   [/\bdogs?\b/, ['No dog. There is a cat, and it belongs to the building.']],
+  // THE HAT STAND. It stood by the door in the early rounds with a coat, a scarf, an umbrella, a
+  // cane and a boater on it, and it was taken out; the headset that hung on it is on the case now.
+  // Until this round a visitor asking about a coat was handed the headset's line.
+  [
+    /\bhat ?stand\b|\bcoats?\b|\bscar(?:f|ves)\b|\bumbrellas?\b|\bcanes?\b|\bboaters?\b|\bhats?\b/,
+    ['There is no hat stand and nothing to hang on one. The operators took their coats when they went, and I have never owned one.'],
+  ],
   // THE TEST TABLE. It stood under the window, then in front of the case, and the user had it taken
   // out ("remove the thing in front of the bookshelf"); everything that was on it is on the shelves
   // now. He is not going to be caught describing a trolley that is not in the room, and a visitor
