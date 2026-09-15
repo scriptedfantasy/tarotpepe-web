@@ -3,11 +3,15 @@
 // carries a low run of furniture — bookcase | the operator's position | bookcase, none of it above
 // waist height — with bare plaster over it and either side of Pepe's head, and ONE row of pictures
 // round the clock under the rail. The PTT's spares press beside the door (four boards, three vessels
-// a board, one bay left to a single carboy), the test table on the plaster stage left with the
-// radio, a headset and three bottles, a floor lamp, a hat stand with a black overcoat, a potted
-// palm, hand-lettered signs, a rug, a doormat, a cat on the right bookcase, the three-petal pendant
-// of the kitchen frame.
-// TWO OF THESE WORK. The radio on the cart plays (round 8) and the cat is a lamp (round 9): click
+// a board, one bay left to a single carboy), the test table on the plaster stage left with a headset
+// and three bottles on it, a potted palm, hand-lettered signs, a rug, a doormat, a cat on the right
+// bookcase, the three-petal pendant of the kitchen frame.
+// THE ONE THING ABOVE WAIST HEIGHT ON THE BACK WALL IS THE TALL CASE, stage left, and the user
+// asked for it by name — "can we add a bookshelf instead of the bare wall". It stands over the
+// radiator on the stretch the window came out of, from the dado to the head line of the room's
+// openings, and it carries the books, the radio and the VIN bottle. It is what balances the door
+// and the press at the other end; the plaster either side of Pepe's head is as bare as it ever was.
+// TWO OF THESE WORK. The radio on the case plays (round 8) and the cat is a lamp (round 9): click
 // it and the black mass goes white. Both are at the foot of this file, under THE SWITCHES, THE
 // RADIO and THE CAT. Neither announces itself — the cursor over the object is the whole affordance.
 // ROUND 6 — THE ROOM IS THE TOWN'S OLD MANUAL TELEPHONE EXCHANGE (PROPS.md). It reads in three
@@ -71,9 +75,9 @@ export async function build(ctx) {
   const railY = room.bands?.rail?.[0] ?? 2.6;
 
   let signMesh = null, signPivot = null; // the wall board over Pepe's head; published below
-  let radioObj = null; // the set on the cart, and the cat on the right-hand bookcase: the two things
-  let catObj = null; //  the visitor may work. Both are wired up at the foot of this file.
-  let wineObj = null; // the VIN bottle on the cart; src/pieces/egg-wine.js does the rest
+  let radioObj = null; // the set on the tall case, and the cat on the right-hand bookcase: the two
+  let catObj = null; //  things the visitor may work. Both are wired up at the foot of this file.
+  let wineObj = null; // the VIN bottle, made on the cart and stood in the case; egg-wine.js pours it
   let globeObj = null; // the globe on the left bookcase; egg-globe.js turns it
   let vaseObj = null; //  the vase of dried stems on the operator's position; egg-vase.js wilts it
 
@@ -332,25 +336,33 @@ export async function build(ctx) {
     }
   }
 
-  // ---- stage left on the back wall: the test table, and no window over it any more --------------
+  // ---- stage left on the back wall: the tall case, and the cart in front of it -------------------
   // THE CURTAINS ARE GONE. Two 0.19 m panels hung inside the architrave from a rod at 2.50 and
   // dropped to the sill at 1.06; there is no architrave, no rod and no sill, so there is nothing for
   // cloth to hang on and it would have been a pair of drapes nailed to bare plaster. (`curtainSet`
   // and `curtainPanel` are still in props-objects.js, and the stage-right window has never had any.)
-  // What is left on this stretch is the cart, the radiator behind it, and the clock above.
+  // What is on this stretch now is THE TALL CASE (below), the cart in front of it, the radiator
+  // under it, and the clock on the plaster to the right.
+  //
+  // THE CART CAME FORWARD 80 mm, from WALL + 0.48 to WALL + 0.56, and that is the only thing about
+  // it that changed. Its own back lip measured z −2.230 to −2.218 and the case's front edge is at
+  // −2.20: the two were through each other by 18 mm. At WALL + 0.56 the lip is at −2.150, 50 mm
+  // clear of the case, its back wheels are at −2.137 and clear the case's toe rail at −2.22, and
+  // its front board is at −1.73 — still 230 mm upstage of the rug's far edge at −1.5, which is the
+  // line the cart has never been allowed to cross.
   {
     const cart = O.barCart({ w: 0.96, d: 0.42, h: 0.8 });
-    cart.position.set(CART.x, 0, WALL + 0.48);
+    cart.position.set(CART.x, 0, WALL + 0.56);
     cart.userData.noShadow = true; // its shadow would black out the wall behind it and swallow the bottles
     g.add(cart);
     const top = cart.userData.top;
-    // the radio on the top board, right; four big bottles on the left. Round 8: it works, and the
-    // whole of that is at the foot of this file, under THE RADIO.
-    const r = O.radio({ w: 0.42, h: 0.26, d: 0.18 });
-    r.position.set(0.25, top, 0.0);
-    r.name = 'radio';
-    cart.add(r);
-    radioObj = r;
+    // THE RADIO AND THE VIN BOTTLE HAVE COME OFF THIS CART and stand in the case behind it — the
+    // user: "you can place the radio and the bottle of wine in the shelf". The row below is still
+    // laid for FOUR and the bottle is still made in it; it is lifted out further down, where the
+    // case is dressed. Taking one object out of a row does not re-space the row, so the gap at the
+    // left end of the top board is exactly where the bottle stood, which is what a gap in a row of
+    // bottles means. The right half of the board, where the set stood, is bare now: a test table
+    // with nothing on two thirds of it is what a test table mostly is.
     cart.add(
       O.row({
         x0: -0.48,
@@ -363,8 +375,11 @@ export async function build(ctx) {
         // black capsule, four different heights, four different shoulders.
         // Round 6: the cart is the test table now, so two of the four go. GIN is the headset,
         // standing on its earpieces with its cord running off the front edge of the board; RHUM is
-        // a square battery jar. VIN (the solid one, which carries the row's black) and MARC stay,
-        // because he does drink. Same four slots, same widths, same arithmetic.
+        // a square battery jar. VIN (the solid one) and MARC stay, because he does drink. Same four
+        // slots, same widths, same arithmetic.
+        // VIN is the one that has since gone up into the case, and the row's black went with it
+        // into its place: the headset is solid ink from its band to the end of its cord, and it is
+        // the second slot, which is where the eye was already going.
         items: [
           { kind: 'tall', name: 'VIN', dark: true, scale: 1.2, seed: 201, bodyH: 0.19, neckH: 0.1 },
           { kind: 'headset' },
@@ -385,6 +400,148 @@ export async function build(ctx) {
     const s = O.siphon();
     s.position.set(-0.28, cart.userData.lower, 0.0);
     cart.add(s);
+  }
+
+  // ---- THE TALL CASE, on the plaster the window left ---------------------------------------------
+  // The user, looking at the stretch the window came out of: "can we add a bookshelf instead of the
+  // bare wall. you can place the radio and the bottle of wine in the shelf." So there is a case on
+  // it now, and the two things a visitor can work in this corner stand IN it instead of on the cart.
+  //
+  // WHERE IT MAY STAND, and every edge of it is something else's edge (tools/_shelf-where.mjs
+  // prints the whole stretch; these are its numbers):
+  //   x -1.955 … -1.089  THE RADIATOR, which is bolted to this plaster and is not going anywhere
+  //             (room.js: columns and manifolds x -1.896..-1.110, the valve and its wheel out to
+  //             -1.955 on the left, the return pipe to -1.089 on the right, y 0..0.814, z -2.455 to
+  //             -2.310). A case cannot stand on a radiator and it will not stand through one, so
+  //             this case stands OVER it — see the legs below — and the iron is still there under
+  //             the bottom board, which is where a radiator in a room like this ends up.
+  //   x -1.035  THE LEFT LOW BOOKCASE's own top board. That is the hard edge on the right: the case
+  //             stops at -1.06, which leaves 25 mm of daylight between two runs of shelving. Any
+  //             further right and the two of them read as one long fitment across the whole wall,
+  //             which is the thing this room has never done.
+  //   x -2.42   THE WALL SHELF on the stage-left wall (w 0.6, d 0.16, hung at 1.3, running z -2.6 to
+  //             -2.0) reaches this far out into the corner with two jars on it. The case stops at
+  //             -2.10, 320 mm short of it, so the corner keeps its air and the jars keep their
+  //             silhouette.
+  //   y  0.905  THE DADO. The carcase starts on the dado band's own bottom line, which is where the
+  //             room's one horizontal already is, and stands on four legs from there to the floor.
+  //   y  2.45   THE HEAD LINE of every opening in this room (the door's y1 and the old window's
+  //             head, both 2.45). The picture rail starts at 2.6, so there is 150 mm of papered
+  //             field over the top board and the case is under the rail, not into it.
+  //   x -0.89   THE CLOCK's box, which is the one thing on this wall a thumb has to land on (it is
+  //             the vortex's switch). The case's right side stands 170 mm off it — half as much
+  //             again as the 110 mm this wall hangs its pictures at — and the clock's whole dial,
+  //             1.875 to 2.245, hangs below the case's top board. They read as a case and a clock
+  //             on one wall, not as a clock wedged into a gap.
+  //   z -2.20   THE CART's back lip was at -2.218. The case is 260 mm deep off the skirting line, so
+  //             its front edge lands there and the cart came forward 80 mm to clear it (above).
+  // WHAT A PHONE SEES OF IT, and it is the closest thing in this room to a near miss. At 390x844 the
+  // case projects to a box 224 x 314 px whose RIGHT EDGE LANDS AT x -11 on both resting plates: it
+  // is off the left of the picture by eleven pixels, `home` and `wide` alike. (The resting plates
+  // stop at x -0.9944 on the wall plane and the case's top board reaches -1.045.) Eleven pixels is
+  // a nudge, and the nudge was not taken: 54 mm to the right is what it would cost, which is the
+  // clock's 170 mm of air cut to 116 and the low bookcase's 25 mm of daylight cut to nothing, in
+  // exchange for a sliver of the case's own side board at the edge of a phone. The `cart` plate is
+  // where a phone sees it — 290 x 419 px, whole, at x 6 — and that is the plate the lateral track
+  // runs to. The radio and the bottle were outside a phone's resting frame on the cart too, so
+  // nothing about what a phone can reach has changed.
+  const CASE = {
+    x0: -2.1,
+    x1: -1.06,
+    foot: 0.905, // the dado band's bottom: where the carcase starts and the legs take over
+    top: 2.45,
+    d: 0.26,
+    thick: 0.022,
+    leg: 0.04,
+    // THE BOARDS ARE UNEVEN AND THEY ARE UNEVEN FOR A REASON: what stands in each bay decided its
+    // height. 1.458 m of clear case, three boards' worth of it taken by the boards themselves:
+    //   0.970 → 1.420   0.450  the bottle bay. VIN is 0.398 tall (the tallest thing that has ever
+    //                          stood on the cart), so this is the bottle's height and a hand.
+    //   1.442 → 2.092   0.650  the set's bay. The radio measures 0.42 x 0.26 x 0.18 and its aerial
+    //                          rises 0.622 off the board it stands on and leans 0.41 to the right,
+    //                          so this is the only bay in the room a wireless fits in standing up.
+    //   2.114 → 2.428   0.314  books, and nothing else: a run of spines under the top board.
+    boards: [0.97, 1.442, 2.114],
+  };
+  {
+    const w = CASE.x1 - CASE.x0;
+    const cx = (CASE.x0 + CASE.x1) / 2;
+    const cz = FLUSH + CASE.d / 2; // back flush with the skirting, like the two low cases
+    // ITS OWN PEN. Every other row of books in this room is dealt off the props piece's shared rng,
+    // and a case added in the middle of the file would have shifted that stream for everything built
+    // after it — different titles on the low cases, a different palm, different stems in the vase.
+    // A seed of its own costs one line and leaves the rest of the room drawn exactly as it was.
+    const shelfRng = mulberry32(8123);
+    const unit = O.shelfUnit({
+      w,
+      h: CASE.top - CASE.foot,
+      d: CASE.d,
+      thick: CASE.thick,
+      boards: CASE.boards.map((y) => y - CASE.foot),
+      plinth: 0, // it has legs instead; a plinth would sit on the radiator's feet
+      back: true,
+    });
+    unit.position.set(cx, CASE.foot, cz);
+    unit.name = 'tall-case';
+    g.add(unit);
+    // THE LEGS, and they are the reason this case works at all. Four solid-ink posts 40 mm square
+    // from the dado to the floor, one at each corner of the carcase: the front pair stand at
+    // z -2.24 to -2.20, 70 mm in FRONT of the radiator's front face, and the back pair at -2.46 to
+    // -2.42, outboard of the iron at x -2.10..-2.06 and -1.10..-1.06 and 24 mm upstage of the
+    // return pipe. Nothing touches anything. The toe rail between the front pair is the black area
+    // the room asks every prop for — a case on legs with no toe is a table — and it is 40 mm deep,
+    // which clears the cart's back wheels at -2.137 with room to spare.
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        const leg = O.box(CASE.leg, CASE.foot, CASE.leg, M.solid);
+        leg.position.set(cx + sx * (w / 2 - CASE.leg / 2), CASE.foot / 2, cz + sz * (CASE.d / 2 - CASE.leg / 2));
+        g.add(leg);
+      }
+    }
+    const toe = O.box(w - CASE.leg * 2, 0.06, CASE.leg, M.solid);
+    toe.position.set(cx, 0.03, cz + CASE.d / 2 - CASE.leg / 2);
+    g.add(toe);
+
+    // WHAT IS IN IT. Books in runs, two things standing, and air where the runs stop — the way the
+    // low cases and the press are filled, and for the same reason: a shelf packed corner to corner
+    // is a texture and a shelf with four objects on it is a display cabinet.
+    const { x0, x1, z0 } = unit.userData.inner; // -0.498 … 0.498 local, the lining at z -0.12
+    const [b0, b1, b2] = CASE.boards.map((y) => y - CASE.foot);
+    // bottom bay: a run of books from the left side, then air, then the bottle at the right end
+    unit.add(O.bookRow({ x0, x1: x0 + 0.5, y: b0, z: z0, rng: shelfRng, maxH: 0.42, depth: 0.23, chunky: true }));
+    // the set's bay: a short run at the left, the radio, then a second run at the right end. The
+    // right-hand run is there because of the AERIAL: it leaves the set at 1.700 and climbs to 2.064
+    // at x -1.124, and with a bare board under it that stroke was a 250 mm diagonal alone in an
+    // empty bay — a crack in the plaster, not a wire. Over a row of spines it is a wire. The books
+    // top out at 1.74 and the aerial is at 1.835 where it crosses them, so it passes clear.
+    unit.add(O.bookRow({ x0, x1: x0 + 0.26, y: b1, z: z0, rng: shelfRng, maxH: 0.3, depth: 0.23, chunky: true }));
+    unit.add(O.bookRow({ x0: x1 - 0.22, x1, y: b1, z: z0, rng: shelfRng, maxH: 0.3, depth: 0.23, chunky: true }));
+    // the top bay: spines all the way across, which is what a case reads as from the door
+    unit.add(O.bookRow({ x0, x1, y: b2, z: z0, rng: shelfRng, maxH: 0.28, depth: 0.23, chunky: true }));
+
+    // THE RADIO, on the middle board and turned a couple of degrees into the room. It stands at
+    // local x 0.04 — world -1.54, so the set runs -1.75 to -1.33 and the aerial's tip lands at
+    // -1.13, 48 mm inside the case's right side — and at local z 0, which leaves its face 40 mm
+    // behind the board's front edge. Everything it does is at the foot of this file under THE
+    // RADIO; the only thing that changed is which board it is standing on.
+    const r = O.radio({ w: 0.42, h: 0.26, d: 0.18 });
+    r.position.set(0.04, b1, 0.0);
+    r.rotation.y = -0.05;
+    r.name = 'radio';
+    unit.add(r);
+    radioObj = r;
+    // THE VIN BOTTLE, lifted off the cart's row and stood on the bottom board at its right end —
+    // world x -1.16, which is the stretch of this case the cart's own bottles do not stand in front
+    // of. egg-wine.js re-strikes THIS object's label on every pour, so it is the same bottle with
+    // the same recipe, the same seed and the same five fingers in it. It stood at x -1.934 on the
+    // cart's board at 0.811; it stands at -1.16 on this one at 0.97, which is 0.77 m across the
+    // wall and 0.16 m up, and nothing else about it is different.
+    if (wineObj) {
+      unit.add(wineObj);
+      wineObj.position.set(0.42, b0, 0.03);
+      wineObj.rotation.y = 0.11;
+      wineObj.name = 'vin-bottle';
+    }
   }
   {
     const stool = new THREE.Group();
@@ -839,8 +996,9 @@ export async function build(ctx) {
 
   // ---- THE RADIO. The one thing in this room the visitor is allowed to work. ---------------------
   // The user, round 8: "would be cool if we could turn the tune on and off and switch through them
-  // via the radio receiver." And his own persona, about this very prop: "The radio on the cart. It
-  // works and you do not switch it on." So the visitor does, and the set has to be honest about it.
+  // via the radio receiver." And his own persona, about this very prop: "The radio. It works and
+  // you do not switch it on." So the visitor does, and the set has to be honest about it. (It stood
+  // on the cart for that round and stands in the case behind it now; nothing below reads its place.)
   //
   // THE DEFAULT IS OFF, and that is a decision, not an oversight. sound.js starts tune `a` on the
   // first gesture; this piece switches it off before any gesture can happen, unless the URL asked
@@ -902,18 +1060,21 @@ export async function build(ctx) {
       return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
     }
     // WHAT A THUMB ACTUALLY HAS TO HIT: the set's own box, grown about its centre to at least 44 px
-    // each way, the extra falling on bare cloth on the cart's top board. Nothing else in the room is
-    // clickable within a foot of there, so the margin costs nothing and a miss costs the feature.
+    // each way, the extra falling on the case's own board and on the books either side of it.
+    // Nothing else in the room is clickable within a foot of there, so the margin costs nothing and
+    // a miss costs the feature.
     //
-    // MEASURED (tools/_props-r8-radio.mjs), and the news is not what anyone expected. The set is not
-    // too SMALL on a phone. It is not in the picture at all:
-    //     1600 x 900   home 95.9 x 59.3 px at x 483    wide 77.2 x 47.8 px at x 545
-    //     390 x 760    home 92.6 x 57.3 px at x -111   wide 92.6 x 57.3 px at x -111
-    //     360 x 800    home 85.5 x 52.9 px at x -102   wide 85.5 x 52.9 px at x -102
-    // A portrait window crops the frame to the middle of the room — the whole cart is outside it,
-    // and the radio's right-hand edge stops 18 px short of the left of the picture. (When these were
-    // measured there was a window over the cart and it was outside the frame too; it has since been
-    // taken out of the room, which changes nothing here: the cart was never the thing in the way.) The margin below therefore never fires: at 93 px the set is twice the size a thumb
+    // MEASURED (BASE=… node tools/_props-r8-radio.mjs), and the news is not what anyone expected.
+    // The set is not too SMALL on a phone. It is not in the picture at all:
+    //     1600 x 900   home 94.5 x 54.5 px at x 433    wide 76.1 x 43.8 px at x 505
+    //     390 x 760    home 91.3 x 52.6 px at x -159   wide 91.3 x 52.6 px at x -159
+    //     360 x 800    home 84.2 x 48.5 px at x -147   wide 84.2 x 48.5 px at x -147
+    // A portrait window crops the frame to the middle of the room — the whole of this end of the
+    // wall is outside it, and the set's right-hand edge now stops 68 px short of the left of the
+    // picture. (It was 18 px when it stood on the cart. Going up into the case took it 0.29 m
+    // further from the room's axis and 0.63 m up, which is 50 px further out of a phone's frame and
+    // 2 px off its size: a phone was never going to see it either way.) The margin below therefore
+    // never fires at any window that shows it at all: at 91 px the set is twice the size a thumb
     // needs. What a phone lacks is not reach, it is the frame. That is the camera's call or the set
     // dressing's, not this control's, and no hidden hotspot at the edge of the picture will do —
     // an affordance nobody can see is not one. Until then the radio is a desktop control, and `t`
@@ -1124,7 +1285,7 @@ export async function build(ctx) {
     setTime: g.userData.setClockTime,
   });
 
-  // ---- THE WINE on the cart. The room's sixth switch (src/pieces/egg-wine.js). -------------
+  // ---- THE WINE, on the tall case's bottom board. The sixth switch (src/pieces/egg-wine.js). ----
   const WINE = buildWine(ctx, wineObj, { switches: SWITCHES });
 
 
@@ -1221,7 +1382,7 @@ export async function build(ctx) {
     // THE CLOCK: `start()` winds the room into it for ten seconds, `t`/`active` say where it is,
     // `?vortex=<t>` and the `vortex-mid` state hold a frame of it for the tools.
     vortex: VORTEX,
-    // THE WINE BOTTLE on the cart. `fingers` is what is left of five, `pour()` takes one as a
+    // THE WINE BOTTLE, on the case's bottom board. `fingers` is what is left of five, `pour()` takes one as a
     // click does, `drunk` is whether the room is currently under it, and hitBox/tapBox are the
     // bottle's box on the glass and the box a thumb is given.
     wine: WINE,
@@ -1264,7 +1425,7 @@ export async function build(ctx) {
     // `castleBox('light'|'dark')` is that castle's box on the glass — the two castles are the
     // switches since round 4 — and `at(u, v)` is any point of the traced original, in pixels.
     cross: CROSS,
-    // THE RADIO on the cart, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
+    // THE RADIO on the case's middle board, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
     // is actually given (which is bigger, on a phone).

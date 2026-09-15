@@ -343,11 +343,12 @@ const SEATS = [
   { at: 'room', p: [1.02, 1.02, -2.17], h: 0.62, ppm: 187, hand: 1, phase: 0 },
   // THE TWO CABINETS OUTBOARD OF THEM. The bar cart stage left (props.js: 0.96 x 0.42, top 0.8, at
   // x -1.5 — which was the window's centre line and is now just where the cart stands — z WALL +
-  // 0.48, so it runs -1.98 to -1.02) and the
+  // 0.56, so it runs -1.98 to -1.02 across and -2.15 to -1.73 deep; it came forward 80 mm when the
+  // tall case went up behind it, and z -2.02 is still its top board) and the
   // PTT's spares press on the door side (0.54 wide, 1.5 tall, at x W/2 - 0.31 = 2.29, running 2.02
-  // to 2.56). The cart's tongue stands at its far left end, well clear of the radio at cart-local
-  // x 0.25; the press's stands on its top board inboard of the MIEL jar, which is at unit-local
-  // 0.13. Both are set as far out as their furniture goes, because those two thirds of
+  // to 2.56). The cart's tongue stands at its far left end, where the VIN bottle used to stand and
+  // the board is bare; the press's stands on its top board inboard of the MIEL jar, which is at
+  // unit-local 0.13. Both are set as far out as their furniture goes, because those two thirds of
   // the home plate are the only ones the floor pair does not already fill.
   { at: 'room', p: [-1.9, 0.8, -2.02], h: 1.0, ppm: 191, hand: 2, phase: 0 },
   { at: 'room', p: [2.32, 1.5, -2.34], h: 0.9, ppm: 184, hand: 1, phase: 1 },

@@ -1,7 +1,11 @@
-// EGG: the wine bottle on the cart. It is the second thing in this room the visitor can work, and
-// unlike the radio it is not announced anywhere — the user's own words: "The wine bottle on the
-// cart. Each click pours a finger; the level in the drawing drops. After three, the whole room
-// should start moving a bit more", and "wine should wear off after 30 seconds".
+// EGG: the VIN bottle, on the bottom board of the tall case stage left. It is the second thing in
+// this room the visitor can work, and unlike the radio it is not announced anywhere — the user's
+// own words: "The wine bottle on the cart. Each click pours a finger; the level in the drawing
+// drops. After three, the whole room should start moving a bit more", and "wine should wear off
+// after 30 seconds". It stood on the cart when he said that; the case went up behind the cart and
+// the bottle went into it ("you can place the radio and the bottle of wine in the shelf"). It is
+// the same bottle, the same five fingers and the same recipe — 0.16 m higher and 0.77 m across the
+// wall, from x -1.934 on the cart's top board to -1.16 on the case's bottom one.
 //
 // The whole affordance is the cursor. There is no glow, no outline, no line of dialogue, nothing on
 // the notice: a pointer crossing the VIN bottle turns into a hand, and a visitor who never crosses
@@ -12,7 +16,7 @@
 //                 seed, same pen (props-textures.js labelTexture, `fillV`). Five fingers in it; the
 //                 ink stops a step lower each time and the glass above is paper with the two glass
 //                 strokes on it, which is how this set has always drawn an empty bottle.
-//   the cue       one 'glug' (sound-voices.js), quiet, panned to the cart at the left.
+//   the cue       one 'glug' (sound-voices.js), quiet, panned to the case at the left.
 //   the room      from the THIRD finger on, and not before.
 //
 // WHAT DRUNK MEANS, and why it is these two things and not a filter over the frame:
@@ -53,7 +57,7 @@ const MIN_TAP = 44; // px: what a thumb needs, whatever the bottle measures on t
 // two take it behind the label to the foot — which is what a bottle with a label on it does.
 const DROP = [0.94, 0.6, 0.38, 0.24, 0.1, null];
 
-// `obj` is the VIN bottle's group, straight off the cart (props.js).
+// `obj` is the VIN bottle's group: made in the cart's own row and stood on the case (props.js).
 export function buildWine(ctx, obj, { switches = null } = {}) {
   const glass = ctx.renderer?.domElement ?? null;
   const ray = new THREE.Raycaster();
@@ -108,11 +112,19 @@ export function buildWine(ctx, obj, { switches = null } = {}) {
     }
     return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
   }
-  // …grown about its centre to at least a thumb. A bottle is a tall thin thing — it measures about
-  // 15 x 50 px in the wide shot — so the growth is nearly all sideways, and it falls on bare cloth
-  // on the cart's top board with the headset a finger's width away. The same caveat the radio
-  // carries applies here: a portrait window crops the cart out of the picture altogether, and an
-  // affordance nobody can see is not one. On a phone this is a bottle and nothing else.
+  // …grown about its centre to at least a thumb. A bottle is a tall thin thing, so the growth is all
+  // sideways, and on the case's bottom board it falls on bare board and on the run of books to the
+  // left. Measured from the new place (BASE=… node tools/_shelf-where.mjs):
+  //     1280 x 800  home   14.2 x 74.3 px at 419,300   wide 11.4 x 59.9 at 462,347
+  //     1600 x 900  home   15.9 x 83.6 px at 551,337   wide 12.8 x 67.4 at 600,391
+  //     390 x 844   home   15.4 x 80.7 px at -45,275   cart 22.5 x 107.3 at 253,338
+  //     1280 x 800  cart   21.4 x 101.7 px at 695,320
+  // The tap box is 44 px wide at every one of them and the radio's — the only other switch within a
+  // metre — never touches it: the nearest the two boxes come is 9 px at 1600x900, and the tool says
+  // so on its own line if they ever overlap. The same caveat the radio carries applies here: a
+  // portrait window crops this end of the room out of its resting frames altogether (the bottle's
+  // box sits at x -45, off the left edge), and an affordance nobody can see is not one. On a phone
+  // this is a bottle and nothing else until the camera tracks to the `cart` plate.
   function tapBox() {
     const b = hitBox();
     if (!b) return null;
@@ -156,7 +168,7 @@ export function buildWine(ctx, obj, { switches = null } = {}) {
     since = ctx.clock.t;
     if (!under) began = since;
     restrike();
-    // the cart stands stage left, so the pour is heard over there
+    // the case stands stage left, where the cart stood, so the pour is still heard over there
     ctx.pieces.sound?.play?.('glug', { pan: -0.32 });
     if (fingers === 0) setHover(false);
     // `drunk` on the EVENT is whether this finger is one the room feels — it is true from the third
