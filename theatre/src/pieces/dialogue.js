@@ -393,7 +393,7 @@ const SPREAD_SHOTS = ['fan', 'spread'];
 // edge instead — every caption, of one line or of five, stands on the same line of the picture and
 // grows upwards. `w` is the measure, recomputed for the window's width (see `measure`).
 const CAPTION = { x: 0.5, y: 0.99, floor: 0.945 };
-const SHOTS = ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'deck', 'card0', 'card1', 'card2', 'door', 'cart', 'threshold'];
+const SHOTS = ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'deck', 'card0', 'card1', 'card2', 'door', 'shelf', 'threshold'];
 const ANCHORS = {};
 // The measure: a fraction of the frame, and NOT a function of what is written on the card. 46% of
 // a cinema frame (never under 300 px of paper), nine tenths of a phone's — where 46% of 390 px

@@ -252,8 +252,9 @@ export function buildVortex(ctx, { clock, switches, dial = 0.185, setTime = null
     return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
   }
   // …grown about its centre to at least 44 px each way. The clock hangs dead centre of the back
-  // wall, which is the one place a portrait frame keeps (the radio's cart is cropped away on a
-  // phone and the radio with it), so on a phone this is the room's reachable switch.
+  // wall, which is the one place a portrait frame keeps (the case at the stage-left end is cropped
+  // away on a phone, and the radio and the bottle in it with it), so on a phone this is the room's
+  // reachable switch.
   function tapBox() {
     const b = hitBox();
     if (!b) return null;

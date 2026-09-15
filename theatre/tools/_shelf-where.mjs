@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// WHAT IS ON THE CART END OF THE BACK WALL, in world metres, and where each resting plate stops on
+// WHAT IS ON THE SHELF END OF THE BACK WALL, in world metres, and where each resting plate stops on
 // that wall. The stretch the window left bare runs from the stage-left corner (x -2.6) to the
-// clock's box (x -0.89), and three things already stand in it: the radiator bolted to the plaster
-// (room.js, x -1.95..-1.05, y 0..0.805), the bar cart in front of that, and the clock above. This
-// prints every mesh whose box touches the stretch so a case can be put there without going through
-// any of them.
+// clock's box (x -0.89), and what stands in it is the TALL CASE, the radiator bolted to the plaster
+// under it (room.js, x -1.955..-1.089, y 0..0.814) and the clock above. This prints every mesh whose
+// box touches the stretch, so nothing can be put there that goes through anything else, and then the
+// two switches in the case — the radio and the VIN bottle — measured on the glass window by window.
 //
 //   BASE=http://127.0.0.1:8739 node tools/_shelf-where.mjs
 //   W=390 H=844 BASE=... node tools/_shelf-where.mjs     # the frame that binds
@@ -53,7 +53,7 @@ const out = await page.evaluate(() => {
   // where each plate's edges land on the back wall plane (z = -2.5)
   const cam = window.__theatre.camera;
   const plates = {};
-  for (const s of ['home', 'wide', 'cart']) {
+  for (const s of ['home', 'wide', 'shelf']) {
     window.__theatre.pieces.camera.cut(s);
     cam.updateMatrixWorld(true);
     const edge = (ndcx, ndcy) => {
@@ -86,7 +86,7 @@ for (const [W, H] of [[1280, 800], [1600, 900], [390, 844]]) {
   u2.searchParams.set('shot', '1');
   await p2.goto(u2.toString(), { waitUntil: 'load' });
   await p2.waitForFunction(() => window.__theatreReady === true, null, { timeout: 180000 });
-  for (const shot of ['home', 'wide', 'cart']) {
+  for (const shot of ['home', 'wide', 'shelf']) {
     const m = await p2.evaluate((s) => {
       window.__theatre.pieces.camera.cut(s);
       const P = window.__theatre.pieces.props;

@@ -576,13 +576,17 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
     // sheet's edges cannot appear at any shape. Nothing of the parlour is in it: the lining stands
     // two centimetres behind the lens.
     crossroads: crossroadsShot(aspect),
-    // THE CART END OF THE BACK WALL: the door's frame slid across it, MIRRORED rather than solved
+    // THE SHELF END OF THE BACK WALL: the door's frame slid across it, MIRRORED rather than solved
     // again — the lateral track runs between the two, and two frames solved separately would differ
     // by a degree of lens, which a track would play as a slow zoom.
-    // It was called `window`, because that is what this frame was pointed at. The user had the
-    // window taken out of the back wall, so it is named for what is actually in it now: the test
-    // table with the radio and the bottles, the radiator behind it, the clock on the plaster above.
-    cart: null,
+    // IT IS NAMED FOR WHAT IS IN IT AND HAS BEEN RENAMED TWICE FOR THAT REASON. It was `window`
+    // until the user had the window taken out of the back wall, then `cart` for the test table that
+    // stood there, and the cart has gone the same way ("remove the thing in front of the
+    // bookshelf"). What the frame holds now is the TALL CASE — three bays of books with the radio
+    // and the VIN bottle among them — the radiator under it and the clock on the plaster to its
+    // right. Everything that names a shot names this one `shelf`: camera.js's track, flow.js and
+    // dialogue.js's lists, and tools/_shelf-where.mjs.
+    shelf: null,
     // From the threshold: the visitor's first look in, and it is `home` seen from a STANDING eye
     // height — 1.70 rather than 1.62 — because that is the difference the shot is for. The visitor
     // comes in on their feet, looks at the room, and the cut to `home` is them sitting down at the
@@ -596,10 +600,10 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
       floorZ: 2.15,
     }),
   };
-  // the cart end is the door's own frame, mirrored about the room's axis
+  // the shelf end is the door's own frame, mirrored about the room's axis
   {
     const d = shots.door;
-    shots.cart = { ...d, pos: [-d.pos[0], d.pos[1], d.pos[2]], look: [-d.look[0], d.look[1], d.look[2]] };
+    shots.shelf = { ...d, pos: [-d.pos[0], d.pos[1], d.pos[2]], look: [-d.look[0], d.look[1], d.look[2]] };
   }
 
   // the three card inserts: one card, hung from the top of the frame with the cloth under it for

@@ -264,7 +264,7 @@ export async function build(ctx) {
     }
   }
   // ---- THE SET'S OWN LOUDSPEAKER ------------------------------------------------------------
-  // A cue played `through: 'set'` comes out of the radio on the cart instead of out of the room:
+  // A cue played `through: 'set'` comes out of the radio in the case instead of out of the room:
   // the same pair of filters the record is played through (RECORD.hp/lp — a small speaker in a
   // wooden box), built once and left standing WHETHER OR NOT THE SET IS SWITCHED ON. The
   // exchange's dial tone uses it (egg-switchboard.js): the board on the wall and the radio are

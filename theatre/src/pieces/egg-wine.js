@@ -57,7 +57,7 @@ const MIN_TAP = 44; // px: what a thumb needs, whatever the bottle measures on t
 // two take it behind the label to the foot — which is what a bottle with a label on it does.
 const DROP = [0.94, 0.6, 0.38, 0.24, 0.1, null];
 
-// `obj` is the VIN bottle's group: made in the cart's own row and stood on the case (props.js).
+// `obj` is the VIN bottle's group, off the tall case's bottom board (props.js).
 export function buildWine(ctx, obj, { switches = null } = {}) {
   const glass = ctx.renderer?.domElement ?? null;
   const ray = new THREE.Raycaster();
@@ -117,14 +117,14 @@ export function buildWine(ctx, obj, { switches = null } = {}) {
   // left. Measured from the new place (BASE=… node tools/_shelf-where.mjs):
   //     1280 x 800  home   14.2 x 74.3 px at 419,300   wide 11.4 x 59.9 at 462,347
   //     1600 x 900  home   15.9 x 83.6 px at 551,337   wide 12.8 x 67.4 at 600,391
-  //     390 x 844   home   15.4 x 80.7 px at -45,275   cart 22.5 x 107.3 at 253,338
-  //     1280 x 800  cart   21.4 x 101.7 px at 695,320
+  //     390 x 844   home   15.4 x 80.7 px at -45,275   shelf 22.5 x 107.3 at 253,338
+  //     1280 x 800  shelf  21.4 x 101.7 px at 695,320
   // The tap box is 44 px wide at every one of them and the radio's — the only other switch within a
   // metre — never touches it: the nearest the two boxes come is 9 px at 1600x900, and the tool says
   // so on its own line if they ever overlap. The same caveat the radio carries applies here: a
   // portrait window crops this end of the room out of its resting frames altogether (the bottle's
   // box sits at x -45, off the left edge), and an affordance nobody can see is not one. On a phone
-  // this is a bottle and nothing else until the camera tracks to the `cart` plate.
+  // this is a bottle and nothing else until the camera tracks to the `shelf` plate.
   function tapBox() {
     const b = hitBox();
     if (!b) return null;

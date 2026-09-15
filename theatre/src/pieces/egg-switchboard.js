@@ -38,7 +38,7 @@
 //
 // AND ON A PHONE IT IS NOT IN THE PICTURE AT ALL. At 390x844 the whole of this wall projects to
 // x −477 and further left: the portrait plates crop the parlour to its middle two metres, exactly
-// as they do the radio on the cart. That is the framing's business, not this control's, and no
+// as they do the radio in the case. That is the framing's business, not this control's, and no
 // hidden hotspot at the edge of the glass would be an affordance. On a phone the room has a cat
 // and a record; on a laptop it also has an exchange.
 //

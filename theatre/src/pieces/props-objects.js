@@ -710,6 +710,10 @@ export function rug({ w = 3.2, d = 3.16 }) {
 }
 
 // ---- bar cart: two boards on four legs, wheels, one handle; nothing else in the way of the bottles
+// NOTHING BUILDS THIS ANY MORE. It stood stage left under the window for four rounds and in front of
+// the tall case for one, and the user had it taken out ("remove the thing in front of the
+// bookshelf"); what was on it is on the case's boards now. It is kept here the way `curtainSet`,
+// `floorLamp` and `hatStand` are kept: the room has asked for each of them back once already.
 export function barCart({ w = 0.9, d = 0.42, h = 0.8 }) {
   const M = materials();
   const g = new THREE.Group();

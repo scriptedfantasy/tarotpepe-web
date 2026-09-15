@@ -66,18 +66,18 @@ export async function build(ctx) {
 
   // The room's openings (from the room piece when it is there; its numbers otherwise). The back
   // wall's window is gone — room.js no longer publishes one — so the only opening on this wall is
-  // the door. The rectangle the window used to occupy survives here as CART, because the bar cart
-  // was centred on it and the cart is still there: keeping the number is how the furniture stays put
-  // through a change that took the joinery out from behind it.
+  // the door. The window's own rectangle does not survive here any more either: it survived one
+  // round as CART, because the bar cart was centred on it, and the cart has since been taken out of
+  // the room. What stands on that stretch now is the tall case, and the case is solved from the
+  // radiator and the clock rather than from a window nobody can see (see THE TALL CASE below).
   const room = ctx.pieces.room ?? {};
   const door = room.door ?? { x0: 1.05, x1: 1.95, y0: 0, y1: 2.45, top: 2.12 };
-  const CART = { x: -1.5 }; // where the window's centre line was, and where the cart has always stood
   const railY = room.bands?.rail?.[0] ?? 2.6;
 
   let signMesh = null, signPivot = null; // the wall board over Pepe's head; published below
   let radioObj = null; // the set on the tall case, and the cat on the right-hand bookcase: the two
   let catObj = null; //  things the visitor may work. Both are wired up at the foot of this file.
-  let wineObj = null; // the VIN bottle, made on the cart and stood in the case; egg-wine.js pours it
+  let wineObj = null; // the VIN bottle, on the case's bottom board; src/pieces/egg-wine.js pours it
   let globeObj = null; // the globe on the left bookcase; egg-globe.js turns it
   let vaseObj = null; //  the vase of dried stems on the operator's position; egg-vase.js wilts it
 
@@ -336,71 +336,28 @@ export async function build(ctx) {
     }
   }
 
-  // ---- stage left on the back wall: the tall case, and the cart in front of it -------------------
+  // ---- stage left on the back wall: the tall case, and nothing in front of it --------------------
   // THE CURTAINS ARE GONE. Two 0.19 m panels hung inside the architrave from a rod at 2.50 and
   // dropped to the sill at 1.06; there is no architrave, no rod and no sill, so there is nothing for
   // cloth to hang on and it would have been a pair of drapes nailed to bare plaster. (`curtainSet`
   // and `curtainPanel` are still in props-objects.js, and the stage-right window has never had any.)
-  // What is on this stretch now is THE TALL CASE (below), the cart in front of it, the radiator
-  // under it, and the clock on the plaster to the right.
   //
-  // THE CART CAME FORWARD 80 mm, from WALL + 0.48 to WALL + 0.56, and that is the only thing about
-  // it that changed. Its own back lip measured z −2.230 to −2.218 and the case's front edge is at
-  // −2.20: the two were through each other by 18 mm. At WALL + 0.56 the lip is at −2.150, 50 mm
-  // clear of the case, its back wheels are at −2.137 and clear the case's toe rail at −2.22, and
-  // its front board is at −1.73 — still 230 mm upstage of the rug's far edge at −1.5, which is the
-  // line the cart has never been allowed to cross.
-  {
-    const cart = O.barCart({ w: 0.96, d: 0.42, h: 0.8 });
-    cart.position.set(CART.x, 0, WALL + 0.56);
-    cart.userData.noShadow = true; // its shadow would black out the wall behind it and swallow the bottles
-    g.add(cart);
-    const top = cart.userData.top;
-    // THE RADIO AND THE VIN BOTTLE HAVE COME OFF THIS CART and stand in the case behind it — the
-    // user: "you can place the radio and the bottle of wine in the shelf". The row below is still
-    // laid for FOUR and the bottle is still made in it; it is lifted out further down, where the
-    // case is dressed. Taking one object out of a row does not re-space the row, so the gap at the
-    // left end of the top board is exactly where the bottle stood, which is what a gap in a row of
-    // bottles means. The right half of the board, where the set stood, is bare now: a test table
-    // with nothing on two thirds of it is what a test table mostly is.
-    cart.add(
-      O.row({
-        x0: -0.48,
-        x1: 0.02,
-        y: top,
-        z: -0.02,
-        rng,
-        gap: 0.01,
-        // one filled bottle in four, at the left where the row starts; the rest paper with a
-        // black capsule, four different heights, four different shoulders.
-        // Round 6: the cart is the test table now, so two of the four go. GIN is the headset,
-        // standing on its earpieces with its cord running off the front edge of the board; RHUM is
-        // a square battery jar. VIN (the solid one) and MARC stay, because he does drink. Same four
-        // slots, same widths, same arithmetic.
-        // VIN is the one that has since gone up into the case, and the row's black went with it
-        // into its place: the headset is solid ink from its band to the end of its cord, and it is
-        // the second slot, which is where the eye was already going.
-        items: [
-          { kind: 'tall', name: 'VIN', dark: true, scale: 1.2, seed: 201, bodyH: 0.19, neckH: 0.1 },
-          { kind: 'headset' },
-          { kind: 'corked', name: 'MARC', dark: false, scale: 1.2, seed: 203, bodyH: 0.15, neckH: 0.06 },
-          { kind: 'square', name: 'PILE', dark: false, scale: 1.1, seed: 204, bodyH: 0.13, neckH: 0.035 },
-        ],
-      }),
-    );
-    // VIN, for egg-wine.js: the one bottle in the room that has a level in it
-    cart.traverse((o) => {
-      if (!wineObj && o.userData?.label?.recipe?.lines?.[0] === 'VIN') wineObj = o;
-    });
-    // the lower board: the newspapers and the soda siphon (the ice bucket went; three things under
-    // there read as clutter behind the cart's own rails)
-    const news = O.newspaperStack({ n: 4, rng });
-    news.position.set(0.16, cart.userData.lower, 0.02);
-    cart.add(news);
-    const s = O.siphon();
-    s.position.set(-0.28, cart.userData.lower, 0.0);
-    cart.add(s);
-  }
+  // AND THE BAR CART IS GONE TOO. The user, one round after the case went up behind it: "its a bit
+  // empty the bookshelf, fill it, and also remove the thing in front of the bookshelf. you can place
+  // the items on it in it." So the trolley is off the floor and everything that stood on it — the
+  // headset, MARC, the PILE jar, the soda siphon, the four newspapers — is on the case's boards
+  // among the books, with the VIN bottle and the radio that went up there first. `barCart` stays in
+  // props-objects.js, unbuilt, the way `curtainSet`, `floorLamp` and `hatStand` do.
+  //
+  // WHAT THAT UNCOVERS, and it is the only thing about this that is not a straight gain: THE
+  // RADIATOR. It is bolted to this plaster at y 0.164..0.814 (room.js) and the cart stood in front
+  // of it, which is why three rounds of notes say it is never the thing being looked at. It is now
+  // the thing under the case, between its two black legs, with bare floorboards either side — nine
+  // fat columns and a valve wheel, which is a drawing this stretch of wall can carry and which says
+  // what the room is heated by. Pepe still answers for it (mind-room.js).
+  //
+  // WHAT IS ON THIS STRETCH NOW: the case, the radiator under it, the clock on the plaster to the
+  // right, and floor.
 
   // ---- THE TALL CASE, on the plaster the window left ---------------------------------------------
   // The user, looking at the stretch the window came out of: "can we add a bookshelf instead of the
@@ -433,18 +390,22 @@ export async function build(ctx) {
   //             again as the 110 mm this wall hangs its pictures at — and the clock's whole dial,
   //             1.875 to 2.245, hangs below the case's top board. They read as a case and a clock
   //             on one wall, not as a clock wedged into a gap.
-  //   z -2.20   THE CART's back lip was at -2.218. The case is 260 mm deep off the skirting line, so
-  //             its front edge lands there and the cart came forward 80 mm to clear it (above).
+  //   z -2.20   THE DEPTH. 260 mm off the skirting line, which is between the two cases the room
+  //             already has (the low pair are 280, the press is 240) and is what a 180 mm book and a
+  //             180 mm wireless want. It was also what the bar cart's back lip left when the cart
+  //             stood in front of this case; the cart has gone and the number has stayed, because it
+  //             was never the cart's number.
   // WHAT A PHONE SEES OF IT, and it is the closest thing in this room to a near miss. At 390x844 the
-  // case projects to a box 224 x 314 px whose RIGHT EDGE LANDS AT x -11 on both resting plates: it
+  // case projects to a box 231 x 319 px whose RIGHT EDGE LANDS AT x -11 on both resting plates: it
   // is off the left of the picture by eleven pixels, `home` and `wide` alike. (The resting plates
   // stop at x -0.9944 on the wall plane and the case's top board reaches -1.045.) Eleven pixels is
   // a nudge, and the nudge was not taken: 54 mm to the right is what it would cost, which is the
   // clock's 170 mm of air cut to 116 and the low bookcase's 25 mm of daylight cut to nothing, in
-  // exchange for a sliver of the case's own side board at the edge of a phone. The `cart` plate is
-  // where a phone sees it — 290 x 419 px, whole, at x 6 — and that is the plate the lateral track
-  // runs to. The radio and the bottle were outside a phone's resting frame on the cart too, so
-  // nothing about what a phone can reach has changed.
+  // exchange for a sliver of the case's own side board at the edge of a phone. The `shelf` plate is
+  // where a phone sees it — 296 x 427 px, whole, at x 3 — and that is the plate the lateral track
+  // runs to, and the plate that is named for this case (camera-shots.js; it was `window`, then
+  // `cart`, and both of those have been taken out of the room). The radio and the bottle were
+  // outside a phone's resting frame on the cart too, so nothing a phone can reach has changed.
   const CASE = {
     x0: -2.1,
     x1: -1.06,
@@ -456,7 +417,7 @@ export async function build(ctx) {
     // THE BOARDS ARE UNEVEN AND THEY ARE UNEVEN FOR A REASON: what stands in each bay decided its
     // height. 1.458 m of clear case, three boards' worth of it taken by the boards themselves:
     //   0.970 → 1.420   0.450  the bottle bay. VIN is 0.398 tall (the tallest thing that has ever
-    //                          stood on the cart), so this is the bottle's height and a hand.
+    //                          stood on the cart this case replaced), so this is a bottle and a hand.
     //   1.442 → 2.092   0.650  the set's bay. The radio measures 0.42 x 0.26 x 0.18 and its aerial
     //                          rises 0.622 off the board it stands on and leans 0.41 to the right,
     //                          so this is the only bay in the room a wireless fits in standing up.
@@ -489,8 +450,9 @@ export async function build(ctx) {
     // z -2.24 to -2.20, 70 mm in FRONT of the radiator's front face, and the back pair at -2.46 to
     // -2.42, outboard of the iron at x -2.10..-2.06 and -1.10..-1.06 and 24 mm upstage of the
     // return pipe. Nothing touches anything. The toe rail between the front pair is the black area
-    // the room asks every prop for — a case on legs with no toe is a table — and it is 40 mm deep,
-    // which clears the cart's back wheels at -2.137 with room to spare.
+    // the room asks every prop for — a case on legs with no toe is a table. It is 40 mm deep and it
+    // sits at the front pair, so the black the eye gets at the foot of this case is a line at the
+    // floor with the radiator's own nine columns standing behind it.
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
         const leg = O.box(CASE.leg, CASE.foot, CASE.leg, M.solid);
@@ -502,46 +464,96 @@ export async function build(ctx) {
     toe.position.set(cx, 0.03, cz + CASE.d / 2 - CASE.leg / 2);
     g.add(toe);
 
-    // WHAT IS IN IT. Books in runs, two things standing, and air where the runs stop — the way the
-    // low cases and the press are filled, and for the same reason: a shelf packed corner to corner
-    // is a texture and a shelf with four objects on it is a display cabinet.
+    // WHAT IS IN IT, and the whole of this block is the user's second note: "its a bit empty the
+    // bookshelf, fill it… you can place the items on it in it." So every bay now carries a RUN OF
+    // SPINES from one side, the cart's own things stand among them, and what is left between is a
+    // hand's air and not a half-empty board. The room's shelf rule is unchanged and is the reason
+    // the runs are runs: books read as one mass of alternating black and paper at four metres, and
+    // objects read as silhouettes against it. Six standing things across three bays is the most this
+    // case will take before it stops being a bookcase and starts being a display cabinet.
+    //
+    // THE LAYOUT, in the unit's own x (-0.498 to 0.498 is the clear width between the sides):
+    //   bottom  books -0.498..-0.31 | siphon -0.255 | MARC -0.15 | PILE -0.045 | books 0.04..0.30 |
+    //           VIN 0.42.  The three vessels are three silhouettes on purpose — a tall thin cylinder
+    //           with a black head, a corked bottle, a square jar — and the 83 mm of air before VIN
+    //           is what keeps the one bottle a visitor can work standing on its own.
+    //   middle  books -0.498..-0.298 | headset -0.27 | radio 0.04 | books 0.278..0.498. The headset
+    //           is 138 mm across and sits 31 mm off the set: an operator's headset beside a wireless
+    //           is where a headset lives, and it is the black mass this bay was missing. Its cord
+    //           runs off the front of the board and hangs, which is what the cord did on the cart.
+    //   top     books -0.498..0.19 | the four newspapers lying flat at 0.33. A stack 300 x 220 on a
+    //           board 230 deep, 60 mm tall under a bay 314 clear: it fits lying down, which is what
+    //           a newspaper does, and it closes the run with a horizontal.
     const { x0, x1, z0 } = unit.userData.inner; // -0.498 … 0.498 local, the lining at z -0.12
     const [b0, b1, b2] = CASE.boards.map((y) => y - CASE.foot);
-    // bottom bay: a run of books from the left side, then air, then the bottle at the right end
-    unit.add(O.bookRow({ x0, x1: x0 + 0.5, y: b0, z: z0, rng: shelfRng, maxH: 0.42, depth: 0.23, chunky: true }));
-    // the set's bay: a short run at the left, the radio, then a second run at the right end. The
-    // right-hand run is there because of the AERIAL: it leaves the set at 1.700 and climbs to 2.064
-    // at x -1.124, and with a bare board under it that stroke was a 250 mm diagonal alone in an
-    // empty bay — a crack in the plaster, not a wire. Over a row of spines it is a wire. The books
-    // top out at 1.74 and the aerial is at 1.835 where it crosses them, so it passes clear.
-    unit.add(O.bookRow({ x0, x1: x0 + 0.26, y: b1, z: z0, rng: shelfRng, maxH: 0.3, depth: 0.23, chunky: true }));
-    unit.add(O.bookRow({ x0: x1 - 0.22, x1, y: b1, z: z0, rng: shelfRng, maxH: 0.3, depth: 0.23, chunky: true }));
-    // the top bay: spines all the way across, which is what a case reads as from the door
-    unit.add(O.bookRow({ x0, x1, y: b2, z: z0, rng: shelfRng, maxH: 0.28, depth: 0.23, chunky: true }));
+    // `extras` is bookRow's licence to put a flat stack or a jar in among the spines, and two runs
+    // here are refused it. A run of 200 mm or less: at that width the dice can spend the whole run
+    // on one jar, which is what the first draw of the set's right-hand run did — a 220 mm board with
+    // a single 85 mm pot on it and nothing else. And the TOP bay, whatever its width: it is the run
+    // that says "bookcase" from the door, the one bay no object of any kind stands in, and the dice
+    // gave its first third to a flat stack. Its horizontal is the newspapers at the far end and it
+    // does not need a second one. Everything else keeps its stacks.
+    const shelfBooks = (a, b, y, maxH, extras = b - a > 0.2) =>
+      unit.add(O.bookRow({ x0: a, x1: b, y, z: z0, rng: shelfRng, maxH, depth: 0.23, chunky: true, extras }));
+    // the bottom bay: books, then the drink and the siphon, then books, then the bottle
+    shelfBooks(x0, x0 + 0.188, b0, 0.42);
+    shelfBooks(x0 + 0.538, x0 + 0.798, b0, 0.42);
+    // the set's bay: a run at the left, the headset, the set, a run under the aerial at the right.
+    // The right-hand run is there because of the AERIAL: it leaves the set at 1.700 and climbs to
+    // 2.064 at x -1.124, and with a bare board under it that stroke was a 250 mm diagonal alone in
+    // an empty bay — a crack in the plaster, not a wire. Over a row of spines it is a wire. The
+    // books top out at 1.742 and the aerial is at 1.804 where it crosses them, so it passes clear.
+    shelfBooks(x0, x0 + 0.20, b1, 0.3);
+    shelfBooks(x1 - 0.22, x1, b1, 0.3);
+    // the top bay: spines most of the way across, which is what a case reads as from the door
+    shelfBooks(x0, x0 + 0.688, b2, 0.28, false);
+
+    // THE CART'S OWN THINGS, in the order they stood on it. Same objects, same seeds, same labels:
+    // MARC and the PILE jar are the two that were left in its top row, the siphon and the four
+    // newspapers were on its lower board, and the headset stood between the bottles with its cord
+    // over the edge. The cord still hangs — off a board 632 mm higher, which is the only thing about
+    // the headset that is different.
+    const siphon = O.siphon();
+    siphon.position.set(-0.255, b0, 0.0);
+    unit.add(siphon);
+    for (const [lx, spec] of [
+      [-0.15, { kind: 'corked', name: 'MARC', dark: false, scale: 1.2, seed: 203, bodyH: 0.15, neckH: 0.06 }],
+      [-0.045, { kind: 'square', name: 'PILE', dark: false, scale: 1.1, seed: 204, bodyH: 0.13, neckH: 0.035 }],
+    ]) {
+      const o = O.shelfItem(spec, shelfRng);
+      o.position.set(lx, b0, 0.01);
+      o.rotation.y = (shelfRng() - 0.5) * 0.4;
+      unit.add(o);
+    }
+    const head = O.shelfItem({ kind: 'headset' }, shelfRng);
+    head.position.set(-0.27, b1, 0.02);
+    head.rotation.y = 0.22;
+    unit.add(head);
+    const news = O.newspaperStack({ n: 4, rng: shelfRng });
+    news.position.set(0.33, b2, 0.0);
+    unit.add(news);
 
     // THE RADIO, on the middle board and turned a couple of degrees into the room. It stands at
     // local x 0.04 — world -1.54, so the set runs -1.75 to -1.33 and the aerial's tip lands at
     // -1.13, 48 mm inside the case's right side — and at local z 0, which leaves its face 40 mm
     // behind the board's front edge. Everything it does is at the foot of this file under THE
-    // RADIO; the only thing that changed is which board it is standing on.
+    // RADIO; filling the bay round it moved nothing about it.
     const r = O.radio({ w: 0.42, h: 0.26, d: 0.18 });
     r.position.set(0.04, b1, 0.0);
     r.rotation.y = -0.05;
     r.name = 'radio';
     unit.add(r);
     radioObj = r;
-    // THE VIN BOTTLE, lifted off the cart's row and stood on the bottom board at its right end —
-    // world x -1.16, which is the stretch of this case the cart's own bottles do not stand in front
-    // of. egg-wine.js re-strikes THIS object's label on every pour, so it is the same bottle with
-    // the same recipe, the same seed and the same five fingers in it. It stood at x -1.934 on the
-    // cart's board at 0.811; it stands at -1.16 on this one at 0.97, which is 0.77 m across the
-    // wall and 0.16 m up, and nothing else about it is different.
-    if (wineObj) {
-      unit.add(wineObj);
-      wineObj.position.set(0.42, b0, 0.03);
-      wineObj.rotation.y = 0.11;
-      wineObj.name = 'vin-bottle';
-    }
+    // THE VIN BOTTLE, on the bottom board at its right end — world x -1.16. It was made in the
+    // cart's own row for two rounds and is made here now, with the same recipe, the same seed and
+    // the same five fingers in it: egg-wine.js re-strikes THIS object's label on every pour, so the
+    // bottle a visitor empties is the bottle that has always been drawn. It stood at x -1.934 on the
+    // cart's board at 0.811 and stands at -1.16 on this one at 0.97.
+    wineObj = O.shelfItem({ kind: 'tall', name: 'VIN', dark: true, scale: 1.2, seed: 201, bodyH: 0.19, neckH: 0.1 }, shelfRng);
+    wineObj.position.set(0.42, b0, 0.03);
+    wineObj.rotation.y = 0.11;
+    wineObj.name = 'vin-bottle';
+    unit.add(wineObj);
   }
   {
     const stool = new THREE.Group();

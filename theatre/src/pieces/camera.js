@@ -630,13 +630,14 @@ export async function build(ctx) {
     setState(name) {
       held = null;
       if (name === 'track') {
-        // a lateral track across the back wall, cart to door; loops so a contact sheet always catches
-        // it moving. (The far end was the window until the user had it taken out; `cart` is the same
-        // plate under a name that is still true — see camera-shots.js.)
+        // a lateral track across the back wall, shelf to door; loops so a contact sheet always
+        // catches it moving. (The far end was the window, then the cart, and both have been taken
+        // out of the room; `shelf` is the same plate under the name of what is standing in it now —
+        // see camera-shots.js.)
         const token = ++seq;
         (async () => {
           while (token === seq) {
-            jump('cart');
+            jump('shelf');
             await startMove('door', 'track');
             if (token === seq) await wait(ctx, 1.2);
           }

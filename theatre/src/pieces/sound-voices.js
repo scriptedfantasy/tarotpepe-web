@@ -90,7 +90,7 @@ export const LEVEL = {
   plug: 0.03,
   dialtone: 0.05,
   bell: 0.094,
-  // the pour (egg-wine.js). Between the street outside and the escapement: it happens on the cart
+  // the pour (egg-wine.js). Between the street outside and the escapement: it happens in the case
   // at the far wall, it is one of his own small private acts, and nobody is meant to notice it —
   // but a hand that did something has to hear that it did.
   glug: 0.028,

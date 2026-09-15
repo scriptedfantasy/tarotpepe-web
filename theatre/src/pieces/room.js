@@ -13,7 +13,8 @@
 // the stage-right one. What went with it: the reveal, the architrave, the sill, the casement and
 // its glass, the two shutter leaves, the telephone LEAD-IN through the head — and, in props.js, the
 // curtains. What did NOT go is the radiator, which is furniture and not joinery: it stands where it
-// stood, behind the bar cart, and Pepe still answers for it when he is asked (mind-room.js).
+// stood — under the tall case props.js has since put over it — and Pepe still answers for it when
+// he is asked (mind-room.js).
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
@@ -165,8 +166,9 @@ export async function build(ctx) {
   const sideWin = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.21 };
   // Where the radiator stands. It used to be handed the window's own rectangle and centred under
   // it; the window is gone and the radiator is not, so it carries the numbers itself. Same x, same
-  // width, same wall: it sits behind the bar cart (props.js stands that at x −1.5, 0.96 wide and
-  // 0.8 tall, 480 mm off the plaster), which is most of why it was never the thing being looked at.
+  // width, same wall: it stands UNDER the tall case now (props.js: x −2.10 to −1.06, carcase from
+  // the dado at 0.905, on four legs that clear this rectangle at both ends), and between those legs
+  // it is finally a thing the room can see — the bar cart that hid it for four rounds is gone.
   const radiator = { x0: -1.95, x1: -1.05 };
   // Downstage on each side wall, level with the visitor's shoulder, a second door: the way in from
   // the landing (stage right) and the door of a press (stage left). They sit in the stretch of side
@@ -326,10 +328,10 @@ function buildWindow(P, M, w, zb, jit = Math.random, { leadIn = false } = {}) {
   // a small cap moulding over the head
   P.boxFrom(x0 - a - 0.02, x1 + a + 0.02, y1 + a, y1 + a + 0.03, zb, zb + ad + 0.02, M.trim, { cast: true });
   // Sill: a board that oversails the architrave, with a moulded nose under it and an apron below.
-  // It used to be one 40 mm slab whose whole drawing was a single line, and the bar cart in front
-  // of it swallowed that line whole. Now it is three lines deep and it projects 130 mm, so it
-  // reads over the top of anything props stand under it (fd-anim-staircase-guitar-room's windows
-  // sit on exactly this: a board, a nose, an apron).
+  // It used to be one 40 mm slab whose whole drawing was a single line, and the bar cart that stood
+  // in front of the back wall's window swallowed that line whole. Now it is three lines deep and it
+  // projects 130 mm, so it reads over the top of anything props stand under it
+  // (fd-anim-staircase-guitar-room's windows sit on exactly this: a board, a nose, an apron).
   P.boxFrom(x0 - a - 0.045, x1 + a + 0.045, y0 - 0.045, y0, zr + 0.02, zb + 0.13, M.trim, { cast: true, receive: true });
   P.boxFrom(x0 - a - 0.03, x1 + a + 0.03, y0 - 0.075, y0 - 0.045, zr + 0.02, zb + 0.1, M.trim, { cast: true });
   P.boxFrom(x0 - a + 0.01, x1 + a - 0.01, y0 - 0.14, y0 - 0.075, zb, zb + 0.032, M.trim, { cast: true });
@@ -490,9 +492,10 @@ function buildShutterLeaf(P, M, x0, x1, y0, y1, z0, z1, side, jit = Math.random)
 // a valve with a wheel, and a pipe down into the floor. It stood under the window and it is still
 // standing now the window has gone, because a radiator is furniture: it is bolted to a wall, not
 // hung off an opening, and the only thing the opening ever gave it was the rectangle it was centred
-// in. It keeps that rectangle (x −1.95 to −1.05) as its own. The bar cart covers it from the front
-// in every frontal shot, which was true before the change and is why it costs the empty wall
-// nothing; Pepe still names it when he is asked (mind-room.js, and tools/_room-visit.mjs checks).
+// in. It keeps that rectangle (x −1.95 to −1.05) as its own. The bar cart covered it from the front
+// in every frontal shot for four rounds; the cart has gone and the tall case stands over it on legs,
+// so nine columns and a valve wheel are now the drawing under that case and the only thing in the
+// frame between the floorboards and the books. Pepe names it when he is asked (mind-room.js).
 function buildRadiator(P, M, w, zb) {
   const { x0, x1 } = w;
   const cx = (x0 + x1) / 2;

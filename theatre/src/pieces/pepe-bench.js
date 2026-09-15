@@ -3,7 +3,7 @@
 // It used to be a BoxGeometry from the boards to the soles of his feet: a paper-white slab with
 // no line on it anywhere except its own four corners, showing through the gap under the cloth in
 // `wide` and `door` like a packing crate someone left behind the table. Everything else in this
-// parlour is a particular object — the radiator has columns, the bar cart has wheels and a lip,
+// parlour is a particular object — the radiator has columns, the tall case has legs and a toe,
 // the console has turned legs and a solid apron — and his seat was the one thing in the room that
 // was not drawn at all.
 //

@@ -141,7 +141,7 @@ const CAPTION = {
 };
 // Every shot the evening cuts to. They are all the same anchor; naming them is how the table says
 // so, and it keeps any shot from falling through to dialogue.js's own default.
-const SHOTS = ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'deck', 'card0', 'card1', 'card2', 'door', 'cart', 'threshold'];
+const SHOTS = ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'deck', 'card0', 'card1', 'card2', 'door', 'shelf', 'threshold'];
 
 // The MEASURE of the block is not set here. Round 5 kept a character-counting `measure(w)` and
 // wrote its answer into `anchors[shot].w`; dialogue.js has had a measure of its own since, and it

@@ -281,20 +281,14 @@ const PLAIN = [
     /\bbottles?\b|\bdemijohn\b|\bcarboy\b|\bspares\b|\bpress\b|\bcabinet\b|\bmarc\b|\bacide?\b|\bfusibles?\b|\bfiches\b|\bressorts\b|\bpile\b/,
     ['Battery jars, fuses, cord tips, and one bottle of marc. It was the spares press. I have added exactly one thing to it.'],
   ],
-  [
-    // "bench under the window" is kept as a key though the window has gone: a visitor who remembers
-    // the room that way still gets the right answer, and nothing else in this table wants the phrase.
-    /\bcart\b|\btrolley\b|\btest table\b|\bworkbench\b|\bbench under the window\b/,
-    ['The test table. It has wheels, which is more than the rest of the furniture can say.'],
-  ],
-  [/\bsiphon\b|\bsoda\b/, ['A soda siphon on a workbench. I did not put it there and I have not moved it.']],
+  [/\bsiphon\b|\bsoda\b/, ['A soda siphon, on the bottom shelf. I did not put it in this room and I have not moved it.']],
   [
     /\bnewspapers?\b|\ble soir\b|\bpaper on the\b|\bcourrier\b/,
     ['Newspapers. I keep them for the weather page, which is wrong about as often as I am.'],
   ],
   [
     /\bhat ?stand\b|\bcoat\b|\bscarf\b|\bumbrella\b|\bcane\b|\bboater\b|\bhat\b|\bheadset\b|\bearpieces?\b/,
-    ['A coat, a hat, an umbrella and an operator\'s headset. Three of those are mine.'],
+    ['An operator\'s headset, on the shelf beside the radio. It is the exchange\'s and it still works, which is two things it has over me.'],
   ],
   [
     /\bpendant\b|\bceiling light\b|\bfloor lamp\b|\blamps?\b|\bmushroom\b|\blight\b/,
@@ -366,6 +360,14 @@ const ABSENT = [
   [/\bbed\b|\bkitchen\b|\bbathroom\b|\btoilet\b|\bthe lavatory\b/, ['Not in here. That is all upstairs, and it is a bed, a kettle and a window looking at another window.'],],
   [/\bwi.?fi\b|\binternet\b|\bsignal\b|\belectricity in here\b/, ['Nothing in this room is connected to anything. It used to be connected to the whole town.']],
   [/\bdogs?\b/, ['No dog. There is a cat, and it belongs to the building.']],
+  // THE TEST TABLE. It stood under the window, then in front of the case, and the user had it taken
+  // out ("remove the thing in front of the bookshelf"); everything that was on it is on the shelves
+  // now. He is not going to be caught describing a trolley that is not in the room, and a visitor
+  // who remembers it — or who is looking at an old still — gets the plain truth instead.
+  [
+    /\bcart\b|\btrolley\b|\btest table\b|\bworkbench\b|\bbench under the window\b/,
+    ['There is no trolley in here any more. What was on it is on the shelves, which do not have wheels and are the better for it.'],
+  ],
 ];
 
 // bare deixis with nothing to point at: chat has no finger in it.
