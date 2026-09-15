@@ -4,6 +4,16 @@
 // start along the shelves, he does not react at all, and the placard says nothing. Move the pointer
 // and they go out."
 //
+// ROUND 3: IT COMES OUT OF THE FIREPLACE. The user, having had one put on the stage-left wall: "the
+// fire easter egg should not originate from the light behind Pepe, but from the fireplace." So the
+// switch is the GRATE and no longer the lamp — click the black hole under the mantel and the first
+// tongue catches IN it, on the firebox floor, among the logs somebody laid there and never lit; the
+// other eleven follow in the order they always have, half a second apart. A second click puts the
+// lot out. The lamp is released by this and something else is given it (src/pieces/egg-dark.js);
+// nothing else in this file changed at all — not the count, not the sizes, not the timing, not the
+// silence, not `props:fine`, not the line on the placard. The fire starts somewhere else and that
+// is the whole of it.
+//
 // ROUND 2, AND IT IS THE PANEL NOW. The user, with the "this is fine" panel in front of him: "the
 // flames on this is fine should be much larger. they should also be orange yellow - and pepe should
 // say this is fine." Three changes and nothing else:
@@ -38,15 +48,17 @@
 //   number in the report, and it is nought.
 //
 //   NOTHING ANNOUNCES IT. No label, no glow, no outline, no tag. The cursor becomes a pointer over
-//   the lamp and that is the entire affordance — the radio's manners, the cat's manners, the
-//   lever's manners. A visitor who never holds still on the lamp never finds out.
+//   the grate and that is the entire affordance — the radio's manners, the cat's manners, the
+//   lever's manners. A visitor who never puts a pointer in the fireplace never finds out. The fire
+//   IS LAID in it, in paper logs on iron bars, which is the nearest this room ever comes to a hint
+//   and is not one: an unlit fire is what an unlit fire looks like.
 //
-// HOW IT IS WORKED. The lamp is a CLICK, like every other switch in this room (it was a hover-and-hold until the user said the hover sucks), and the
-// difference is the point: you do not click a lamp into flames, you linger on it until something
-// goes wrong. Three seconds of the pointer resting on the mushroom lamp; then one flame every half
-// second until a dozen are burning, in the order a fire would actually take the room —
+// HOW IT IS WORKED. A CLICK on the grate, like every other switch in this room (the lamp before it
+// was a hover-and-hold until the user said the hover sucks, and then a click). One click and the
+// first tongue catches on the next drawing, the rest one every half second until a dozen are
+// burning, in the order a fire would actually take the room —
 //
-//   the lamp's own shade, because that is where the hand was;
+//   the grate itself, because that is where the hand was and where a fire in a room starts;
 //   the shelf boards either side of him, because that is what is nearest and it is full of paper;
 //   the cabinets outboard of those — the tall case on the left carrying two of them, having taken
 //     them off the cart when the cart went, which took them off the window when the window went —
@@ -54,8 +66,9 @@
 //   the floor either side of the table, which is where a fire this size actually stands;
 //   and the near edge of the cloth, the last thing between the fire and the lens.
 //
-// The moment the pointer leaves the lamp — or, on a phone, the moment the finger lifts or slides
-// off it — every flame shrinks over half a second to a last wisp and is gone, and the cue stops.
+// A SECOND CLICK and every flame shrinks over half a second to a last wisp and is gone, and the cue
+// stops. (`HOLD_F` below is kept as the number the catching counts from: a click sets the counter
+// straight to it, so the first tongue is on the next drawing and nothing else here had to move.)
 //
 // HOW A FLAME IS DRAWN. Two sheets each, and exactly one of them is shown at a time, swapped on
 // every 12 fps step: that is the room's own boil doing the flickering, so a flame is alive for the
@@ -80,9 +93,9 @@
 //   colours        { yellow, orange }: the two plates, for a proof that wants to name them
 //   metres         how tall each of the twelve is, for the same reason
 //   set(on)        for a still: all of them, or none, with no hold, no cue and nothing to wait for
-//   hitBox()       the lamp's box on the glass, in px
+//   hitBox()       the fireplace OPENING's box on the glass, in px
 //   tapBox()       the box a thumb is actually given (≥ 44 px, grown about the same centre)
-//   held           how long the pointer has rested on the lamp, in seconds
+//   held           how long the pointer has been down on the grate, in seconds
 //   setState(name) `fine-burning` is the dozen alight; every other name is a room that is fine
 //   update(ctx)    called from props.update on the stepped clock
 // events:
@@ -99,11 +112,11 @@ import { mulberry32 } from '../core/rng.js';
 // thing in the room that ran on a different clock from the paper. On a machine that holds sixty frames a
 // second the two are the same number; on one that does not, the fire takes as long as the rest of
 // the drawing does, which is the correct answer and the one a stop-motion camera would give.
-const HOLD_F = 36; // drawings of the pointer resting on the lamp before the first flame (3.0 s)
+const HOLD_F = 36; // what the catching counts from; a click sets the counter straight to it
 const EVERY_F = 6; // drawings between one flame and the next (0.5 s)
 const OUT_F = 6; // drawings to shrink the lot to nothing (0.5 s)
 const CRACKLE_EVERY = 4; // drawings between one firing of the cue and the next (see LENGTH.crackle)
-const MIN_TAP = 44; // px: what a thumb needs, whatever the lamp measures on the glass
+const MIN_TAP = 44; // px: what a thumb needs, whatever the opening measures on the glass
 
 // ---- THE SECOND COLOUR IN THE ROOM ---------------------------------------------------------------
 // Until this round there was one: his skin, SKIN #69b964 in pepe.js, with the card faces beside it.
@@ -305,8 +318,8 @@ export function drawFlame(hand, pose, ch, pen) {
 
 // ---- where the twelve stand -----------------------------------------------------------------------
 // THE ORDER IS THE FIRE'S OWN, and it starts under the hand. `at` says which frame the position is
-// in ('lamp' is an offset from the lamp's own origin, so those follow it; the rest are room
-// coordinates), `h` how tall the tongue is IN METRES, `ppm` how many pixels a metre measures at
+// in ('grate' is an offset from the firebox anchor's own origin, so that one follows the fireplace;
+// the rest are room coordinates), `h` how tall the tongue is IN METRES, `ppm` how many pixels a metre measures at
 // that depth on the home plate (measured off the plate itself; the sheet and the nib are solved
 // off it and nothing else, and tools/_egg-fine-proof.mjs prints the same table back), and `hand`/`phase` which of the three drawings it was dealt and
 // which of the two it starts on.
@@ -314,8 +327,8 @@ export function drawFlame(hand, pose, ch, pen) {
 // THE SIZES ARE THE PANEL'S, and they are the round's whole point. A seated frog is 1.37 m of this
 // room; the two on the floor are 1.95 and stand a head above him, the doorway's is 1.7, and the one
 // that used to be the curtain's is still 1.15 on the case it ended up on. Nothing here is a shelf
-// ornament any more: the smallest of the twelve is the one
-// on the lampshade at 0.30 m, and even that is 60 px of the home plate.
+// ornament any more: the smallest of the twelve is the one on the cloth at 0.50 m, and the one in
+// the grate is 0.62 — it was 0.30 on a lampshade and the fireplace has room for twice that.
 //
 // WHAT THEY MAY NOT DO. Not one of them comes near his face. He measures px 535–745 across and
 // 307–623 down on the home plate and his HEAD is about 590–700; the two floor tongues measure 242 px
@@ -325,12 +338,33 @@ export function drawFlame(hand, pose, ch, pen) {
 // the table crops their feet, which is what a table does); the one on the cloth is the only thing
 // in the room downstage of it. The placard is DOM and is over all of it whatever happens.
 const SEATS = [
-  // THE LAMP'S OWN SHADE — an offset from the lamp's origin, standing on the dome's CROWN (a
-  // hemisphere of r 0.115 about y 0.19) and not on its face, so the shade's arc comes out unbroken
-  // and the fire sits on it. Round 1 stood three here and they erased a 43 x 23 px lamp; one tongue
-  // twice the height of the shade is the same joke with the lamp still in the drawing, and it is
-  // the one the hand is actually resting on.
-  { at: 'lamp', p: [-0.01, 0.3046, 0.0], h: 0.3, ppm: 187, hand: 1, phase: 0 },
+  // THE GRATE — an offset from the anchor props.js stands at the middle of the firebox floor
+  // (room.js `fireplace.grate`), which is the one seat in this list that is where the hand was. It
+  // is 0.62 m of tongue in a 0.66 m opening: it fills the hole and stops 40 mm under its head, so
+  // the fire is IN the fireplace and not coming out of it, which is the difference between this
+  // room catching light and this room being on fire. It is the only tongue in the twelve that is
+  // TURNED — ry a quarter turn, so the sheet lies in the opening's own plane on a wall seen at 67
+  // degrees instead of facing the lens out of a slot 100 px wide. The eleven others face the lens,
+  // as a paper cut-out standing on a floor does.
+  // 244 px per metre at this depth on the home plate, measured off the plate: the fireplace is
+  // 2.55 m from the lens where the back wall's shelves are 4.4, so this tongue is drawn on a bigger
+  // sheet than anything but the two on the floor.
+  // AND IT IS DRAWN ANAMORPHIC, which nothing else in this file is and which is the whole of what
+  // this seat cost. Measured at the grate on the 1280x800 home plate: 249 px to the metre UP the
+  // wall and 96 ACROSS it, a ratio of 2.61 — that is what a plane seen at 67 degrees does to
+  // anything lying in it. A sheet with the file's own ASPECT of 0.5 laid in the opening came out
+  // 22 px wide and 125 tall: a yellow spike, not a flame. So this one seat carries an `aspect` of
+  // its own, 0.5 x 2.61 = 1.305 — the sheet is WIDER than it is tall IN THE ROOM, and the rake
+  // squeezes it back to the twice-as-tall-as-wide the drawing was made for. The canvas is untouched
+  // (it is still cut at 0.5 and the nib is still solved to the room's 2.4 px): the stretch and the
+  // squeeze are the same number and they cancel, which is why the contour comes out at the room's
+  // own width in both directions and no second pen was needed.
+  // The height then falls out of the opening's width: a sheet 1.305 times its own height may be
+  // 0.56 m across before it touches the jambs of a 0.62 m hole, so the flame is 0.40 m tall. It
+  // stands 80 mm above the grate's top rail at 0.52 and stops 260 below the opening's head at 0.86 —
+  // a fire IN a fireplace, which is the difference between this room catching light and this room
+  // being on fire. 249 px per metre is measured off the plate, like every other ppm in this table.
+  { at: 'grate', p: [0.0, 0.008, 0.0], h: 0.4, ppm: 249, hand: 1, phase: 0, ry: Math.PI / 2, aspect: 0.5 * 2.61 },
   // THE SHELF BOARDS, left and right and left and right: a fire crosses a room, it does not finish
   // one bookcase before it starts the other. The top boards run -1.035 to -0.665 and 0.665 to
   // 1.035; the globe's own box on the left one is -0.972 to -0.745 and the cat's on the right is
@@ -392,12 +426,7 @@ const SEATS = [
   { at: 'table', p: [-0.4, 0.762, 0.57], h: 0.5, ppm: 267, hand: 2, phase: 1 },
 ];
 
-// The lamp's own box, in its own frame, off props-objects.js `mushroomLamp`: a lathed base under a
-// hemisphere of radius 0.115 whose centre is at y 0.19, so the whole fitting is 0.23 across and
-// 0.305 tall. Read, never written: if that lamp is ever redrawn these move with it.
-const LAMP = { r: 0.115, top: 0.305 };
-
-export function buildFine(ctx, { group, switches, lamp }) {
+export function buildFine(ctx, { group, switches, grate, opening, face }) {
   const root = new THREE.Group();
   root.name = 'fine';
   root.userData.noShadow = true; // a drawn flame throws nothing: the light does not change
@@ -406,7 +435,7 @@ export function buildFine(ctx, { group, switches, lamp }) {
   // its flame comes out at on the glass, so the canvas is 1.35 screen pixels to the pixel wherever
   // the flame stands and the nib is the same 2.4 screen px everywhere — the room's own contour.
   // Both fall out of one number, the flame's projected height, and that is the only reason a 56 px
-  // tongue on the lampshade and a 485 px one on the floor are drawn by the same hand.
+  // tongue on the cloth and a 485 px one on the floor are drawn by the same hand.
   const geo = new THREE.PlaneGeometry(1, 1);
   const cache = new Map();
   const sheetMat = (hand, pose, ch, nib) => {
@@ -431,11 +460,11 @@ export function buildFine(ctx, { group, switches, lamp }) {
     return m;
   };
 
-  // WHERE THE LAMP IS. props.js stands it on the operator's position and never turns it, so its
-  // own frame and the room's are the same frame; if it is not in the set at all (a stripped room)
-  // the fire falls back to where that position has always been and nothing throws.
-  lamp?.updateWorldMatrix(true, true);
-  const lampAt = lamp ? lamp.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(-0.44, 0.82, -2.25);
+  // WHERE THE GRATE IS. props.js stands an anchor at the middle of the firebox floor and never
+  // turns it, so its own frame and the room's are the same frame; if it is not in the set at all (a
+  // stripped room) the fire falls back to where the firebox has always been and nothing throws.
+  grate?.updateWorldMatrix(true, true);
+  const grateAt = grate ? grate.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(-2.46, 0.2, -0.05);
 
   const flames = SEATS.map((s, i) => {
     const g = new THREE.Group();
@@ -451,20 +480,22 @@ export function buildFine(ctx, { group, switches, lamp }) {
       g.add(m);
       return m;
     });
-    const foot = s.at === 'lamp' ? new THREE.Vector3(...s.p).add(lampAt) : new THREE.Vector3(...s.p);
+    const foot = s.at === 'grate' ? new THREE.Vector3(...s.p).add(grateAt) : new THREE.Vector3(...s.p);
     const sheet = s.h / TALL; // the sheet is taller than the flame: see BASE_V / TIP_V
     g.position.copy(foot);
+    // the grate's tongue is the only one turned: see SEATS
+    if (s.ry) g.rotation.y = s.ry;
     g.visible = false;
     root.add(g);
-    return { i, group: g, sheets, foot, sheet, phase: s.phase, at: s.at, lit: false, from: 0 };
+    return { i, group: g, sheets, foot, sheet, aspect: s.aspect ?? ASPECT, phase: s.phase, at: s.at, lit: false, from: 0 };
   });
   group.add(root);
 
   // ---- the fire ---------------------------------------------------------------------------------
-  let want = false; // the pointer is resting on the lamp (or a finger is down on it)
+  let want = false; // the grate has been clicked and the fire is on
   let hovering = false, pressing = false;
   let drawn = 0; // drawings this piece has been given, ever: what the flicker and the wisps run on
-  let steps = 0; // …and how many of them the pointer has rested on the lamp for. Zero when it has not.
+  let steps = 0; // …and how many of them the fire has been on for. Zero when it has not.
   let lit = 0; // how many are alight
   let outFrom = -1; // the drawing they started going out on, -1 while nothing is going out
   let burning = false;
@@ -472,7 +503,7 @@ export function buildFine(ctx, { group, switches, lamp }) {
   let crackleAt = -99;
   // LIT BY HAND, WHICH IS NOT THE SAME AS BURNING. `set(true)` is for a still — the `fine-burning`
   // judging state, a tool's control frame — and a still has to HOLD. Without this latch the very
-  // next drawing sees that no pointer is on the lamp, starts the going-out and has the frame bare
+  // next drawing sees that the fire is not on, starts the going-out and has the frame bare
   // six drawings later, which is exactly what ?view=props&state=fine-burning did until it was
   // caught. A real pointer arriving takes the fire off the hand and puts it back on the hold.
   let byHand = false;
@@ -480,8 +511,9 @@ export function buildFine(ctx, { group, switches, lamp }) {
   const setSize = (f, u) => {
     // scaled about its FOOT, not its middle: a flame shrinking to a wisp keeps standing on the
     // board it is standing on. The sheet is a tall rectangle now, not a square, so x carries the
-    // drawing's own aspect.
-    f.group.scale.set(f.sheet * u * ASPECT, f.sheet * u, 1);
+    // drawing's own aspect — which is the file's 0.5 for eleven of the twelve and the grate's own
+    // anamorphic 1.305 for the one lying in the stage-left wall (see SEATS).
+    f.group.scale.set(f.sheet * u * f.aspect, f.sheet * u, 1);
     f.group.position.set(f.foot.x, f.foot.y + f.sheet * u * (BASE_V - 0.5), f.foot.z);
   };
   const show = (f, which) => {
@@ -523,24 +555,29 @@ export function buildFine(ctx, { group, switches, lamp }) {
     return n ? Math.max(-1, Math.min(1, sum / n)) : 0;
   }
 
-  // ---- the lamp on the glass ---------------------------------------------------------------------
+  // ---- THE GRATE ON THE GLASS, and what a pointer is given is THE OPENING ------------------------
+  // The set is built as one merged mesh per material (room-build.js), so there is no grate object
+  // to raycast and there does not need to be: the thing a visitor aims at is the black rectangle
+  // under the mantel, and that rectangle's eight corners are numbers room.js publishes. They are
+  // projected here exactly as the lamp's own box was. The box is taken from the OPENING and not
+  // from the bars, because a fireplace is a hole and half of what the eye calls the fireplace is
+  // the dark inside it.
   function hitBox() {
-    if (!lamp) return null;
-    lamp.updateMatrixWorld(true);
+    if (!opening) return null;
     const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
     const xs = [], ys = [];
     const v = new THREE.Vector3();
-    for (const x of [-LAMP.r, LAMP.r]) for (const y of [0, LAMP.top]) for (const z of [-LAMP.r, LAMP.r]) {
-      v.set(x, y, z);
-      lamp.localToWorld(v).project(ctx.camera);
+    const x0 = face ?? -2.36;
+    for (const x of [x0 - 0.24, x0]) for (const y of [opening.y0, opening.y1]) for (const z of [opening.z0, opening.z1]) {
+      v.set(x, y, z).project(ctx.camera);
       xs.push(((v.x + 1) / 2) * W);
       ys.push(((1 - v.y) / 2) * H);
     }
     return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
   }
-  // …grown about its centre to a thumb's 44 px. The lamp stands at the far end of the operator's
-  // position with the doily under it and bare plaster over it, and the nearest other switch (the
-  // globe on the left bookcase) is 0.4 m away, so the margin costs nothing.
+  // …grown about its centre to a thumb's 44 px. The nearest other switch to the fireplace is the
+  // globe on the left bookcase, two and a half metres upstage of it and on another wall, so the
+  // margin costs nothing and the arbiter never has two boxes to choose between here.
   function tapBox() {
     const b = hitBox();
     if (!b) return null;
@@ -551,11 +588,12 @@ export function buildFine(ctx, { group, switches, lamp }) {
     const b = tapBox();
     return !!b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
   };
-  // A CLICK ON THE LAMP, like every other switch in the room (round 2 of this egg; the user: "the
-  // hover sucks, lets make it a click on the lamp — if the user clicks on the lamp, the fire
-  // starts"). One click and the first tongue catches on the next drawing, the rest one every half
-  // second; a second click puts them out. The old three-second hold is kept as the number the
-  // catching counts from, so nothing else here had to move.
+  // A CLICK ON THE GRATE, like every other switch in the room (round 2 of this egg made it a click
+  // — the user: "the hover sucks, lets make it a click on the lamp — if the user clicks on the
+  // lamp, the fire starts" — and round 3 moved which object it is a click ON). One click and the
+  // first tongue catches in the firebox on the next drawing, the rest one every half second; a
+  // second click puts them out. The three-second hold is kept as the number the catching counts
+  // from, so nothing else here had to move.
   const toggle = () => {
     want = !want;
     byHand = false; // a hand on the glass takes the fire off a tool and puts it back on the clock
@@ -564,7 +602,7 @@ export function buildFine(ctx, { group, switches, lamp }) {
   };
   switches?.add?.({
     name: 'fine',
-    object: () => lamp,
+    object: () => grate,
     tapBox,
     // the arbiter has already stopped the event reaching flow.js (which would read it as the
     // visitor skipping Pepe's line) and opened the audio context by hand, which is the only reason
@@ -585,7 +623,7 @@ export function buildFine(ctx, { group, switches, lamp }) {
     get full() {
       return full;
     },
-    // how long the pointer has rested on the lamp — in drawings, and in the seconds those drawings
+    // how long the fire has been on — in drawings, and in the seconds those drawings
     // are worth at 12 fps. What a tool needs to say the hold is three seconds and not two or four.
     get steps() {
       return want ? steps : 0;
@@ -623,7 +661,7 @@ export function buildFine(ctx, { group, switches, lamp }) {
     },
     // for the tools and for setState: the whole dozen, or none of them, with no hold and no cue.
     // It says nothing on the bus either — a still is not an event, and the line on the placard
-    // belongs to a visitor who held the lamp, not to a screenshot.
+    // belongs to a visitor who clicked the grate, not to a screenshot.
     set(on = true) {
       hovering = pressing = want = false;
       steps = 0;

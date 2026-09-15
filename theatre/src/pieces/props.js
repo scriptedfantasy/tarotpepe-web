@@ -295,7 +295,7 @@ export async function build(ctx) {
     d.position.set(-0.44, top + 0.002, chest.position.z + 0.02);
     g.add(d);
     const lamp = O.mushroomLamp();
-    lamp.name = 'mushroom-lamp'; // egg-fine.js hangs the fire off it; nothing else about it changed
+    lamp.name = 'mushroom-lamp'; // the fire hung off it for two rounds and the dark hangs off it now
     lamp.position.set(-0.44, top, chest.position.z + 0.02);
     g.add(lamp);
     let y = top;
@@ -1361,11 +1361,32 @@ export async function build(ctx) {
   // sound of rain. egg-cross.js still calls it by its api during the storm, which is what it is for
   // now. It takes no `window` and it registers no switch.
   const RAIN = eggRain(ctx, { group: g });
-  // ---- THE FIRE. The room's seventh switch, and the only one worked by holding still --------------
-  // Rest the pointer on the mushroom lamp for three seconds and the shelves catch. Nothing in the
-  // room reacts to it — not the light, not Pepe, not the placard — which is the whole of the joke;
-  // src/pieces/egg-fine.js says so at length.
-  const FINE = buildFine(ctx, { group: g, switches: SWITCHES, lamp: g.getObjectByName('mushroom-lamp') });
+  // ---- THE FIRE, AND IT IS THE FIREPLACE THAT WORKS IT NOW ---------------------------------------
+  // The user: "the fire easter egg should not originate from the light behind Pepe, but from the
+  // fireplace." It was the mushroom lamp on the operator's position for two rounds — first a hover,
+  // then a click — and the lamp is released by this change (something else is given it: see THE
+  // DARK). Click the grate and the fire lights IN it and spreads from there into the eleven other
+  // places it has always taken; click again and it goes out. Nothing in the room reacts to any of
+  // it — not the light, not Pepe, not the placard — which is the whole of the joke, and none of
+  // that has changed. src/pieces/egg-fine.js says so at length.
+  //
+  // room.js owns the fireplace and publishes it in world metres (`room.fireplace`). What this egg
+  // needs from it is two things: a rectangle on the glass for a pointer — the OPENING, the black
+  // hole a visitor would actually aim at — and a point in the room for the first tongue to stand
+  // on, which is the middle of the firebox floor. The set is one merged mesh per material, so
+  // there is no grate OBJECT to raycast; the anchor below is what the arbiter sorts by depth, and
+  // the box is what it hit-tests. If room.js is not in the set at all (a stripped page) the
+  // fallback is where the fireplace has always been and nothing throws.
+  const FP = room.fireplace ?? {
+    face: -W / 2 + 0.24,
+    opening: { z0: -0.36, z1: 0.26, y0: 0.2, y1: 0.86 },
+    grate: { x: -W / 2 + 0.14, y: 0.2, z: -0.05 },
+  };
+  const grateAt = new THREE.Object3D();
+  grateAt.name = 'grate';
+  grateAt.position.set(FP.grate.x, FP.grate.y, FP.grate.z);
+  g.add(grateAt);
+  const FINE = buildFine(ctx, { group: g, switches: SWITCHES, grate: grateAt, opening: FP.opening, face: FP.face });
   // ---- THE PICTURE OF THIS ROOM in the right frame (src/pieces/egg-droste.js). ----------------
   // The sheet inside it is cut to the window's own aspect (landscape on a laptop, upright on a
   // phone) and the moulding is put round that; what is in it is this room, live, drawn by the same

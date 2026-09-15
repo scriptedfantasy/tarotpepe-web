@@ -1,4 +1,4 @@
-// _egg-fine-click — the lamp is a click (round 2 of egg-fine.js): one real click starts the fire,
+// _egg-fine-click — the grate is a click (rounds 2 and 3 of egg-fine.js): one real click starts it,
 // the tongues catch one every half second, a second click puts them out. Proved with the piece's
 // own api read back off the page.
 //

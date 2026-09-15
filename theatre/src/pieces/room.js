@@ -207,6 +207,38 @@ export async function build(ctx) {
   //             stage-right window keeps its pair; this one has none, which is also why Pepe
   //             answers for the two of them differently (mind-room.js).
   const sideWinL = { x0: -2.34, x1: -0.86, y0: 1.04, y1: 2.45, depth: 0.21 };
+  // ---- THE FIREPLACE, on the same wall, downstage of the window ----------------------------------
+  // The user: "Put a fireplace on the left wall — the fire easter egg should not originate from the
+  // light behind Pepe, but from the fireplace." It is JOINERY AND IRON and it belongs to this file,
+  // the way the door, the two windows and the radiator that used to stand here did; what WORKS it is
+  // props' (src/pieces/egg-fine.js), and all that file is given is the numbers below.
+  //
+  //   z -0.60 .. 0.50   THE BREAST, 1.10 m of wall. Upstage it is stopped by the wide window's cap
+  //             moulding at -0.75, which leaves 150 mm of plaster; downstage by the press door's
+  //             architrave at 0.86, which leaves 360. Its downstage face is at z 0.50 and the
+  //             1280x800 `home` plate, which stops at z -0.128 ON THE PLASTER, reaches z 0.427 on a
+  //             surface standing 240 mm proud of it — so the whole of this breast but 73 mm of its
+  //             downstage return is in the conversation shot on a laptop, and all of it at 1600x900.
+  //   proj 0.24 THE FACE, at x -2.36. Deep enough for a firebox and its jambs, and 240 is also what
+  //             makes the thing read as a breast and not a panel at the rake this wall is seen from.
+  //   y 0 .. 2.98  floor to the cornice's own bottom line. A chimney breast goes up through a room;
+  //             one that stopped at the picture rail would be a cupboard. The SKIRTING, the DADO
+  //             RAIL, the PICTURE RAIL and the CORNICE all return round it — four horizontals that
+  //             step out and back at the same two verticals, which is the most characteristic
+  //             drawing a Victorian room has and exactly what a wall seen at 67 degrees wants.
+  //   y 1.22    THE MANTEL. A 40 mm shelf oversailing the breast by 60 mm each way, with a frieze
+  //             under it: the one strong horizontal on this wall, with a black hole below it.
+  //   0.62 x 0.66  THE OPENING, centred on the breast at z -0.05, 0.20 to 0.86. It was drawn 0.80
+  //             tall for one pass and at this rake a 0.62 x 0.80 hole is a SLOT — it read as a
+  //             doorway with the door off, and the grate sat in the bottom third of it with a foot
+  //             of black over its head. Squared up it reads as a fire opening and the grate fills
+  //             half of it. It is the SOLID DARK this prop owes the round-1 critic and the breast
+  //             and mantel are its bare white. The iron slip round it tops out at 0.915, INSIDE the
+  //             dado band (0.905..0.970), so the dado rail's run across the face is broken and dies
+  //             into the chimneypiece either side, which is what a dado rail does when it meets one.
+  // AND NOTHING STANDS ON THE MANTEL. The room always keeps one big empty area and this wall has
+  // just spent the rest of itself on a window; the plaster over this shelf is where that area went.
+  const fire = { x0: -0.6, x1: 0.5, proj: 0.24, top: 2.98, mantel: 1.22, open: 0.62, sill: 0.2, head: 0.86, slab: 0.34, slip: 0.055 };
   // Downstage on each side wall, level with the visitor's shoulder, a second door: the way in from
   // the landing (stage right) and the door of a press (stage left). They sit in the stretch of side
   // wall that only the long door/window/track shots see — in those the lens is a metre from the
@@ -282,12 +314,23 @@ export async function build(ctx) {
     for (const [y0, y1, d] of profile) P.boxFrom(x0, x1, y0, y1, zb, zb + d, M.trim, { receive: true });
   };
   // A run along a side wall, in z, optionally broken where a side door's architrave lands.
-  const sideRun = (profile, side, gap = null) => {
+  // `gaps` is a list now and not one pair: the stage-left wall has TWO things that break a run —
+  // the press door (the low mouldings only) and the chimney breast (all four of them, because a
+  // breast is the full height of the wall and every horizontal on it steps round the thing).
+  const sideRun = (profile, side, gaps = []) => {
     for (const [y0, y1, d] of profile) {
       const x0 = side < 0 ? -hx : hx - d, x1 = side < 0 ? -hx + d : hx;
       // runs into the back-wall moulding (same material, so the overlap is invisible and the
       // corner closes without an end face showing)
-      const spans = gap ? [[zb, gap[0]], [gap[1], uEnd]] : [[zb, uEnd]];
+      let spans = [[zb, uEnd]];
+      for (const [g0, g1] of gaps) {
+        const next = [];
+        for (const [z0, z1] of spans) {
+          if (z0 < g0) next.push([z0, Math.min(z1, g0)]);
+          if (z1 > g1) next.push([Math.max(z0, g1), z1]);
+        }
+        spans = next;
+      }
       for (const [z0, z1] of spans) if (z1 > z0) P.boxFrom(x0, x1, y0, y1, z0, z1, M.trim, { receive: true });
     }
   };
@@ -299,8 +342,10 @@ export async function build(ctx) {
       backRun(prof, -hx, door.x0 - a0);
       backRun(prof, door.x1 + a0, hx);
     } else backRun(prof, -hx, hx);
-    sideRun(prof, -1, low ? [sideDoorL.x0 - a0, sideDoorL.x1 + a0] : null);
-    sideRun(prof, 1, low ? [sideDoorR.x0 - a0, sideDoorR.x1 + a0] : null);
+    // the breast interrupts EVERY run on the stage-left wall; the press door only the low pair
+    const breast = [fire.x0 - PROFILE[key][0][2], fire.x1 + PROFILE[key][0][2]];
+    sideRun(prof, -1, low ? [[sideDoorL.x0 - a0, sideDoorL.x1 + a0], breast] : [breast]);
+    sideRun(prof, 1, low ? [[sideDoorR.x0 - a0, sideDoorR.x1 + a0]] : []);
   }
 
   // ---- what the PTT left on the side walls ----
@@ -331,6 +376,7 @@ export async function build(ctx) {
     // the left frame maps local x to world -z, so a u range on this wall is negated to be built
     // (the press door has done this for as long as there has been one)
     buildWindow(P, M, { ...sideWinL, x0: -sideWinL.x1, x1: -sideWinL.x0 }, zb, jit, { shutters: false, lights: 3 });
+    buildFireplace(P, M, { ...fire, x0: -fire.x1, x1: -fire.x0 }, zb, BAND);
     buildSideDoor(P, M, { ...sideDoorL, x0: -sideDoorL.x1, x1: -sideDoorL.x0 }, zb, { knob: -1, press: true });
   });
 
@@ -342,7 +388,20 @@ export async function build(ctx) {
   // the BACK wall to be asked about. Anything that still reads `room.window` gets undefined and
   // falls to its own fallback, which would put a drawing back on plaster — so the readers were
   // changed rather than left to fall: lighting.js, props.js, egg-rain.js, egg-cross.js.
-  return { group: g, sideWindow: sideWin, leftWindow: sideWinL, door, bands: BAND, setState() {} };
+  // …and `fireplace` in world metres, because the only thing that reads it is a pointer: `wall` is
+  // the plaster, `face` the breast's front, `z0/z1` the breast along the wall, `opening` the black
+  // rectangle a visitor clicks, and `grate` the middle of the firebox floor, which is where the
+  // first tongue of egg-fine.js's fire now stands.
+  const fireWorld = {
+    wall: -hx,
+    face: -hx + fire.proj,
+    z0: fire.x0,
+    z1: fire.x1,
+    mantel: fire.mantel,
+    opening: { z0: (fire.x0 + fire.x1) / 2 - fire.open / 2, z1: (fire.x0 + fire.x1) / 2 + fire.open / 2, y0: fire.sill, y1: fire.head },
+    grate: { x: -hx + fire.proj - 0.1, y: fire.sill, z: (fire.x0 + fire.x1) / 2 },
+  };
+  return { group: g, sideWindow: sideWin, leftWindow: sideWinL, fireplace: fireWorld, door, bands: BAND, setState() {} };
 }
 
 // A casement window in a reveal, an architrave, a sill, and (if there is wall for them) two louvred
@@ -546,6 +605,118 @@ function buildShutterLeaf(P, M, x0, x1, y0, y1, z0, z1, side, jit = Math.random)
   // a shutter dog holding the leaf open (small hook near the outer bottom corner)
   const dogX = side < 0 ? x0 + 0.05 : x1 - 0.05;
   P.box(0.05, 0.02, 0.05, dogX, y0 + 0.08, z1 + 0.02, M.metal, { cast: true });
+}
+
+// A CHIMNEY BREAST, A MANTEL, A HEARTH AND A GRATE WITH A FIRE LAID IN IT, on the stage-left wall.
+// Everything about where it stands is at the openings above, under THE FIREPLACE; this is how it is
+// made. It is drawn in the frame the press door and the wide window are drawn in — local x is minus
+// world z, local z is how far a thing stands off the plaster, zb is the plaster itself.
+//
+// THE BREAST IS THE WALL, REPEATED 240 mm NEARER. It carries the side wall's own bands in the side
+// wall's own materials — skirting behind the board, boarded wainscot, dado, plain field, rail,
+// frieze — and because room-build maps every UV off world position in metres, the wainscot's boards
+// and the plaster's grain run round the corner onto it without a seam or a number.
+//
+// THE OPENING IS CUT OUT OF THOSE BANDS AND NOT SUNK INTO THEM. A recess hollowed out of a solid
+// box is a recess nothing can see: the ink pass reads depth and normals, and the hole has to be a
+// real hole. So each band is subtracted around the opening exactly as the walls are subtracted
+// around a door, and the box behind is lined in M.dark on all five faces — the one surface in this
+// room that is cross-hatched to solid black, which is what a firebox is from four metres away.
+function buildFireplace(P, M, f, zb, BANDS) {
+  const { x0, x1, top, mantel, sill, head, slip } = f;
+  const zf = zb + f.proj; // the breast's face
+  const cx = (x0 + x1) / 2;
+  const o0 = cx - f.open / 2, o1 = cx + f.open / 2;
+  const open = { x0: o0, x1: o1, y0: sill, y1: head };
+
+  // ---- the breast, in the side wall's own bands, cut round the opening ----
+  const bands = [
+    ['skirt', M.trim],
+    ['wainscot', M.wainscot],
+    ['dado', M.trim],
+    ['field', M.side],
+    ['rail', M.trim],
+    ['frieze', M.plaster],
+  ];
+  for (const [band, m] of bands) {
+    const [by0, by1] = BANDS[band];
+    if (by0 >= top) continue;
+    let rects = [{ x0, x1, y0: by0, y1: Math.min(by1, top) }];
+    rects = subtractRect(rects, open);
+    for (const r of rects) P.boxFrom(r.x0, r.x1, r.y0, r.y1, zb, zf, m, { cast: true, receive: true });
+  }
+
+  // ---- the mouldings, RETURNING round it: out along one side, across the face, back along the
+  // other. Four horizontals that step out and step back at the same two verticals. A skirting and a
+  // dado that simply STOPPED at a breast is what the first pass drew and it is what no room has
+  // ever done; the return is the drawing this whole thing was worth putting on a raking wall for.
+  for (const key of ['skirt', 'dado', 'rail', 'cornice']) {
+    for (const [py0, py1, d] of PROFILE[key]) {
+      P.boxFrom(x0 - d, x0, py0, py1, zb, zf + d, M.trim, { receive: true }); // the upstage return
+      P.boxFrom(x1, x1 + d, py0, py1, zb, zf + d, M.trim, { receive: true }); // the downstage one
+      // …and across the face, broken at the chimneypiece where the chimneypiece is in the way
+      const spans = key === 'dado' ? [[x0 - d, o0 - slip], [o1 + slip, x1 + d]] : [[x0 - d, x1 + d]];
+      for (const [a, b] of spans) if (b > a) P.boxFrom(a, b, py0, py1, zf, zf + d, M.trim, { receive: true });
+    }
+  }
+
+  // ---- the firebox: five faces of solid hatch, and nothing else in it that is not iron ----
+  const t = 0.008;
+  P.boxFrom(o0, o1, sill, head, zb, zb + t, M.dark, { receive: true }); // the back
+  P.boxFrom(o0, o0 + t, sill, head, zb, zf, M.dark, { receive: true }); // the two jambs
+  P.boxFrom(o1 - t, o1, sill, head, zb, zf, M.dark, { receive: true });
+  P.boxFrom(o0, o1, head - t, head, zb, zf, M.dark, { receive: true }); // the soffit
+  P.boxFrom(o0, o1, sill, sill + t, zb, zf, M.dark, { receive: true }); // the firebox floor
+
+  // ---- the surround: a slip of iron round the opening, standing 18 mm off the face. This is what
+  // the dado rail dies into either side (see the runs above), and it is the line that says the hole
+  // is a fireplace and not a cupboard with the door off.
+  P.boxFrom(o0 - slip, o0, sill, head + slip, zf, zf + 0.018, M.iron, { cast: true, receive: true });
+  P.boxFrom(o1, o1 + slip, sill, head + slip, zf, zf + 0.018, M.iron, { cast: true, receive: true });
+  P.boxFrom(o0 - slip, o1 + slip, head, head + slip, zf, zf + 0.018, M.iron, { cast: true, receive: true, uvSwap: true });
+
+  // ---- the mantel: a shelf with a frieze under it, oversailing the breast both ways ----
+  P.boxFrom(x0 - 0.06, x1 + 0.06, mantel, mantel + 0.04, zb, zf + 0.06, M.trim, { cast: true, receive: true });
+  P.boxFrom(x0 - 0.03, x1 + 0.03, mantel - 0.024, mantel, zb, zf + 0.03, M.trim, { cast: true });
+
+  // ---- the hearth: a SLAB ON THE BOARDS and not a plinth. It was drawn from the floor up to the
+  // opening's own sill at 0.20 for one pass and it came out as a bench 1.04 m long and 340 deep
+  // standing in front of the fire; a hearth is a stone laid on a floor, 55 mm of it, and what is
+  // under the opening is the breast's own wainscot, which is where it was already.
+  P.boxFrom(x0 + 0.03, x1 - 0.03, 0, 0.055, zf, zf + f.slab, M.trim, { cast: true, receive: true });
+
+  // ---- THE GRATE, and it is the only thing in the box that is not black: five bars and a fret,
+  // in iron, standing in front of a cross-hatched hole. One dark area and one bare light is the
+  // rule; here the hole is the dark and the bars are the light, which is why they are M.iron and
+  // not M.dark and why there are five of them and not fifteen — at 66 px to the metre on this wall
+  // a 30 mm bar is two pixels, and a bar every 90 mm is two pixels with three of paper between.
+  const gz = zf - 0.03; // the bars stand just inside the face
+  const bars = 5, span = f.open - 0.16;
+  for (let i = 0; i < bars; i++) {
+    const bx = cx - span / 2 + (span / (bars - 1)) * i;
+    P.boxFrom(bx - 0.014, bx + 0.014, sill + 0.02, sill + 0.3, gz - 0.018, gz, M.iron, { cast: true });
+  }
+  P.boxFrom(o0 + 0.06, o1 - 0.06, sill + 0.28, sill + 0.32, gz - 0.022, gz, M.iron, { cast: true }); // the top rail
+  P.boxFrom(o0 + 0.06, o1 - 0.06, sill + 0.01, sill + 0.045, gz - 0.026, gz + 0.004, M.iron, { cast: true }); // the fret
+
+  // ---- THE FIRE LAID IN IT, unlit: three logs across the bars with kindling under them. It is
+  // drawn so that the thing a visitor clicks already looks like a fire that has not been lit — the
+  // affordance in this room is never a label, it is the object saying what it is for.
+  // …AND THEY ARE PAPER, NOT INK. Drawn in M.dark they were three black logs inside a black hole
+  // and the whole of the laid fire disappeared. The room's answer to a thing standing in a solid
+  // mass is to turn it over — it is what the cat's lamp does when it is switched on — so the logs
+  // and the kindling are the trim's own paper with the pen round them: white billets in a black
+  // box, which is also what a fire looks like before it is lit.
+  for (const [ly, lz, r, lean] of [
+    [sill + 0.075, -0.012, 0.035, 0.07],
+    [sill + 0.085, 0.028, 0.03, -0.11],
+    [sill + 0.135, 0.004, 0.032, 0.05],
+  ]) {
+    P.cylinder(r, r, f.open - 0.24, cx + lz * 2, ly, gz - 0.075, M.trim, { rz: Math.PI / 2, ry: lean, segments: 9, cast: true });
+  }
+  for (const [kx, ky, kl] of [[-0.09, 0.028, 0.16], [0.02, 0.022, 0.19], [0.1, 0.03, 0.14]]) {
+    P.cylinder(0.009, 0.009, kl, cx + kx, sill + ky, gz - 0.075, M.trim, { rz: Math.PI / 2 + 0.4, segments: 6 });
+  }
 }
 
 // THE CABLE DUCT. The one thing the PTT screwed to the walls that was not worth taking away: a

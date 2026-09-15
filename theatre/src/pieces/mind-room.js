@@ -246,6 +246,18 @@ const PLAIN = [
   // A visitor who asks after it is answered by ABSENT at the foot of this file, which is where
   // everything this room has not got is answered.
   [
+    // THE FIREPLACE. The user: "Put a fireplace on the left wall." It is room.js's joinery and it is
+    // also the switch the fire egg hangs off (src/pieces/egg-fine.js) — and this line gives none of
+    // that away, exactly as the frame that was a cabinet door gave none of itself away: he says what
+    // is standing there and stops. `the fire` and `the grate` are in the keys because that is what a
+    // visitor who has just clicked it will type, and the answer to that is the same answer.
+    /\bfire ?places?\b|\bchimney\b|\bhearth\b|\bgrate\b|\bmantel ?(?:piece)?\b|\bthe fire\b|\bstove\b/,
+    [
+      'A fireplace. It is swept, it is laid, and I have not lit it since the second winter.',
+      'The fireplace. The chimney is the only thing in this building that still goes all the way out.',
+    ],
+  ],
+  [
     // HE HAS TWO WINDOWS AGAIN, AND NEITHER IS THE ONE BEHIND HIM. The back wall's casement was
     // taken out and has not come back; what has come is a WIDE one on the stage-left wall, where
     // the switchboard and the wall shelf were. The cable is still outside the stage-right one —
@@ -359,10 +371,10 @@ const ABSENT = [
   [/\btelephones?\b|\bthe phone\b|\ba phone\b/, ['There is no telephone. This was the exchange; they took every telephone with them when they went.']],
   [/\btelevision\b|\btv\b|\bscreens?\b|\bcomputers?\b|\bmonitor\b/, ['Nothing in this room has a screen in it. That is not a principle; it is the lease.']],
   [/\bmirrors?\b/, ['There is no mirror. Nobody has ever asked for one twice.']],
-  [/\bfireplaces?\b|\bthe fire\b|\bstove\b/, ['No fireplace. There is no radiator either, since you ask. The room is heated by the season.']],
-  // THE RADIATOR. It was bolted to the plaster stage left and it came out of the room with the tall
-  // case's legs; this is where the question goes now.
-  [/\bradiators?\b|\bheating\b|\bheater\b/, ['There is no radiator. There was, under the case, and it knocked at seven and again at eleven. I do not miss the knocking.']],
+  // THE FIREPLACE is not here any more: there IS one, and it is answered in PLAIN above. What is
+  // left absent on this subject is the radiator, which came out of the room with the tall case's
+  // legs and was replaced by nothing until the chimney breast went up.
+  [/\bradiators?\b|\bheating\b|\bheater\b/, ['There is no radiator. There was, under the case, and it knocked at seven and again at eleven. There is a fireplace instead, which is older and quieter and no warmer.']],
   [/\bpianos?\b|\bguitar\b|\bgramophone\b|\brecord player\b/, ['There is no piano. There is a radio that does not get switched on, which is quieter still.']],
   [/\bbed\b|\bkitchen\b|\bbathroom\b|\btoilet\b|\bthe lavatory\b/, ['Not in here. That is all upstairs, and it is a bed, a kettle and a window looking at another window.'],],
   [/\bwi.?fi\b|\binternet\b|\bsignal\b|\belectricity in here\b/, ['Nothing in this room is connected to anything. It used to be connected to the whole town.']],

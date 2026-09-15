@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// WHERE THE FIRE CAN STAND. The three places the user named — the lamp's own shade, the shelf
+// WHERE THE FIRE CAN STAND. The three places the user named — the grate it starts in, the shelf
 // edges either side of him, the table's edge nearest the lens — measured on the glass at the home
 // plate and on a phone, so a flame is put where the camera can actually see one.
 //   BASE=http://127.0.0.1:8713/ node tools/_egg-fine-where.mjs

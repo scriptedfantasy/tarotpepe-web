@@ -195,9 +195,21 @@ const ok = (cond, line) => {
   if (!cond) fails.push(line);
 };
 
-// ---- 1. the lamp on the glass, in every window the film is judged at --------------------------------
+// ---- 1. the grate on the glass, in every window the film is judged at -------------------------------
+// THE SWITCH IS THE FIREPLACE NOW and not the mushroom lamp (the user: "the fire easter egg should
+// not originate from the light behind Pepe, but from the fireplace"), so what this section measures
+// is the OPENING under the mantel: the black rectangle a visitor aims at. It is on the STAGE-LEFT
+// WALL, which is the hardest place in this room to put a control, and the numbers say exactly how
+// hard: that wall recedes to the left edge of the picture as it comes downstage, so what is in shot
+// is decided by the window's aspect and by nothing else.
+//   1280x800  home   the box is cut by the left edge and about 79 px of it is in the picture
+//   1600x900  home   whole, with room either side
+//   390x844   home   not in the picture at all, at either resting plate
+// So the assertion is not "whole" — it cannot be, at 16:10 — it is REACHABLE: a thumb's 44 px of it
+// has to be on the glass at the plate the conversation is played at. On a phone it is not there at
+// all and this egg is a laptop egg, which is said here rather than asserted away.
 if (doing('lamp')) {
-console.log('\nTHE LAMP, WHICH IS THE WHOLE AFFORDANCE  (home plate; the flames are not touchable, only it is)');
+console.log('\nTHE GRATE, WHICH IS THE WHOLE AFFORDANCE  (home plate; the flames are not touchable, only it is)');
 await fresh();
 for (const [W, H] of [PLATE, [1600, 900], PHONE, [360, 800]]) {
   const page = await open(W, H, '&shot=1');
@@ -206,13 +218,18 @@ for (const [W, H] of [PLATE, [1600, 900], PHONE, [360, 800]]) {
     return { hit: F.hitBox(), tap: F.tapBox() };
   });
   const b = m.hit, t = m.tap;
-  const inside = b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H;
+  const whole = b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H;
+  // how much of the thumb's own box is actually on the glass
+  const onGlass = Math.max(0, Math.min(t.x + t.w, W) - Math.max(t.x, 0));
+  const onGlassY = Math.max(0, Math.min(t.y + t.h, H) - Math.max(t.y, 0));
   console.log(
-    `  ${String(W + 'x' + H).padEnd(9)} lamp ${b.w.toFixed(1)} x ${b.h.toFixed(1)} px at ${b.x.toFixed(0)},${b.y.toFixed(0)}` +
-      `  tap ${t.w.toFixed(0)} x ${t.h.toFixed(0)}${t.grown ? ' (GROWN)' : ' (the lamp itself)'}  ${inside ? 'IN SHOT' : 'OUT OF FRAME'}`,
+    `  ${String(W + 'x' + H).padEnd(9)} opening ${b.w.toFixed(1)} x ${b.h.toFixed(1)} px at ${b.x.toFixed(0)},${b.y.toFixed(0)}` +
+      `  tap ${t.w.toFixed(0)} x ${t.h.toFixed(0)}${t.grown ? ' (GROWN)' : ''}` +
+      `  ${whole ? 'WHOLE' : onGlass > 0 && onGlassY > 0 ? `cut by the frame: ${onGlass.toFixed(0)} x ${onGlassY.toFixed(0)} px of it is reachable` : 'NOT IN THE PICTURE'}`,
   );
-  if (W === PLATE[0] && H === PLATE[1]) ok(inside, 'the lamp is whole inside the home plate, which is where the pointer has to find it');
-  if (W === PHONE[0]) ok(inside && t.w >= 44 && t.h >= 44, 'and whole on a 390x844 phone, with a thumb-sized box round it');
+  if (W === PLATE[0] && H === PLATE[1]) ok(onGlass >= 44 && onGlassY >= 44, `a thumb's worth of the grate is on the home plate, which is where the pointer has to find it (${onGlass.toFixed(0)} x ${onGlassY.toFixed(0)} px)`);
+  if (W === 1600) ok(whole, 'and whole at 1600x900, where that wall has room either side of it');
+  if (W === PHONE[0]) ok(onGlass === 0, 'and NOT in the picture on a 390x844 phone: the stage-left wall is off the frame at both resting plates, so this is a laptop egg and there is no hotspot at the edge pretending otherwise');
   await page.close();
 }
 }
@@ -555,6 +572,12 @@ console.log('\nTHE ROOM, ALIGHT AND NOT  (1280x800, home, ?t=2.5 frozen; the sam
       flames: Array.from({ length: F.count }, (_, i) => F.flameBox(i)),
       where: F.where,
       pepe: { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) },
+      // AND THE PICTURE OF THIS ROOM, which is a live drawing of this room (egg-droste.js) and
+      // therefore has a fire in it when the room has a fire in it. That is not "the rest of the
+      // room changing"; it is the room, at 158 px, doing exactly what it is hung there to do.
+      // Without this box the test below reported about 2200 changed pixels in a dozen 2x2 blocks
+      // on every run, every one of them inside the moulding, and had done since the picture went up.
+      picture: window.__theatre.pieces.props.droste?.hitBox?.() ?? null,
     };
   });
   await page.waitForTimeout(700);
@@ -606,6 +629,7 @@ console.log('\nTHE ROOM, ALIGHT AND NOT  (1280x800, home, ?t=2.5 frozen; the sam
       const i = y * PW + x;
       if (!changed[i] || !changed[i + 1] || !changed[i + PW] || !changed[i + PW + 1]) continue;
       if (geom.flames.some((b) => inBox(b, x, y))) continue;
+      if (geom.picture && inBox(geom.picture, x, y, 2)) continue; // the room's own picture of itself
       if (inBox(geom.pepe, x, y, 0)) pepeBlocks++;
       else {
         blocks++;
@@ -627,9 +651,16 @@ console.log('\nTHE ROOM, ALIGHT AND NOT  (1280x800, home, ?t=2.5 frozen; the sam
   await page.close();
 }
 
-// ---- 4. a phone, where there is no hover and the lamp is pressed and held ---------------------------
+// ---- 4. a phone, where the fireplace is not in the picture -------------------------------------
+// This section used to press and hold a finger on the mushroom lamp, which stood on the operator's
+// position behind Pepe and was in a phone's frame. The switch is the fireplace now, and the
+// fireplace is on the STAGE-LEFT WALL, which a 390x844 plate does not see at all at either resting
+// plate (tools/_left-wall-where.mjs: that plate's left edge crosses the wall plane at z -16.9,
+// which is to say the whole wall is off the picture). So there is nothing here for a thumb, and the
+// honest test is the negative one: the box is off the glass, a touch where a thumb could actually
+// land does nothing whatever, and no hotspot at the edge of the frame pretends otherwise.
 if (doing('phone')) {
-console.log('\nA PHONE  (390x844, home, a finger held on the lamp)');
+  console.log('\nA PHONE  (390x844, home: the stage-left wall, and the fireplace on it, are not in the picture)');
   await fresh();
   const [W, H] = PHONE;
   const page = await open(W, H, '&now=21:12');
@@ -639,32 +670,21 @@ console.log('\nA PHONE  (390x844, home, a finger held on the lamp)');
   });
   await page.waitForTimeout(700);
   const tap = await page.evaluate(() => window.__theatre.pieces.props.fine.tapBox());
-  const cx = tap.x + tap.w / 2, cy = tap.y + tap.h / 2;
-  console.log(`  the target on the glass  x ${cx.toFixed(0)} y ${cy.toFixed(0)}  (${tap.w.toFixed(0)} x ${tap.h.toFixed(0)} px, a thumb's own box)`);
+  const onGlass = Math.max(0, Math.min(tap.x + tap.w, W) - Math.max(tap.x, 0));
+  console.log(`  where the grate would be  x ${tap.x.toFixed(0)} y ${tap.y.toFixed(0)}  (${tap.w.toFixed(0)} x ${tap.h.toFixed(0)} px, ${onGlass.toFixed(0)} px of it on the glass)`);
   await page.screenshot({ path: `${OUT}/egg-fine-phone-fine.png`, timeout: 400000 });
-  await gate(page); // the same gate as the hold's, and for the same reason
-  const run = (n) => release(page, n);
-  const lit = () => page.evaluate(() => ({ lit: window.__theatre.pieces.props.fine.lit, steps: window.__theatre.pieces.props.fine.steps }));
-  // a HELD touch: down, hold, up — which is the only way a phone has of resting on something
+  ok(onGlass === 0, `the fireplace is off a phone's frame entirely: ${Math.abs(tap.x + tap.w).toFixed(0)} px past the left edge`);
+  // …and a thumb put where a thumb could go finds nothing. The left edge of the picture, at the
+  // height the grate would be at, is the nearest a finger can get to it.
   const cdp = await page.context().newCDPSession(page);
+  const cy = Math.max(10, Math.min(H - 10, tap.y + tap.h / 2));
   const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
-  await touch('touchStart', cx, cy);
-  await run(35);
-  const p29 = await lit();
-  await page.screenshot({ path: `${OUT}/egg-fine-phone-2s92.png`, timeout: 400000 });
-  await run(1);
-  await page.screenshot({ path: `${OUT}/egg-fine-phone-3s00.png`, timeout: 400000 });
-  await run(66);
-  const p90 = await lit();
-  await page.screenshot({ path: `${OUT}/egg-fine-phone-8s50.png`, timeout: 400000 });
-  console.log(`  a held finger: drawing ${p29.steps} (${(p29.steps / 12).toFixed(2)} s) → ${p29.lit} alight, drawing ${p90.steps} (${(p90.steps / 12).toFixed(2)} s) → ${p90.lit} alight`);
-  console.log(`  →  ${OUT}/egg-fine-phone-2s92.png · -3s00 · -8s50 · -fine.png · -out.png`);
-  ok(p29.lit === 0 && p90.lit === 12, `a held finger works the lamp exactly as a resting pointer does (2.92 s: ${p29.lit}, 8.50 s: ${p90.lit})`);
-  await touch('touchEnd', cx, cy);
-  await run(8);
-  const gone = await page.evaluate(() => window.__theatre.pieces.props.fine.lit);
-  await page.screenshot({ path: `${OUT}/egg-fine-phone-out.png`, timeout: 400000 });
-  ok(gone === 0, 'and the finger lifting puts them out');
+  await touch('touchStart', 6, cy);
+  await page.waitForTimeout(400);
+  await touch('touchEnd', 6, cy);
+  await page.waitForTimeout(600);
+  const after = await page.evaluate(() => window.__theatre.pieces.props.fine.lit);
+  ok(after === 0, `a thumb at the left edge of the picture, level with the grate, lights nothing (${after} alight)`);
   const world2 = await world(page);
   ok(world2.placard === '', 'the placard on a phone says nothing either');
   console.log('  props:fine on the phone  ', JSON.stringify(await page.evaluate(() => window.__fine)));
@@ -713,15 +733,27 @@ console.log('\nHIS LINE  (1280x800, a whole evening, no ?view: the door, the gre
 
   await gate(page);
   const run = (n) => release(page, n);
-  const lamp = await page.evaluate(() => window.__theatre.pieces.props.fine.tapBox());
-  const lx = lamp.x + lamp.w / 2, ly = lamp.y + lamp.h / 2;
-  await page.mouse.move(lx - 420, ly + 160);
-  await run(2);
-  await page.mouse.move(lx, ly);
-  await run(101); // one short of the dozen
+  // A CLICK ON THE GRATE, which is what this egg is worked by (egg-fine.js, round 2 made it a click
+  // and round 3 moved it onto the fireplace). The box is CUT BY THE LEFT EDGE at 16:10, so the
+  // point clicked is the middle of the part that is actually on the glass and not the middle of the
+  // box — which is also the only point a visitor could click.
+  const grate = await page.evaluate(() => window.__theatre.pieces.props.fine.tapBox());
+  const gx0 = Math.max(0, grate.x), gx1 = Math.min(W, grate.x + grate.w);
+  const lx = (gx0 + gx1) / 2, ly = grate.y + grate.h / 2;
+  console.log(`  the target on the glass  x ${lx.toFixed(0)} y ${ly.toFixed(0)}  (of a box ${grate.w.toFixed(0)} x ${grate.h.toFixed(0)} at ${grate.x.toFixed(0)}, cut to ${(gx1 - gx0).toFixed(0)} px wide by the frame)`);
+  await page.mouse.click(lx, ly);
+  // …and released a drawing at a time until ELEVEN are up. It used to be a flat run(101), which was
+  // the hold's own arithmetic: thirty-six drawings of a pointer resting on the lamp and then one
+  // tongue every six. A click skips the hold — it sets the counter straight to HOLD_F — so the
+  // dozen is up in sixty-six drawings and not a hundred and two, and the number to stop at is the
+  // piece's own count and not a stopwatch.
+  for (let guard = 0; guard < 140; guard++) {
+    if ((await page.evaluate(() => window.__theatre.pieces.props.fine.lit)) >= 11) break;
+    await run(1);
+  }
   const at11 = { lit: await page.evaluate(() => window.__theatre.pieces.props.fine.lit), text: await placardText(page) };
   ok(at11.lit === 11 && !at11.text.includes('This is fine.'), `eleven tongues and he has said nothing: the line waits for the LAST one (${at11.lit} alight)`);
-  await run(1); // …and the twelfth
+  await run(6); // …and the twelfth, which is at most six drawings behind the eleventh
   // the flow takes the event, cuts the field short and hands the line to dialogue.ask; that is a
   // frame or two of the page's own loop
   await page.waitForFunction(() => (window.__asks ?? []).includes('This is fine.'), null, { timeout: 120000 }).catch(() => {});
@@ -762,13 +794,13 @@ console.log('\nHIS LINE  (1280x800, a whole evening, no ?view: the door, the gre
   // must not be allowed to interrupt it.
   //
   // The event is put on the bus BY HAND here, and the reason is measured two lines below: at every
-  // plate a reading is played in, the mushroom lamp is not in the picture at all, so a visitor
-  // cannot reach it and the fire cannot be started from there. What is under test is the flow's
+  // plate a reading is played in, the fireplace is not in the picture at all, so a visitor cannot
+  // reach it and the fire cannot be started from there. What is under test is the flow's
   // rule, not the egg's arithmetic — the egg's is proved above, twelve tongues at a time — so the
   // event it would emit is emitted, at the real beat, with the real field open.
-  await page.mouse.move(lx - 420, ly + 160);
+  await page.mouse.click(lx, ly); // a second click puts it out
   await run(8);
-  ok((await page.evaluate(() => window.__theatre.pieces.props.fine.lit)) === 0, 'the pointer comes off and the room is fine again');
+  ok((await page.evaluate(() => window.__theatre.pieces.props.fine.lit)) === 0, 'a second click on the grate and the room is fine again');
   await page.evaluate(() => {
     const i = document.querySelector('#dialogue input');
     i.value = 'read my cards';
@@ -788,7 +820,7 @@ console.log('\nHIS LINE  (1280x800, a whole evening, no ?view: the door, the gre
     },
     { W, H },
   );
-  console.log(`  the lamp at the "${reach.shot}" plate: ${reach.box.w.toFixed(0)} x ${reach.box.h.toFixed(0)} px at ${reach.box.x.toFixed(0)},${reach.box.y.toFixed(0)} — ${reach.inShot ? 'IN SHOT' : 'not in the picture'}`);
+  console.log(`  the grate at the "${reach.shot}" plate: ${reach.box.w.toFixed(0)} x ${reach.box.h.toFixed(0)} px at ${reach.box.x.toFixed(0)},${reach.box.y.toFixed(0)} — ${reach.inShot ? 'IN SHOT' : 'not in the picture'}`);
   const before2 = { asks: await page.evaluate(() => window.__asks.length), text: await placardText(page) };
   await page.evaluate(() => window.__theatre.emit('props:fine', { burning: true, n: 12, full: true }));
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
