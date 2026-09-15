@@ -149,13 +149,6 @@ function scripted({ beat, user, slug, position, question, spread = [], focus = n
       return { text: followupScript(said, spread, talk.stance), offered: false };
     case 'farewell':
       return { text: farewellScript(talk), offered: false };
-    // THE PHONE, and the empty string is the whole answer. The board on the wall rang because the
-    // visitor found the pair (egg-switchboard.js); with no live voice there is nothing written for
-    // it and nothing is going to be. A bell in a room where nobody says anything afterwards is a
-    // better event than a canned sentence, and a canned sentence would be the same one every time
-    // a visitor found the pair — which is exactly the thing the user ruled out for the shuffle.
-    case 'phone':
-      return { text: '', offered: false };
     // THE READING, FLIPPED — and the empty string is the whole answer here too. The visitor offered
     // to read for him, he pulled let_them_read, and these three beats are his side of being read
     // to: asking what a card says, answering what they made of it, taking something from the three.
@@ -178,13 +171,6 @@ function scripted({ beat, user, slug, position, question, spread = [], focus = n
       return { text: '', offered: false };
     // THE DECK LAID OUT: what it is for. Keyless, flow.js puts PROMPTS.deck up itself.
     case 'deck':
-      return { text: '', offered: false };
-    // PEPE SILVIA: the wall to his left has just gone up (src/pieces/egg-silvia.js) and the empty
-    // string is the whole answer. There is nothing written for it and there is not going to be: the
-    // line is a man explaining a conspiracy board he built himself, which is a different speech
-    // every time or it is not worth having. Keyless the wall goes up in silence, which is funnier
-    // than a canned paragraph and is the same rule the phone and the flipped reading are held to.
-    case 'silvia':
       return { text: '', offered: false };
     default:
       return { text: beatText(beat), offered: false };

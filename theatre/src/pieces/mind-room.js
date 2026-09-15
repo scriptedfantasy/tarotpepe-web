@@ -155,7 +155,7 @@ export const STORIES = [
   {
     id: 'menu',
     name: 'the framed menu card',
-    where: 'the small frame on the stage-left wall, under the shelf',
+    where: 'the small frame on the stage-left wall',
     fact: 'At twelve he got into a hamburger company\'s networked menu board and left a single item on it for a morning. The framed card is that menu. He has never been asked what the item was, and he does not say. A man frames the first thing he ever published.',
     keys: /\bmenu\b|\bcanteen\b|\bmcdonald'?s?\b|\bhamburger\b|\bframed card\b|\bcard in the (?:frame|little frame)\b|\blittle frame\b/,
     lines: [
@@ -211,17 +211,16 @@ const PLAIN = [
       'A picture of the parlour, on the parlour wall. Look closely and it is in there too.',
     ],
   ],
-  // THE PICTURE ON THE STAGE-LEFT WALL, AND IT STANDS BEFORE THE CLOCK'S OWN LINE ON PURPOSE: PLAIN
-  // is walked in order and a visitor who asks about "the frame on the left" should not be handed
-  // whatever matches further down. It is a circuit diagram on a nail and it is also a cabinet door
-  // with a conspiracy board behind it (src/pieces/egg-silvia.js), and the line gives none of that
-  // away: he says what is hanging there and stops, the way he does about the sixty other things
-  // that came with the room. It does not say there is nothing behind it, because there is.
-  // `pepe silvia` is in the keys because somebody will type the name before they have touched
-  // anything, and the honest answer to that is the same answer.
+  // THE WALL TO HIS LEFT, AND IT STANDS BEFORE THE WINDOW'S OWN LINE ON PURPOSE: PLAIN is walked
+  // in order and a visitor who asks about "the left-hand wall" means the thing that fills it, which
+  // is now the wide window. A switchboard hung on that plaster, and a framed circuit diagram that
+  // was also a cabinet door with a conspiracy board behind it; the user had both taken out ("let's
+  // remove both of these, they don't make sense anymore. add a wide window instead", and "pepe
+  // silvia doesnt work on the side, so you can remove it"). `pepe silvia` stays in the keys because
+  // somebody will type the name, and the answer to that is the answer to all of it: it is not here.
   [
     /\bdiagram\b|\bcircuit\b|\bgrid\b|\bpicture on the left\b|\bframe on the left\b|\bleft(?:[- ]hand)? wall\b|\bpepe silvia\b|\bsilvia\b/,
-    ['A circuit diagram, on the wall to my left. It is a jack field drawn on paper. It was there when I took the room and I have never taken it down.'],
+    ['The wall to my left is mostly window. There was a board on it and a framed diagram, and both went the same week; I have not put anything back.'],
   ],
   [
     /\bclock\b|\bpendulum\b|\bseconds hand\b/,
@@ -247,12 +246,16 @@ const PLAIN = [
   // A visitor who asks after it is answered by ABSENT at the foot of this file, which is where
   // everything this room has not got is answered.
   [
-    // THE WINDOW HE HAS IS THE ONE ON THE RIGHT-HAND WALL. There were two and the one behind him was
-    // taken out; he is not going to be caught describing a wall he is sitting in front of. The cable
-    // is still outside it — room.js drives the lead-in through that window's head now — so the
-    // second sentence is the same sentence it always was, about the window that is left.
+    // HE HAS TWO WINDOWS AGAIN, AND NEITHER IS THE ONE BEHIND HIM. The back wall's casement was
+    // taken out and has not come back; what has come is a WIDE one on the stage-left wall, where
+    // the switchboard and the wall shelf were. The cable is still outside the stage-right one —
+    // room.js drives the lead-in through that window's head — so that clause is the clause it
+    // always was, and he is still not describing the wall he is sitting in front of.
     /\bwindow\b|\bshutters?\b|\bsill\b/,
-    ['One window, on the right, with two shutters. The black cable outside it goes down the wall and stops at nothing.'],
+    [
+      'Two windows. The wide one on my left, and a tall one on the right with two shutters on it. The black cable outside that one goes down the wall and stops at nothing.',
+      'The wide one to my left is three lights across and has no shutters — there is no wall left either side to fold them onto. The other is on the right and does.',
+    ],
   ],
   [
     // Curtains: there are none. There were, on the window that has gone, and they were two inches

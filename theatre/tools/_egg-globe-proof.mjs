@@ -178,7 +178,7 @@ console.log('\n=== 4. a hand on the glass ===');
   await page.close();
 }
 
-// ---- 4b. the switchboard: the radio still answers and the globe declines its pixels ------------
+// ---- 4b. the arbiter: the radio still answers and the globe declines its pixels ---------------
 console.log('\n=== 4b. the radio, beside it ===');
 {
   const page = await open(`${BASE}/?view=props&state=default`, { width: 1600, height: 900 });

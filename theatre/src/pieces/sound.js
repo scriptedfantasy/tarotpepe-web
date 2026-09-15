@@ -267,7 +267,7 @@ export async function build(ctx) {
   // A cue played `through: 'set'` comes out of the radio in the case instead of out of the room:
   // the same pair of filters the record is played through (RECORD.hp/lp — a small speaker in a
   // wooden box), built once and left standing WHETHER OR NOT THE SET IS SWITCHED ON. The
-  // exchange's dial tone uses it (egg-switchboard.js): the board on the wall and the radio are
+  // exchange's dial tone used it, back when there was a board on the wall: that voice and the radio are
   // wired to the same building, and a tone off a dead exchange arriving out of the one live
   // loudspeaker in the room is the whole of the joke. It hangs on `master`, not on the tune bus,
   // so nothing it plays is stopped, ducked or veiled with the music.

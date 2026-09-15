@@ -32,7 +32,6 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import * as O from './props-objects.js';
-import { build as buildSwitchboard } from './egg-switchboard.js';
 import { eggFuse } from './egg-fuse.js';
 import { buildVortex } from './egg-vortex.js';
 import { buildWine } from './egg-wine.js';
@@ -44,7 +43,6 @@ import { eggRain, rainState } from './egg-rain.js';
 import { buildFine } from './egg-fine.js';
 
 
-import { eggSilvia } from './egg-silvia.js';
 import { eggDroste } from './egg-droste.js';
 
 import { eggPeep } from './egg-peep.js';
@@ -57,8 +55,8 @@ import { eggCross } from './egg-cross.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'switchboard-plugged', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'silvia-open', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'] },
-  files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js', 'src/pieces/egg-switchboard.js'],
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'] },
+  files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js'],
 };
 
 export async function build(ctx) {
@@ -761,7 +759,7 @@ export async function build(ctx) {
     // under the rail, with bare plaster above the furniture and either side of Pepe's head.
     // Round 6 hung two plates beside it and both have since left: the Nakamoto card, which the user
     // has now taken off the wall for good, and the circuit diagram, which went to the stage-left
-    // wall with PEPE SILVIA behind it (src/pieces/egg-silvia.js). What is left is the CLOCK and
+    // wall and has since gone out of the room with it. What is left is the CLOCK and
     // THE PICTURE OF THIS ROOM (src/pieces/egg-droste.js). They no longer share a band: the picture
     // is nailed in the middle of the wall, behind him, and the clock hangs out to the left on the
     // plaster the window used to take — see THE ROW at the head of this build.
@@ -778,23 +776,20 @@ export async function build(ctx) {
     g.userData.wallClock = clock; // what a pointer is raycast against; see THE VORTEX below
   }
 
-  // ---- the stage-left wall (no window there): a small shelf of jars ---------------------------------
-  // A round frame hung here too — a zodiac disc, then a barometer, then for a round a mirror with
-  // five Pepes in it (egg-mirror.js, gone with this change). The user: "lets put the pepe silvia
-  // painting and mechanism where the mirror currently is", so the round frame is off the wall and
-  // the rectangular one is on it, hung at the foot of this file because it has to swing.
-  {
-    const x = -W / 2 + 0.02;
-    const rot = Math.PI / 2;
-    // …AND ITS TWO JARS HAVE GONE INTO THE TALL CASE, on the bottom bay it grew when it came off
-    // its legs (see THE TWO BAYS AT THE FOOT). The board itself is still on its two brackets and it
-    // is bare, which it will be for exactly one change: the whole of this stretch of wall goes to
-    // the wide window next.
-    const shelf = O.wallShelf({ w: 0.6, d: 0.16 });
-    shelf.position.set(x, 1.3, -2.3);
-    shelf.rotation.y = rot;
-    g.add(shelf);
-  }
+  // ---- the stage-left wall: NOTHING OF PROPS' IS ON IT ANY MORE -----------------------------------
+  // It carried three things and it carries none. Upstage, a cut-down telephone switchboard on the
+  // plaster with six jacks and two cords in it; under it, a 0.6 m wall shelf on two brackets with
+  // a SUCRE jar and an ANIS jar standing on it; downstage at z 0.3, a framed circuit diagram that
+  // was a cabinet door with a conspiracy board pinned behind it. The user, looking at a crop of
+  // that wall: "then let's remove both of these, they don't make sense anymore. add a wide window
+  // instead" — and, of the third: "pepe silvia doesnt work on the side, so you can remove it."
+  //
+  // So the wall is room.js's now, and what is on it is JOINERY: a wide three-light casement upstage
+  // (room.js, `sideWinL`) where the board and the shelf were. The jars went into the tall case's
+  // bottom bay one change earlier; the board, its bell, the phone beat and the whole of
+  // egg-switchboard.js are out of the repository, as are egg-silvia.js and its two tools. Nothing
+  // of this piece's stands against that plaster upstage of the press door, and that is the point:
+  // a window wants the wall.
 
   // ---- the stage-right wall: a small round picture, upstage of the window ---------------------------
   {
@@ -1315,20 +1310,6 @@ export async function build(ctx) {
     };
   })();
 
-  // ---- THE SWITCHBOARD ON THE LEFT-HAND WALL. The room's third switch. -------------------------
-  // The user: "the switchboard is too hidden behind him. what if we placed the switchboard on the
-  // lefthand wall?" It is all in src/pieces/egg-switchboard.js — the board, its six jacks, its two
-  // cords, the pair that rings — because it is a piece of business and not set dressing, and
-  // because everything it needs from this file is the group to stand in and the arbiter above.
-  const SWITCHBOARD = buildSwitchboard(ctx, {
-    group: g,
-    switches: SWITCHES,
-    chest, // its jack strip came off the back of the position and is on the wall now
-  });
-  // While he is answering the phone the cords stay in: dialogue says how long each line of his is,
-  // and the board holds them until the last one has been read.
-  ctx.on?.('dialogue:say', ({ seconds }) => SWITCHBOARD.holdFor(seconds ?? 1.5));
-
   // ---- THE FUSE BOX'S LEVER, and the night the room drops to without it. ------------------
   // The room's fourth switch, all in src/pieces/egg-fuse.js; it registers with the arbiter above.
   const FUSE = eggFuse(ctx, { group: g, switches: SWITCHES });
@@ -1398,13 +1379,6 @@ export async function build(ctx) {
   }
   relay();
   ctx.on?.('resize', () => relay());
-  // ---- PEPE SILVIA on the stage-left wall, and the wall it hangs on (src/pieces/egg-silvia.js). ---
-  // The user: "lets put the pepe silvia painting and mechanism where the mirror currently is." So
-  // the picture hangs where the round frame hung — x -2.58 plus the row's own 15 mm of stand-off,
-  // y 1.95, z 0.3, turned a quarter turn to face into the room — and the board goes on the plaster
-  // round it. The nail is at y 2.29 and not at the picture rail: room.js runs a 90 mm cable duct
-  // along this wall at y 2.30, and cords to the rail at 2.58 would be threaded through it.
-  const SILVIA = eggSilvia(ctx, { group: g, switches: SWITCHES, slot: { wall: -W / 2, z: 0.3, y: 1.95, w: 0.4, h: 0.46, off: 0.035, hookY: 2.29 } });
   // ---- PEEP THE TOAD on the press's middle bay, and the floor he ends up on (src/pieces/egg-peep.js). --
   const PEEP = eggPeep(ctx, { group: g, switches: SWITCHES, jar: g.getObjectByName('miel-jar') });
   // ---- THE HOUSE OF CARDS. The room's seventh switch, and it has no object: ↑↑↓↓←→←→BA on the
@@ -1425,11 +1399,6 @@ export async function build(ctx) {
     group: g,
     // the arbiter itself, for the tools (`hovered`) and for any piece that wants a switch of its own
     switches: SWITCHES,
-    // THE SWITCHBOARD, on the stage-left wall upstage of the press door. `plugged` is
-    // which jacks have cords in them, `plug(i)` / `pull(i)` work one as a tap does, `set([i, j])`
-    // puts them there for a still with no cue and no bell, and hitBox/tapBox take a jack's index
-    // (or none, for the whole board).
-    switchboard: SWITCHBOARD,
     // THE MAINS LEVER on the terminal box, stage right. `out` is true when the lever is down and
     // the room is on the one lamp that is not on the mains, `pull()` throws it as a click does (a
     // cut on the next 12 fps drawing, with the clack on the click), `set(out, lit)` throws it with
@@ -1496,13 +1465,6 @@ export async function build(ctx) {
     // whether it is still turning, and hitBox/tapBox are the sphere's box on the glass and the box
     // a thumb is actually given.
     globe: GLOBE,
-    // PEPE SILVIA on the stage-left wall. `open` is whether the board is up, `toggle()` works the frame
-    // as a click does — the swing, the eighteen sheets, the red string and the cues — `set(open)`
-    // puts the wall there for a still with none of it, `phase` is shut / opening / up / closing,
-    // `progress` says which drawing of it we are on, and hitBox/tapBox are the LEAF's box on the
-    // glass (which moves as it swings) and the box a thumb is given. `sheetBox(id)` is any one
-    // card's box; `red` is the string's colour, which is the room's fourth.
-    silvia: SILVIA,
     // THE PICTURE OF THIS ROOM, in the frame beside the clock. `geometry` is where the sheet is in
     // world metres (centre, half-extents) — which is what camera.js solves the zoom from — `frame`
     // is the whole moulding's size for this window's aspect, `material` is the surface ink.js binds
@@ -1553,8 +1515,6 @@ export async function build(ctx) {
       const m = /^radio-(off|a|b|c)$/.exec(name ?? '');
       if (m) RADIO.set(m[1] === 'off' ? 0 : 'abc'.indexOf(m[1]) + 1);
       CAT.set(name === 'cat-lit');
-      // `switchboard-plugged` puts both cords in the pair, silently: the board at work, for a still.
-      SWITCHBOARD.set(name === 'switchboard-plugged' ? SWITCHBOARD._pair : []);
       // `fuse-out` is the lever down with the one lamp that is not on the mains still burning;
       // `fuse-dark` is the same room with that lamp out. Every other name puts the mains back.
       FUSE.set(name === 'fuse-out' || name === 'fuse-dark', name !== 'fuse-dark');
@@ -1568,9 +1528,6 @@ export async function build(ctx) {
       rainState(RAIN, name);
       // `fine-burning` is the dozen flames alight; every other name is a room that is fine
       FINE.setState(name);
-      // `silvia-open` is the right frame swung open on the whole board — eighteen pinned sheets and
-      // every length of red string tied. Every other name is a picture on a wall nobody has touched.
-      SILVIA?.setState(name);
       // `peep-fallen` is the toad on the boards in front of the press; every other name has him
       // standing on the shelf, which is where a reload always puts him
       PEEP.setState(name);
@@ -1595,7 +1552,6 @@ export async function build(ctx) {
       SWITCHES.update();
       RADIO.update(ctx);
       CAT.update();
-      SWITCHBOARD.update();
       FUSE.update(ctx);
       VORTEX.update(ctx); // last: while it runs, the hands and the bob are its own
       WINE.update(ctx);
@@ -1603,7 +1559,6 @@ export async function build(ctx) {
       VASE?.update(ctx);
       RAIN?.update(ctx);
       FINE.update(ctx);
-      SILVIA?.update(ctx);
       PEEP.update(ctx);
       KONAMI.update(ctx);
       DECK_OUT.update(ctx);

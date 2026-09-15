@@ -1,6 +1,6 @@
 // PIECE: room — the parlour set itself: floorboards, three papered walls with wainscot, dado,
-// picture rail, frieze and cornice, a panelled door with a transom light stage right, one tall
-// shuttered window — on the stage-right wall — a
+// picture rail, frieze and cornice, a panelled door with a transom light stage right, two windows
+// — a tall shuttered one on the stage-right wall and a wide three-light one on the stage left — a
 // plain ceiling. Frontal, symmetrical, drawn with a pen: the geometry carries the
 // drawing (real slats, real panels, real mouldings — the ink pass draws lines where there are
 // edges), the textures carry only the PATTERN of what things are made of.
@@ -22,6 +22,13 @@
 // of solid ink at the bottom of that corner was the fault being pointed at. `buildRadiator` has
 // gone with it and Pepe no longer answers for one (mind-room.js). The room is heated by nothing,
 // which is a thing this building would do.
+//
+// AND THE STAGE-LEFT WALL HAS A WINDOW NOW. It carried a switchboard and a framed diagram, both
+// props' rather than the set's, and the user had the pair taken out: "then let's remove both of
+// these, they don't make sense anymore. add a wide window instead." So there is a wide one — the
+// same sill, head, reveal and joinery as the stage-right casement, three lights instead of two,
+// and no shutters, because a window that takes its whole wall leaves nowhere to fold one. It is
+// solved at the openings below under THE WIDE WINDOW ON THE STAGE-LEFT WALL.
 import * as THREE from 'three';
 import { inkMaterial } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
@@ -168,9 +175,38 @@ export async function build(ctx) {
   // −1.05, sill 1.04, head 2.45 — the bands below simply run through, because the hole is no longer
   // in `holes` and nothing else about that wall was ever special-cased for it.
   const door = { x0: 1.05, x1: 1.95, y0: 0, y1: 2.45, top: 2.12, depth: 0.1 };
-  // The room's window, on the stage-right wall; its u axis is world z (u = z). It carries the same
-  // joinery the back wall's did, which is why `buildWindow` is still here and still general.
+  // The stage-right window; its u axis is world z (u = z). It carries the same joinery the back
+  // wall's did, which is why `buildWindow` is still here and still general.
   const sideWin = { x0: -1.95, x1: -1.05, y0: 1.04, y1: 2.45, depth: 0.21 };
+  // ---- THE WIDE WINDOW ON THE STAGE-LEFT WALL ----------------------------------------------------
+  // The user, given a crop of that wall with a switchboard on it and a framed diagram beside it:
+  // "then let's remove both of these, they don't make sense anymore. add a wide window instead."
+  // So there is one, and it is THE SAME WINDOW THE ROOM ALREADY HAS, laid down longer: the same
+  // sill at 1.04, the same head at 2.45, the same 0.21 reveal, the same architrave, sill board,
+  // apron, brackets, frame ring and glazing bars. Two windows in one house are one window twice.
+  //
+  // WHERE ITS TWO ENDS ARE, and both of them are somebody else's edge (tools/_left-wall-where.mjs
+  // prints this wall and where every plate stops on it):
+  //   z -2.500  THE BACK CORNER, and the hard stop upstage. The side wall starts at the back wall's
+  //             own plane and there is nothing past it, so the widest thing on this window — the
+  //             SILL BOARD, which oversails the architrave by a + 45 mm = 135 — may not reach it.
+  //             At x0 -2.34 the sill ends at -2.475, 25 mm inside the angle.
+  //   z -0.860  where it stops, and what stops it is the CHIMNEY BREAST that comes onto this wall
+  //             downstage of it: the breast stands z -0.60 .. 0.50 and this window's cap moulding
+  //             ends at -0.75, so there is 150 mm of plaster between the two.
+  //   1.48 m    what is left in the clear, which is a wide window: the stage-right one is 0.90, and
+  //             this one is 1.48 wide against its own 1.41 high — the first opening in this room
+  //             that is broader than it is tall. It is 62 % of the 2.372 m of this wall a 1280x800
+  //             `home` plate sees at all (that plate's left edge crosses this plane at z -0.128; a
+  //             1600x900 reaches 0.524) and the chimney breast has the rest of it.
+  //   3 lights  0.4547 m each in the clear. Two leaves at this width are 0.74 m apiece, which is a
+  //             French door and not a casement; three are the proportion the stage-right pair has.
+  //   NO SHUTTERS, and the reason is measured. A louvred leaf is 0.46 wide and folds onto the
+  //             plaster OUTSIDE the architrave. There is 70 mm of wall upstage of this architrave
+  //             and 150 downstage before the breast: there is nowhere for either leaf to go. The
+  //             stage-right window keeps its pair; this one has none, which is also why Pepe
+  //             answers for the two of them differently (mind-room.js).
+  const sideWinL = { x0: -2.34, x1: -0.86, y0: 1.04, y1: 2.45, depth: 0.21 };
   // Downstage on each side wall, level with the visitor's shoulder, a second door: the way in from
   // the landing (stage right) and the door of a press (stage left). They sit in the stretch of side
   // wall that only the long door/window/track shots see — in those the lens is a metre from the
@@ -218,7 +254,7 @@ export async function build(ctx) {
     // back wall: u = x, plane at z = zb facing +z
     { u0: -hx, u1: hx, holes: [door], bands: backBands, ghost: GHOST, place: (u, y, w, h, m, out = 0) => P.plane(w, h, u, y, zb + out, m, { receive: true }) },
     // stage-left wall: u = z, plane at x = -hx facing +x
-    { u0: zb, u1: uEnd, holes: [sideDoorL], bands: sideBands, place: (u, y, w, h, m) => P.plane(w, h, -hx, y, u, m, { ry: Math.PI / 2, receive: true }) },
+    { u0: zb, u1: uEnd, holes: [sideWinL, sideDoorL], bands: sideBands, place: (u, y, w, h, m) => P.plane(w, h, -hx, y, u, m, { ry: Math.PI / 2, receive: true }) },
     // stage-right wall: u = z, plane at x = +hx facing -x
     { u0: zb, u1: uEnd, holes: [sideWin, sideDoorR], bands: sideBands, place: (u, y, w, h, m) => P.plane(w, h, hx, y, u, m, { ry: -Math.PI / 2, receive: true }) },
   ];
@@ -268,7 +304,7 @@ export async function build(ctx) {
   }
 
   // ---- what the PTT left on the side walls ----
-  buildDuct(P, M, { hx, zb, uEnd, sideWin });
+  buildDuct(P, M, { hx, zb, uEnd, sideWin, sideWinL });
   buildTerminalBox(P, M, hx, 0.12);
 
   // ---- the openings ----
@@ -291,22 +327,40 @@ export async function build(ctx) {
     buildSideDoor(P, M, sideDoorR, zb, { knob: 1 });
     buildSwitch(P, M, sideDoorR.x0 - 0.1 - 0.17, 1.22, zb); // the switch by the way in
   });
-  P.withFrame(leftFrame, () => buildSideDoor(P, M, { ...sideDoorL, x0: -sideDoorL.x1, x1: -sideDoorL.x0 }, zb, { knob: -1, press: true }));
+  P.withFrame(leftFrame, () => {
+    // the left frame maps local x to world -z, so a u range on this wall is negated to be built
+    // (the press door has done this for as long as there has been one)
+    buildWindow(P, M, { ...sideWinL, x0: -sideWinL.x1, x1: -sideWinL.x0 }, zb, jit, { shutters: false, lights: 3 });
+    buildSideDoor(P, M, { ...sideDoorL, x0: -sideDoorL.x1, x1: -sideDoorL.x0 }, zb, { knob: -1, press: true });
+  });
 
   P.build(g, 'room');
   ctx.scene.add(g);
-  // `window` is NOT published any more and the absence is the point: there is no window on the back
-  // wall to be asked about, and a piece that wants the room's one window asks for `sideWindow` and
-  // gets a rectangle in the stage-right wall's own plane (u = world z). Anything that still reads
-  // `room.window` gets undefined and falls to its own fallback, which would put a drawing back on
-  // plaster — so the readers were changed rather than left to fall: lighting.js, props.js,
-  // egg-rain.js, egg-cross.js.
-  return { group: g, sideWindow: sideWin, door, bands: BAND, setState() {} };
+  // TWO WINDOWS, EACH IN ITS OWN WALL'S PLANE (u = world z, in both cases). `sideWindow` is the
+  // tall shuttered casement on the stage-right wall and `leftWindow` the wide three-light one on
+  // the stage left. `window` is NOT published and the absence is the point: there is no window on
+  // the BACK wall to be asked about. Anything that still reads `room.window` gets undefined and
+  // falls to its own fallback, which would put a drawing back on plaster — so the readers were
+  // changed rather than left to fall: lighting.js, props.js, egg-rain.js, egg-cross.js.
+  return { group: g, sideWindow: sideWin, leftWindow: sideWinL, door, bands: BAND, setState() {} };
 }
 
-// A tall casement window in a reveal, an architrave, a sill, and two louvred shutters folded
-// back flat against the wall on either side (their slats are real: thin angled boxes).
-function buildWindow(P, M, w, zb, jit = Math.random, { leadIn = false } = {}) {
+// A casement window in a reveal, an architrave, a sill, and (if there is wall for them) two louvred
+// shutters folded back flat against it on either side — their slats are real: thin angled boxes.
+//
+// `lights` is HOW MANY LEAVES the casement is divided into and it is the only thing that is not the
+// same for the room's two windows. At two it is exactly the drawing this function has always made:
+// a pair meeting in the middle, 8 mm between their meeting stiles. At three — which is what the
+// wide one on the stage-left wall asks for — it is the same leaf, the same stiles, the same glazing
+// bar a third of the way down, laid three times across the opening, and the fastening goes on the
+// MIDDLE meeting rather than the only one. The arithmetic is written so that `lights: 2` comes out
+// at the same numbers to the millimetre: a leaf is (clear - 0.008 * (lights - 1)) / lights and the
+// first one starts at x0 + f, which for two puts the meeting at (x0 + x1) / 2 ± 0.004 as before.
+//
+// `shutters` is whether there is anywhere to fold a leaf. See sideWinL, above: a window that takes
+// the whole of its wall has no plaster either side of the architrave, and a louvred leaf nailed to
+// nothing is worse than no shutter at all.
+function buildWindow(P, M, w, zb, jit = Math.random, { leadIn = false, shutters = true, lights = 2 } = {}) {
   const { x0, x1, y0, y1, depth } = w;
   const zr = zb - depth; // the back of the reveal
   // reveal faces (jambs, head, sill-bed): they carry tone, like the door reveal in the film
@@ -345,15 +399,17 @@ function buildWindow(P, M, w, zb, jit = Math.random, { leadIn = false } = {}) {
   P.boxFrom(x1 - f, x1, y0, y1, zf0, zf1, M.trim);
   P.boxFrom(x0, x1, y1 - f, y1, zf0, zf1, M.trim);
   P.boxFrom(x0, x1, y0, y0 + f, zf0, zf1, M.trim);
-  const xm = (x0 + x1) / 2;
-  // leaves: two casements meeting in the middle (no mullion — the film's windows are a pair of
-  // plain leaves whose meeting stiles make one double line)
+  // leaves: casements meeting stile to stile (no mullion — the film's windows are plain leaves
+  // whose meeting stiles make one double line). Two of them, or three on the wide window.
   const zl0 = zf0 + 0.008, zl1 = zf1 - 0.008;
   const s = 0.042, rt = 0.05, rb = 0.075;
-  const leaves = [
-    [x0 + f, xm - 0.004],
-    [xm + 0.004, x1 - f],
-  ];
+  const gap = 0.008; // between one leaf's shutting stile and the next one's
+  const leafW = (x1 - f - (x0 + f) - gap * (lights - 1)) / lights;
+  const leaves = [];
+  for (let i = 0; i < lights; i++) {
+    const lx0 = x0 + f + i * (leafW + gap);
+    leaves.push([lx0, lx0 + leafW]);
+  }
   for (const [lx0, lx1] of leaves) {
     P.boxFrom(lx0, lx0 + s, y0 + f, y1 - f, zl0, zl1, M.trim);
     P.boxFrom(lx1 - s, lx1, y0 + f, y1 - f, zl0, zl1, M.trim);
@@ -376,8 +432,11 @@ function buildWindow(P, M, w, zb, jit = Math.random, { leadIn = false } = {}) {
   // leaf's stile, a keeper on the left leaf that it shuts against, a rose and a lever that hangs
   // down at an angle. (It was a rod, two blocks and a long bar, and at the wide shot the whole
   // middle of the window went to one ragged black smear.)
+  // …on the MIDDLE meeting: leaves[mid - 1] shuts against leaves[mid]. At two lights that is the
+  // only meeting there is and the numbers are what they always were.
+  const mid = Math.max(1, Math.round(lights / 2));
   {
-    const [lx0] = leaves[1];
+    const [lx0] = leaves[mid];
     const rx = lx0 + s / 2, rz = zl1 + 0.008;
     const ly = (y0 + y1) / 2 - 0.04;
     P.box(0.024, 0.19, 0.005, rx, ly + 0.02, rz, M.metal, { cast: true });
@@ -385,13 +444,13 @@ function buildWindow(P, M, w, zb, jit = Math.random, { leadIn = false } = {}) {
     P.cylinder(0.017, 0.017, 0.007, rx, ly, rz + 0.005, M.metal, { rx: Math.PI / 2, segments: 12, cast: true });
     P.box(0.014, 0.085, 0.011, rx + 0.016, ly - 0.05, rz + 0.014, M.metal, { rz: -0.3, cast: true });
     P.sphere(0.012, rx + 0.03, ly - 0.09, rz + 0.014, M.metal, { cast: true });
-    // the keeper the lever drops into, on the left leaf
-    const [, klx1] = leaves[0];
+    // the keeper the lever drops into, on the leaf it shuts against
+    const [, klx1] = leaves[mid - 1];
     P.box(0.018, 0.026, 0.014, klx1 - s / 2, ly, zl1 + 0.006, M.metal, { cast: true });
   }
-  // a casement stay on the left leaf: a perforated bar on a pivot
+  // a casement stay on that same leaf: a perforated bar on a pivot
   {
-    const [, lx1] = leaves[0];
+    const [, lx1] = leaves[mid - 1];
     const sx = lx1 - s / 2, sy = (y0 + y1) / 2 - 0.12;
     P.cylinder(0.011, 0.011, 0.005, sx, sy, zl1 + 0.004, M.metal, { rx: Math.PI / 2, segments: 10 });
     P.box(0.012, 0.16, 0.006, sx - 0.01, sy - 0.08, zl1 + 0.008, M.metal, { rz: 0.12, cast: true });
@@ -427,13 +486,14 @@ function buildWindow(P, M, w, zb, jit = Math.random, { leadIn = false } = {}) {
     }
   }
 
-  // shutters: two leaves folded flat against the wall outside the architrave
-  const leafW = 0.46, t = 0.036;
-  for (const side of [-1, 1]) {
-    const hingeX = side < 0 ? x0 - a : x1 + a; // the edge nearest the window
-    const lx0 = side < 0 ? hingeX - leafW : hingeX;
-    const lx1 = lx0 + leafW;
-    buildShutterLeaf(P, M, lx0, lx1, y0, y1, zb, zb + t, side, jit);
+  // shutters: two leaves folded flat against the wall outside the architrave, where there is wall
+  if (shutters) {
+    const sw = 0.46, t = 0.036;
+    for (const side of [-1, 1]) {
+      const hingeX = side < 0 ? x0 - a : x1 + a; // the edge nearest the window
+      const lx0 = side < 0 ? hingeX - sw : hingeX;
+      buildShutterLeaf(P, M, lx0, lx0 + sw, y0, y1, zb, zb + t, side, jit);
+    }
   }
 }
 
@@ -498,16 +558,24 @@ function buildShutterLeaf(P, M, x0, x1, y0, y1, z0, z1, side, jit = Math.random)
 // over two metres of it and stand 56 mm proud, and a duct does not pass through a shutter — so the
 // trough is stopped and capped, which is what happens to a duct in a building that had windows in
 // it before it had cables.
-function buildDuct(P, M, { hx, zb, uEnd, sideWin }) {
+//
+// AND THE STAGE-LEFT RUN NOW STOPS AT THE WIDE WINDOW, for the same reason read off a different
+// piece of joinery. That window has no shutters, but its architrave stands 39 mm proud from y 1.02
+// to 2.54 and the trough hangs at 2.30: the two occupy the same wall and the same height, and the
+// architrave was there first. So the left-hand run starts downstage of that architrave's cap
+// (z -0.84) and is capped there, exactly as the right-hand one is capped at its shutter.
+function buildDuct(P, M, { hx, zb, uEnd, sideWin, sideWinL }) {
   const { y: yb, h, d, cleat } = DUCT;
   const yt = yb + h;
   const shutter = sideWin.x1 + 0.09 + 0.46 + 0.02; // the downstage edge of the folded leaf
+  // …and on the left, the downstage edge of the wide window's cap moulding (architrave 0.09 + 0.02)
+  const capL = sideWinL.x1 + 0.11;
   for (const side of [-1, 1]) {
     const x0 = side < 0 ? -hx : hx - d; // the wall face
     const x1 = side < 0 ? -hx + d : hx; // ...and the front of the trough
     const front = side < 0 ? x1 : x0; // the face that looks into the room
     const out = side < 0 ? 1 : -1; // which way is "proud"
-    const runs = side < 0 ? [[zb, uEnd]] : [[shutter, uEnd]];
+    const runs = side < 0 ? [[capL, uEnd]] : [[shutter, uEnd]];
     for (const [z0, z1] of runs) {
       if (z1 - z0 < 0.05) continue;
       // no cast: it is a nine-metre bar a hand's breadth off the wall, and the practicals would

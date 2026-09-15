@@ -27,6 +27,27 @@
 // (The back wall's window was already off a phone's frame. The rain has been a laptop-only egg for
 // as long as there has been a phone plate; this change finished it rather than started it.)
 //
+// AND THE WIDE WINDOW WAS MEASURED TOO, WHEN IT WENT IN. The user had the switchboard and the
+// framed diagram taken off the stage-left wall and a wide window put there instead (room.js,
+// `sideWinL`: 1.48 m in the clear, three lights, sill 1.04, head 2.45), which is a bigger opening
+// than the back wall's ever was and the obvious second chance for this drawing. It fails on the
+// same number, and not by much less:
+//     plate                 the window   a light   px per metre ACROSS the wall   a 0.0115 m stroke
+//     1280x800  home         97 px        26.5 px    66                            0.76 px
+//     1600x900  home        110 px        29.9 px    74                            0.85 px
+//     1280x800  wide         78 px        21.4 px    53                            0.61 px
+// The pen keeps a mark at about 2.1 px and throws anything under it away, so the stroke this window
+// would need is 32 mm at the home plate and 40 at the wide. That is WIDER THAN THE JOINERY IT FALLS
+// IN FRONT OF — the glazing bar is 26 mm and a leaf's meeting stile 42 — and rain drawn at the width
+// of a window bar is not rain, it is more bars. The back wall's window ran 158 px to the metre and
+// its 0.0115 m stroke arrived at 2.08 px on its own: that window was drawn square to the lens and
+// this one is on a wall seen at 67 degrees, and that is the whole of the difference. egg-silvia.js
+// widened its pen on this same plaster and was right to — a card and its lettering may be any size
+// the wall wants — but a raindrop may not: its width is the thing it is.
+// The second reason is unchanged and on its own sufficient: at 390x844 this wall is off the frame
+// at both resting plates (tools/_left-wall-where.mjs), so the click that starts the rain cannot be
+// reached by a thumb here either. The drawing stays retired.
+//
 // SO WHAT IS LEFT IS THE WEATHER WITHOUT THE PICTURE OF IT, and it is not nothing:
 //   THE ROOM GOES OVER. A `rain` state is injected into lighting.js's own table (it publishes
 //     `states`, so this costs that file nothing): the key dropped and cooled to an overcast sky, the

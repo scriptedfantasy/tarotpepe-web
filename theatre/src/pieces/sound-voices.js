@@ -77,8 +77,12 @@ export const LEVEL = {
   hinge: 0.058,
   knock: 0.122,
   footfall: 0.05,
-  // THE SWITCHBOARD ON THE LEFT-HAND WALL (egg-switchboard.js). Three voices, in the order the
-  // visitor meets them and at three different distances from being an event:
+  // THREE VOICES NOTHING FIRES ANY MORE. They were the switchboard's on the left-hand wall, and
+  // that board came off the plaster when the wide window went in — there is no egg-switchboard.js
+  // now and no jack to plug. The voices are kept, drawn and levelled, because they are three good
+  // pieces of brass and glass in a room that is an old exchange and because the probe still walks
+  // them (tools/_sound-probe.mjs); nothing in the set calls them. They are listed here in the
+  // order the visitor used to meet them and at three different distances from being an event:
   //   plug      a jack sleeve going home. The same manners as the cat's switch — under the
   //             escapement, over the room tone, gone before anyone can consider it.
   //   dialtone  the exchange's own 440, one second of it, and it is not heard in the ROOM: it
@@ -151,8 +155,8 @@ export const TRIM = {
   hinge: 29.544,
   knock: 1.569,
   footfall: 1.599,
-  // measured with tools/_egg-switchboard-proof.mjs --sound, which renders these three through the
-  // same OfflineAudioContext tools/_sound-probe.mjs uses and prints the trims back
+  // measured through the same OfflineAudioContext tools/_sound-probe.mjs uses, back when the
+  // switchboard fired them; nothing fires them now (see LEVEL above)
   plug: 2.318,
   dialtone: 0.784,
   bell: 0.523,
@@ -229,7 +233,7 @@ export const LENGTH = {
   footfall: 0.17,
   plug: 0.07,
   // one second, and it is the user's own number: "the exchange's dial tone hums through the
-  // radio's speaker for a second". egg-switchboard.js reads it back as DIAL_S.
+  // radio's speaker for a second". The board that read it back is gone.
   dialtone: 1.0,
   // two seconds, and it is one ring and not a ringing telephone: a French bell rings for about
   // that and then there is a pause of four, and the pause is where he picks up.
@@ -813,7 +817,7 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.type;
     }
 
-    // ---- the switchboard on the left-hand wall (egg-switchboard.js) ----------------------------
+    // ---- the three the switchboard used to fire, kept and called by nothing (see LEVEL) -------
 
     // A PLUG GOING HOME. A brass sleeve into a brass jack: one short scrape as the shank goes in,
     // and then the click of the springs closing behind it 25 ms later. Brighter than the cat's

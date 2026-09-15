@@ -343,9 +343,9 @@ export async function build(ctx) {
   night.visible = false;
   g.add(night);
   let nightBuilt = false;
-  function buildNight(sideWin) {
+  function buildNight(sideWin, leftWin) {
     const mat = inkMaterial({ hatch: 1, lineWeight: 0.8 });
-    const paneGroup = (w) => {
+    const paneGroup = (w, lights = 2) => {
       const grp = new THREE.Group();
       const { x0, x1, y0, y1, depth } = w;
       const zr = zb - depth;
@@ -353,8 +353,17 @@ export async function build(ctx) {
       const zl0 = zf0 + 0.008, zl1 = zf1 - 0.008;
       const z = (zl0 + zl1) / 2 + 0.004; // just in front of the glass, behind the glazing bars
       const f = 0.05, s = 0.042, rt = 0.05, rb = 0.075, margin = 0.025;
-      const xm = (x0 + x1) / 2;
-      for (const [lx0, lx1] of [[x0 + f, xm - 0.03], [xm + 0.03, x1 - f]]) {
+      // the same division room.js's own casement makes, read back here: a leaf is
+      // (clear - 0.008 * (lights - 1)) / lights, and the sheet is set 22 mm inside each meeting so
+      // the stiles and the bar are still drawn over it
+      const gap = 0.008;
+      const lw = (x1 - f - (x0 + f) - gap * (lights - 1)) / lights;
+      const bays = [];
+      for (let i = 0; i < lights; i++) {
+        const a0 = x0 + f + i * (lw + gap);
+        bays.push([a0 - (i > 0 ? 0.026 : 0), a0 + lw + (i < lights - 1 ? 0.026 : 0)]);
+      }
+      for (const [lx0, lx1] of bays) {
         const px0 = lx0 + s - margin, px1 = lx1 - s + margin;
         const py0 = y0 + f + rb - margin, py1 = y1 - f - rt + margin;
         const m = new THREE.Mesh(new THREE.PlaneGeometry(px1 - px0, py1 - py0), mat);
@@ -363,13 +372,22 @@ export async function build(ctx) {
       }
       return grp;
     };
-    // ONE window, on the stage-right wall. There were two of these — the back wall's casement got a
-    // pane group in its own plane and this one got the same group turned a quarter turn — and the
-    // back wall's window has been taken out of the room, so the turned one is all there is.
-    const side = paneGroup(sideWin);
+    // TWO WINDOWS, one in each side wall, and each pane group is the same drawing turned a quarter
+    // turn onto its own plaster — the arrangement the back wall's casement used to get in its own
+    // plane. The stage-right one is a pair of lights and the stage-left one is three; both are
+    // read off `lights`, so if room.js ever divides a casement differently the hatching follows it.
+    const side = paneGroup(sideWin, 2);
     side.rotation.y = -Math.PI / 2;
     side.position.x = hx - Math.abs(zb);
     night.add(side);
+    if (leftWin) {
+      // the left frame: local +z to world +x, local x to world -z, so the rectangle is negated the
+      // way room.js negates it to build the window itself
+      const left = paneGroup({ ...leftWin, x0: -leftWin.x1, x1: -leftWin.x0 }, 3);
+      left.rotation.y = Math.PI / 2;
+      left.position.x = -hx - zb;
+      night.add(left);
+    }
     nightBuilt = true;
   }
 
@@ -436,7 +454,7 @@ export async function build(ctx) {
     }
     if (!nightBuilt && ctx.pieces.room !== undefined) {
       const r = ctx.pieces.room;
-      buildNight(r.sideWindow ?? WIN_FALLBACK);
+      buildNight(r.sideWindow ?? WIN_FALLBACK, r.leftWindow ?? null);
     }
     if (!inkDefaults && ctx.pieces.ink?.params?.tone) applyInk(STATES[current].ink);
   }

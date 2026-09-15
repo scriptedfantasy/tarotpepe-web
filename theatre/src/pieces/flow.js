@@ -180,19 +180,7 @@ export async function build(ctx) {
     if (el && el.value) heldText = el.value;
     askAbort?.abort();
   }
-  let rang = false; // the board on the wall rang and he has picked up: one turn owed
   const alive = (token) => token === run;
-
-  // THE PHONE ON THE LEFT-HAND WALL (props.switchboard / egg-switchboard.js). The visitor found
-  // the two jacks that make a circuit, the bell rang, and the board says so. It is handled exactly
-  // as a finger on a card lying on the table is: the open field is cut short, the digression is
-  // played, and the field opens again under whatever he was left holding. It is not a silence —
-  // the quiet counter does not move and no waiting line is spent on it.
-  ctx.on?.('props:switchboard', ({ rang: r } = {}) => {
-    if (!r) return;
-    rang = true;
-    cutField();
-  });
 
   // ---- AN OBJECT IN THE ROOM ASKS HIM TO SPEAK -------------------------------------------------
   // The globe on the cabinet (src/pieces/egg-globe.js) is the only thing in the evening that starts
@@ -291,28 +279,6 @@ export async function build(ctx) {
     if (!D?.asking || picking || READING.has(api.beat)) return;
     atTheDoor = true;
     cutField();
-  });
-
-  // ---- THE WALL TO HIS LEFT IS A CONSPIRACY BOARD ------------------------------------------------
-  // The visitor opens the picture frame on the stage-left wall (src/pieces/egg-silvia.js), it swings
-  // like a cabinet door, and over the next seven seconds eighteen pinned cards and photographs go up
-  // that wall and are joined with red string. When the last length is tied the room says so, once,
-  // and he is asked what he has found.
-  //
-  // IT IS THE GLOBE'S SHAPE, with three subtractions, and each of them is the joke:
-  //   NO react(). The wall is BEHIND him and he does not turn round. A man who has built that board
-  //     over some weeks does not need to look at it to describe it.
-  //   NO cut. The camera has not noticed either.
-  //   NO SCRIPT. Keyless there is no line and there is not going to be one: a canned paragraph about
-  //     Pepe Silvia, the same one every evening, is exactly the thing the user cut out of the
-  //     shuffle. With no live voice the wall simply goes up in silence, which is funnier.
-  // And the fire's guard, for the fire's reason: never over a reading, and only into the visitor's
-  // own open field — the placard they are answering must not be cut out from under them.
-  ctx.on?.('props:silvia', ({ open } = {}) => {
-    if (!open || roomSays || !M?.available || !M?.reply) return;
-    if (!D?.asking || picking || READING.has(api.beat)) return;
-    roomSays = { beat: 'silvia' };
-    cutField(); // the visitor's turn gives way; nothing they typed is sent, and none of it is lost
   });
 
   // ---- THE VISITOR HAS PICKED UP A CARD, AND HE TEACHES IT ---------------------------------------
@@ -899,23 +865,6 @@ export async function build(ctx) {
       const said = await D.ask(prompt, { timeout: patient ? 0 : IDLE_S, hold: 0.35, signal: ac.signal, ...(back ? { value: back } : {}) });
       askAbort = null;
       if (!alive(token)) return { spoke: false };
-      // The board on the wall rang. He answers it WITHOUT MOVING — there is nothing on that wall
-      // for him to reach and he never leaves the bench; the reaction is his face and the line is
-      // his mouth, and the room does the rest. The beat is `phone` (server/pepe.mjs) and it has no
-      // scripted twin on purpose: with no live voice `mind.reply` yields nothing, the placard
-      // never comes up, and the bell was the whole event. `speak()` is deliberately not used —
-      // its fallback would read a greeting out of script.js into an answered telephone.
-      if (rang) {
-        rang = false;
-        api.beat = 'phone';
-        // (the look on his face belongs to the board, which fires react() on the ring itself, so
-        // that it happens in a judging view as well, where nothing is listening for this event)
-        const r = await render(M?.reply ? M.reply({ beat: 'phone' }) : null, { hold: 1.3, keepLast: true, each: closer });
-        if (!alive(token)) return { spoke: false };
-        frame = 'home';
-        prompt = r.held ?? prompt;
-        continue;
-      }
       // A CARD IS UP ON THE PAPER and he is teaching it. The visitor tapped one of the seventy-eight
       // on the cloth, or one of the three lying face up, and the ? card's third face has it (see
       // THE VISITOR HAS PICKED UP A CARD). The lesson is played here, on the placard under the
@@ -938,8 +887,8 @@ export async function build(ctx) {
         prompt = back ?? prompt;
         continue;
       }
-      // The globe came to rest while the field was open — or the deck went out, or the wall behind
-      // him finished going up (`silvia`). His line goes up on the placard and the
+      // The globe came to rest while the field was open, or the deck went out. His line goes up
+      // on the placard and the
       // field opens again under it, exactly as a talk turn ends — so it is a digression and not a
       // silence: the quiet counter does not move and no waiting line is spent on it. There is no
       // script behind this one, so `render` is asked directly and a dead call leaves the room as
