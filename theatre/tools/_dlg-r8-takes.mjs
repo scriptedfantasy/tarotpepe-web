@@ -1,7 +1,16 @@
 #!/usr/bin/env node
 // A long line is still cut into takes inside the standing card, and the LAST take is the one that
 // holds — for as long as it takes, with nothing coming to clear it.
+//
+// ROUND 14 PUT A HAND IN IT. This used to `await` the line with nobody touching anything, because
+// the takes turned themselves; a take that fills the card does not turn itself any more (the user:
+// "make sure the text never auto switches to the next chatbox when its full. display an arrow, the
+// user has to click to switch a full chatbox"), so the wait below turns each take when the mark
+// comes up, the way the visitor does. What the tool proves is unchanged: the line is cut into
+// takes, the LAST one holds, and four seconds of nothing does not clear it.
+//   BASE=http://127.0.0.1:8740 node tools/_dlg-r8-takes.mjs
 import { chromium } from 'playwright';
+const BASE = process.env.BASE ?? 'http://127.0.0.1:5173';
 const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
 const errs = [];
@@ -9,7 +18,7 @@ page.on('pageerror', (e) => errs.push(String(e)));
 await page.route('**/@vite/client', (r) =>
   r.fulfill({ contentType: 'application/javascript', body: `export function createHotContext(){return{accept(){},acceptExports(){},dispose(){},prune(){},decline(){},invalidate(){},on(){},off(){},send(){},data:{}};} export function updateStyle(){} export function removeStyle(){} export function injectQuery(u){return u;} export class ErrorOverlay{}` }),
 );
-await page.goto('http://127.0.0.1:5173/?view=dialogue&state=greeting', { waitUntil: 'load', timeout: 180000 });
+await page.goto(`${BASE}/?view=dialogue&state=greeting`, { waitUntil: 'load', timeout: 180000 });
 for (let i = 0; i < 400; i++) {
   if (await page.evaluate(() => window.__theatreReady === true).catch(() => false)) break;
   await page.waitForTimeout(200);
@@ -29,7 +38,15 @@ const out = await page.evaluate(async () => {
     const w = well();
     if (!seen.length || seen[seen.length - 1].text !== w) seen.push({ at: Math.round(performance.now() - t0), text: w });
   }, 60);
-  await said;
+  // THE VISITOR TURNS THE GATE. A take that filled the card waits for a hand (round 14), so the
+  // wait is a hand: every time the mark is up, one gesture, exactly as a person makes it. A take
+  // that left a line of paper still turns on its own and nothing here touches it.
+  let done = false;
+  said.then(() => (done = true));
+  for (let i = 0; i < 1200 && !done; i++) {
+    await sleep(50);
+    if (!cap().querySelector('.next')?.hidden) D.skip();
+  }
   const resolvedAt = Math.round(performance.now() - t0);
   await sleep(4000); // four seconds of nothing at all following it
   clearInterval(poll);

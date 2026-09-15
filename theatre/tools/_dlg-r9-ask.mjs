@@ -3,7 +3,15 @@
 // too long for the well must NOT open the field under take one of three. Watched frame by frame:
 // the field may appear only after the last take of the prompt is up, and the arrow may never be up
 // at the same time as the field (or as the caret, or as the microphone, which stands only with it).
+//
+// ROUND 14 MADE THE CONTRACT ABSOLUTE AND GAVE IT A HAND TO KEEP. "Nobody clicks: the fallback
+// carries it" is how this used to reach the field — and there is no fallback under a full card any
+// more (the user: "the user has to click to switch a full chatbox"), so the watch below turns each
+// take when the mark comes up, as the visitor does, and the field is expected only after the last
+// of them. Everything it counts is unchanged, and `fieldUnderATakeStillWaiting` must still be 0.
+//   BASE=http://127.0.0.1:8740 node tools/_dlg-r9-ask.mjs
 import { chromium } from 'playwright';
+const BASE = process.env.BASE ?? 'http://127.0.0.1:5173';
 const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errs = [];
@@ -11,7 +19,7 @@ page.on('pageerror', (e) => errs.push(String(e)));
 await page.route('**/@vite/client', (r) =>
   r.fulfill({ contentType: 'application/javascript', body: `export function createHotContext(){return{accept(){},acceptExports(){},dispose(){},prune(){},decline(){},invalidate(){},on(){},off(){},send(){},data:{}};} export function updateStyle(){} export function removeStyle(){} export function injectQuery(u){return u;} export class ErrorOverlay{}` }),
 );
-await page.goto('http://127.0.0.1:5173/?view=dialogue&state=greeting', { waitUntil: 'load', timeout: 180000 });
+await page.goto(`${BASE}/?view=dialogue&state=greeting`, { waitUntil: 'load', timeout: 180000 });
 for (let i = 0; i < 500; i++) {
   if (await page.evaluate(() => window.__theatreReady === true).catch(() => false)) break;
   await page.waitForTimeout(200);
@@ -28,7 +36,10 @@ const out = await page.evaluate(async () => {
   const frames = [];
   let takes = 0, last = '';
   let clash = 0, fieldUnderTake = 0;
-  for (let i = 0; i < 400; i++) {
+  // A watch bounded by the CLOCK and not by a count of turns round the loop: a headless frame of
+  // this room takes what it takes, and forty ticks of 100 ms are not forty seconds on a swiftshader.
+  const until = performance.now() + 60000;
+  while (performance.now() < until) {
     const well = (cap.querySelector('.well')?.textContent ?? '').replace(/\s+/g, ' ').trim();
     const field = !!cap.querySelector('input.keys');
     const arrow = !!cap.querySelector('.next') && !cap.querySelector('.next').hidden;
@@ -49,7 +60,9 @@ const out = await page.evaluate(async () => {
       if (moreComing) fieldUnderTake++;
     }
     if (field) break;
-    // nobody clicks: the fallback carries it
+    // THE VISITOR TURNS THE TAKE. One gesture per mark, and never while the field is open: this is
+    // the only thing that carries a full prompt through to its last take (round 14).
+    if (arrow) D.skip();
     await new Promise((r) => setTimeout(r, 100));
   }
   const openedAt = Math.round(performance.now() - t0);
@@ -64,7 +77,7 @@ const out = await page.evaluate(async () => {
     fieldUnderATakeStillWaiting: fieldUnderTake,
   };
 });
-console.log('the prompt, take by take, with nobody clicking:');
+console.log('the prompt, take by take, the visitor turning each mark as it comes up:');
 for (const f of out.frames) console.log(`   ${String(f.at).padStart(6)} ms  take ${f.take}  field:${f.field}  “${f.well}…”`);
 console.log('the field opened at', out.openedAt, 'ms, on the LAST take:', out.fieldOpenedOnTheLastTake);
 console.log('the field ever opened under a take still waiting:', out.fieldUnderATakeStillWaiting, '(must be 0)');

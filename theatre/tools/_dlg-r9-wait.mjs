@@ -1,8 +1,23 @@
 #!/usr/bin/env node
-// A VISITOR WHO NEVER CLICKS MUST NOT HANG THE EVENING. Say a line in three takes and touch
-// nothing: every take must take itself off after TAKE_WAIT, say() must resolve, and the arrow must
-// not be up on the last take, where there is nothing to go on to.
+// A VISITOR WHO NEVER CLICKS. Say a line in three takes and touch nothing, and watch what the card
+// does with nobody in front of it.
+//
+// ROUND 9 WROTE THIS TO PROVE THE OPPOSITE OF WHAT IT NOW PROVES, and the line is kept rather than
+// deleted because the reversal is the point. It used to read: every take must take itself off after
+// TAKE_WAIT, say() must resolve, and the arrow must not be up on the last take. Round 14 is the
+// user's instruction — "make sure the text never auto switches to the next chatbox when its full.
+// display an arrow, the user has to click to switch a full chatbox" — so a take that FILLED the
+// card stands there all night. What this tool watches for now:
+//
+//   · the card does not turn: one take, from the first mark to the last;
+//   · say() does not resolve, so nothing behind it moves either;
+//   · the arrow IS up, on a full take whether or not it is the last of its line.
+//
+// A take that ends short of the fourth line is the one case TAKE_WAIT is kept for, and it is proved
+// in tools/_dlg-r14-turn.mjs along with everything the visitor's hand does.
+//   BASE=http://127.0.0.1:8740 node tools/_dlg-r9-wait.mjs
 import { chromium } from 'playwright';
+const BASE = process.env.BASE ?? 'http://127.0.0.1:5173';
 const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errs = [];
@@ -10,7 +25,7 @@ page.on('pageerror', (e) => errs.push(String(e)));
 await page.route('**/@vite/client', (r) =>
   r.fulfill({ contentType: 'application/javascript', body: `export function createHotContext(){return{accept(){},acceptExports(){},dispose(){},prune(){},decline(){},invalidate(){},on(){},off(){},send(){},data:{}};} export function updateStyle(){} export function removeStyle(){} export function injectQuery(u){return u;} export class ErrorOverlay{}` }),
 );
-await page.goto('http://127.0.0.1:5173/?view=dialogue&state=greeting', { waitUntil: 'load', timeout: 180000 });
+await page.goto(`${BASE}/?view=dialogue&state=greeting`, { waitUntil: 'load', timeout: 180000 });
 for (let i = 0; i < 500; i++) {
   if (await page.evaluate(() => window.__theatreReady === true).catch(() => false)) break;
   await page.waitForTimeout(200);
@@ -27,7 +42,12 @@ const out = await page.evaluate(async () => {
   const marks = [];
   let last = null;
   const arrow = () => !cap.querySelector('.next')?.hidden;
-  for (let i = 0; i < 400; i++) {
+  // WATCHED BY THE CLOCK, for three times the stopwatch this round took away. TAKE_WAIT is 6 s and
+  // the hold at the end of a line is about 1.2, so twenty seconds of an untouched card is the old
+  // build turning it three times over. (It was a count of 400 turns round the loop; a headless
+  // frame of this room is slow enough that the count was worth minutes, not forty seconds.)
+  const until = performance.now() + 20000;
+  while (performance.now() < until) {
     const t = (cap.querySelector('.well')?.textContent ?? '').replace(/\s+/g, ' ').trim();
     if (t !== last) {
       marks.push({ at: Math.round(performance.now() - t0), take: t.slice(0, 34) });
@@ -43,8 +63,11 @@ const out = await page.evaluate(async () => {
 console.log('takes, unattended:');
 for (const m of out.marks) console.log(`   ${String(m.at).padStart(6)} ms  “${m.take}…”`);
 const gaps = out.marks.slice(1).map((m, i) => m.at - out.marks[i].at);
-console.log('gaps between takes (ms):', gaps.join(' '));
-console.log('say() resolved at', out.resolved, 'ms with nobody touching anything');
-console.log('the arrow on the LAST take:', out.arrowAtEnd, '(must be false)');
+console.log('gaps between takes (ms):', gaps.join(' ') || '(none: the card never turned)');
+console.log('say() resolved at', out.resolved, 'ms with nobody touching anything (must be null)');
+console.log('the arrow, on a full take, at the end of the watch:', out.arrowAtEnd, '(must be true)');
 console.log('page errors:', errs.length, errs.slice(0, 2).join(' | '));
 await browser.close();
+const ok = out.marks.length === 1 && out.resolved == null && out.arrowAtEnd && !errs.length;
+console.log(ok ? 'PASS — a full card stood there and waited' : 'FAIL — something turned the card, or the mark is not up');
+process.exit(ok ? 0 : 1);
