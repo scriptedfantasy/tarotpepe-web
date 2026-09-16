@@ -16,11 +16,12 @@ const VIEWS = {
   reveal: ['dealt', 'turning', 'revealed', 'fan', 'shuffle', 'fanning', 'pick', 'gather', 'deal', 'turn'],
   lighting: ['default', 'evening', 'lamp'],
   sound: ['default'],
-  camera: ['home', 'wide', 'pepe', 'table', 'spread', 'door', 'fan', 'crossroads', 'zoom-half', 'zoom-deep'],
+  camera: ['home', 'wide', 'pepe', 'table', 'spread', 'door', 'fan', 'crossroads', 'fireplace', 'doorway', 'case', 'zoom-half', 'zoom-deep'],
   entrance: ['closed', 'opening', 'open'],
   titles: ['title', 'chapter', 'closing', 'hidden'],
   dialogue: ['greeting', 'question', 'reading', 'farewell'],
   help: ['closed', 'hover', 'open', 'cards'],
+  walk: ['home', 'fireplace', 'doorway', 'case'],
   // not a piece: what the notice DOES. ?view=keep draws page one of the sheet a visitor takes away
   // (src/pieces/help-keep.js) into the overlay, from a canned reading.
   keep: ['default'],

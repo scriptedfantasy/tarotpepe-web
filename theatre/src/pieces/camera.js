@@ -43,7 +43,7 @@ import { tanHalf } from './camera-frame.js';
 
 export const meta = {
   name: 'camera',
-  judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'crossroads', 'track', 'whip', 'zoom-half', 'zoom-deep'] },
+  judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'crossroads', 'fireplace', 'doorway', 'case', 'track', 'whip', 'zoom-half', 'zoom-deep'] },
   files: ['src/pieces/camera.js', 'src/pieces/camera-shots.js', 'src/pieces/camera-frame.js', 'src/pieces/camera-plan.js'],
 };
 

@@ -23,6 +23,7 @@ import * as pepe from './pieces/pepe.js';
 import * as pepeAnim from './pieces/pepeAnim.js';
 import * as reveal from './pieces/reveal.js';
 import * as camera from './pieces/camera.js';
+import * as walk from './pieces/walk.js';
 import * as ink from './pieces/ink.js';
 import * as entrance from './pieces/entrance.js';
 import * as titles from './pieces/titles.js';
@@ -34,7 +35,7 @@ import * as flow from './pieces/flow.js';
 import * as dials from './pieces/dials.js';
 
 // Build order = dependency order. Each piece receives ctx.pieces with everything built before it.
-export const PIECES = [lighting, room, props, table, cards, pepe, pepeAnim, reveal, camera, ink, entrance, titles, dialogue, help, sound, mind, flow, dials];
+export const PIECES = [lighting, room, props, table, cards, pepe, pepeAnim, reveal, camera, walk, ink, entrance, titles, dialogue, help, sound, mind, flow, dials];
 
 const params = new URLSearchParams(location.search);
 const view = params.get('view');

@@ -265,6 +265,18 @@ const RIM = 0.62; // the table's radius; its top is at 0.76
 const FOOT = [0, 0, RIM]; // where the table meets the floor, nearest the visitor
 const RUG = [0, 0, 1.1]; // the rug's near edge
 const DOOR = { x: 1.5, x0: 1.05, x1: 1.95, head: 2.45, board: 2.41 };
+// THE FIREPLACE on the stage-left wall, room.js's own numbers (it publishes them as
+// `room.fireplace` and this file may not ask the room piece anything: it is handed the layout and
+// the props piece and nothing else). The breast stands z −0.60 .. 0.50 with its face 240 mm proud
+// of the plaster at x −2.36; the mantel is a 40 mm shelf at 1.22 oversailing 60 mm each way; the
+// opening is 0.62 x 0.66 centred on the breast at z −0.05. Nothing stands on the mantel and the
+// plaster over it is bare to the picture rail at 2.60, so a top edge may fall anywhere between.
+const FIRE = { wall: -2.6, face: -2.36, z0: -0.6, z1: 0.5, mantel: 1.22, mid: -0.05, open: { z0: -0.36, z1: 0.26, y0: 0.2, y1: 0.86 } };
+// THE TALL CASE on the back wall, props.js's own numbers (props.js CASE): the carcase stands
+// x −2.10 .. −1.06 on a 70 mm plinth, 2.45 to the top board, 260 mm deep with its back flush with
+// the skirting — so its front face is at z −2.20 and its lining at −2.46. The picture rail starts
+// at 2.60 and there is 150 mm of papered field over the top board.
+const TALL_CASE = { x0: -2.1, x1: -1.06, front: -2.2, top: 2.45, plinth: 0.07, boards: [0.52, 0.97, 1.442, 2.114] };
 
 // a box of points: the corners of a thing, for "wholly in or wholly out"
 const box = (x0, x1, y0, y1, z0, z1) => {
@@ -598,6 +610,105 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
       tops: [BULB, ROSE],
       pad: 0.19,
       floorZ: 2.15,
+    }),
+
+    // ---- THE THREE PLACES THE VISITOR MAY WALK TO (src/pieces/walk.js) ------------------------
+    // The user: "the user should be able to walk in front of the fireplace and watch the fire. or
+    // walk up to the door and open it. Also the user should be able to walk up to the bookshelf and
+    // open books." Three frames, and they keep this file's own grammar rather than inventing one:
+    // the lens axis is HORIZONTAL and SQUARE to the wall the thing stands on (the back wall for two
+    // of them, the stage-left wall for the fireplace — a side wall is a wall), the frame is hung by
+    // a rise of the lens and never by a tilt, and every one of them is a LONG lens pulled back.
+    //
+    // WHY THE DOOR'S IS CALLED `doorway`. `door` is taken, by the frontal of the whole doorway from
+    // 8.5 m back that the closing card cuts to and the lateral track runs to (dialogue.js and
+    // flow.js name it, and its geometry may not move). This is a different frame of the same thing:
+    // the visitor standing at it rather than looking across the room at it.
+    //
+    // AND ALL THREE FRAME THE SAME AT EVERY WINDOW SHAPE, which is not luck — it is what the
+    // distances were chosen for. Solved at 1280x800 (1.60) and at 390x844 (0.462):
+    //   fireplace  28.6 deg at both. Landscape is bound by the HEIGHT (hearth to over the mantel);
+    //              portrait would be bound by the breast's 1.22 m of width at 36.5 deg, so the
+    //              narrow window gives up the breast's two returns and keeps the chimneypiece —
+    //              the `narrow` composition below — and lands on the same lens.
+    //   doorway    33.1 deg at both: the opening is 0.90 wide against 2.45 high, so even a phone is
+    //              bound by the height and there is nothing for a second composition to buy.
+    //   case       29.4 deg at both, for the same reason: 1.04 wide against 2.38 high.
+    // Their positions are all clear of the table (radius 0.62 about the origin) and of him: the
+    // nearest any of them stands to the cloth is the fireplace's 1.30 m of x.
+    //
+    // THE FIREPLACE, FROM ACROSS THE TABLE. There is nowhere to stand between the table and the
+    // chimneypiece — at the breast's own centre line (z −0.05) the cloth reaches x −0.619, and a
+    // camera in the 1.74 m left over is a 64 deg lens against a wall. So the frame is taken from
+    // the OTHER side of the room on the same centre line, 3.66 m out, which is a long lens square to
+    // the stage-left wall and the same manners every other shot in this file has.
+    // THE EYE IS AT 1.62 AND THE REASON IS THE TABLE. The line from here to the firebox floor at
+    // y 0.20 crosses the table's far rim (x −0.619, 52 % of the way) at y 0.876 — 116 mm over the
+    // cloth. At 1.45 it clears by 34 mm and at 1.30 it does not clear at all: the table takes the
+    // grate. The hearth slab (0 .. 0.055) is behind the table at every eye height, which is what a
+    // table in front of a fire does, and the fire itself is wholly in the picture.
+    fireplace: (() => {
+      const P = [1.3, 1.62, FIRE.mid];
+      const look = [FIRE.wall, 1.62, FIRE.mid];
+      const O = FIRE.open;
+      const chimney = [
+        [FIRE.face, O.y0, O.z0], [FIRE.face, O.y0, O.z1],
+        [FIRE.face, O.y1, O.z0], [FIRE.face, O.y1, O.z1],
+        [FIRE.face, FIRE.mantel, O.z0 - 0.1], [FIRE.face, FIRE.mantel, O.z1 + 0.1],
+      ];
+      return fitEither({
+        pos: P,
+        look,
+        // the whole breast in a window that has room for it; the chimneypiece alone in one that has
+        // not (`narrow`, below). Either way the firebox is the business and it is whole.
+        keep: aspect < 1.05 ? chimney : [...chimney, [FIRE.face, 0.1, FIRE.z0 - 0.06], [FIRE.face, 0.1, FIRE.z1 + 0.06], [FIRE.face, FIRE.mantel + 0.04, FIRE.z0 - 0.06], [FIRE.face, FIRE.mantel + 0.04, FIRE.z1 + 0.06]],
+        // over the mantel, in the bare plaster the user's own note keeps empty: the shelf tops out
+        // at 1.26 and the picture rail starts at 2.60, so 1.80 is a clean line at this depth and
+        // there is half a metre of paper over the mantel, which is what a mantel wants over it.
+        tops: [[FIRE.face, 1.8, FIRE.mid]],
+        pad: 0.14,
+      }, aspect);
+    })(),
+    // THE DOORWAY, FROM THE THRESHOLD SIDE. 5.10 m back from the wall on the door's own centre
+    // line: far enough that the leaf swinging 100 deg into the room stays in the frame, near enough
+    // that the opening is four fifths of the picture's height. The top edge is the `door` shot's
+    // own line — 2.66, over the rail and the VOYANTE board, under the cornice — so the two frames
+    // of this door agree about where the wall stops.
+    doorway: flat([DOOR.x, 1.45, 2.6], {
+      keep: [[DOOR.x0, 0.06, -2.5], [DOOR.x1, 0.06, -2.5], [DOOR.x0, DOOR.head, -2.5], [DOOR.x1, DOOR.head, -2.5], [DOOR.x, 0, -2.16]],
+      tops: [[DOOR.x, 2.66, -2.5]],
+      pad: 0.14,
+    }),
+    // THE TALL CASE, SQUARE ON, AND IT HOLDS THE BAYS A HAND REACHES AND NOT THE WHOLE CARCASE.
+    // 5.40 m back on the case's own centre line (x −1.58), which is clear of the table by 2.11 m and
+    // of him by 1.58.
+    //
+    // WHY NOT THE WHOLE CASE, which is what this shot held first. A frame's width is 2·t·d·A and
+    // its height 2·t·d, so an object 1.04 m wide and 2.38 m tall CANNOT fill a landscape frame in
+    // both directions: holding all of it at 16:10 leaves the case 23 % of the picture's width with
+    // two metres of parlour either side, and its spines 17 px across. The case's own height is the
+    // thing to give up, because two of its five bays are out of a standing hand's reach anyway —
+    // the jars' bay is at ankle height and the top bay is at 2.11. So the frame holds 0.45 to 1.75:
+    // the cat's bay, the bottle bay and the foot of the set's bay, which is every bay a visitor
+    // could take a book out of. It goes from 23 % of the width to 43 %, and a 60 mm spine from
+    // 17 px to 32.
+    //
+    // WHAT A SPINE MEASURES HERE, which is the number the books are clickable by:
+    //   1280x800   the frame holds 1.51 m → 529 px to the metre → a 60 mm spine is 32 px across
+    //              and a 0.25 m book 132 px tall
+    //   390x844    the WIDTH binds instead (1.04 m against a frame 0.462 as wide as it is tall),
+    //              so the case fills the phone from side to side and the frame grows to 2.34 m of
+    //              height — 360 px to the metre, a 22 px spine, and very nearly the whole case in
+    //              the picture. A phone sees MORE of this case than a laptop does, which is the
+    //              same trade every portrait composition in this file makes.
+    // Both are under a thumb's 44 px, so the four spines that open are given the arbiter's own
+    // grown box, and a pointer actually on one of them hits the drawing (props.js, THE SWITCHES).
+    case: flat([(TALL_CASE.x0 + TALL_CASE.x1) / 2, 1.1, 3.2], {
+      keep: [
+        [TALL_CASE.x0, 0.45, TALL_CASE.front], [TALL_CASE.x1, 0.45, TALL_CASE.front],
+        [TALL_CASE.x0, 1.75, TALL_CASE.front], [TALL_CASE.x1, 1.75, TALL_CASE.front],
+      ],
+      pad: 0.1,
     }),
   };
   // the shelf end is the door's own frame, mirrored about the room's axis
