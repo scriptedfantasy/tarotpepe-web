@@ -4,15 +4,16 @@
 // books in the bookshelf has to be entitled TAROT by PEPE. Users should be able to open it and read
 // through pepe's take of the tarot."
 //
-// So four of the thirty-three spines standing in that case are switches. Click one and the book
-// comes off the shelf and stands open over the room as a spread: paper, a gutter, the block of
-// leaves at each outer edge, drawn in the room's own pen, with the text lettered in the signwriter's
-// hand — the same hand, the same nib and the same boil as the notice under the shop's sign, which
-// is the model for anything in this film a visitor READS (src/pieces/help.js, help-bill.js).
+// So ONE of the thirty-three spines standing in that case is a switch. Click it and the book comes
+// off the shelf and stands open over the room as a spread: paper, a gutter, the block of leaves at
+// each outer edge, drawn in the room's own pen, with the text lettered in the signwriter's hand —
+// the same hand, the same nib and the same boil as the notice under the shop's sign, which is the
+// model for anything in this film a visitor READS (src/pieces/help.js, help-bill.js) — and his own
+// cards printed on the facing leaves.
 //
-// NOTHING ANNOUNCES THEM. No gilding, no glow, no tag. Four spines out of thirty-three answer a
-// pointer and the other twenty-nine are books on a shelf; a visitor who never runs a cursor along
-// the row never finds out. Which four, and the measurement that chose them, is WHICH SPINES below.
+// NOTHING ANNOUNCES IT. No gilding, no glow, no tag. One spine out of thirty-three answers a
+// pointer and the other thirty-two are books on a shelf; a visitor who never runs a cursor along
+// the row never finds out. Which one, and the measurement that chose it, is WHICH SPINES below.
 //
 // HOW IT IS WORKED. A click on a spine opens the book at its first opening. A click on the RIGHT
 // page turns forward, on the LEFT page back, a click anywhere off the paper puts it down, and so
@@ -24,17 +25,26 @@
 // lettering. An entry that will not fit even then spills onto the next leaf, which is what a book
 // does — each entry still STARTS on a leaf of its own, so the trumps are one to a page whenever the
 // window has room for them. What that comes out at, measured (tools/_book-proof.mjs prints it):
-//   1280x800   a spread, 950 x 660, two pages of 436 across, set at a 13 px cap — and the whole of
-//              TAROT BY PEPE in 34 leaves, which is 17 openings
+//   1280x800   a spread, 950 x 660, two pages of 436 across, set at a 13 px cap. 63 leaves — 32
+//              openings — of which 26 are CARDS and 3 are a printer's blanks facing a plate.
 //   390x844    ONE page, because two pages of 170 px is not a book, it is a column of hyphens. The
 //              sheet is 374 x 580 and the spread is CROPPED to its recto: the gutter and the far
 //              page's edge still run down the left, so what is on the phone is an open book seen
 //              close, and turning goes one leaf at a time exactly as it does on a laptop. The same
-//              thirty entries come to 62 leaves there, which is what a small book is.
-// Both counts are turned through and counted by tools/_book-proof.mjs rather than asserted here.
+//              thirty entries come to 87 leaves there, 26 of them cards and none of them blank —
+//              a single page needs no verso to face.
+// Both counts are turned through, and every plate's own ink counted inside its box on the glass, by
+// tools/_book-proof.mjs rather than asserted here.
+//
+// AND THE CARDS ARE THE ROOM'S OWN. The user: "the tarot by pepe book needs to actually contain his
+// tarot cards!" So every card entry carries a `slug` and the leaf before its text is the PLATE —
+// public/cards/<slug>.webp, 1024 x 1792, the same sheet the deck lays out on the cloth and the same
+// one the ? card's third face puts up (help-cards.js). It is an `<img>` lying on the drawn page and
+// nothing in this film's pen goes near it: no ink pass, no boil, no contour, no hatch. 320 x 560 px
+// on a laptop and 282 x 493 on a phone, which is a card somebody can actually look at.
 //
 // api (ctx.pieces.walk.books):
-//   open(title) · close() · turn(+1|-1) · showing · title · leaf · leaves · spines
+//   open(title) · close() · turn(+1|-1) · showing · title · leaf · leaves · spines · card · sheetLeaves
 import { INK, PAPER, inkLine } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 import { signCaps, signWidth, signFold } from './titles-sign.js';
@@ -62,12 +72,16 @@ import { BOOKS, TAROT_BY_PEPE } from './book-tarot.js';
 // it and the two bays at the foot of the case (and the cat's bay, which is dealt last) would come
 // out drawn with different books. Re-lettering strikes one strip of paper and moves nothing: the
 // board, its width, its lean and its place on the shelf are the ones the dice gave it.
-const SPINES = [
-  { key: 'TAROT', at: [-2.039, 0.97], letter: TAROT_BY_PEPE.spine },
-  { key: 'MARSEILLE', at: [-1.957, 0.97] },
-  { key: 'CHIROMANCIE', at: [-1.496, 0.97] },
-  { key: 'LE DESTIN', at: [-1.969, 0.52] },
-];
+//
+// AND ONE OF THEM OPENS, NOT FOUR. The user, once the book had his cards in it: "the tarot by pepe
+// book needs to actually contain his tarot cards! for now it should be the only clickable one,
+// we'll think of other books as we go along." So MARSEILLE, CHIROMANCIE and LE DESTIN are books on
+// a shelf again — they are not switches, they have no cursor, and nothing on the case says which of
+// the thirty-three is the one that opens. The cursor over the TAROT spine is the whole affordance,
+// which is the rule every other thing in this room is worked by. Their pages are still written and
+// still in the data module, marked unused (src/pieces/book-tarot.js, OTHERS): the writing costs
+// nothing to keep and the next round may want it.
+const SPINES = [{ key: 'TAROT', at: [-2.039, 0.97], letter: TAROT_BY_PEPE.spine }];
 const MIN_TAP = 44; // px: what a thumb needs, whatever a 45 mm spine measures on the glass
 
 // ---- the sheet -----------------------------------------------------------------------------------
@@ -160,9 +174,22 @@ function paginate(book, S) {
   for (; cap > CAP_MIN; cap -= 0.5) {
     if (book.pages.every((e) => setPage(e, S, cap).fits)) break;
   }
+  // …and the floor is the floor. Once the cards went into the book an entry's text got ONE page of
+  // the opening instead of two, so the longest of his takes no longer fits a single leaf at any
+  // hand this film will set: the loop walks all the way down to CAP_MIN and the long ones spill,
+  // which is the same answer a printer gives and is why the leaf count is measured and not assumed.
   cap = Math.max(CAP_MIN, cap);
   const leaves = [];
   for (const entry of book.pages) {
+    // A CARD GETS A LEAF OF ITS OWN AND HIS TAKE FACES IT. On a spread that means the plate has to
+    // land on a VERSO, or the two halves of an entry would be in two different openings and the
+    // visitor would be reading about a card they cannot see. So a blank leaf is pushed when the
+    // count is odd — which is what a printer does with a plate, and the blanks are counted and
+    // reported rather than swept up.
+    if (entry.slug) {
+      if (S.spread && leaves.length % 2 === 1) leaves.push({ entry, blank: true, rows: [], head: null, capH: cap, lead: cap * LEAD, top: 0, part: 0, parts: 1 });
+      leaves.push({ entry, plate: entry.slug, rows: [], head: null, capH: cap, lead: cap * LEAD, top: 0, part: 0, parts: 1 });
+    }
     const L = setPage(entry, S, cap);
     if (L.fits || L.rows.length === 0) {
       leaves.push({ entry, ...L, part: 0, parts: 1 });
@@ -254,6 +281,33 @@ function strike(S, leaves, i, parity, dpr) {
   pages.forEach((box, k) => {
     const L = leaves[i + k];
     if (!L) return;
+    if (L.blank) return; // a printer's blank, facing a plate
+    if (L.plate) {
+      // THE CARD'S OWN PAGE, and the pen does almost nothing on it: the plate is an IMAGE lying on
+      // the paper (the DOM puts it there, see `img` below) exactly as it lies on the ? card's third
+      // face, with no ink pass over it, no contour round it and no hatch on it. What is struck here
+      // is the bed it lies in — a tight band of strokes off its bottom and right edges, which is
+      // the same mark the sheet itself uses to say one thing is lying on another — and the card's
+      // name at the foot, because a plate in a book is captioned and a card on a table is not.
+      const P = plateBox(S, box);
+      const band = Math.max(4, S.pen * 4);
+      for (let n = 0, m = Math.round(P.w / (S.pen * 1.3)); n < m; n++) {
+        const x = P.x + put() * P.w;
+        if (put() < 0.35) continue;
+        inkLine(g, x, P.y + P.h + 0.4, x + (put() - 0.5) * 1.2, P.y + P.h + band * (0.2 + 0.8 * put()), { width: S.pen * 0.45, wobble: 0.3, rng: put, alpha: 0.5 });
+      }
+      for (let n = 0, m = Math.round(P.h / (S.pen * 1.3)); n < m; n++) {
+        const y = P.y + put() * P.h;
+        if (put() < 0.35) continue;
+        inkLine(g, P.x + P.w + 0.4, y, P.x + P.w + band * (0.2 + 0.8 * put()), y + (put() - 0.5) * 1.2, { width: S.pen * 0.45, wobble: 0.3, rng: put, alpha: 0.5 });
+      }
+      const cap = L.capH * 0.86;
+      const name = signFold(`${L.entry.head}${L.entry.num ? ` · ${L.entry.num}` : ''}`);
+      signCaps(g, name, box.x + box.w / 2, P.y + P.h + band + cap * 1.2, { capH: cap, tracking: 0.2, pen: Math.max(1.3, cap * 0.12), seed: 700 + i + k, boil, alpha: 0.85 });
+      const folio = String(i + k + 1);
+      signCaps(g, folio, k === 0 && S.spread ? box.x + S.padX : box.x + box.w - S.padX, S.sh - S.padY * 0.45, { capH: L.capH * 0.82, tracking: 0.18, pen: 1.3, align: k === 0 && S.spread ? 'left' : 'right', seed: 90 + i + k, boil, alpha: 0.75 });
+      return;
+    }
     const x0 = box.x + S.padX;
     if (L.entry.kind === 'title') {
       // the title page: centred, no running head, and set at a bigger hand
@@ -290,6 +344,19 @@ function strike(S, leaves, i, parity, dpr) {
     signCaps(g, folio, k === 0 && S.spread ? x0 : box.x + box.w - S.padX, S.sh - S.padY * 0.45, { capH: L.capH * 0.82, tracking: 0.18, pen: 1.3, align: k === 0 && S.spread ? 'left' : 'right', seed: 90 + i + k, boil, alpha: 0.75 });
   });
   return c;
+}
+
+// THE CARD'S PLATE, on whichever page it is standing on. The supplied sheets are 1024 x 1792
+// (help-cards.js, PLATE) and they are never cropped and never re-drawn: the box is the largest 4:7
+// rectangle the page's own margins leave, centred in it. What that comes out at:
+//   1280x800   320 x 560 px on a page 436 wide — the plate is bound by the page's HEIGHT
+//   390x844    282 x 493 px on a page 342 wide, where it is bound by the width by 2 px
+const PLATE = { w: 1024, h: 1792 };
+function plateBox(S, box) {
+  const availW = box.w - 2 * S.padX, availH = S.sh - 2 * S.padY;
+  const w = Math.max(40, Math.min(availW, (availH * PLATE.w) / PLATE.h));
+  const h = (w * PLATE.h) / PLATE.w;
+  return { x: box.x + (box.w - w) / 2, y: (S.sh - h) / 2, w, h };
 }
 
 // the one or two page boxes on the sheet, in sheet coordinates
@@ -379,14 +446,49 @@ export function buildBooks(ctx, { switches, place }) {
     #book { z-index: 3; display: none; pointer-events: none; }
     #book.up { display: block; pointer-events: auto; cursor: default; }
     #book > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    /* THE CARD'S PLATE, lying on the page. It is an IMG and not a canvas for the reason the ? card's
+       own third face is one (help-cards.js): the plate is a printed thing photographed, the browser
+       scales it with its own filtering, and nothing in this film's pen is allowed anywhere near it —
+       no ink pass, no boil, no contour, no hatch over the picture. It is hidden on every leaf that
+       is not a plate. */
+    #book > img.plate { position: absolute; display: none; }
+    #book > img.plate.on { display: block; }
   `;
   document.head.appendChild(style);
   const root = document.createElement('div');
   root.id = 'book';
   const canvas = document.createElement('canvas');
   root.appendChild(canvas);
+  const img = document.createElement('img');
+  img.className = 'plate';
+  img.alt = '';
+  img.decoding = 'async';
+  root.appendChild(img);
   ctx.dom.overlay.appendChild(root);
   const g2 = canvas.getContext('2d');
+  // where the plate for THIS opening goes, or nothing. On a spread it is always the verso, because
+  // paginate() puts it there; on a phone it is the one page there is.
+  function layPlate(b) {
+    const boxes = pageBoxes(b.S);
+    let put = null;
+    boxes.forEach((box, k) => {
+      const L = b.leaves[b.page + k];
+      if (L?.plate && !put) put = { slug: L.plate, at: plateBox(b.S, box) };
+    });
+    if (!put) {
+      img.classList.remove('on');
+      img.removeAttribute('src');
+      return null;
+    }
+    const url = `/cards/${put.slug}.webp`;
+    if (img.getAttribute('src') !== url) img.src = url;
+    img.style.left = `${Math.round(b.box.x + put.at.x)}px`;
+    img.style.top = `${Math.round(b.box.y + put.at.y)}px`;
+    img.style.width = `${Math.round(put.at.w)}px`;
+    img.style.height = `${Math.round(put.at.h)}px`;
+    img.classList.add('on');
+    return put;
+  }
 
   let showing = null; // the title of the book that is up, or null
   let leaf = 0;
@@ -416,6 +518,7 @@ export function buildBooks(ctx, { switches, place }) {
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
     }
+    cut.card = layPlate(cut);
     painted = '';
     return cut;
   }
@@ -434,7 +537,11 @@ export function buildBooks(ctx, { switches, place }) {
   }
 
   function open(key) {
-    if (!BOOKS[key]) return false;
+    // …AND ONLY A BOOK THE CASE ACTUALLY CARRIES AS A SWITCH. `BOOKS` is the list (book-tarot.js)
+    // and `found` is what was found on the shelf; a title that is neither — one of the three that
+    // stopped opening this round, or a typo in a tool — gets nothing, rather than a sheet standing
+    // over the room that no spine could have produced.
+    if (!BOOKS[key] || !found.some((f) => f.key === key)) return false;
     showing = key;
     leaf = 0;
     cutAt = '';
@@ -449,6 +556,7 @@ export function buildBooks(ctx, { switches, place }) {
     const was = showing;
     showing = null;
     root.classList.remove('up');
+    img.classList.remove('on');
     ctx.emit?.('book', { title: null, from: was });
     return true;
   }
@@ -529,6 +637,19 @@ export function buildBooks(ctx, { switches, place }) {
     },
     get box() {
       return showing && cut ? { ...cut.box } : null;
+    },
+    // WHAT CARD IS ON THE OPENING THAT IS UP, and where its plate is on the glass — which is what a
+    // proof counts the card's own ink inside. Null on a leaf that carries no plate.
+    get card() {
+      if (!showing || !cut?.card) return null;
+      const r = root.getBoundingClientRect();
+      const b = cut.card.at;
+      return { slug: cut.card.slug, x: Math.round(cut.box.x + b.x + r.left), y: Math.round(cut.box.y + b.y + r.top), w: Math.round(b.w), h: Math.round(b.h) };
+    },
+    // every leaf, as a word: 'title' · 'plate:<slug>' · 'blank' · a running head. A proof walks this
+    // instead of turning the book twice.
+    get sheetLeaves() {
+      return (cut?.leaves ?? []).map((L) => (L.plate ? `plate:${L.plate}` : L.blank ? 'blank' : L.entry.kind === 'title' ? 'title' : L.head ?? '?'));
     },
     // the four spines, as the room found them: what they read now, what they read before, and where
     // they stand. A proof reports this instead of taking the list above on trust.

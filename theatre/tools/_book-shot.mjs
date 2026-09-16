@@ -1,0 +1,30 @@
+import { chromium } from 'playwright';
+const BASE = process.env.BASE ?? 'http://127.0.0.1:8739';
+const W = +(process.env.W ?? 1280), H = +(process.env.H ?? 800);
+const b = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const p = await b.newPage({ viewport: { width: W, height: H } });
+p.on('pageerror', (e) => console.log('ERR', String(e).slice(0, 200)));
+await p.goto(`${BASE}/?shot=1`, { waitUntil: 'load', timeout: 300000 });
+await p.waitForFunction('window.__theatreReady === true', null, { timeout: 300000 });
+await p.evaluate(() => window.__theatre.pieces.walk.go('case'));
+await p.waitForFunction(() => !window.__theatre.pieces.camera.moving, null, { timeout: 300000, polling: 250 });
+await p.evaluate(() => window.__theatre.pieces.walk.books.open('TAROT'));
+await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+const info = await p.evaluate(() => ({ leaves: window.__theatre.pieces.walk.books.leaves, cap: window.__theatre.pieces.walk.books.cap, sheet: window.__theatre.pieces.walk.books.sheetLeaves }));
+console.log('leaves', info.leaves, 'cap', info.cap);
+console.log('blanks', info.sheet.filter((x) => x === 'blank').length, 'plates', info.sheet.filter((x) => x.startsWith('plate')).length);
+console.log(info.sheet.slice(0, 16).join(' | '));
+const want = process.env.WANT ?? 'plate:the-hanged-man';
+const at = info.sheet.indexOf(want);
+if (at >= 0) {
+  await p.evaluate((n) => {
+    const B = window.__theatre.pieces.walk.books;
+    for (let i = 0; i < 200 && B.leaf < n; i++) if (!B.turn(1)) break;
+  }, at);
+  await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await p.waitForTimeout(600);
+  const card = await p.evaluate(() => window.__theatre.pieces.walk.books.card);
+  console.log('leaf', await p.evaluate(() => window.__theatre.pieces.walk.books.leaf), 'card', JSON.stringify(card));
+  await p.screenshot({ path: process.env.OUT ?? '/tmp/walk/book-card.png' });
+} else console.log('NOT FOUND', want);
+await b.close();

@@ -36,6 +36,12 @@
 // `kind: 'title'` is the one page set differently: centred, with no running head.
 
 const P = (head, num, ...lines) => ({ head, num, lines });
+// …and an entry WITH A CARD ON IT. `slug` is the deck's own name for the plate (src/core/deck.js),
+// which is also the file on disk: public/cards/<slug>.webp, 1024 x 1792, the same sheet the deck
+// lays out on the cloth and the same one the ? card's third face puts up (help-cards.js). The book
+// does not redraw a card and never will — there is one drawing of each of the seventy-eight in this
+// film and this is it.
+const C = (head, num, slug, ...lines) => ({ head, num, slug, lines });
 
 export const TAROT_BY_PEPE = {
   // what is cut on the spine: the title, and his name under it on the label band
@@ -62,133 +68,133 @@ export const TAROT_BY_PEPE = {
       'the pages after this one are the twenty-two, one to a page, and then the four suits. what i have written for each of them is what is in the picture and what that is in a person. if you find yourself reaching for this book in the middle of a reading, put it down and look at the card.'),
 
     // ---- the trumps, in the deck's own order ----------------------------------------------------
-    P('the fool', '0',
+    C('the fool', '0', 'the-fool',
       'a frog walking, with everything it owns over one shoulder in a bundle, and a small animal at its heel with its claws in the back of its leg. it is not looking where it is going. it is not looking anywhere in particular.',
       'he is the only one in the deck with no number, which means he is not in the sequence and he is not going to be. he can stand anywhere. he does not know what the other twenty-one know and that is exactly what he is for.',
       'in the person in front of me: something in you is already leaving and has not told the rest of you. the animal at the heel is not a warning, it is the thing at home that will be hurt. you can go anyway. most people who get this card have already gone and are looking for permission they do not need.'),
 
-    P('the juggler', 'I',
+    C('the juggler', 'I', 'the-juggler',
       'a young frog behind a small table, everything laid out on it — a cup, a coin, a blade, a stick — one hand up and one hand down. the table has three legs you can see and one you cannot.',
       'the whole deck is on that table and none of it is committed. he is at the start of everything and good at all of it, which is a very particular kind of trouble.',
       'in the person: you have the materials. you have had the materials for some time. the card is not asking whether you are capable, it has already granted that, and it is the granting that makes it uncomfortable. ask instead what the fourth leg of your table is standing on.'),
 
-    P('the popess', 'II',
+    C('the popess', 'II', 'the-popess',
       'a seated frog with a book half open on her lap and a veil behind her. the book is open but she is not reading it, and she is not showing it to you either.',
       'she is the first one in the deck who knows something and is not saying. patience drawn as a person.',
       'in the person: you already know. you have known for a while and you have been very busy not putting it into words, because the moment it is in words you will have to do something. she is not telling you to speak. she is telling you that the not-speaking is a decision and that you are the one making it.'),
 
-    P('the empress', 'III',
+    C('the empress', 'III', 'the-empress',
       'a frog seated with a shield and a sceptre, wings at the back of the chair, and she is turned slightly towards you rather than square on. the shield rests, it is not raised.',
       'she is what happens when something is allowed to grow. not effort — conditions.',
       'in the person: there is something of yours that would come along fine if you stopped working on it and started feeding it. the difference between the two is the whole card. also: she is comfortable, and comfort in this deck is never an accusation.'),
 
-    P('the emperor', 'IV',
+    C('the emperor', 'IV', 'the-emperor',
       'a frog in profile, one leg crossed over the other, sitting on very little and holding a sceptre. he is side-on. you get half of him.',
       'structure, and the price of it. the crossed leg is the thing everybody misses: he is not braced, he is settled, and a man in profile is a man showing you one side on purpose.',
       'in the person: you have built something and now you have to hold it, and holding it is a different job from building it, and nobody warned you. or the reverse — someone is holding a shape around you that you have outgrown. the card does not say which. the crossed leg does: look at how much of your weight is on the thing.'),
 
-    P('the pope', 'V',
+    C('the pope', 'V', 'the-pope',
       'a frog with a hand raised over two smaller frogs whose backs are to us. we see their shoulders. we do not see their faces.',
       'transmission. someone is being told how it is done, and the card is drawn from behind the ones being told, which is the whole editorial position.',
       'in the person: you are taking somebody else\'s word for something. that is not a fault — nobody works anything out from first principles, we would all still be rubbing sticks — but the two below him have their backs to us because we cannot see what they look like while they agree. is it a teacher or is it a habit with a robe on.'),
 
-    P('the lovers', 'VI',
+    C('the lovers', 'VI', 'the-lovers',
       'three figures standing, and a fourth above with a bow. the young frog in the middle is not looking at either of the two beside him. he is looking off, past them.',
       'this card is not about romance and it never was. it is a choice, drawn at the exact moment before it is made.',
       'in the person: you have two things and you are pretending you have to keep both. you do not. and the thing that looks like a decision about somebody else is a decision about which of two lives you are going to have. the arrow above is already loosed. the card is only telling you the room you are standing in is small.'),
 
-    P('the chariot', 'VII',
+    C('the chariot', 'VII', 'the-chariot',
       'a frog standing in a small carriage under a canopy, two animals harnessed in front, one looking left and one looking right. he holds no reins. there are no reins in the picture.',
       'he is going somewhere and the two things pulling him do not agree. and he is winning anyway, which is the joke.',
       'in the person: momentum is carrying you and you have mistaken it for control. that is fine for a while — a great deal gets done that way. but the card puts the absence of reins right in the middle of the picture, and the two beasts are yours, both of them. it is worth knowing which one you have been feeding.'),
 
-    P('justice', 'VIII',
+    C('justice', 'VIII', 'justice',
       'a frog seated square to you, scales in one hand, a sword upright in the other. she faces front. almost nobody in this deck faces front.',
       'the sword is up, not down. the weighing has been done.',
       'in the person: you are asking me whether it was fair. it was not, or it was, and either way the card is pointing at the part of it that was yours. this is the least comfortable trump in the deck for exactly one reason: it looks at you instead of past you, and everybody else in the pack has the decency to look away.'),
 
-    P('the hermit', 'IX',
+    C('the hermit', 'IX', 'the-hermit',
       'an old frog walking with a lamp, hooded, the lamp held out to the side and low — not up. it lights the ground in front of his own feet and nothing else.',
       'he is not searching for anything. he is going slowly with just enough light.',
       'in the person: you want the whole road lit and you are not going to get it. the lamp is the size it is. what he is actually doing is walking, which is the only part of this that is under your control. and the hood: he is not lonely, he is undisturbed, and those look identical from outside.'),
 
-    P('wheel of fortune', 'X',
+    C('wheel of fortune', 'X', 'wheel-of-fortune',
       'a wheel with a crank on it, three animals on the rim: one climbing, one at the top wearing a crown, one going down head first. no hand on the crank.',
       'nobody is turning it. that is the card.',
       'in the person: you are trying to work out what you did to deserve this, and for this one the answer is nothing, and that is worse. the one at the top is not better than the one going down, it is earlier. what the wheel asks of a person is the only thing it can ask: what you are like at each of the three positions, because you will hold all three.'),
 
-    P('strength', 'XI',
+    C('strength', 'XI', 'strength',
       'a frog holding a lion\'s jaws — closing them, not opening them — and she is doing it with her bare hands and no visible effort. her hat is the juggler\'s hat.',
       'it is the same hat because it is the same power, older, and with the hands changed.',
       'in the person: the thing you are frightened of in yourself is not going anywhere, and killing it was never offered. the card shows a woman with her hands in the mouth of the animal, calm, and the calm is not bravery, it is familiarity. you have done this before. do it again.'),
 
-    P('the hanged man', 'XII',
+    C('the hanged man', 'XII', 'the-hanged-man',
       'a frog suspended by one foot from a beam, the other leg crossed behind, hands behind the back, and the face is not in pain. the hair hangs down. small coins are falling out of the pockets, or they are not, depending on the printing.',
       'he is upside down and he is fine. that is the whole information.',
       'in the person: you are stuck and you have decided that stuck is the same as wasted. it is not. this is the only card in the deck that shows somebody doing nothing on purpose, and the crossed leg says he arranged it. something is turning over. let it. the coins were never the point and you will be relieved when they have finished falling out.'),
 
-    P('death', 'XIII',
+    C('death', 'XIII', 'death',
       'a skeleton frog with a scythe, working. heads and hands and feet in the ground round it, some of them crowned. the scythe is mid-swing. and the card has no name printed on it.',
       'the unnamed card, which the old printers did on purpose, and the only one in the deck that is actually working while you look at it.',
       'in the person: nobody dies. something ends and you have been holding the door for it. the crowned head on the ground is the part you were proudest of, and that is why it is drawn crowned. the scythe clears a field. a field is not a grave. if you came in hoping i would tell you this card was about something else — it is not, and you are already relieved.'),
 
-    P('temperance', 'XIV',
+    C('temperance', 'XIV', 'temperance',
       'a winged frog pouring from one vessel into another, standing up, and the two vessels are level with each other. nothing is spilling. nothing is being measured.',
       'this comes directly after the skeleton, which is not an accident. after something ends, somebody has to move what is left from one container to another.',
       'in the person: you want a rule for how much. there is no rule, there is only the pouring, and you have to stand there while it happens. the wings mean it is not hard work. it is just slow, and slow is the part you keep trying to skip.'),
 
-    P('the devil', 'XV',
+    C('the devil', 'XV', 'the-devil',
       'a horned frog standing on a block with two smaller figures chained at its foot, and the chains are loose. the collars are wide. they could step out.',
       'look at the chains before you look at the face. everybody looks at the face.',
       'in the person: you are getting something out of it. that is the part nobody says out loud, and until it is said the arrangement cannot move. this card is not evil and it is not a warning, it is an inventory: what does the thing you complain about pay you. answer honestly and the collar is already off.'),
 
-    P('the house of god', 'XVI',
+    C('the house of god', 'XVI', 'the-house-of-god',
       'a tower with its crown coming off, struck, and two frogs falling out head first. the falling ones are drawn with their eyes open.',
       'it is called the house of god and it is the one card people are frightened of by name.',
       'in the person: the thing you built to keep the weather out was also keeping you in. it came down at once, without notice, and there was nothing to be done — and the card draws the falling figures wide awake, which is the kindest thing in it. you are going to see this clearly while it happens. that is not a mercy at the time. it is later.'),
 
-    P('the star', 'XVII',
+    C('the star', 'XVII', 'the-star',
       'a frog kneeling by water, pouring from two jugs, one into the river and one onto the ground. stars over her, a bird in the tree. she has nothing on and she is not hiding.',
       'after the tower, someone unclothed and calm by the water. the order matters.',
       'in the person: something has been taken off you and you have not needed to replace it yet. it is not hope — hope is a word for wanting, and nobody in this picture is wanting anything. it is being seen without having arranged yourself first. take the rest of the evening with it, anon. it does not last long and it is not supposed to.'),
 
-    P('the moon', 'XVIII',
+    C('the moon', 'XVIII', 'the-moon',
       'two dogs baying at a moon with a face, a pool below, a crab in the pool, and two towers at the back. everything in this card is either reflected, doubled or underwater.',
       'the moon has a face and the face is looking sideways. nothing here is looking at you.',
       'in the person: you cannot tell at the moment which of the things you feel are yours. that is the honest reading and it is a bad night for decisions. the crab climbs out of the pool every time somebody draws this card; nobody knows whether it gets anywhere. what the card asks is that you stop trying to see in this light and wait for a different one.'),
 
-    P('the sun', 'XIX',
+    C('the sun', 'XIX', 'the-sun',
       'two frogs under a sun with a face, standing close, one with a hand on the other\'s shoulder, a low wall behind them. the sun drops what look like coins.',
       'the plainest card in the deck. two of them, out of doors, in the light, with a wall at their backs.',
       'in the person: something is uncomplicated and you are suspicious of it. this is the card people argue with hardest, because it does not come with a lesson attached. there is no work to do here. the wall behind them is low and there is somebody next to you. that is the reading, and if it seems thin it is because we are all very trained to distrust it.'),
 
-    P('judgement', 'XX',
+    C('judgement', 'XX', 'judgement',
       'an angel with a horn over three frogs — two standing with their backs to us, one rising up out of the ground between them.',
       'the one coming up is drawn from behind as well. you do not get a face in this card. you get a summons.',
       'in the person: something is calling you by a name you had stopped using. the card is old and it is about the dead getting up, and in a small room across a table it is about the part of you that you decided was finished. it is not finished, it has been called, and the two standing either side are people who will have to watch you change.'),
 
-    P('the world', 'XXI',
+    C('the world', 'XXI', 'the-world',
       'a figure inside a wreath, one leg crossed behind the other, and at the four corners an eagle, a bull, a lion and a man.',
       'the crossed leg is the hanged man\'s leg, the right way up. the last card in the sequence is the twelfth card turned over.',
       'in the person: you have finished something. not everything — the fool has no number and he is still walking around outside the wreath, waiting to be dealt somewhere else. this is one whole thing, closed, with the four corners holding it. let it be that. the deck starts again at zero and so, shortly, will you.'),
 
     // ---- the suits -------------------------------------------------------------------------------
-    P('cups', null,
+    C('cups', null, 'ace-of-cups',
       'fourteen cards, and what they hold is water, which is to say nothing you can grip.',
       'cups are what passes between people and what pools inside one. the ace is a cup nobody is holding yet. the middle of the suit is the part everybody would rather skip: the five with three of the cups over and two standing, the eight where somebody walks away from a set that is nearly complete.',
       'at the table, a run of cups means the question was never about the job. it never is. what to watch for in the court cards is which of them is looking INTO the cup and which is looking over the top of it at somebody else.'),
 
-    P('pentacles', null,
+    C('pentacles', null, 'ace-of-pentacles',
       'fourteen cards of coins, and they are the flattest and most honest suit in the deck.',
       'money, yes, but only because money is the thing people will talk about when they cannot talk about the rest. pentacles are what is countable: what you have, what you make, what is owed, what a day\'s work is worth. the suit is drawn as discs because a disc has two faces and you only ever see one.',
       'a run of them is rarely about wealth. it is about whether the thing you are doing every day adds up to anything you would recognise if you saw it written down. that is a spiritual question and it arrives in a suit of coins because that is how it arrives in life.'),
 
-    P('swords', null,
+    C('swords', null, 'ace-of-swords',
       'fourteen cards of blades, and this is the suit people flinch at and the one i trust most.',
       'swords are thought. they cut both ways and they are the only tool in the deck that is sharp on the side facing the person holding it. the suit runs cleanly from a single blade held up to a figure lying under ten of them, and the argument of the whole run is that a mind will keep going long after the situation has stopped.',
       'when a table fills with swords, the person in front of me has usually been thinking about one thing for a very long time, alone, at night. the cards are not the disaster. the thinking is not the disaster either. the loneliness of it is what i read.'),
 
-    P('wands', null,
+    C('wands', null, 'ace-of-wands',
       'fourteen cards of batons, cut green, with the leaves still on them.',
       'the leaves are the whole suit. a wand is a piece of living wood, so this is work that is still growing while you do it: making, starting, building, quarrelling, wanting. it is the loudest suit and the least subtle, and after an evening of cups it is a relief.',
       'wands ask one thing: is the thing in your hands alive or has it gone dry. a dry stick is still a stick and you can still hit somebody with it. that is the difference between the ace and the five, and it is worth knowing which one you have been carrying about.'),
@@ -200,11 +206,17 @@ export const TAROT_BY_PEPE = {
   ],
 };
 
-// ---- THE THREE OTHER SPINES THAT OPEN ------------------------------------------------------------
-// Chosen from the titles the case already carries (props-objects.js deals them out of TITLES; these
-// three are all standing in the two bays the `case` shot holds, at 0.52 and 0.97 m). One page each,
-// in the same hand, and each one is a book HE would have on that shelf: what it is, and what he
-// thinks of it. Nothing here is a second essay about tarot.
+// ---- THREE OTHER BOOKS, WRITTEN AND NOT IN USE ---------------------------------------------------
+// These three spines opened for one round. The user, once TAROT BY PEPE had his cards in it: "for
+// now it should be the only clickable one, we'll think of other books as we go along." So they are
+// books on a shelf again — not switches, no cursor, nothing on the case saying which one opens —
+// and they are NOT in `BOOKS` below, which is what the room can actually put in front of a visitor.
+//
+// The writing is kept rather than deleted because keeping it costs a kilobyte and it is already
+// done: three titles the case already carries (props-objects.js deals them out of TITLES; all three
+// stand in the two bays the `case` shot holds, at 0.52 and 0.97 m), one page each, in the same hand,
+// each a book HE would have on that shelf — what it is, and what he thinks of it. Nothing in them is
+// a second essay about tarot. Put a key back into `BOOKS` and its spine is a switch again.
 export const OTHERS = {
   MARSEILLE: {
     name: 'MARSEILLE',
@@ -237,8 +249,10 @@ export const OTHERS = {
   },
 };
 
-// every book the case opens, by the title cut on its spine
+// EVERY BOOK THE CASE OPENS, by the title cut on its spine — and there is one. This object is the
+// single source of truth for it: walk-book.js registers a switch for each key in `SPINES` that it
+// can find on the shelf and refuses to open anything that is not in here, so adding a book is
+// adding it to both and nothing else.
 export const BOOKS = {
   TAROT: TAROT_BY_PEPE,
-  ...OTHERS,
 };

@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 // THE FOUR BOOKS ON THE TALL CASE, OPENED LIKE A VISITOR (src/pieces/walk-book.js).
 //
-//   the SPINES    which four the room found, what each read before it was re-lettered, where it
+//   the SPINE     which one the room found, what it read before it was re-lettered, where it
 //                 stands, and how far its thumb box is from the bottle's, the radio's and the cat's
+//   the OTHERS    MARSEILLE, CHIROMANCIE and LE DESTIN are refused: they are books on a shelf now
+//                 and the arbiter does not know their names
 //   a real CLICK  page.mouse.click on the spine, through the arbiter, standing at the case
-//   the PAGES     every leaf turned through and counted, and the text of each read back out of the
-//                 piece in the hand's own folded case — so the proof reads the page rather than
-//                 looking at a picture of it
-//   the WAY OUT   a click off the paper, and Escape
+//   the PAGES     every leaf turned through and counted, the text of each read back out of the
+//                 piece in the hand's own folded case, and — on every leaf that carries one — THE
+//                 CARD'S OWN INK COUNTED IN PIXELS inside the plate's box on the glass, so the card
+//                 is proved to be ON the page rather than merely asked for
 //   the DRAWING   /tmp/walk/book-*.png at 1280x800 and 390x844
 //
 //   BASE=http://127.0.0.1:8739 node tools/_book-proof.mjs
 import { chromium } from 'playwright';
+import sharp from 'sharp';
 import { mkdirSync } from 'node:fs';
 
 const args = Object.fromEntries(
@@ -25,7 +28,11 @@ const OUT = args.out ?? '/tmp/walk';
 mkdirSync(OUT, { recursive: true });
 const PLATE = [1280, 800];
 const PHONE = [390, 844];
-const TITLES = ['TAROT', 'MARSEILLE', 'CHIROMANCIE', 'LE DESTIN'];
+const TITLES = ['TAROT'];
+// the three that used to open and no longer do: the proof asks the arbiter for each by name
+const SHUT = ['MARSEILLE', 'CHIROMANCIE', 'LE DESTIN'];
+// the twenty-two trumps and the four aces, which is every plate the book carries
+const CARDS = 26;
 
 const LAUNCH = { headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', '--disable-gpu-sandbox'] };
 const stub = (r) => r.fulfill({ contentType: 'application/javascript', body: 'export const createHotContext=()=>({on(){},off(){},send(){},accept(){},acceptExports(){},dispose(){},prune(){},invalidate(){},decline(){},data:{}});export const updateStyle=()=>{};export const removeStyle=()=>{};export const injectQuery=(u)=>u;export class ErrorOverlay{}' });
@@ -60,7 +67,7 @@ for (const [w, h] of [PLATE, PHONE]) {
   // ---- the spines, as the room found them ------------------------------------------------------
   const spines = await page.evaluate(() => window.__theatre.pieces.walk.books.spines);
   for (const s of spines) console.log(`   ${s.title.padEnd(12)} was ${String(s.was).padEnd(12)} at ${s.at[0].toFixed(3)}, ${s.at[1].toFixed(3)}  (${(s.off * 1000).toFixed(0)} mm off the place it was looked for)`);
-  claim(spines.length === 4 && TITLES.every((t) => spines.some((s) => s.title === t)), `all four spines were found (${spines.map((s) => s.title).join(', ')})`);
+  claim(spines.length === 1 && spines[0]?.title === 'TAROT', `one spine on the case opens, and it is the one with his name on it (${spines.map((s) => s.title).join(', ') || 'NONE'})`);
 
   await page.evaluate(() => window.__theatre.pieces.walk.go('case'));
   await settle(page);
@@ -79,7 +86,16 @@ for (const [w, h] of [PLATE, PHONE]) {
     return out;
   }, TITLES);
   for (const [t, d] of Object.entries(gaps)) console.log(`   ${t.padEnd(12)} thumb box is ${d.bottle} px from the bottle's, ${d.radio} from the radio's, ${d.cat} from the cat's`);
-  claim(Object.values(gaps).every((d) => Math.min(d.bottle ?? 1e9, d.radio ?? 1e9, d.cat ?? 1e9) > 44), 'every one of the four is more than a thumb clear of the bottle, the radio and the cat');
+  claim(Object.values(gaps).every((d) => Math.min(d.bottle ?? 1e9, d.radio ?? 1e9, d.cat ?? 1e9) > 44), 'it is more than a thumb clear of the bottle, the radio and the cat');
+  // AND THE OTHER THREE ARE NOT SWITCHES. Nothing on the case says which book opens; what says it
+  // is the cursor, and these three do not have one.
+  const closed = await page.evaluate((names) => {
+    const B = window.__theatre.pieces.walk.books;
+    return names.map((n) => ({ n, box: B.tapBox(n) ?? null, opens: B.open(n) }));
+  }, SHUT);
+  for (const r of closed) claim(!r.box && r.opens === false, `${r.n} is a book on a shelf: no thumb box (${r.box ? 'HAS ONE' : 'none'}), open() answers ${r.opens}`);
+  const still = await state(page);
+  claim(!still.showing, `…and none of them put anything up (showing ${still.showing})`);
 
   // ---- a real click on the TAROT spine ----------------------------------------------------------
   const tb = await page.evaluate(() => window.__theatre.pieces.walk.books.tapBox('TAROT'));
@@ -95,6 +111,7 @@ for (const [w, h] of [PLATE, PHONE]) {
   // ---- every leaf turned through and counted -----------------------------------------------------
   const seen = new Set();
   const texts = [];
+  const plates = [];
   let guard = 0;
   let major = null;
   while (guard++ < 200) {
@@ -102,6 +119,20 @@ for (const [w, h] of [PLATE, PHONE]) {
     seen.add(s.leaf);
     const t = await page.evaluate(() => window.__theatre.pieces.walk.books.text());
     texts.push(t ?? '');
+    // THE CARD, COUNTED IN PIXELS. `card` is the plate's box on the glass; the count is of pixels
+    // inside it that are NOT the room's paper — the card's own ink and colour. A plate that failed
+    // to load, or one the DOM put somewhere else, counts nothing and fails here rather than in a
+    // screenshot somebody has to look at.
+    const card = await page.evaluate(() => window.__theatre.pieces.walk.books.card);
+    if (card) {
+      const shot = await page.screenshot({ clip: { x: Math.max(0, card.x), y: Math.max(0, card.y), width: Math.min(card.w, w - card.x), height: Math.min(card.h, h - card.y) } });
+      const { data, info } = await sharp(shot).raw().toBuffer({ resolveWithObject: true });
+      let ink = 0;
+      for (let q = 0; q < data.length; q += info.channels) {
+        if (data[q] < 200 || data[q + 1] < 200 || data[q + 2] < 200) ink++;
+      }
+      plates.push({ slug: card.slug, leaf: s.leaf, w: card.w, h: card.h, frac: ink / (info.width * info.height) });
+    }
     if (!major && /THE HANGED MAN/.test(t ?? '')) {
       major = s.leaf;
       await page.screenshot({ path: `${OUT}/book-major-${w}x${h}.png` });
@@ -112,6 +143,13 @@ for (const [w, h] of [PLATE, PHONE]) {
     const n = await state(page);
     if (n.leaf === s.leaf) break; // the last leaf
   }
+  const thin = plates.filter((q) => q.frac < 0.25);
+  console.log(`   ${plates.length} plates were on the glass; the lightest carried ${(Math.min(...plates.map((q) => q.frac)) * 100).toFixed(1)}% ink, the heaviest ${(Math.max(...plates.map((q) => q.frac)) * 100).toFixed(1)}%, each ${plates[0]?.w}x${plates[0]?.h} px`);
+  claim(plates.length === CARDS, `every one of the ${CARDS} cards is on a leaf of its own (${plates.length} seen: ${plates.length === CARDS ? 'the 22 trumps and the 4 aces' : plates.map((q) => q.slug).join(' ')})`);
+  claim(thin.length === 0, `and every plate is actually drawn on the page — none under a quarter ink (${thin.map((q) => `${q.slug} ${(q.frac * 100).toFixed(1)}%`).join(', ') || 'none'})`);
+  const sheet = await page.evaluate(() => window.__theatre.pieces.walk.books.sheetLeaves);
+  console.log(`   the leaves run: ${sheet.slice(0, 10).join(' | ')} …`);
+  claim(sheet.filter((x) => String(x).startsWith('plate:')).length === CARDS, `the book's own list of leaves agrees: ${sheet.filter((x) => String(x).startsWith('plate:')).length} plates, ${sheet.filter((x) => x === 'blank').length} printer's blanks`);
   const end = await state(page);
   claim(end.leaf === end.leaves - 1, `every leaf was turned through by clicking the right page: ${seen.size} stops, ending on leaf ${end.leaf + 1} of ${end.leaves}`);
   claim(major != null, `a trump's own page is in it (THE HANGED MAN, leaf ${major != null ? major + 1 : '—'})`);
@@ -132,19 +170,13 @@ for (const [w, h] of [PLATE, PHONE]) {
   const shut = await state(page);
   claim(!shut.showing && shut.at === 'case', `a click off the paper puts the book down and leaves the visitor at the case (${shut.at})`);
 
-  // ---- the three others, and Escape --------------------------------------------------------------
-  for (const t of ['MARSEILLE', 'CHIROMANCIE', 'LE DESTIN']) {
-    const box = await page.evaluate((k) => window.__theatre.pieces.walk.books.tapBox(k), t);
-    await page.mouse.click(box.x + box.w / 2, box.y + box.h / 2);
-    await frames(page, 3);
-    const s = await state(page);
-    const text = await page.evaluate(() => window.__theatre.pieces.walk.books.text());
-    claim(s.showing && s.title === t, `${t} opens from its own spine (${s.leaves} leaf${s.leaves === 1 ? '' : 'ves'}): «${(text ?? '').slice(0, 64)}…»`);
-    await page.keyboard.press('Escape');
-    await frames(page, 2);
-    const after = await state(page);
-    claim(!after.showing && after.at === 'case', `${t}: Escape puts it down and does NOT walk the visitor home (${after.at})`);
-  }
+  // ---- the way out, and Escape ------------------------------------------------------------------
+  await page.evaluate(() => window.__theatre.pieces.walk.books.open('TAROT'));
+  await frames(page, 3);
+  await page.keyboard.press('Escape');
+  await frames(page, 2);
+  const esc = await state(page);
+  claim(!esc.showing && esc.at === 'case', `Escape puts the book down and does NOT walk the visitor home (${esc.at})`);
   console.log(`   errors: ${errors.length ? errors.join(' | ') : 'none'}`);
   if (errors.length) bad++;
   await page.close();
