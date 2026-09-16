@@ -764,6 +764,60 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) keep.push([bx + sx * (READING.bx / 2 + m), READING.top, bz + sz * (READING.bz / 2 + m)]);
       return fitEither({ pos, look, up: [0, 0, -1], keep, pad: 0.05 }, aspect);
     })(),
+    // THE SAME BOOK, OPEN. src/pieces/walk-book.js swings the front board over and lays the block
+    // out as a spread on the same table; these are the three frames a visitor reads it in, and they
+    // differ from `reading` in three ways, each of which is a fact about the open object.
+    //
+    //  1. THE FRAME IS SQUARE TO THE BOOK AND NOT TO THE ROOM. The book lies nine degrees off square
+    //     (props-table.js, `yaw`), which a closed book can carry — it is a rectangle on a table — and
+    //     an open one cannot: nine degrees of tilt on a page of lettering is a page somebody has to
+    //     turn their head to read. So `up` is the BOOK's own −z and the table is the thing that
+    //     stands crooked in the picture, which is the right way round.
+    //  2. IT IS COMPOSED ON THE SPINE, which is where the open book's centre is — the block stays
+    //     where it lay and the front board goes down on the table to the left of it, so the spread
+    //     is 340 mm wide about a gutter 75 mm left of the closed book's own middle. The piece slides
+    //     the block those 75 mm as it opens (walk-book.js says why: without it the spread hangs
+    //     15 mm off the table's edge and a frame composed on it has 62 px of floorboard down one
+    //     side and none down the other), so the gutter lands on the table's own centre line.
+    //  3. AND A NARROW WINDOW GETS ONE LEAF. Two 160 mm pages seen from 1.5 m above cannot be read on
+    //     a 390 px screen: measured, the leaf comes out 162 px across, and the sign hand at the film's
+    //     floor of 13 px then has a measure of 134 px inside the page's own margins — nine characters
+    //     to a line. `book-verso` and `book-recto` are the same plan moved half a spread either way —
+    //     one leaf, 315 px across a 390 px screen, at that same 13 px cap — and walk-book.js walks the
+    //     lens between them as the visitor reads. Both are solved at every aspect (they cost three dot
+    //     products) and a wide window simply never asks for them.
+    //
+    // WHAT THEY MEASURE, with a leaf 160 x 226 mm of paper (tools/_book-measure.mjs):
+    //   1280x800   `book` 11.41 deg, a leaf 425 x 601 px     1600x900   `book` 11.41 deg, 478 x 676
+    //   1200x1100  `book` 13.72 deg, 485 x 685               390x844    `book-recto` 16.17, 315 x 445
+    // The 20 mm of table the spread keeps is not taste either: the ribbon's tail hangs 20 mm past the
+    // head of the block, and at 15 mm of margin the frame's top edge falls 0.8 mm outside the tip of
+    // it — the one mark in the book a visitor has to be able to see from every page, a hair from
+    // being cut off. At 20 the tip has 5.6 mm of air over it.
+    ...(() => {
+      // the book's own frame: the yaw props-table lays it at, and the 75 mm it squares up by
+      const yaw = -0.09, cy = Math.cos(yaw), sy = Math.sin(yaw);
+      const rot = (x, z) => [x * cy + z * sy, -x * sy + z * cy];
+      const g = rot(0.075, 0);
+      const gx = READING.cx + 0.01 + g[0], gz = READING.cz - 0.01 + g[1];
+      const spine = -READING.bx / 2; // the gutter, in the book's own coordinates
+      const plane = READING.top + 0.0225; // the leaves' own mid-height in a 45 mm block
+      const plan = (at, halfX, m) => {
+        const [px, pz] = rot(at, 0);
+        const c = [gx + px, gz + pz];
+        const keep = [];
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+          const [dx, dz] = rot(sx * (halfX + m), sz * (READING.bz / 2 + m));
+          keep.push([c[0] + dx, plane, c[1] + dz]);
+        }
+        return fitEither({ pos: [c[0], READING.top + 1.53, c[1]], look: [c[0], plane, c[1]], up: [-sy, 0, -cy], keep, pad: 0.05 }, aspect);
+      };
+      return {
+        book: plan(spine, READING.bx, 0.02),
+        'book-recto': plan(spine + READING.bx / 2, READING.bx / 2, 0.01),
+        'book-verso': plan(spine - READING.bx / 2, READING.bx / 2, 0.01),
+      };
+    })(),
     // THE PIANO, FROM OVER THE KEYBOARD, which is the shot the user asked for in so many words: "i
     // think it'd be funny if we see a piano from above and see pepe's hand play a song."
     //

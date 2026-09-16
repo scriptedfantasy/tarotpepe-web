@@ -103,7 +103,7 @@ import { buildBooks } from './walk-book.js';
 export const meta = {
   name: 'walk',
   judge: { shot: 'home', states: ['home', 'fireplace', 'doorway', 'case', 'piano', 'table'] },
-  files: ['src/pieces/walk.js', 'src/pieces/walk-book.js', 'src/pieces/book-tarot.js', 'src/pieces/props-piano.js', 'src/pieces/piano-song.js', 'src/pieces/props-table.js'],
+  files: ['src/pieces/walk.js', 'src/pieces/walk-book.js', 'src/pieces/walk-book-page.js', 'src/pieces/book-tarot.js', 'src/pieces/props-piano.js', 'src/pieces/piano-song.js', 'src/pieces/props-table.js'],
 };
 
 // 1.5 s, which at twelve a second is eighteen drawings. The cross egg's own walk out through the
@@ -479,6 +479,12 @@ export async function build(ctx) {
   const CROSS = () => ctx.pieces?.props?.cross ?? null;
   api.hang({
     onOwn: (place, px, py) => {
+      // AT THE TABLE, THE FIRST CLICK OFF THE BOOK SHUTS IT. The book is an object on the table now
+      // and not a sheet in front of the room (walk-book.js), so a click that is not on the paper and
+      // not on the ribbon reaches this listener like any other — and while the boards are open it
+      // means «I have finished reading», not «I have finished at this table». The second one, or
+      // Escape again, walks them back, which is the user's own sentence for this place.
+      if (place === 'table') return BOOKS.showing ? BOOKS.close() : false;
       if (place !== 'doorway') return false;
       const X = CROSS();
       if (!X) return false;
