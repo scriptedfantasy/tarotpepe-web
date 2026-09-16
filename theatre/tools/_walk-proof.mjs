@@ -160,7 +160,13 @@ if (doing('walk')) {
       else await p.evaluate((k) => window.__theatre.pieces.walk.go(k), n);
       await settle(p);
       const a1 = await at(p);
-      claim(a1.at === n && a1.shot === n, `${w}x${h} ${n}: ${hit ? `clicked at ${hit[0].toFixed(0)},${hit[1].toFixed(0)}` : 'called (off the frame — a phone cannot reach it from the chair)'} → walk.at=${a1.at} camera=${a1.shot}`);
+      // WHICH SHOT THE PLACE STANDS ON IS ASKED, NOT ASSUMED. Four of the five name their shot
+      // after themselves and this read `a1.shot === n` for three rounds; the reading table cannot,
+      // because camera-shots.js already has a shot called `table` — his own, the one the whole
+      // reading is played on — so the table's is `reading`. Asking the piece for `shots[n]` is
+      // right whatever a later round renames.
+      const want = await p.evaluate((k) => window.__theatre.pieces.walk.shots?.[k] ?? k, n);
+      claim(a1.at === n && a1.shot === want, `${w}x${h} ${n}: ${hit ? `clicked at ${hit[0].toFixed(0)},${hit[1].toFixed(0)}` : 'called (off the frame — a phone cannot reach it from the chair)'} → walk.at=${a1.at} camera=${a1.shot} (its shot is ${want})`);
       claim(a1.zoomable === false, `${w}x${h} ${n}: the scroll is refused at the place (zoomable=${a1.zoomable})`);
       claim(a1.resting === 'home', `${w}x${h} ${n}: the resting plate is still home (${a1.resting})`);
       await shot(p, `${n}-${w}x${h}`);
@@ -286,13 +292,19 @@ if (doing('switches')) {
   {
     await p.evaluate(() => window.__theatre.pieces.walk.go('case'));
     await settle(p);
-    // ONE SPINE OPENS. The other three stopped being switches the round the cards went into the
-    // book ("for now it should be the only clickable one"), so they have no box at all and that is
-    // what is asked of them here.
+    // AND NOW NOT ONE OF THE FOUR OPENS. Three of them stopped being switches the round the cards
+    // went into the book ("for now it should be the only clickable one") and have no box at all;
+    // TAROT stopped being one this round, when the book came off the shelf and went onto the
+    // reading table, so the case is thirty-three books on a shelf and nothing else.
+    //
+    // TAROT IS ASKED DIFFERENTLY FROM THE OTHER THREE, and the difference is the point: it is still
+    // CUT and still re-lettered, so walk-book can still project a box for it, and a proof that only
+    // asked for the absence of a box would pass for the wrong reason. What is asked is the ARBITER
+    // — over the spine's own middle, nobody answers.
     {
       const b = await p.evaluate(() => window.__theatre.pieces.walk.books.tapBox('TAROT'));
       const said = b ? await asks(p, b.x + b.w / 2, b.y + b.h / 2) : 'no box';
-      claim(said === 'book-TAROT', `case: the TAROT spine answers "${said}"`);
+      claim(said !== 'book-TAROT', `case: the TAROT spine is a book on a shelf again — the arbiter answers "${said}" over it`);
     }
     for (const t of ['MARSEILLE', 'CHIROMANCIE', 'LE DESTIN']) {
       const b = await p.evaluate((k) => window.__theatre.pieces.walk.books.tapBox(k), t);

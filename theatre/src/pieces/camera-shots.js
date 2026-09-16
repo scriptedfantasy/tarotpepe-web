@@ -731,8 +731,16 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
     // bound by the table's 0.64 m ALONG the wall (the frame's vertical) and holds the whole piece of
     // furniture; a portrait one would be bound by its 0.54 m of depth in a frame 0.462 as wide as it
     // is tall, and holding the whole table there costs 55 deg of lens pointed at a tabletop. So a
-    // narrow window composes on the BOOK and a hand's breadth of table round it instead, and the
-    // book goes from a fifth of the frame's height to two thirds of it.
+    // narrow window composes on the BOOK and 30 mm of table round it instead.
+    //
+    // AND THE TWO SHAPES ARE BOUND BY DIFFERENT EDGES OF THE BOOK, which is worth writing down
+    // because it is why one margin does not serve both. A laptop's frame is wider than the kept
+    // box, so it is bound by the box's DEPTH and the book stands 54 % of the frame's height; a
+    // phone's is far narrower, so it is bound by the box's WIDTH and the book stands 76 % of the
+    // frame's width with slack above and below. Measured, closed, on the plate:
+    //     1280x800   325 x 433 px — 54 % of the frame's height, 13.8 % of its area
+    //     1600x900   366 x 487 px — 54 % of its height, 12.4 % of its area
+    //      390x844   295 x 392 px — 76 % of its WIDTH, 35.1 % of its area
     //
     // AND IT IS CALLED `reading`, NOT `table`. There is already a shot called `table` in this file
     // (line 432): the frontal one of HIS table that the whole reading is played on, and reveal.js
@@ -750,7 +758,7 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
       // picture with half a square metre of empty top round it (measured: 200 x 280 px of a
       // 1280 x 800 frame, 9 % of its area). What changes with the shape is only how much table is
       // left round it: a hand's breadth on a laptop, 30 mm on a phone, where the frame is
-      // 0.462 as wide as it is tall and every millimetre of margin costs the book's own height.
+      // 0.462 as wide as it is tall and every millimetre of margin comes off the book's own width.
       const m = aspect < 1.05 ? 0.03 : 0.105;
       const keep = [];
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) keep.push([bx + sx * (READING.bx / 2 + m), READING.top, bz + sz * (READING.bz / 2 + m)]);

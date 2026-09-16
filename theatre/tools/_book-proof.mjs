@@ -107,14 +107,25 @@ const seeing = (p) => p.evaluate(() => {
 
 // THE TRIGGER, FOUND RATHER THAN KNOWN. The book is opened by something in the room, and what that
 // something is is not this proof's business: it was a spine on the tall case and it is moving to a
-// reading table. So every place the room can walk to is tried, plus the chair, and at each one the
-// BOOK's own thumb box is asked for and clicked on the glass — three points down it, because a
-// 16 px spine grown to a 44 px box is mostly margin and the arbiter answers to the drawing first.
+// reading table, and it has arrived there. So every place the room can walk to is tried, plus the
+// chair, and at each one EVERY box the room offers for this book is clicked on the glass — three
+// points down each, because a 16 px spine grown to a 44 px box is mostly margin and the arbiter
+// answers to the drawing first.
 // What the arbiter calls the thing is reported where it answers and is not a condition: the claim
 // is that a real click, at a place a visitor can stand, put the book up.
-async function openTheBook(page, w, h) {
+async function openTheBook(page, w, h, reset) {
   const places = await page.evaluate(() => window.__theatre.pieces.walk.places ?? []);
+  let first = true;
   for (const place of [null, ...places]) {
+    // EVERY PLACE IS TRIED IN A ROOM NOBODY HAS TOUCHED YET, and it has to be. These are REAL
+    // clicks at boxes that are not always the book: at the doorway the reading table's book
+    // projects onto the door leaf, so the sweep opened the door, walked out to the crossroads, and
+    // from there the room rightly refused to have the visitor at the case, the piano or the table
+    // at all — three places never tried, and a proof that reported nothing in the room opens the
+    // book while the table opened it perfectly well. Reloading between places costs eight seconds
+    // and buys each one an untouched room.
+    if (!first) await reset();
+    first = false;
     if (place) {
       // THE VISITOR IS PUT AT THE PLACE AND THE LENS IS CUT THERE, rather than walked. `go` is what
       // makes the room think somebody is standing at it — that is the thing a switch asks about —
@@ -139,23 +150,42 @@ async function openTheBook(page, w, h) {
       // position, which is a box in the wrong half of the room.
       await frames(page, 2);
     }
-    const box = await page.evaluate(() => {
-      const B = window.__theatre.pieces.walk.books;
-      return B.tapBox?.('TAROT') ?? (B.spineBoxes?.() ?? [])[0] ?? null;
+    // EVERY BOX THE ROOM OFFERS FOR THIS BOOK, and not one named place to look. Asking walk-book
+    // for its own `tapBox('TAROT')` was the whole list while the trigger was a spine in the tall
+    // case; the trigger is the BOOK LYING ON THE READING TABLE now (src/pieces/props-table.js) and
+    // that box belongs to props, so a proof that asked only the first would have reported that
+    // nothing in the room opens the book while the room opened it perfectly well. The list is the
+    // union, in the order the room grew them, and whichever one is on the glass here is clicked.
+    // …and the same rectangle is not clicked twice. `tapBox('TAROT')` and the first of
+    // `spineBoxes()` are the same spine, so the first cut of this list poked every box three times
+    // over and turned a sweep of twenty-five clicks a window into one of seventy-five — and under
+    // software GL, where a click queues behind a drawing of the whole parlour, that is the
+    // difference between a proof of an hour and one of three.
+    const candidates = await page.evaluate(() => {
+      const B = window.__theatre.pieces.walk.books, P = window.__theatre.pieces.props;
+      const all = [B.tapBox?.('TAROT') ?? null, ...(B.spineBoxes?.() ?? []), P?.table?.tapBox?.() ?? null].filter(Boolean);
+      const seen = new Set();
+      return all.filter((b) => {
+        const k = `${Math.round(b.x)},${Math.round(b.y)},${Math.round(b.w)},${Math.round(b.h)}`;
+        return seen.has(k) ? false : (seen.add(k), true);
+      });
     });
     // NOT ON THIS WINDOW'S GLASS. A projected box can be anywhere — behind the lens, off the left,
     // half a screen past the right — and a click outside the window is a click at nothing, so a box
     // that does not overlap the frame is passed over rather than poked at.
-    const on = box && box.x + box.w > 0 && box.y + box.h > 0 && box.x < w && box.y < h;
-    console.log(`   …${place ?? 'the chair'}: ${box ? `the book's box is ${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.w)}x${Math.round(box.h)}${on ? '' : ' — off the glass'}` : 'no box for the book'}`);
-    if (!on) continue;
-    for (const at of [0.5, 0.3, 0.7]) {
-      const x = box.x + box.w / 2, y = box.y + box.h * at;
-      const who = await page.evaluate(([px, py]) => window.__theatre.pieces.props.switches.at(px, py), [x, y]);
-      await page.mouse.click(x, y);
-      const s = await state(page); // the book goes up inside the click; no frame is waited for
-      console.log(`      a click at ${Math.round(x)},${Math.round(y)} — the arbiter says ${who ?? 'nothing'}, the book is ${s.showing ? 'UP' : 'down'}`);
-      if (s.showing) return { place: place ?? 'the chair', who: who ?? 'nothing the arbiter names', box, at };
+    if (!candidates.length) console.log(`   …${place ?? 'the chair'}: no box for the book`);
+    for (const box of candidates) {
+      const on = box.x + box.w > 0 && box.y + box.h > 0 && box.x < w && box.y < h;
+      console.log(`   …${place ?? 'the chair'}: the book's box is ${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.w)}x${Math.round(box.h)}${on ? '' : ' — off the glass'}`);
+      if (!on) continue;
+      for (const at of [0.5, 0.3, 0.7]) {
+        const x = box.x + box.w / 2, y = box.y + box.h * at;
+        const who = await page.evaluate(([px, py]) => window.__theatre.pieces.props.switches.at(px, py), [x, y]);
+        await page.mouse.click(x, y);
+        const s = await state(page); // the book goes up inside the click; no frame is waited for
+        console.log(`      a click at ${Math.round(x)},${Math.round(y)} — the arbiter says ${who ?? 'nothing'}, the book is ${s.showing ? 'UP' : 'down'}`);
+        if (s.showing) return { place: place ?? 'the chair', who: who ?? 'nothing the arbiter names', box, at };
+      }
     }
   }
   return null;
@@ -170,8 +200,11 @@ for (const [w, h] of [PLATE, PHONE]) {
     if (m.type() === 'error') errors.push(m.text().slice(0, 300));
   });
   await page.route('**/@vite/client', stub);
-  await page.goto(`${BASE}/?shot=1`, { waitUntil: 'load', timeout: 300000 });
-  await page.waitForFunction('window.__theatreReady === true', null, { timeout: 300000 });
+  const load = async () => {
+    await page.goto(`${BASE}/?shot=1`, { waitUntil: 'load', timeout: 300000 });
+    await page.waitForFunction('window.__theatreReady === true', null, { timeout: 300000 });
+  };
+  await load();
   console.log(`\n=== ${w}x${h}`);
 
   // ---- the three that do not open ---------------------------------------------------------------
@@ -182,7 +215,7 @@ for (const [w, h] of [PLATE, PHONE]) {
   claim(closed.every((r) => !r.box && r.opens === false), `the three shut books are books on a shelf: ${closed.map((r) => `${r.n} ${r.box ? 'HAS A BOX' : 'no box'}/${r.opens}`).join(', ')}`);
 
   // ---- a real click on whatever opens it ---------------------------------------------------------
-  const trigger = await openTheBook(page, w, h);
+  const trigger = await openTheBook(page, w, h, load);
   claim(!!trigger, `a real click opens the book${trigger ? ` — ${trigger.who}, worked from ${trigger.place}, box ${Math.round(trigger.box.w)}x${Math.round(trigger.box.h)} px` : ': NOTHING IN THE ROOM OPENED IT — see the places above'}`);
   // AND THE BOOK IS PROVED EITHER WAY. The trigger is not this proof's work and it is being moved
   // from the tall case to a reading table while this is written; when the room has nothing that
