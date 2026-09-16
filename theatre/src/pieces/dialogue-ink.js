@@ -6,6 +6,7 @@
 //   drawCaret    the visitor's caret: an upright pen stroke standing on the baseline
 //   drawDots     the thinking mark: three dots struck one at a time while he writes
 //   drawArrow    the mark at the card's corner: there is more of this sentence, and it waits for you
+//   drawTab      the tab cut into the card's edge: the thing you pull to fold the card away
 //
 // ROUND 7 took the speaker's dashes out. Round 6 opened each register with one — his laid in his
 // green and contoured in ink, the visitor's a single stroke — because green TYPE at #69b964 could
@@ -271,6 +272,53 @@ export function drawArrow(svg, seed = 0, { color = INK, weight = 2.6 } = {}) {
     `<path d="${d}" fill="none" stroke="${color}" stroke-width="${weight.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`;
 }
 
+
+// ---------------------------------------------------------------------------------------------
+// THE TAB — the cut of paper on the card's edge that the visitor pulls to fold the placard out of
+// the frame, and pulls again to bring it back.
+//
+// ROUND 15, the user: "i think the placard should be hidable." Nothing here is an icon and nothing
+// is labelled: it is a tab cut into the sheet's OWN edge, in the pen that framed the card, the way
+// an index card behind a divider has one. Three hand-cut edges — up the left, across the free edge,
+// down the right — and NO line across its base, because the base is not an edge: the tab and the
+// card are one piece of paper. The fill runs a few pixels past the base and over the card's own
+// frame stroke, so the card's edge line stops at the tab and starts again on the far side of it,
+// which is exactly what a tab cut into a sheet looks like. The side strokes run ON past the base
+// into the card the way every corner of the card itself does; the pen does not stop on the mark.
+//
+// `side` is the edge of the card the tab stands on, which is always the edge the card folds
+// towards: 'top' while the card hangs at the foot of the frame (the visitor pulls it DOWN), and
+// 'bottom' while it is docked at the head of the frame (they pull it UP). The whole drawing is
+// mirrored for the second, so the same hand cut both.
+//
+// The box is the button's own, w x h in px, and the drawing fills it.
+export function drawTab(svg, w, h, seed = 7, lw = 2.4, side = 'top') {
+  const rng = mulberry32(seed);
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  const over = Math.max(4, lw * 2); // paper past the base, into the card's own sheet
+  const in0 = lw * 0.9 + 0.5; // the sides and the free edge, kept off the box so the run-on shows
+  // a tab is cut a little narrower at its free edge than at its base: a hand does not cut it square
+  const taper = Math.min(w * 0.1, (h - in0) * 0.42);
+  const A = [in0, h], B = [in0 + taper, in0], C = [w - in0 - taper, in0], D = [w - in0, h];
+  const amp = Math.max(0.7, Math.min(1.5, w * 0.0055));
+  const edge = (p, q, bow) => deckle(p[0], p[1], q[0], q[1], rng, { amp, bow });
+  // A → B → C → D is the same clockwise turn the card's own cut takes, so deckle's offsets go
+  // inward here exactly as they do there.
+  const sides = [
+    [edge(A, B, 1.1), A, B],
+    [edge(B, C, Math.min(4, Math.max(1.1, (C[0] - B[0]) * 0.012))), B, C],
+    [edge(C, D, 1.1), C, D],
+  ];
+  const flip = (pts) => (side === 'bottom' ? pts.map(([x, y]) => [x, h - y]) : pts);
+  const [L, T, R] = sides.map((s) => s[0]);
+  const fill = flip([[L[0][0], h + over], ...L, ...T, ...R, [R[R.length - 1][0], h + over]]);
+  const frame = sides.map(([pts, a, b]) => flip(runOn(shift(pts, a[0], a[1], b[0], b[1], lw * 0.75 + 0.6), 3 + rng() * 5, 3 + rng() * 5)));
+  svg.innerHTML =
+    `<path d="${pathD(fill)}Z" fill="${PAPER}" stroke="none"/>` +
+    frame.map((pts) => `<path d="${pathD(pts)}" fill="none" stroke="${INK}" stroke-width="${lw.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+}
 
 // ---------------------------------------------------------------------------------------------
 // THE PLACARD — the card the line brings with it into the picture, like the sign the passenger

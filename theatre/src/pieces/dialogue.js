@@ -112,6 +112,45 @@
 // unattended for fifteen seconds each (TAKE_WAIT is six) with the mark up and `say` unsettled, then
 // turned by a real mouse — on the card, and on the mark — at 1280x800 and at 390x844.
 //
+// ROUND 15: THE CARD FOLDS AWAY, AND A TAB BRINGS IT BACK. The user: "i think the placard should be
+// hidable." The card is opaque paper standing in the picture all evening, and there are moments
+// when what the visitor wants is the room — the fire, the cat, the spines on the case — and not the
+// words in front of it.
+//
+// It is not a close button and it is nothing labelled. There is a TAB cut into the card's own edge
+// (dialogue-ink.js, drawTab): a small flap of the same paper, in the same pen, standing on the edge
+// the card would fold towards — the top edge at the foot of the frame, the bottom edge while the
+// card is docked at the head — with no rule across its base, so it is one sheet with a tab in it
+// and not a control stuck on the corner. It is the thing you pull, and it says so by being that
+// shape and nothing else.
+//
+//   PULLED, the whole card walks out of the frame in FOLD_STEPS drawings on the twelves — the same
+//     stop-motion move the dock's re-lay makes, over a longer distance — and stops with its own
+//     edge on the frame's edge and the tab standing in the picture. Nothing fades and nothing
+//     slides on a browser's clock;
+//   THE FIELD GOES WITH IT, because the field is part of the card: their register, their caret and
+//     the hidden input are all inside the placard, so the card taking them out of the frame is the
+//     whole of it. The input is blurred as the card leaves — a phone's keyboard goes down with it —
+//     and nothing may pull the focus back while the card is away (see THE FIELD, ON A PHONE: three
+//     handlers there exist to put the focus back, and all three stand down while it is folded);
+//   PULLED AGAIN, it comes back the same way, with whatever was on it still on it;
+//   AND A NEW LINE OF HIS BRINGS IT BACK ON ITS OWN. They folded it to look at the room, not to
+//     miss him: anything of his landing on the paper — a take, a card's intertitle, the thinking
+//     mark, or the field opening for their own answer — unfolds it first. So the state is
+//     remembered for exactly as long as he has nothing to say, and it is not written down anywhere:
+//     a `clear()` or the door puts the card back on its anchor standing.
+//
+// THE TAB IS NOT THE MARK, AND ITS CLICK IS NOT THE VISITOR'S CLICK. Round 14's gate is untouched:
+// a full card still waits for a click on the CARD, on the arrow, on Space or Return, and a hand on
+// the tab turns nothing — it folds the card with the take still standing on it and unfolds it with
+// the same take and the same mark still there. Escape is not taken either; it belongs to the walk
+// back out.
+//
+// Proved in tools/_dlg-r15-hide.mjs, at 1280x800 and 390x844, with a real mouse: the tab is drawn
+// and on the right edge of the card, a click folds the card and the field out of the frame, the
+// pixels where the card stood are the room again, a click on the tab brings it back, his next line
+// brings it back with no hand on it at all, and a full card's mark survives the round trip.
+//
 // AND NOBODY IS NAMED. Round 5 lettered TAROT PEPE over the first line of a beat and left it off
 // the rest, which the user saw at once — "sometimes it says tarotpepe … it should say tarotpepe at
 // all" — and then decided the other way: "we dont need tarotpepes name over every line - i prefer
@@ -243,6 +282,9 @@
 //   thinking(on)                               the three dots, asked for directly (see the contract note)
 //   clear()                                    cuts whatever is up — the only thing that takes a
 //                                              line off the card without putting another in its place
+//   fold(on) / folded                          the card out of the frame with only its tab showing,
+//                                              and back. The visitor works it with the tab itself;
+//                                              a line of his unfolds it whoever folded it (round 15)
 //   anchors                                    {shot: {x, y, w, floor}} — editable; flow.js sets the same
 //   band() → {at, top, bottom, h, w}           the strip of the frame the card stands in, in px,
 //                                              whether or not a word is on it (help.js cuts the
@@ -251,7 +293,7 @@
 import { SCRIPT, lineFor, linesFor, reply as scriptReply, POSITIONS, positionKey } from './script.js';
 import { bySlug } from '../core/deck.js';
 import { INK } from '../core/strokes.js';
-import { SVGNS, drawCaret, drawDots, drawArrow, drawPlacard, drawName, drawBlock, PLACARD_BLEED } from './dialogue-ink.js';
+import { SVGNS, drawCaret, drawDots, drawArrow, drawPlacard, drawName, drawBlock, drawTab, PLACARD_BLEED } from './dialogue-ink.js';
 import { signFold, signWidth } from './titles-sign.js';
 
 export const meta = {
@@ -355,6 +397,26 @@ const PAD_X = 1.3, PAD_X_NARROW = 0.8;
 // of every take and given back to the words of the three above it. It costs nothing anywhere else:
 // a take that never reaches the fourth line is not touched by the reserve at all.
 const ARROW_REACH = 2.6, ARROW_GAP = 0.45; // ems, from the card's right edge
+
+// ---- THE TAB, AND THE CARD FOLDED OUT OF THE FRAME (round 15) -----------------------------------
+// The card walks out in four drawings on the 12 fps clock — a third of a second. The dock's re-lay
+// is three (DOCK_STEPS) over a few dozen pixels; this is the whole height of the card and a little
+// more, so it is given one drawing extra and no more than that. It is paper being pulled by a hand
+// under a rostrum camera, not a panel sliding on a browser's easing curve.
+const FOLD_STEPS = 4;
+// The tab itself, in ems of the card's own type — the unit every other compartment on this card is
+// reserved in — with a floor in px, because it is the one thing on the placard a THUMB must find
+// when there is nothing else of the card in the frame. 4.2 x 1.05 em is 99 x 25 px on a laptop and
+// 81 x 26 on a phone (the floor takes the height there): a tab about a sixth of the card's width,
+// which is the proportion a file card's own tab has.
+const TAB_W = 4.2, TAB_H = 1.05, TAB_MIN_W = 56, TAB_MIN_H = 26;
+// Where it stands along that edge: at the card's RIGHT, which is the side the mark already keeps —
+// so the two things on this card the visitor puts a finger on are both over there and neither is
+// ever in the middle of his words. Not in the corner, though: the corner is where two of the
+// card's own strokes already cross, and a tab standing in it would be a third line in the same
+// knot. One em in from the corner leaves the card's own edge showing on both sides of the tab,
+// which is what says it was cut into the edge rather than folded off the end of it.
+const TAB_RIGHT = 1; // ems
 
 // ---- THE THINKING MARK -------------------------------------------------------------------------
 // Three dots in his register while a turn of his is in flight. The numbers, all of them measured:
@@ -491,15 +553,20 @@ function buildStyle() {
        canvases are drawn into, so the em below is a measuring unit and not a face. font-size is
        written on the element by place(): it is the cap height over 0.72, the same relation the
        hand itself uses, so every em in this sheet is 1.39 caps. */
+    /* «--fold» is how far the card is walked out of the frame right now (round 15): 0 while it
+       stands on its anchor, and the whole of its own height and a little more while it is folded
+       away with only its tab in the picture. It is a TRANSFORM and not a change of anchor, so the
+       card keeps its place, its measure and its drawn edge the whole time it is gone, and comes
+       back to the exact line of the picture it left. */
     #dialogue .cap {
-      position: absolute; left: 50%; transform: translate(-50%, 0);
+      position: absolute; left: 50%; transform: translate(-50%, var(--fold, 0px));
       box-sizing: border-box; text-align: center;
       padding: 0.86em ${PAD_X}em 0.9em;
       font-size: 22px; line-height: ${LINE_H};
       color: ${INK};
     }
     #dialogue .cap.narrow { padding-left: ${PAD_X_NARROW}em; padding-right: ${PAD_X_NARROW}em; }
-    #dialogue .cap.mid { top: 50%; transform: translate(-50%, -50%); }
+    #dialogue .cap.mid { top: 50%; transform: translate(-50%, calc(-50% + var(--fold, 0px))); }
     /* THE BODY — four lines of one grid (round 13). It is a FIXED height, reserved before a word is
        written, so the card is the same object on every line of the evening and nothing moves when
        the turn changes. What changes inside it is only how many of the four he has used: his take
@@ -577,6 +644,24 @@ function buildStyle() {
     }
     #dialogue .cap .next[hidden] { display: none; }
     #dialogue .cap .next > svg { display: block; width: 2.1em; height: 1.45em; overflow: visible; }
+    /* THE TAB (round 15): the cut of paper on the card's edge that folds it out of the frame. It
+       stands OUTSIDE the card's box — above the top edge at the foot of the frame, below the bottom
+       edge while the card is docked at the head (.head) — so it is never over a word of his, and it
+       is a real button wrapped round the drawn flap, as the arrow is. It keeps pointer events in
+       every state of the card, including the ones where the card itself is transparent to them:
+       while the card is folded away it is the only thing of the placard in the picture, and it has
+       to take the tap that brings the card back. */
+    #dialogue .cap .tab {
+      position: absolute; right: ${TAB_RIGHT}em; bottom: 100%; z-index: 4;
+      font: inherit; letter-spacing: normal;
+      width: max(${TAB_MIN_W}px, ${TAB_W}em); height: max(${TAB_MIN_H}px, ${TAB_H}em);
+      padding: 0; margin: 0; border: 0; background: transparent; appearance: none; outline: 0;
+      pointer-events: auto; cursor: pointer;
+    }
+    #dialogue .cap.head .tab { bottom: auto; top: 100%; }
+    /* the flap is drawn past its own box at the base, over the card's frame stroke, so the card's
+       edge line stops at the tab and starts again on the far side of it: one sheet, one cut */
+    #dialogue .cap .tab > svg { display: block; width: 100%; height: 100%; overflow: visible; }
     /* while the arrow is up the card itself takes the clicks, so a tap ANYWHERE on it advances */
     #dialogue .cap.waiting { pointer-events: auto; cursor: pointer; }
     /* ... and while it is the VISITOR'S turn the card is the thing they put a thumb on. The hidden
@@ -744,6 +829,21 @@ export async function build(ctx) {
   arrowSvg.setAttribute('aria-hidden', 'true');
   arrow.appendChild(arrowSvg);
 
+  // THE TAB (round 15). One element for the whole evening, exactly as the arrow is: moved into each
+  // fresh inner block rather than rebuilt, so a thumb already on it stays on it while the card
+  // re-sets under it. The drawn flap is what is seen; the button is what is pressed, and it carries
+  // the only words on this card nobody will ever read — a label for a screen reader, because the
+  // drawing cannot say "hidden" to somebody who cannot see it.
+  const tab = document.createElement('button');
+  tab.type = 'button';
+  tab.className = 'tab';
+  tab.setAttribute('aria-label', 'Fold the card away');
+  tab.setAttribute('aria-expanded', 'true');
+  tab.title = 'Fold the card away';
+  const tabSvg = document.createElementNS(SVGNS, 'svg');
+  tabSvg.setAttribute('aria-hidden', 'true');
+  tab.appendChild(tabSvg);
+
   let typing = null; // { words, start, hold, done, keep, chars }
   let inter = null; // { until, done }
   let field = null; // { input, answer, caret:[el], submit, dispose }
@@ -824,12 +924,22 @@ export async function build(ctx) {
     return true;
   }
   function place() {
+    layOut();
+    // THE FOLD FOLLOWS THE CARD (round 15). How far "out of the frame" is depends on where the card
+    // stands, and three things move that under it: the window, the keyboard and the dock. A card
+    // that is already folded is re-carried to the new edge on the spot — there is nothing in the
+    // picture to watch it move — and a fold already in progress is left to its own drawings.
+    if (folded && !foldTravel) applyFold(foldDepth());
+  }
+  function layOut() {
     const a = ANCHORS[shotName()];
     lastKb = kbInset(); // whatever branch this takes, the keyboard has been read for this drawing
     const W = ctx.size?.w || root.clientWidth || window.innerWidth || 1600;
     const mid = !!a && a.at === 'centre';
     cap.classList.toggle('mid', mid);
     cap.classList.toggle('narrow', W <= PHONE);
+    // which edge of the card the tab stands on, and so which way the card folds (round 15)
+    cap.classList.toggle('head', docked);
     // The MEASURE is this piece's own — it is typography, not staging — and an anchor may only ask
     // for a WIDER card, never a narrower one. flow.js keeps a copy of the old character-counting
     // measure and sets `w` from it at runtime; it lands under this floor at every size, so it no
@@ -874,7 +984,7 @@ export async function build(ctx) {
   // The only case left for fitting: an anchor that hangs the card by its TOP edge and would push
   // it past the floor. The bottom-hung anchor every shot uses cannot, so this is a no-op there.
   function fit() {
-    if (!anchored || cap.hidden || docked) return; // docked: place() put it on the head line
+    if (!anchored || cap.hidden || docked || folded) return; // docked: place() put it on the head line
     const h = ctx.size.h || window.innerHeight;
     const a = ANCHORS[shotName()];
     const lo = h * 0.035;
@@ -960,6 +1070,15 @@ export async function build(ctx) {
   // otherwise it walks there in DOCK_STEPS drawings on the twos — a quarter of a second, three
   // positions, the way a hand shifts a card under a rostrum camera.
   function relay(next, onCut) {
+    // A FOLDED CARD IS SIMPLY RE-HUNG. It is out of the frame: there is no move to see, the tab
+    // changes edges with the dock, and place() carries the card to whichever edge it is now nearest.
+    if (folded) {
+      docked = next;
+      travel = 0;
+      foldTravel = 0; // a fold still walking lands on the new edge, not on the one it set out for
+      place();
+      return;
+    }
     const before = cap.hidden ? null : cap.getBoundingClientRect().top;
     docked = next;
     travel = 0;
@@ -993,6 +1112,122 @@ export async function build(ctx) {
     if (want !== docked) relay(want, cutNow);
     else if (travel) stepTravel();
   }
+
+  // ---- ROUND 15: THE CARD FOLDED OUT OF THE FRAME, AND THE TAB IT LEAVES BEHIND ------------------
+  // The user: "i think the placard should be hidable." The card is opaque and it stands in the
+  // picture all evening; sometimes what the visitor wants is the room behind it.
+  //
+  // It is a MOVE and not a hiding: the card keeps its anchor, its measure, its seed and everything
+  // written on it, and is simply carried out of the frame by a transform — down at the foot, up at
+  // the head — until its own edge is on the frame's edge and only the tab is left standing in the
+  // picture. Nothing is torn down, so nothing has to be rebuilt to bring it back.
+  let folded = false;
+  let foldAt = 0; // px of that move applied right now; 0 while the card stands on its anchor
+  let foldTravel = 0, foldFrom = 0, foldTo = 0;
+  // Which edge of the card the tab stands on — and so which way the card folds. It is always the
+  // edge that faces the frame's own: the top of the card at the foot of the frame, the bottom of
+  // the card while it is docked at the head. That way the tab is the LAST of the card to leave, and
+  // it stops at the frame's edge with the picture on one side of it and the folded card on the
+  // other.
+  const foldUp = () => docked;
+  // How far the card has to go. Measured off its own box rather than worked out from the anchor,
+  // because the anchor is a percentage, the keyboard is px and the two are added by the browser:
+  // the rect is the one place the card's real place is known. `foldAt` is taken back out of it, so
+  // this answers the same number whether the card is standing, folded or halfway.
+  //
+  // The two px are the card's own frame stroke: it stops ON the frame's edge rather than a hair
+  // past it, so the line of the card's edge is the line the tab stands on.
+  function foldDepth() {
+    const H = ctx.size?.h || window.innerHeight || 900;
+    const r = cap.getBoundingClientRect();
+    return foldUp() ? -(r.bottom - foldAt - 2) : H - (r.top - foldAt) - 2;
+  }
+  function applyFold(px) {
+    foldAt = px;
+    cap.style.setProperty('--fold', `${px.toFixed(1)}px`);
+  }
+  // One drawing of the move, on the stepped clock — the same stop-motion walk the dock's re-lay
+  // takes, over a longer distance.
+  function stepFold() {
+    if (!foldTravel) return;
+    const k = (FOLD_STEPS - foldTravel + 1) / FOLD_STEPS;
+    foldTravel -= 1;
+    applyFold(foldTravel ? foldFrom + (foldTo - foldFrom) * k : foldTo);
+  }
+  // Fold the card away, or bring it back. `at once` is for the cases where there is no move to see:
+  // the card being taken off the paper altogether (cut), and a fresh card standing up.
+  function setFold(on, { atOnce = false } = {}) {
+    const want = !!on && !cap.hidden;
+    // already where it is going, and not on its way anywhere: nothing to do. (The `foldAt` half is
+    // for the one case the flag cannot answer — a card that is NOT folded but is still carrying an
+    // offset, which is a card being put straight by cut() or by a window that changed under it.)
+    if (want === folded && !foldTravel && (want || !foldAt)) return;
+    folded = want;
+    tab.setAttribute('aria-expanded', want ? 'false' : 'true');
+    const label = want ? 'Bring the card back' : 'Fold the card away';
+    tab.setAttribute('aria-label', label);
+    tab.title = label;
+    // THE FIELD GOES WITH THE CARD, because the field is part of the card: the register, the caret
+    // and the hidden input are all inside the placard and the move carries them out of the frame.
+    // What the move cannot do by itself is let go of the KEYBOARD, so the input is blurred here —
+    // a phone puts its keyboard away, the card drops back onto the picture's own floor line, and
+    // the three handlers that exist to put the focus back (THE FIELD, ON A PHONE) all stand down
+    // while it is folded. The field is not closed: `ask` is still waiting, every character they had
+    // typed is still in the input, and it is all there when they pull the tab again.
+    if (want && field) field.input.blur();
+    // AND THE PEN COMES BACK WITH THE CARD. They pulled the tab to carry on writing, and the pull is
+    // a gesture, so a phone raises its keyboard inside it. When it was HIS line that brought the
+    // card back there is no gesture behind this focus and no keyboard is possible — so their next
+    // tap is armed to open it, exactly as `ask` arms it. Never on the at-once path: that is the card
+    // being taken off the paper, and the field going with it.
+    else if (!want && field && !atOnce) {
+      field.input.focus();
+      armed = !gesture;
+    }
+    foldFrom = foldAt;
+    foldTo = want ? foldDepth() : 0;
+    if (atOnce || cap.hidden) {
+      foldTravel = 0;
+      applyFold(foldTo);
+    } else {
+      foldTravel = FOLD_STEPS;
+      stepFold(); // the first drawing is this frame's: the pull answers the hand at once
+    }
+    ctx.emit?.('dialogue:fold', { folded: want });
+  }
+  // HE HAS PUT SOMETHING ON THE CARD, so the card comes back. The visitor folded it to look at the
+  // room, not to miss him — every mark of his lands through one of four doors (a take, an
+  // intertitle, the thinking dots, and the field opening for their own answer) and all four call
+  // this. It is also the whole of how long the folded state is remembered: until he speaks.
+  function unfold() {
+    if (folded || foldAt) setFold(false);
+  }
+  // Cut the tab. It is drawn like the card and not like the words — once per sheet, keyed to the
+  // box, the side and the card's own seed — so it does not boil under a thumb that is resting on
+  // it. The pen is the card's own frame stroke, a hair lighter, the way the arrow is.
+  function drawTheTab() {
+    if (cap.hidden || !tab.isConnected) return;
+    const w = tab.offsetWidth, h = tab.offsetHeight;
+    if (!w || !h) return;
+    const side = foldUp() ? 'bottom' : 'top';
+    const lw = Math.max(1.8, Math.min(3.6, cardW * 0.0064));
+    const key = `${w}x${h}:${side}:${placardSeed}:${lw.toFixed(2)}`;
+    if (tabSvg.dataset.k === key) return;
+    tabSvg.dataset.k = key;
+    drawTab(tabSvg, w, h, placardSeed + 5, lw * 0.9, side);
+  }
+  // The tab is not the card and its click is not the visitor's click (round 14's gate): it folds
+  // the card with the take and the mark still standing on it, and turns nothing. The pointerdown is
+  // where the work is done — the same hand the arrow is worked by — and the click after it is
+  // taken only when it came from a keyboard (detail 0), so Tab and Return reach it too.
+  function onTab(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'click' && e.detail !== 0) return;
+    setFold(!folded);
+  }
+  tab.addEventListener('pointerdown', onTab);
+  tab.addEventListener('click', onTab);
 
   // ---- the caption itself ------------------------------------------------------------------------
   // The em the card is cut in right now, in px — the arrow and the thinking mark take their pen's
@@ -1055,6 +1290,7 @@ export async function build(ctx) {
     placard.setAttribute('aria-hidden', 'true');
     cap.insertBefore(placard, cap.firstChild);
     cap.appendChild(arrow); // the same button, moved into the new block: never rebuilt
+    cap.appendChild(tab); // ... and the tab with it, after the placard, so its paper covers the edge
     drawCard();
   }
   // Set the card as a conversation: his register, then the visitor's. Both are always present,
@@ -1150,6 +1386,7 @@ export async function build(ctx) {
     if (!placard || cap.hidden) return;
     const w = cap.offsetWidth, h = cap.offsetHeight;
     if (!w || !h) return;
+    drawTheTab(); // the tab is cut with the sheet it is cut into, and keyed like it
     const rules = ruleLines();
     const key = `${w}x${h}:${rules.map((r) => Math.round(r.y)).join(',')}`;
     if (placard.dataset.k === key) return;
@@ -1164,6 +1401,9 @@ export async function build(ctx) {
   function cut() {
     arrowStill = false;
     setArrow(false);
+    // the card is off the paper: the next one stands up on its anchor, not folded away. The state
+    // is the visitor's memory of this card and it goes with it — it is never written down anywhere.
+    setFold(false, { atOnce: true });
     cap.hidden = true;
     cap.classList.remove('asking');
     cap.innerHTML = '';
@@ -1245,6 +1485,10 @@ export async function build(ctx) {
       inset: reserve && lines.length >= BODY_LINES ? reserve : 0,
     };
     paintWell();
+    // HE HAS WRITTEN: the card comes back if the visitor had folded it away. One of the four doors
+    // (round 15) — this one covers both a fresh line of his and the next take of one he is already
+    // saying, since every take on this card is set through here.
+    unfold();
     // his take has decided how many lines are left; anything standing in theirs is re-rolled to fit
     if (replyInk) setReply(field ? field.input.value : lastAnswer);
     return words;
@@ -1429,6 +1673,9 @@ export async function build(ctx) {
   // click that follows it cannot both count as a gesture.
   function onArrow(e) {
     if (!arrowUp || field) return;
+    // the tab is not the card (round 15): a hand on it folds the card and turns nothing. Its own
+    // handler stops the event before this one ever sees it; this says the rule where it is read.
+    if (e.target?.closest?.('.tab')) return;
     e.preventDefault(); // ... and the button does not take the focus off a pointer
     e.stopPropagation();
     setArrow(false);
@@ -1479,6 +1726,7 @@ export async function build(ctx) {
   // drawn bleed at the edge and any moment the input is not the top-most thing under the thumb.
   cap.addEventListener('pointerdown', (e) => {
     if (!field || e.target === field.input) return; // the input took it itself: let it, natively
+    if (folded || e.target?.closest?.('.tab')) return; // the tab folds the card; it does not type
     e.preventDefault(); // ... and nothing on the card may take the focus off it instead
     field.input.focus();
   });
@@ -1498,14 +1746,18 @@ export async function build(ctx) {
     if (f && f.beat === 'fan') return false; // the spread is out: every tap belongs to the cards
     return (ctx.pieces.reveal?.picks?.length ?? 0) === 0; // cards are down and touchable
   }
+  // ... and NONE OF THE THREE WHILE THE CARD IS FOLDED AWAY (round 15). All three exist to keep the
+  // focus in a field the visitor can see; a field that has been carried out of the frame is one
+  // they have deliberately put away, and a keyboard coming up over the room they asked to look at
+  // would be the ambush this whole passage is written to avoid.
   window.addEventListener('pointerdown', (e) => {
-    if (!field || !armed || e.target === field.input || e.target?.closest?.('#dialogue')) return;
+    if (!field || !armed || folded || e.target === field.input || e.target?.closest?.('#dialogue')) return;
     if (!tapIsOurs()) return;
     armed = false;
     field.input.focus();
   }, true);
   window.addEventListener('mousedown', (e) => {
-    if (!field || e.target === field.input || e.target?.closest?.(FOCUSABLE)) return;
+    if (!field || folded || e.target === field.input || e.target?.closest?.(FOCUSABLE)) return;
     e.preventDefault();
     if (document.activeElement !== field.input) field.input.focus();
   }, true);
@@ -1553,6 +1805,7 @@ export async function build(ctx) {
     wellInk = null;
     think = { svg: well.querySelector('svg'), at: ctx.clock.frame };
     standing = false; // the dots are not words: the next line replaces them without ceremony
+    unfold(); // he is writing: a folded card comes back for the dots, and his line lands on it
     drawThink();
     fit();
     drawCard();
@@ -1652,6 +1905,11 @@ export async function build(ctx) {
     cap.appendChild(input);
     field = { input, caret: [c] };
     mountReply(value); // their register, re-cut with the caret standing in it
+    // THE CARD IS WANTED (round 15). The turn is theirs, and a field opening on a card that is
+    // folded away is a caret blinking somewhere nobody can see. This is the one door of the four
+    // that is not a mark of his — it is him handing them the pen — and it brings the card back the
+    // same way.
+    unfold();
     input.addEventListener('input', drawAnswer);
     return input;
   }
@@ -1693,6 +1951,11 @@ export async function build(ctx) {
     // help.js asks: the card viewer's sheet is cut to end clear of this band — above `top` at the
     // foot, below `bottom` at the head — so his lesson about the card in the picture has somewhere
     // to stand, whichever end he is standing at.
+    //
+    // A FOLDED CARD (round 15) IS NOT TAKEN OUT OF THIS, deliberately. The band is where the card
+    // belongs, and a visitor who folds it away for a moment has not moved it: a sheet that re-cut
+    // itself every time they pulled the tab would make a far bigger event of the fold than the fold
+    // is. The room under it is simply theirs to look at while the card is out of the frame.
     band() {
       const H = ctx.size?.h || window.innerHeight || 900;
       const em = hand?.em ?? capForCard(cardW || 300) / 0.72;
@@ -1771,6 +2034,7 @@ export async function build(ctx) {
       ].filter((r) => r.canvas && r.text);
       paintTitle();
       cap.hidden = false;
+      unfold(); // a card's title is his mark on the paper too: it brings a folded card back
       fit();
       drawCard(); // the card and its title arrive on the same frame, as a caption's do
       ctx.emit?.('dialogue:intertitle', { slug, position });
@@ -1840,7 +2104,7 @@ export async function build(ctx) {
         const onAbort = () => settle(null);
         // a click on the picture takes the focus; the next typed character brings it back
         const refocus = (e) => {
-          if (!field || e.target === input || e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return;
+          if (!field || folded || e.target === input || e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return;
           input.focus();
         };
         input.addEventListener('keydown', (e) => {
@@ -1923,6 +2187,18 @@ export async function build(ctx) {
 
     get asking() {
       return !!field;
+    },
+
+    // THE CARD FOLDED OUT OF THE FRAME (round 15), and back. The visitor works this with the tab on
+    // the card's edge and nothing else — no key is bound to it, and Escape in particular is not
+    // taken: it belongs to the walk back out of the room. It is here so that a piece with a reason
+    // to want the frame to itself can ask, and so the tools can read the state they are driving.
+    // `fold(false)` is what every line of his does on its way onto the paper.
+    fold(on = true) {
+      setFold(on);
+    },
+    get folded() {
+      return folded;
     },
     // A card, read: the title, then its lines.
     async read(slug, position, { hold = 1.3 } = {}) {
@@ -2033,6 +2309,8 @@ export async function build(ctx) {
       // closing against the edge it hangs from, and the picking beat starting or ending, which
       // takes it to the head of the frame and back (see THE DOCK). Nothing else.
       tickDock();
+      // ... and the card walking out of the frame, or back into it, one drawing to the step
+      if (foldTravel) stepFold();
       // A line that is only STANDING (said, read, and waiting to be replaced) comes off at the
       // door: the evening ends on the drawn door and the sign-off card, and neither of them is a
       // frame his last sentence belongs in. A line still being said is left alone.
@@ -2099,6 +2377,12 @@ export async function build(ctx) {
     setAnchors(ctx.size?.w || window.innerWidth || 1600);
     if (cap.hidden) return;
     travel = 0; // a window changing shape ends any re-lay in progress: place() is the truth
+    // ... and a fold in progress with it: the new window decides where the card's edge is, and
+    // place() carries a folded card straight to it.
+    if (foldTravel) {
+      foldTravel = 0;
+      if (!folded) applyFold(0);
+    }
     place();
     // the lettering is cut at the display's own resolution, and to the card's own measure: throw
     // away every strike the card is carrying and cut them again
