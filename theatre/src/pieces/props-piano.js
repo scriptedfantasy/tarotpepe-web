@@ -31,21 +31,17 @@
 // keys are 88 keys rather than a grey band. camera-shots.js, `piano`.
 //
 // ---- HIS HANDS -------------------------------------------------------------------------------
-// Two rigs out of src/pieces/reveal-hand.js — the same cut plates, the same thin-lined sleeve, the
-// same drawing that comes over the cloth for the shuffle. Nothing is redrawn here. Three things are
-// different and each of them is one option on `buildHand`:
-//   THE SHOULDER. The cloth rig runs each sleeve back to the puppet's own wrist at the table. This
-//     one runs them back to a point just off the bottom edge of the piano frame — where a player's
-//     shoulders would be, on the stool — so the hands come INTO the picture from below and the
-//     sleeves leave it, which is what the user asked for and what a rostrum camera over a keyboard
-//     sees.
-//   THE FLOOR. The cloth rig measures its heights from the cloth at 0.7625; this one from the white
-//     keys at 0.66.
-//   AND PEPE DOES NOT MOVE. The cloth rig lends itself the puppet's own hand on that side and takes
-//     his drawn one off. Here `onShown` is given and does nothing: he sits at the table with both
-//     hands on it while these play, which is the joke and is also the only way a frog reaches a
-//     piano a metre and a half behind him.
-import { buildHand, HAND } from './reveal-hand.js';
+// Drawn for this shot, in src/pieces/piano-hands.js, and they are the one thing here that is not
+// borrowed. The first cut of this piano took the two rigs out of src/pieces/reveal-hand.js — the
+// drawing that comes over the cloth for the shuffle — and gave them a shoulder off the bottom of
+// the frame. Over a keyboard 2.2 m from the lens that came out as two white sleeve tubes arching
+// across the keys with three green slivers under them; the user: "review the hands on the piano,
+// they could be a lot better." So the cloth keeps its hands untouched and the piano has its own:
+// the BACKS of two hands, his own green and his own four fingers and thumb, a short white cuff at
+// each wrist and no sleeve past it, with the fingering worked out from the score every drawing.
+// AND PEPE DOES NOT MOVE while they play. He sits at the table with both hands on it, a metre and a
+// half behind the stool, which is the joke and is also the only way a frog reaches this piano.
+import { buildPianoHands } from './piano-hands.js';
 import { NOTES, BEAT, METRE, BARS, LOOP, freqOf, soundingAt } from './piano-song.js';
 
 // ---- the joinery, in world metres ---------------------------------------------------------------
@@ -176,26 +172,18 @@ export function buildPiano(ctx, { group, switches, O, M }) {
   }
 
   // ---- 4. HIS HANDS -----------------------------------------------------------------------------
-  // The shoulders: just off the bottom edge of the piano frame, at the height a player's would be
-  // over this stool, one either side of the keyboard's middle. `L` is the bass hand and stands
-  // downstage of `R`, because the bass is downstage (see keyZ, above).
-  // WHERE THEY COME FROM, and it is worked out from the FRAME and not from anatomy. The piano shot
-  // looks down at 46 degrees from (−0.73, 2.29), so the frame's own «up» is the world vector
-  // (−0.72, +0.69, 0) — away from the room and upward — and its DOWN is (+0.72, −0.69): toward the
-  // room and toward the floor. A sleeve that is to leave by the bottom edge has to run that way, so
-  // each shoulder is set at a LARGER x and a LOWER y than the keys it serves: 0.68 m of forearm out
-  // to (−1.45, 0.42), which is where a player's elbows would be over this stool.
-  // (The first cut put them at (−1.72, 1.00), level with the keyboard and only 0.42 m out. The arm
-  // rig bows an elbow out of the straight line, and over that distance the bow was the whole sleeve:
-  // two white loops curling back INTO the picture. Measured by looking at it.)
-  const SHOULDER = { L: [-1.45, 0.42, mz + 0.3], R: [-1.45, 0.42, mz - 0.3] };
-  // TWO RIGS, one locked to each side, because the two hands are on the keyboard at the same time
-  // and a single rig holds one `want`. This is the arrangement `buildHands` makes over the cloth
-  // for the smoosh, made here without the part of it that borrows the puppet's own hands.
-  const hands = {
-    L: buildHand(ctx, { name: 'piano-hand-L', lockSide: 'L', onShown: () => {}, anchors: SHOULDER, floorY: P.keyY }),
-    R: buildHand(ctx, { name: 'piano-hand-R', lockSide: 'R', onShown: () => {}, anchors: SHOULDER, floorY: P.keyY }),
-  };
+  // One pair, drawn for this shot (src/pieces/piano-hands.js). They are given the four things about
+  // this instrument a hand has to know — how high the white keys are, where a key stands along the
+  // board, which of the 88 are black, and where the key block begins — and they work out the rest,
+  // including which finger takes which note, from the notes they are handed each drawing.
+  // THE HANDS HANG OFF THE PIANO. Its root is in world metres like every other prop, so a hand put
+  // at a key's own z is at that key; and when the room is dressed away (?nodress) the hands go with
+  // it, which the cloth's rig — a child of the scene — never could.
+  // `home` is the first note each hand plays, read off the score: where a hand that has nothing to
+  // do yet waits. The left hand has this piece to itself for four bars, and the right hand comes in
+  // with it anyway and stands over the F♯ it is going to enter on.
+  const home = { L: NOTES.find((n) => n.hand === 'L').m, R: NOTES.find((n) => n.hand === 'R').m };
+  const hands = buildPianoHands(ctx, { parent: root, keyY: P.keyY, keyZ, isBlack, front: P.front, home });
 
   // ---- 5. THE SONG ------------------------------------------------------------------------------
   // It runs on the TWELVES like everything else drawn in this room, and on the AUDIO CLOCK for the
@@ -227,16 +215,19 @@ export function buildPiano(ctx, { group, switches, O, M }) {
     startFrame = ctx.clock.frame;
     scheduledTo = -1;
     struck.length = 0;
+    hands.enter();
     ctx.emit?.('piano', { playing: true });
     return true;
   }
-  function stop() {
+  // `gone` is the visitor having walked away: the hands go at once rather than taking their three
+  // drawings to leave the frame, because the frame is not this one any more and a pair of hands
+  // sliding off a keyboard nobody is looking at is three drawings spent on nothing.
+  function stop(gone = false) {
     if (!playing) return false;
     playing = false;
     heldBeat = null;
     allKeysUp();
-    hands.L.clear();
-    hands.R.clear();
+    hands.leave(gone);
     ctx.emit?.('piano', { playing: false });
     return true;
   }
@@ -304,7 +295,7 @@ export function buildPiano(ctx, { group, switches, O, M }) {
       return struck.slice();
     },
     get hands() {
-      return { L: { shown: hands.L.shown, out: hands.L.out }, R: { shown: hands.R.shown, out: hands.R.out }, shown: hands.L.shown || hands.R.shown };
+      return hands.state;
     },
     start,
     stop,
@@ -319,6 +310,7 @@ export function buildPiano(ctx, { group, switches, O, M }) {
       playing = true;
       heldBeat = ((b % (BARS * METRE)) + BARS * METRE) % (BARS * METRE);
       scheduledTo = 1e9;
+      hands.enter(true); // a still is not an entrance: the hands are already on the keys
       api.update(ctx);
       return heldBeat;
     },
@@ -327,13 +319,19 @@ export function buildPiano(ctx, { group, switches, O, M }) {
       else stop();
     },
     update(c) {
-      if (!playing) return;
+      // THE HANDS ARE DRAWN WHETHER THE SONG IS ON OR NOT: they take three drawings to come in from
+      // the bottom of the frame and three to go back down, and two of those fall after the last
+      // note. A hand that is neither playing nor leaving costs one comparison here.
+      if (!playing) {
+        if (c.clock.stepped) hands.step();
+        return;
+      }
       // WALKING AWAY STOPS IT. The keys are only a switch from the piano's own shot, so a visitor
       // who has left has no way to stop the song from wherever they went — and a piano playing
       // itself in an empty corner is a different film. A still holds (`heldBeat`), because a
       // judging state is nobody standing anywhere.
       if (heldBeat == null && ctx.pieces?.walk?.at !== 'piano') {
-        stop();
+        stop(true);
         return;
       }
       if (!c.clock.stepped) return;
@@ -358,18 +356,14 @@ export function buildPiano(ctx, { group, switches, O, M }) {
         k.position.y = k.userData.rest - (dn ? 0.006 : 0);
         k.rotation.z = dn ? -0.056 : 0;
       }
-      // THE HANDS. Each takes the MIDDLE of what its own side is holding — a hand covers a chord,
-      // it does not stand on one note of it — and if that side is silent it stays where it was, so
-      // the left hand does not jump off the keyboard between the bass and the chord.
-      for (const side of ['L', 'R']) {
-        const ms = side === 'L' ? now.L : now.R;
-        if (ms.length) {
-          const z = ms.reduce((acc, m) => acc + keyZ(m), 0) / ms.length;
-          const black = ms.some((m) => isBlack(m));
-          hands[side].at(P.front + (black ? 0.055 : 0.085), 0.012, z, { side, pose: ms.length > 1 ? 'splay' : 'point', by: 'tip' });
-        }
-        hands[side].step();
-      }
+      // THE HANDS. Each is handed WHAT ITS OWN SIDE IS SOUNDING and nothing else — not a position,
+      // not a pose: which finger goes on which of those notes, and where the hand has to stand to
+      // put it there, is the hands' own arithmetic (piano-hands.js, "WHICH FINGER PLAYS WHICH
+      // NOTE"). A side that is silent is handed an empty list, which holds it where it was: the
+      // left hand does not leave the keyboard between the bass and the chord.
+      hands.play('L', now.L);
+      hands.play('R', now.R);
+      hands.step();
       // ---- the sound, laid a bar ahead on the audio clock ------------------------------------
       const S2 = ctx.pieces?.sound;
       if (!S2?.key || scheduledTo > 1e8) return;
@@ -388,7 +382,6 @@ export function buildPiano(ctx, { group, switches, O, M }) {
       scheduledTo = Math.min(ahead, BARS * METRE);
       if (ahead >= BARS * METRE) scheduledTo = -1; // the round has come back to the top
       void lap;
-      void HAND;
       void freqOf;
     },
   };
