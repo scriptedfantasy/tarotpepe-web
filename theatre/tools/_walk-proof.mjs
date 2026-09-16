@@ -241,6 +241,67 @@ if (doing('switches')) {
   await p.close();
 }
 
+// ---- 3b. THE FIRE, WATCHED -------------------------------------------------------------------
+// The laid fire in the grate is alight while somebody is standing at the fireplace and at no other
+// time, and it is not the egg: `props:fine` must not fire, `burning` must stay false and `lit` must
+// stay 0 the whole way through. What is on the glass is counted in pixels rather than asked for.
+if (doing('fire')) {
+  await fresh();
+  console.log('\nFIRE — the laid fire alight at the fireplace, and the grate left as it was');
+  for (const [w, h] of [PLATE, PHONE]) {
+    const p = await room(w, h);
+    await p.evaluate(() => {
+      window.__fine = [];
+      window.__theatre.on('props:fine', (d) => window.__fine.push(d));
+    });
+    await p.mouse.click(4, 4); // the audio context's first gesture: without it no cue is scheduled
+    const cold = await p.evaluate(() => ({ hearth: window.__theatre.pieces.props.fine.hearth.burning, egg: window.__theatre.pieces.props.fine.burning }));
+    claim(!cold.hearth && !cold.egg, `${w}x${h}: nothing is alight from the chair (hearth ${cold.hearth}, egg ${cold.egg})`);
+    await p.evaluate(() => window.__theatre.pieces.walk.go('fireplace'));
+    await settle(p);
+    await frames(p, 8); // the three tongues catch and come up through CATCH
+    const hot = await p.evaluate(() => ({
+      hearth: window.__theatre.pieces.props.fine.hearth.burning,
+      lit: window.__theatre.pieces.props.fine.hearth.lit,
+      egg: window.__theatre.pieces.props.fine.burning,
+      eggLit: window.__theatre.pieces.props.fine.lit,
+      events: window.__fine.length,
+      box: window.__theatre.pieces.props.fine.hearth.box(1),
+      cues: (window.__theatre.pieces.sound?.timeline ?? []).filter((c) => (c.name ?? c[0]) === 'crackle').length,
+      audio: { running: window.__theatre.pieces.sound?.running ?? null, muted: window.__theatre.pieces.sound?.muted ?? null, total: (window.__theatre.pieces.sound?.timeline ?? []).length },
+    }));
+    claim(hot.hearth && hot.lit === 3, `${w}x${h}: three tongues alight in the grate (${hot.lit})`);
+    claim(!hot.egg && hot.eggLit === 0 && hot.events === 0, `${w}x${h}: and it is NOT the egg — burning ${hot.egg}, lit ${hot.eggLit}, props:fine fired ${hot.events} times`);
+    claim(hot.box && hot.box.h > 20, `${w}x${h}: the middle tongue measures ${hot.box ? `${hot.box.w.toFixed(0)}x${hot.box.h.toFixed(0)} px` : 'nothing'} on the glass`);
+    // the crackle bed. In a headless chromium with no audio device the graph never starts, so the
+    // count is reported against whether sound was running at all rather than claimed blind.
+    console.log(`   crackle cues while standing there: ${hot.cues} (sound running ${hot.audio.running}, ${hot.audio.total} cues on the timeline all told)`);
+    if (hot.audio.running) claim(hot.cues > 0, `${w}x${h}: the crackle bed is thrown while the visitor stands there (${hot.cues})`);
+    if (w === PLATE[0]) await shot(p, 'fire-watched-1280x800');
+    else await shot(p, 'fire-watched-390x844');
+    // …and the fire the egg is still lights from here, over the top of it
+    const fb = await p.evaluate(() => window.__theatre.pieces.props.fine.tapBox());
+    await p.mouse.click(Math.min(w - 2, Math.max(2, fb.x + fb.w / 2)), Math.min(h - 2, Math.max(2, fb.y + fb.h / 2)));
+    await frames(p, 6);
+    const egg = await p.evaluate(() => ({ egg: window.__theatre.pieces.props.fine.burning, hearth: window.__theatre.pieces.props.fine.hearth.burning, at: window.__theatre.pieces.walk.at }));
+    claim(egg.egg && egg.at === 'fireplace', `${w}x${h}: the grate still works from the fireplace (egg ${egg.egg}, still at ${egg.at})`);
+    claim(!egg.hearth, `${w}x${h}: and the laid fire is doused while the egg has the firebox (${egg.hearth})`);
+    // put it out, walk away, and the grate is what it was
+    await p.mouse.click(Math.min(w - 2, Math.max(2, fb.x + fb.w / 2)), Math.min(h - 2, Math.max(2, fb.y + fb.h / 2)));
+    await frames(p, 40);
+    await p.evaluate(() => window.__theatre.pieces.walk.back());
+    await settle(p);
+    await frames(p, 6);
+    const gone = await p.evaluate(() => ({ hearth: window.__theatre.pieces.props.fine.hearth.burning, lit: window.__theatre.pieces.props.fine.hearth.lit, egg: window.__theatre.pieces.props.fine.burning }));
+    claim(!gone.hearth && gone.lit === 0, `${w}x${h}: walking away leaves the grate as it was (${gone.lit} tongues)`);
+    if (p.__errors.length) {
+      console.log(`   errors: ${p.__errors.join(' | ')}`);
+      bad++;
+    }
+    await p.close();
+  }
+}
+
 // ---- 4. HE CAN STILL TALK WHILE YOU STAND THERE ------------------------------------------------
 if (doing('talk')) {
   await fresh();

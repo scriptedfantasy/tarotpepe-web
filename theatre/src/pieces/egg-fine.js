@@ -489,6 +489,55 @@ const ORDER = [0, 9, 11, 5, 7, 3, 1, 10, 2, 4, 8, 6];
 // arriving. Nothing about the hook, the beat or the line changed; only the drawing it goes on.
 const SAY_AT = 2;
 
+// ---- THE HEARTH, WHICH IS NOT THE EGG ------------------------------------------------------------
+// The user: "the user should be able to walk in front of the fireplace and watch the fire." So when
+// the visitor is STANDING AT THE FIREPLACE (src/pieces/walk.js), the fire that was laid in the grate
+// and never lit is alight — three small tongues among the logs, in the room's own ink and this
+// file's own yellow and orange, on this file's own twos, with the crackle underneath. Walk away and
+// the grate is exactly what it was: paper logs on iron bars.
+//
+// IT IS NOT THE EGG AND IT MUST NEVER BE MISTAKEN FOR IT. `props:fine` does not fire, `burning`
+// does not go true, `lit` does not move, `full` is not reached and he says nothing. A fire in a
+// fireplace is not a room on fire, and the joke the egg is depends on the room not having noticed.
+// The two share the grate and never share a drawing: the hearth is doused the moment the egg's
+// first tongue takes the firebox and comes back when the last wisp of it has gone.
+//
+// THREE TONGUES, AND THEY ARE COMPOSED FOR THE SHOT THEY ARE SEEN FROM. The egg's own grate tongue
+// is drawn anamorphic (SEATS above: a sheet 1.305 times its height, squeezed back to 0.5 by a wall
+// seen at 67 degrees from `home`). These are seen from `fireplace`, which stands 3.66 m out on the
+// breast's own centre line and looks straight at that wall — the sheet is SQUARE to the lens there,
+// so its aspect is the file's own 0.5 and nothing is stretched. The price is the honest one: from
+// `home` these three would be thin, and from `home` they are never alight.
+//
+// WHERE THEY STAND, AND IT IS BETWEEN THE LOGS AND THE BARS. room.js builds this grate out of five
+// bars 28 mm wide from y 0.22 to 0.50, a top rail at 0.48..0.52 and a fret at 0.21..0.245, all of
+// them 30 mm inside the face (world x −2.39); the three paper billets lie 75 mm further back, at
+// −2.465, with their tops at 0.367. The anchor props.js hands this file stands at (−2.46, 0.20,
+// −0.05) — in among the logs. The first cut of this fire stood ON the anchor and the grate simply
+// ate it: two of the three tongues were behind a bar and the third came up between two logs 40 px
+// high. So the feet are lifted onto the logs (y 0.32) and brought forward to x −2.43, which is
+// between the billets and the bars — the fire is seen THROUGH the basket, which is what a fire in a
+// basket looks like, and it is in front of what it is burning.
+//   z −0.17, −0.05, +0.06 in the room: the bars span z −0.28 .. 0.18, so the three stand over the
+//     middle three gaps of the five, each 115 mm wide against a tongue 75 to 110 mm across.
+//   0.17, 0.26 and 0.14 m tall from 0.32. The drawing inside a sheet reaches about nine tenths of
+//     its own height (the tongue's tallest lobe stops short of TIP_V), so they come out at 0.47,
+//     0.55 and 0.45 on the glass — measured off the plate, not assumed. The top rail is at
+//     0.48..0.52: the middle tongue licks 34 mm over it and the two others stand inside the
+//     basket, seen through its bars. The egg's own tongue is 0.40 m from the firebox FLOOR and
+//     reaches 0.608 — 80 mm proud
+//     of that rail — which is the difference between a fire somebody laid and a fire that is going
+//     to take the room, and it is why these are not simply a smaller copy of it.
+//   405 px to the metre at the `fireplace` plate (the frame holds 1.976 m of room over 800 px), so
+//     the sheets and the nib are solved for the picture they are actually drawn in.
+const HEARTH = [
+  { p: [0.03, 0.12, -0.12], h: 0.17, hand: 0, phase: 0 },
+  { p: [0.03, 0.12, 0.0], h: 0.26, hand: 2, phase: 1 },
+  { p: [0.03, 0.12, 0.11], h: 0.14, hand: 1, phase: 1 },
+];
+const HEARTH_PPM = 405;
+const HEARTH_GAIN = 0.34; // under the egg's own 0.55: a hearth is heard, not listened to
+
 export function buildFine(ctx, { group, switches, grate, opening, face }) {
   const root = new THREE.Group();
   root.name = 'fine';
@@ -550,9 +599,36 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
     if (s.ry) g.rotation.y = s.ry;
     g.visible = false;
     root.add(g);
-    return { i, group: g, sheets, foot, sheet, aspect: s.aspect ?? ASPECT, phase: s.phase, at: s.at, lit: false, from: 0, out: -1 };
+    return { i, group: g, sheets, foot, sheet, aspect: s.aspect ?? ASPECT, turned: !!s.ry, phase: s.phase, at: s.at, lit: false, from: 0, out: -1 };
   });
   group.add(root);
+
+  // ---- THE HEARTH, built the same way and kept apart ---------------------------------------------
+  // Same geometry, same cache, same pen; a group of its own so nothing that walks `flames` can ever
+  // see it and nothing that counts `lit` can ever count it.
+  const hearth = HEARTH.map((s, i) => {
+    const g = new THREE.Group();
+    g.name = `hearth-${i}`;
+    const px = s.h * HEARTH_PPM;
+    const ch = sheetH(px);
+    const nib = (PEN_PX * ch * TALL) / px;
+    const sheets = [0, 1].map((pose) => {
+      const m = new THREE.Mesh(geo, sheetMat(s.hand, pose, ch, nib));
+      m.castShadow = m.receiveShadow = false;
+      m.visible = false;
+      g.add(m);
+      return m;
+    });
+    const foot = new THREE.Vector3(...s.p).add(grateAt);
+    g.position.copy(foot);
+    g.rotation.y = Math.PI / 2; // the sheet lies in the opening's plane, facing into the room
+    g.visible = false;
+    root.add(g);
+    return { group: g, sheets, foot, sheet: s.h / TALL, aspect: ASPECT, phase: s.phase, lit: false, from: 0, out: -1 };
+  });
+  let hearthOn = false; // is the laid fire alight
+  let hearthHand = null; // a still holds it: true or false, set by a tool, cleared by a visitor
+  let hearthCrackle = -99;
 
   // ---- the fire ---------------------------------------------------------------------------------
   let want = false; // the grate has been clicked and the fire is on
@@ -575,12 +651,24 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
   // caught. A real pointer arriving takes the fire off the hand and puts it back on the hold.
   let byHand = false;
 
+  // THE GRATE'S TONGUE HAS TWO ASPECTS NOW, AND THE ROOM ONLY EVER GETS ONE OF THEM. The seat is
+  // drawn anamorphic — 1.305 wide against its own height — because the sheet lies in the stage-left
+  // wall's plane and `home` sees that wall at 67 degrees, which squeezes it back to the 0.5 the
+  // drawing was made for (SEATS, above). The walk piece added a shot that stands 3.66 m out on the
+  // breast's own centre line and looks STRAIGHT AT that plane: there is no rake there to cancel
+  // anything, so the same sheet came out 2.6 times too wide — a yellow smear lying on its side
+  // across the basket, which is what it did until this was written. So the one turned seat carries
+  // both numbers and takes whichever the lens has earned. Every other shot in the film, `home` and
+  // `wide` included, gets 1.305 exactly as before: the `fireplace` shot did not exist when the
+  // anamorph was measured and nothing else looks down that axis.
+  const squareOn = () => ctx.pieces?.camera?.current === 'fireplace';
+  const aspectOf = (f) => (f.turned && squareOn() ? ASPECT : f.aspect);
   const setSize = (f, u) => {
     // scaled about its FOOT, not its middle: a flame shrinking to a wisp keeps standing on the
     // board it is standing on. The sheet is a tall rectangle now, not a square, so x carries the
     // drawing's own aspect — which is the file's 0.5 for eleven of the twelve and the grate's own
     // anamorphic 1.305 for the one lying in the stage-left wall (see SEATS).
-    f.group.scale.set(f.sheet * u * f.aspect, f.sheet * u, 1);
+    f.group.scale.set(f.sheet * u * aspectOf(f), f.sheet * u, 1);
     f.group.position.set(f.foot.x, f.foot.y + f.sheet * u * (BASE_V - 0.5), f.foot.z);
   };
   const show = (f, which) => {
@@ -695,10 +783,33 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
     jumpAt = -1e9;
     hovering = pressing = want;
   };
+  // …AND IT ANSWERS AS A DRAWING AND NOT ONLY AS A MARGIN (the walk piece's fireplace shot).
+  // The arbiter refuses a margin box bigger than a quarter of the window — props.js measured that
+  // rule the hard way, when the squared deck's box came out 13912 x 33305 px and every egg in the
+  // room answered `deck` — and this switch had no drawing to raycast (room-build.js merges the set
+  // into one mesh per material), so the margin was the whole of it. Standing AT the fireplace the
+  // opening measures 281 x 321 px on a 390x844 phone: 90180 px against a cap of 82290, and the
+  // grate stopped answering at the one shot the visitor is nearest it. Measured, and it is a near
+  // miss — a laptop's is 251 x 286 = 71771 against 256000 and was never in danger.
+  //
+  // So the opening is now a HIT TEST, which is the first pass and not the margin, and it carries
+  // the margin inside it: the black rectangle under the mantel first, then the thumb's 44 px while
+  // that is still a margin by the arbiter's own arithmetic. Nothing about which switch answers a
+  // point has changed anywhere else — nothing in this room is ever drawn over this opening, so the
+  // first pass has one candidate wherever the test passes — and the breast the walk piece
+  // registers, which has no drawing of its own, keeps everything outside it.
+  const areaCap = () => (ctx.size?.w || window.innerWidth) * (ctx.size?.h || window.innerHeight) * 0.25;
   switches?.add?.({
     name: 'fine',
     object: () => grate,
     tapBox,
+    hit: (px, py) => {
+      const b = hitBox();
+      if (b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return true;
+      const t = tapBox();
+      if (!t || t.w * t.h > areaCap()) return false;
+      return px >= t.x && px <= t.x + t.w && py >= t.y && py <= t.y + t.h;
+    },
     // the arbiter has already stopped the event reaching flow.js (which would read it as the
     // visitor skipping Pepe's line) and opened the audio context by hand, which is the only reason
     // a phone hears the crackle at all
@@ -874,6 +985,94 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
         crackleAt = drawn;
         ctx.pieces.sound?.play?.('crackle', { gain: 0.55 + (0.45 * lit) / flames.length, pan: pan() });
       }
+    },
+  };
+
+  // ---- THE HEARTH'S OWN DRAWING, run off the same stepped clock ---------------------------------
+  // Called from api.update, at the head, so it is on the same twelve as everything else here and
+  // the sheet it shows is chosen off ctx.clock.frame like every other flame in this file (a frozen
+  // still must hold one drawing, not flicker sixty times a second).
+  function stepHearth() {
+    // WHO WANTS IT ALIGHT. The visitor standing at the fireplace — and nobody else, ever. It is
+    // doused while the egg's own fire has anything in the firebox, because the two would be drawn
+    // one on top of the other in the same 0.62 m hole: `lit` is 0 only when the grate's tongue is
+    // out, since the grate is the first seat up the order and the last one down it.
+    const standing = ctx.pieces?.walk?.at === 'fireplace';
+    const clear = lit === 0 && !flames[ORDER[0]].lit;
+    const wantHearth = hearthHand != null ? hearthHand : standing && clear;
+    if (wantHearth !== hearthOn) {
+      hearthOn = wantHearth;
+      for (const f of hearth) {
+        if (wantHearth) {
+          f.lit = true;
+          f.out = -1;
+          f.from = drawn;
+          f.group.visible = true;
+        } else if (f.lit) f.out = drawn;
+      }
+      // the first crackle goes on the drawing it catches, panned where the grate is on the glass
+      if (wantHearth && hearthHand == null) {
+        hearthCrackle = drawn;
+        ctx.pieces.sound?.play?.('crackle', { gain: HEARTH_GAIN + 0.1, pan: panOf(hearth[1]) });
+      }
+    }
+    let any = false;
+    for (const f of hearth) {
+      if (!f.lit) continue;
+      if (f.out >= 0 && drawn - f.out >= WISP.length) {
+        f.lit = false;
+        f.out = -1;
+        f.group.visible = false;
+        continue;
+      }
+      any = true;
+      const age = hearthHand ? CATCH.length : drawn - f.from;
+      const dying = f.out >= 0 ? drawn - f.out : -1;
+      const u = dying >= 0 ? (WISP[dying] ?? 0) : age < CATCH.length ? CATCH[age] : 1;
+      f.group.scale.set(f.sheet * u * f.aspect, f.sheet * u, 1);
+      f.group.position.set(f.foot.x, f.foot.y + f.sheet * u * (BASE_V - 0.5), f.foot.z);
+      show(f, (ctx.clock.frame + f.phase) % 2);
+    }
+    // THE CRACKLE BED, while the visitor stands there. Every eighth drawing rather than the egg's
+    // fourth, at a third of its gain: three small tongues in a grate two metres off are a room
+    // with a fire in it, not a room going up.
+    if (any && hearthOn && hearthHand == null && drawn - hearthCrackle >= CRACKLE_EVERY * 2) {
+      hearthCrackle = drawn;
+      ctx.pieces.sound?.play?.('crackle', { gain: HEARTH_GAIN, pan: panOf(hearth[1]) });
+    }
+  }
+  const realUpdate = api.update;
+  api.update = (c) => {
+    stepHearth();
+    realUpdate(c);
+  };
+  // THE LAID FIRE, ALIGHT, for a tool and for a still. `hearth.set(on)` holds it with no cue and no
+  // catching beat; `hearth.set(null)` gives it back to whoever is standing at the fireplace.
+  api.hearth = {
+    get burning() {
+      return hearthOn;
+    },
+    get lit() {
+      return hearth.filter((f) => f.lit).length;
+    },
+    count: hearth.length,
+    metres: HEARTH.map((s) => s.h),
+    set(on = true) {
+      hearthHand = on;
+    },
+    box(i = 1) {
+      const f = hearth[i];
+      if (!f) return null;
+      const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
+      const xs = [], ys = [];
+      const v = new THREE.Vector3();
+      for (const x of [-0.5, 0.5]) for (const y of [-0.5, 0.5]) {
+        v.set(x, y, 0);
+        f.group.localToWorld(v).project(ctx.camera);
+        xs.push(((v.x + 1) / 2) * W);
+        ys.push(((1 - v.y) / 2) * H);
+      }
+      return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
     },
   };
   // `?fine=<n>` holds the nth JUMP for a tool: the room n seats along the order, every tongue at
