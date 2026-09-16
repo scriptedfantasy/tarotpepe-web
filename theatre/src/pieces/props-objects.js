@@ -408,21 +408,48 @@ export function row({ x0, x1, y, z, items, rng, gap = 0.014 }) {
 // POESIES), and the sign hand it letters with now has the whole accented case.
 const TITLES = ['LE TAROT', 'ASTRONOMIE', 'RÊVES', 'LA MAIN', 'PROVERBES', 'ATLAS', 'LA LUNE', 'MÉMOIRES', 'ORACLES', 'BOTANIQUE', 'LES NOMBRES', 'HISTOIRE', 'VOL. II', 'POÉSIES', 'ALMANACH', 'LE DESTIN', 'GRAMMAIRE', 'MARSEILLE', 'CHIROMANCIE', 'CARTES', 'TOME I', 'TOME III', 'LES ASTRES', 'LE HASARD', 'CUISINE', 'VOYAGES', 'DICTIONNAIRE', 'ZODIAQUE', 'SILENCE', 'CHANSONS'];
 let _titleIdx = 0;
-export function book({ w = 0.14, h = 0.2, t = 0.03, title = null, flat = false, seed = 1, dark = false }) {
+export function book({ w = 0.14, h = 0.2, t = 0.03, title = null, sub = null, flat = false, seed = 1, dark = false }) {
   const M = materials();
   title = title ?? TITLES[_titleIdx++ % TITLES.length];
   const cover = dark ? M.solid : M.cloth;
   let mesh;
   if (!flat) {
-    const spine = inkMaterial({ map: T.spineTexture({ title, seed, vertical: true, w: 64, h: 256, dark }), hatch: 0.45 });
+    const spine = inkMaterial({ map: T.spineTexture({ title, sub, seed, vertical: true, w: 64, h: 256, dark }), hatch: 0.45 });
     mesh = new THREE.Mesh(new THREE.BoxGeometry(t, h, w), [cover, cover, M.pages, cover, spine, M.pages]);
   } else {
-    const spine = inkMaterial({ map: T.spineTexture({ title, seed, vertical: false, w: 256, h: 64, dark }), hatch: 0.45 });
+    const spine = inkMaterial({ map: T.spineTexture({ title, sub, seed, vertical: false, w: 256, h: 64, dark }), hatch: 0.45 });
     mesh = new THREE.Mesh(new THREE.BoxGeometry(w, t, h), [M.pages, M.pages, cover, cover, spine, M.pages]);
   }
   mesh.castShadow = true;
   mesh.receiveShadow = true;
+  // WHAT IS ON THIS SPINE, so that a piece can find a book by the title cut on it rather than by
+  // counting children (src/pieces/walk-book.js opens four of the ones in the tall case). The spine
+  // is material index 4 either way round, which is the other thing a re-lettering needs to know.
+  mesh.userData.title = title;
+  mesh.userData.sub = sub;
+  mesh.userData.dark = dark;
+  mesh.userData.flat = flat;
+  mesh.userData.spineIndex = 4;
+  mesh.userData.size = { w, h, t };
   return mesh;
+}
+// RE-LETTER A SPINE IN PLACE. The book keeps its boards, its size, its lean and its place on the
+// shelf; only the strip of paper down its back is struck again. It is how one of the spines in the
+// tall case comes to read TAROT / PEPE without the row it stands in being re-dealt — bookRow runs
+// off a shared pen, so putting a new book INTO a run re-deals every title after it, and the room
+// downstream of this case would have been drawn with different books on it.
+export function reletter(mesh, { title, sub = null, seed = 1 }) {
+  if (!mesh?.isMesh || !Array.isArray(mesh.material)) return false;
+  const i = mesh.userData.spineIndex ?? 4;
+  const flat = !!mesh.userData.flat;
+  const dark = !!mesh.userData.dark;
+  const old = mesh.material[i];
+  mesh.material[i] = inkMaterial({ map: T.spineTexture({ title, sub, seed, vertical: !flat, w: flat ? 256 : 64, h: flat ? 64 : 256, dark }), hatch: 0.45 });
+  old?.map?.dispose?.();
+  old?.dispose?.();
+  mesh.userData.title = title;
+  mesh.userData.sub = sub;
+  return true;
 }
 // Books along a shelf from x0..x1 (local), standing on y, back at z (spines to +z). A third of
 // the spines are solid ink, the way the film blacks in every third book on a shelf.

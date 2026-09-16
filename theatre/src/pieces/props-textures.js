@@ -266,7 +266,11 @@ export function labelTexture({ lines = ['VIN'], uRange = [0.3, 0.7], vRange = [0
 }
 
 // ---- book spines ------------------------------------------------------------------------------
-export function spineTexture({ title, seed = 1, vertical = true, w = 64, h = 256, dark = false }) {
+// `sub` is a SECOND line on the spine, under the title and smaller — an author's name, which is
+// what the spine of a book somebody wrote has on it and what none of the room's other spines needed
+// until one of them turned out to be his (src/pieces/book-tarot.js). It is set on the same label
+// band, at two thirds of the title's height, and omitting it draws exactly what was drawn before.
+export function spineTexture({ title, sub = null, seed = 1, vertical = true, w = 64, h = 256, dark = false }) {
   return drawTexture(
     w,
     h,
@@ -282,17 +286,40 @@ export function spineTexture({ title, seed = 1, vertical = true, w = 64, h = 256
       if (dark) {
         g.fillStyle = INK;
         g.fillRect(-2, -2, L + 4, T + 4);
-        // a paper label band with the title, and two paper rules for the raised bands
+        // a paper label band with the title, and two paper rules for the raised bands.
+        // A BOOK WITH AN AUTHOR ON IT GETS A LONGER LABEL, which is what a binder does: two lines
+        // squeezed into the 32 % band a one-line title uses came out at a third of the height of
+        // the spine beside it and could not be read at the shot the case is seen from. 54 % is the
+        // band a title and a name want, and it is still a label and not a wrapper.
+        const bandL = sub ? 0.54 : 0.32;
         g.fillStyle = LABEL_PAPER;
-        g.fillRect(L * 0.34, T * 0.14, L * 0.32, T * 0.72);
+        g.fillRect(L * (0.5 - bandL / 2), T * 0.14, L * bandL, T * 0.72);
         for (const u of [0.1, 0.9]) inkLine(g, u * L, 2, u * L, T - 2, { width: 2.2, wobble: 0.5, rng, color: LABEL_PAPER });
-        const size = penFit(title, T * 0.42, L * 0.28, 0.1);
-        penText(g, title, L * 0.5, T * 0.5, { size, weight: Math.max(1.4, size * 0.16), rng, tracking: 0.1 });
+        if (sub) {
+          // the two lines are set at a THIRD of the spine's width each, one at 0.33 across it and
+          // one at 0.73, which leaves a clear third of a line between them. Set any larger and the
+          // name climbs into the title: measured at the `case` shot, where this spine is 30 px
+          // across and each line lands at about 9 px of cap.
+          const s1 = penFit(title, T * 0.33, L * (bandL - 0.08), 0.1);
+          penText(g, title, L * 0.5, T * 0.33, { size: s1, weight: Math.max(1.4, s1 * 0.16), rng, tracking: 0.1 });
+          const s2 = penFit(sub, T * 0.24, L * (bandL - 0.16), 0.1);
+          penText(g, sub, L * 0.5, T * 0.73, { size: s2, weight: Math.max(1.2, s2 * 0.15), rng, tracking: 0.1 });
+        } else {
+          const size = penFit(title, T * 0.42, L * 0.28, 0.1);
+          penText(g, title, L * 0.5, T * 0.5, { size, weight: Math.max(1.4, size * 0.16), rng, tracking: 0.1 });
+        }
       } else {
         const o = { width: 2, wobble: 0.5, rng };
         for (const u of [0.08, 0.15, 0.85, 0.92]) inkLine(g, u * L, 3, u * L, T - 3, o);
-        const size = penFit(title, T * 0.5, L * 0.6, 0.12);
-        penText(g, title, L * 0.5, T * 0.5, { size, weight: Math.max(1.4, size * 0.16), rng, tracking: 0.12 });
+        if (sub) {
+          const s1 = penFit(title, T * 0.4, L * 0.5, 0.12);
+          penText(g, title, L * 0.45, T * 0.5, { size: s1, weight: Math.max(1.4, s1 * 0.16), rng, tracking: 0.12 });
+          const s2 = penFit(sub, T * 0.28, L * 0.2, 0.12);
+          penText(g, sub, L * 0.78, T * 0.5, { size: s2, weight: Math.max(1.2, s2 * 0.15), rng, tracking: 0.12 });
+        } else {
+          const size = penFit(title, T * 0.5, L * 0.6, 0.12);
+          penText(g, title, L * 0.5, T * 0.5, { size, weight: Math.max(1.4, size * 0.16), rng, tracking: 0.12 });
+        }
       }
       g.restore();
     },

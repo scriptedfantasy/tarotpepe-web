@@ -382,6 +382,8 @@ export async function build(ctx) {
   // runs to, and the plate that is named for this case (camera-shots.js; it was `window`, then
   // `cart`, and both of those have been taken out of the room). The radio and the bottle were
   // outside a phone's resting frame on the cart too, so nothing a phone can reach has changed.
+  // the case itself, published for the piece that opens its books (src/pieces/walk-book.js)
+  let tallCase = null;
   const CASE = {
     x0: -2.1,
     x1: -1.06,
@@ -599,6 +601,24 @@ export async function build(ctx) {
     cat.name = 'cat';
     unit.add(cat);
     catObj = cat;
+
+    // WHAT IS ON THIS CASE, BY THE TITLE ON ITS BACK. walk-book.js opens four of these spines and
+    // has to find them by name: the run they stand in is dealt by the dice, so nothing upstream can
+    // say in advance which board CHIROMANCIE landed on. The list is taken fresh each time it is
+    // asked for (a re-lettering changes a title under it) and it holds only the books STANDING on a
+    // board — a flat stack is a stack, not a spine, and its title faces the ceiling.
+    tallCase = {
+      unit,
+      boards: CASE.boards.slice(),
+      bounds: { x0: CASE.x0, x1: CASE.x1, top: CASE.top, front: cz + CASE.d / 2 },
+      get books() {
+        const out = [];
+        unit.traverse((o) => {
+          if (o.isMesh && o.userData?.title && !o.userData.flat) out.push(o);
+        });
+        return out;
+      },
+    };
   }
   {
     const stool = new THREE.Group();
@@ -1501,6 +1521,10 @@ export async function build(ctx) {
     // `castleBox('light'|'dark')` is that castle's box on the glass — the two castles are the
     // switches since round 4 — and `at(u, v)` is any point of the traced original, in pixels.
     cross: CROSS,
+    // THE TALL CASE, for the piece that opens its books. `unit` is the carcase, `books` the spines
+    // standing on its boards (each mesh carries `userData.title`), `boards` their heights and
+    // `bounds` the carcase in world metres. src/pieces/walk-book.js finds four of them by title.
+    tallCase,
     // THE RADIO on the case's middle board, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb

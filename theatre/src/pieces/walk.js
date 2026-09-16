@@ -85,10 +85,12 @@
 //   blocked         why a walk would be refused just now, as a word, or null
 //   setState(name)  `fireplace` · `doorway` · `case` are a still AT that place; anything else is
 //                   the chair. `?walk=<place>` does the same for a tool.
+import { buildBooks } from './walk-book.js';
+
 export const meta = {
   name: 'walk',
   judge: { shot: 'home', states: ['home', 'fireplace', 'doorway', 'case'] },
-  files: ['src/pieces/walk.js'],
+  files: ['src/pieces/walk.js', 'src/pieces/walk-book.js', 'src/pieces/book-tarot.js'],
 };
 
 // 1.5 s, which at twelve a second is eighteen drawings. The cross egg's own walk out through the
@@ -207,6 +209,7 @@ export async function build(ctx) {
     if (Pp?.cross && Pp.cross.phase !== 'shut' && at !== 'doorway') return 'cross';
     if (ctx.pieces?.help?.showing) return 'notice';
     if (midReading()) return 'reading';
+    if (busy()) return 'book';
     return null;
   }
 
@@ -301,11 +304,13 @@ export async function build(ctx) {
     if (t === 'INPUT' || t === 'TEXTAREA') return; // he is being written to
     if (ev.key !== 'Escape' || !at) return;
     if (ctx.pieces?.help?.showing) return; // the notice is in front of the room: it gets the key
+    if (busy()) return; // …and so does a book standing open on the sheet (walk-book.js)
     ev.stopImmediatePropagation();
     if (onEscape(at)) return; // step 3: the door shuts before the visitor walks away from it
     back();
   });
   let onEscape = () => false;
+  let busy = () => false;
 
   const api = {
     get at() {
@@ -324,10 +329,14 @@ export async function build(ctx) {
     tapBox,
     go,
     back,
-    // step 3 hangs the door's own two answers here rather than this file knowing about the door
+    // steps 3 and 4 hang their own answers here rather than this file knowing about the door or the
+    // books: `onOwn` is what a click on the place's own object does, `onEscape` what the key does
+    // first, and `busy` is a piece of the place standing IN FRONT of the room — a book on the sheet
+    // — which takes both the key and any walk until it is put down.
     hang(handlers = {}) {
       if (handlers.onOwn) onOwn = handlers.onOwn;
       if (handlers.onEscape) onEscape = handlers.onEscape;
+      if (handlers.busy) busy = handlers.busy;
     },
     // A JUDGED FRAME IS A STILL: the camera JUMPS to the place, nothing walks and nothing is held.
     // `?view=walk&state=case` is somebody looking at one drawing, not watching a move.
@@ -346,6 +355,7 @@ export async function build(ctx) {
       C?.cut?.(p.shot);
     },
     update() {
+      api.books?.update?.();
       // ?walk=<place> is parked and spent on the first update, for main.js's own reason: it cuts
       // the camera to a shot after every piece is built, and a cut is a cut.
       if (pending) {
@@ -396,6 +406,18 @@ export async function build(ctx) {
       mine = null;
     }
   });
+
+  // ---- STEP 4: THE BOOKS ------------------------------------------------------------------------
+  // Four of the spines on the tall case come off it and open over the room (src/pieces/walk-book.js
+  // draws them, src/pieces/book-tarot.js is what is printed in them). They are switches on the same
+  // arbiter as everything else and they answer only while the visitor is standing at the case.
+  const BOOKS = buildBooks(ctx, { switches: P?.switches, place: () => at });
+  api.books = BOOKS;
+  const bookUp = () => BOOKS.showing;
+  // …and while a book is up it owns the room. Escape closes the book before it walks anybody home,
+  // and a click on the paper never reaches this piece at all (the sheet is a DOM layer over the
+  // canvas, and the test at the head of the pointer handler is that the target IS the canvas).
+  api.hang({ busy: bookUp });
 
   const asked = ctx.params?.get?.('walk');
   if (asked && PLACES[asked]) pending = asked;

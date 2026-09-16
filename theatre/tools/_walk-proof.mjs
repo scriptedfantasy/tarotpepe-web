@@ -229,7 +229,35 @@ if (doing('switches')) {
   };
   await probe('fireplace', [['fine', 'fine']]);
   await probe('case', [['cat', 'cat'], ['wine', 'wine'], ['radio', 'radio']]);
-  await probe('doorway', [['cross', 'cross']]);
+  // THE CROSS STANDS DOWN AT THE DOORWAY, on purpose (egg-cross.js: the door is worked by the door
+  // while somebody is standing at it, or the storm would take the camera out from under the walk).
+  // So what is asked here is the opposite of the other two: nobody answers where the cross is.
+  {
+    await p.evaluate(() => window.__theatre.pieces.walk.go('doorway'));
+    await settle(p);
+    const b = await p.evaluate(() => window.__theatre.pieces.props.cross.tapBox());
+    const said = b ? await asks(p, b.x + b.w / 2, b.y + b.h / 2) : 'no box';
+    claim(said === null, `doorway: the cross on the frieze stands down while somebody is at the door (${said})`);
+    await p.evaluate(() => window.__theatre.pieces.walk.back());
+    await settle(p);
+    const home = await p.evaluate(() => {
+      const c = window.__theatre.pieces.props.cross.tapBox();
+      return c ? window.__theatre.pieces.props.switches.at(c.x + c.w / 2, c.y + c.h / 2) : null;
+    });
+    claim(home === 'cross', `…and it answers again from the chair (${home})`);
+  }
+  // …and the four spines answer at the case, each to its own name
+  {
+    await p.evaluate(() => window.__theatre.pieces.walk.go('case'));
+    await settle(p);
+    for (const t of ['TAROT', 'MARSEILLE', 'CHIROMANCIE', 'LE DESTIN']) {
+      const b = await p.evaluate((k) => window.__theatre.pieces.walk.books.tapBox(k), t);
+      const said = b ? await asks(p, b.x + b.w / 2, b.y + b.h / 2) : 'no box';
+      claim(said === `book-${t}`, `case: the ${t} spine answers "${said}"`);
+    }
+    await p.evaluate(() => window.__theatre.pieces.walk.back());
+    await settle(p);
+  }
   // …and the fire still lights from the fireplace shot
   await p.evaluate(() => window.__theatre.pieces.walk.go('fireplace'));
   await settle(p);
