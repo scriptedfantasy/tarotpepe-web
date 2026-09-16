@@ -302,6 +302,16 @@ const DARK_F = 2; // the dark path: the strike, and then the walk back
 // z 0.75 is a hand's breadth downstage of the table's rim (0.62) and x 1.5 is a metre clear of the
 // bookcases at 1.02, so nothing in the set is walked through.
 const OUT_S = 2.5; // the walk out
+// ---- THE DAY'S OWN TWO NUMBERS (step 3 of the point-and-click round) ---------------------------
+// DAY_OUT is the drawing the camera leaves on: the leaf is at rest after SWING.length x F.hold = 12
+// drawings and the lens waits OUT_CUT (2) more, which is the same sixth of a second of stillness a
+// cutter leaves on a stop. There is no F.swingAt in it — that eight-drawing wait is the storm
+// coming in, and by day there is no storm; the visitor pushed the door and it goes.
+const DAY_OUT = 12 + OUT_CUT;
+// …and the walk itself is SHORTER than the storm's, because it starts from the doorway and not
+// from the chair. The storm crosses 6.1 m of parlour in 2.5 s; this one leaves from (1.5, 1.45,
+// 2.60) and has 2.2 m less to cover, so 1.6 s is the same stride.
+const DAY_OUT_S = 1.6;
 const BACK_S = 1.5; // …and the shorter way home
 const VIA_OUT = [PLATE.eye[0], 1.53, 0.75];
 const SHUT_AT = 3; // drawings into the way back before the leaf starts to shut: the lens is clear
@@ -838,6 +848,43 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   // a strike that is due on drawing 15 would simply never be on the drawing anybody rendered. A
   // counter that goes up by one every time this piece is asked to draw cannot skip a strike, and it
   // is also what lets a proof release the storm one drawing at a time.
+  // ---- THE STATE MACHINE, WHOLE, NOW THAT THERE ARE TWO WAYS IN --------------------------------
+  //
+  //                       ┌──── click the cross on the frieze ────► storm ──20 dr──► open
+  //                       │                                                            │
+  //        shut ──────────┤                                        choose a road, or 60 s
+  //          ▲            │                                                            ▼
+  //          │            └── click the DOOR, standing at the doorway ──► day       closing
+  //          │                (walk.js; step 3 of the point-and-click round)  │         │
+  //          │                                                                │         ├─► dark
+  //          └──────────── day-closing ◄── choose a road · click off · Escape ─┘         └─► shut
+  //
+  // THE TWO ENTRIES CANNOT MEET, and that is by construction rather than by care: both are refused
+  // unless the phase is `shut`, so whichever is taken first owns the door until it hands it back.
+  //   · `start()` (the cross) refuses unless shut — it always did.
+  //   · `openByDay()` refuses unless shut, and the cross's own switch is `enabled` only while shut
+  //     AND while the visitor is not standing at a place, so a hand cannot start the storm from the
+  //     doorway and take the camera out from under a walk that is already holding it.
+  //   · `choose()` answers in `open` and in `day`, and sends each to its own closing.
+  //   · `set()` / `setState()` reach `shut` from ANY phase (clear(false) + goHome({at: true})), so
+  //     a judging state always lands somewhere legal whatever the room was doing.
+  // And `outside` is one flag for both: the plate is up while the room is out there by either road,
+  // and `syncPlate` is the only thing that puts it up or takes it down.
+  //
+  // WHAT IS DIFFERENT ABOUT THE DAY, and it is all subtraction. No rain, no strike, no thunder, no
+  // pendant swinging, no shade taken off the room's light, and no line from him — `props:cross`
+  // carries `day` and flow.js only ever acted on `open`, so he says nothing about a door the
+  // visitor opened themselves. What is the SAME is the leaf (the same six poses on the same twos),
+  // the plate (his own traced crossroads, reached through this file rather than copied), the two
+  // castles, and `path` — so a road taken by day reaches mind.js exactly as a road taken in the
+  // storm does.
+  //
+  // WHAT STANDS IN THE OPENING. room.js merges the real door leaf into the same buffer as the
+  // skirting, so when the drawn leaf swings away something opaque must be in the slot or the
+  // visitor is looking at a shut door through an open one. In the storm that is the weather. By day
+  // it is the sheet of BARE PAPER a strike whitens the opening with — the same mesh, doing the same
+  // job for the opposite reason: an open door onto a bright afternoon, seen from inside a room, is
+  // a white rectangle. The walk out then crosses it exactly as the storm's walk does.
   const rng = mulberry32(20260910);
   let phase = 'shut';
   let path = null;
@@ -944,8 +991,13 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     if (C.holding === 'crossroads' && !C.moving) return true;
     C.hold('crossroads', { jump: false });
     // the brake is SHORT: a dolly spends its drawings where it stops, and this one must not stop in
-    // the doorway — it crosses the threshold at cruise and brakes in the open air beyond it
-    C.move('home', 'crossroads', OUT_S, { via: [VIA_OUT], ease: [0.26, 0.2] });
+    // the doorway — it crosses the threshold at cruise and brakes in the open air beyond it.
+    // …AND IT LEAVES FROM WHERE THE CAMERA IS. The storm's own walk names `home` because that is
+    // where the camera is standing when the leaf comes open; the day's starts at the DOORWAY, and
+    // naming `home` there would have jumped the lens back across the room for one drawing before
+    // walking it out again. `null` is camera.js's own word for "off whatever pose it is holding".
+    const near = C.current !== 'home';
+    C.move(near ? null : 'home', 'crossroads', near ? DAY_OUT_S : OUT_S, { via: [VIA_OUT], ease: [0.26, 0.2] });
     return true;
   }
   function goHome({ at = false } = {}) {
@@ -990,10 +1042,48 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     return true;
   }
 
+  // ---- THE DAY. The visitor is standing at the doorway and pulls the door open. ----------------
+  // The swing starts on the drawing of the click — there is no storm to wait through, so the eight
+  // drawings the cross spends letting the weather in are not spent here — and the camera leaves for
+  // the country two drawings after the leaf comes to rest, which is the cut's own beat (OUT_CUT).
+  // Nothing times out: a visitor who walked over here and opened the door is looking at it, and the
+  // offer is withdrawn when they say so and not when a clock does.
+  function openByDay() {
+    if (phase !== 'shut') return false;
+    byHand = false;
+    path = null;
+    weather.visible = true;
+    outMesh.visible = false;
+    rainMesh.visible = false;
+    doorFlash.visible = true; // bare paper in the slot: an open door onto an afternoon
+    flash.visible = false;
+    strikeMesh.visible = false;
+    skyAt(-1); // no bank of cloud on the country
+    showLeaf(SWING[0]);
+    go('day');
+    return true;
+  }
+  // …and shuts it again. Called by the visitor clicking anything that is not a castle, by Escape
+  // (walk.js hangs both on this piece), and by `choose` once a road has been taken.
+  function shutByDay() {
+    if (phase !== 'day') return false;
+    byHand = false;
+    go('day-closing');
+    return true;
+  }
+
   function choose(which) {
-    if (phase !== 'open' || (which !== 'light' && which !== 'dark')) return false;
+    if ((phase !== 'open' && phase !== 'day') || (which !== 'light' && which !== 'dark')) return false;
     path = which;
     byHand = false;
+    if (phase === 'day') {
+      // BY DAY A ROAD IS JUST A ROAD. There is no storm to clear and none to leave standing: the
+      // light was never taken, the rain never started, so both roads shut the same door on the same
+      // afternoon and the difference between them is the one that matters — what `path` says, which
+      // is what mind.js reads and what the visitor chose.
+      go('day-closing');
+      return true;
+    }
     go('closing');
     if (which === 'light') {
       // the storm clears: the light comes back a shade at once (this piece puts back what it took,
@@ -1025,13 +1115,20 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   // ---- the switches -----------------------------------------------------------------------------------
   // The cross answers only when the room is quiet: while the storm is on, or standing, it is a cross
   // on a wall again. The two roads answer only while the room is standing out at the crossroads.
+  // …AND THE CROSS STANDS DOWN WHILE THE VISITOR IS AT A PLACE. It hangs on the frieze 355 mm over
+  // the doorway's own head, so at the `doorway` shot it is in the picture and a hand reaching for
+  // the door could take it instead — and the storm would then pull the camera out from under a walk
+  // that is holding it, from `home`'s pose, halfway across a room the visitor had already crossed.
+  // While somebody is standing anywhere, the door is worked by the door.
+  const atAPlace = () => !!ctx.pieces?.walk?.at;
   switches?.add?.({
     name: 'cross',
     object: () => crossMesh,
     tapBox,
-    enabled: () => phase === 'shut',
+    enabled: () => phase === 'shut' && !atAPlace(),
     onDown: () => start(),
   });
+  const offering = () => phase === 'open' || phase === 'day';
   for (const which of ['light', 'dark']) {
     switches?.add?.({
       name: `cross-${which}`,
@@ -1039,9 +1136,10 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
       tapBox: () => pathBox(which),
       // …and only once the walk is OVER. While the camera is crossing the parlour the castles are
       // not a choice, they are scenery going past: neither is on the glass where pathBox says it is
-      // until the picture has arrived.
-      hit: (px, py) => phase === 'open' && arrived() && inBox(pathBox(which), px, py),
-      enabled: () => phase === 'open' && arrived(),
+      // until the picture has arrived. Same rule by day, same test — the country is the same
+      // country and it is reached by the same walk.
+      hit: (px, py) => offering() && arrived() && inBox(pathBox(which), px, py),
+      enabled: () => offering() && arrived(),
       onDown: () => choose(which),
     });
   }
@@ -1107,6 +1205,15 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     swing: SWING.map((r) => +((r * 180) / Math.PI).toFixed(1)),
     close: CLOSE.map((r) => +((r * 180) / Math.PI).toFixed(1)),
     click: () => start(),
+    // THE DOOR, OPENED BY HAND, BY DAY. walk.js calls these when the visitor is standing at the
+    // doorway: `openByDay` on a click on the leaf or its architrave, `shutByDay` on a click that is
+    // not a castle and on Escape. Both refuse from any phase but their own, so the storm and the
+    // afternoon can never be in the doorway together.
+    openByDay,
+    shutByDay,
+    get daylight() {
+      return phase === 'day' || phase === 'day-closing';
+    },
     choose,
     hitBox,
     tapBox,
@@ -1167,6 +1274,29 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
         goHome({ at: true });
         return;
       }
+      // THE AFTERNOON, HELD. `day` is the leaf standing open on a white doorway, seen from the
+      // room; `day-out` is the room standing out at the crossroads with no weather on it. Neither
+      // touches the rain or the light, which is the whole difference between this and the storm.
+      if (next === 'day' || next === 'day-out') {
+        phase = 'day';
+        path = null;
+        from = drawn - DAY_OUT;
+        weather.visible = true;
+        outMesh.visible = false;
+        rainMesh.visible = false;
+        doorFlash.visible = true;
+        flash.visible = false;
+        strikeMesh.visible = false;
+        skyAt(-1);
+        showLeaf(SWING[SWING.length - 1]);
+        lights(null);
+        R?.set?.(false);
+        if (sway) sway.rotation.z = 0;
+        swayFrom = -1e9;
+        if (next === 'day-out') goOut({ at: true });
+        else goHome({ at: true });
+        return;
+      }
       R?.set?.(true);
       if (next === 'storm' || next === 'open' || next === 'out') {
         phase = 'open';
@@ -1222,7 +1352,14 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     // itself, the room having cut through the door; `cross-dark` is the standing storm with the
     // door shut on it. Every other name is a room nobody has touched the cross in.
     setState(name = 'default') {
-      api.set(name === 'cross-storm' ? 'open' : name === 'cross-out' ? 'out' : name === 'cross-dark' ? 'dark' : 'shut');
+      api.set(
+        name === 'cross-storm' ? 'open'
+          : name === 'cross-out' ? 'out'
+            : name === 'cross-dark' ? 'dark'
+              : name === 'cross-day' ? 'day'
+                : name === 'cross-day-out' ? 'day-out'
+                  : 'shut',
+      );
     },
     // the thunder rendered through an OfflineAudioContext by the very code the page runs — what the
     // proof measures its peak from (sound.js's `render` walks a list of named cues and this is not
@@ -1256,6 +1393,44 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
       }
       const f = frame();
       const sf = drawn - stormFrom; // …and the same count from the click, for the strikes
+
+      // ---- THE DAY, which is its own two phases and shares nothing with the weather ------------
+      if (phase === 'day' || phase === 'day-closing') {
+        if (phase === 'day') {
+          // the leaf, on the same twos as the storm's, from the drawing of the click
+          const i = Math.min(SWING.length - 1, Math.floor(f / F.hold));
+          showLeaf(SWING[i]);
+          if (f === DAY_OUT) goOut();
+        } else {
+          // the way back: the camera leaves at once and the leaf shuts as it clears the opening
+          if (f === 0) goHome();
+          const g2 = f - SHUT_AT;
+          if (g2 >= 0) {
+            const i = Math.floor(g2 / F.hold);
+            if (i < CLOSE.length) showLeaf(CLOSE[i]);
+            else {
+              showLeaf(null);
+              weather.visible = false;
+            }
+          }
+          if (g2 >= SHUT_F) {
+            clear(false);
+            phase = 'shut';
+            emit();
+          }
+        }
+        // AND THE THRESHOLD FLASHES THROUGH BY DAY TOO — except that by day the sheet in the
+        // opening IS the bare paper, so there is nothing to swap: the last half metre of the walk
+        // magnifies a blank rectangle, which is a blank rectangle. The zone is kept only so that
+        // the sheet is not left hidden behind the lens on the way back.
+        if (weather.visible) {
+          outMesh.visible = false;
+          rainMesh.visible = false;
+          doorFlash.visible = true;
+        }
+        drawn++;
+        return;
+      }
 
       // the flash is ONE drawing, and the light cuts with it: the room's tone is up on the same
       // drawing the sky comes in, and back on the next. Nothing here fades.

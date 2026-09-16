@@ -302,6 +302,96 @@ if (doing('fire')) {
   }
 }
 
+// ---- 3c. THE DOOR, OPENED --------------------------------------------------------------------
+// Standing at the doorway, a click on the leaf opens it by day and the camera walks out to the same
+// drawn country the cross egg reveals. What is asked is that the DAY is a day (no rain, no strike,
+// no bank of cloud, the room's own light untouched), that the two castles still answer, and that
+// when it is over the cross egg is in a state the STORM can still be started from.
+const cross = (p) =>
+  p.evaluate(() => {
+    const X = window.__theatre.pieces.props.cross;
+    return {
+      phase: X.phase, out: X.out, path: X.path, sky: X.sky, leaf: X.leaf, daylight: X.daylight,
+      raining: !!window.__theatre.pieces.props.rain?.on,
+      shot: window.__theatre.pieces.camera.current,
+      at: window.__theatre.pieces.walk.at,
+      lights: window.__theatre.pieces.lighting?.state ?? null,
+    };
+  });
+if (doing('door')) {
+  console.log('\nDOOR — opened by day from the doorway, and shut again');
+  for (const [w, h] of [PLATE, PHONE]) {
+    await fresh();
+    const p = await room(w, h);
+    const before = await cross(p);
+    await p.evaluate(() => window.__theatre.pieces.walk.go('doorway'));
+    await settle(p);
+    // a REAL click on the leaf, through the arbiter's own window listener
+    const b = await p.evaluate(() => window.__theatre.pieces.walk.box('doorway'));
+    await p.mouse.click(Math.min(w - 2, Math.max(2, b.x + b.w / 2)), Math.min(h - 2, Math.max(2, b.y + b.h / 2)));
+    await p.waitForFunction(() => window.__theatre.pieces.props.cross.phase === 'day', null, { timeout: 120000, polling: 200 }).catch(() => {});
+    const opening = await cross(p);
+    claim(opening.phase === 'day', `${w}x${h}: a click on the leaf opens the door by day (phase ${opening.phase})`);
+    // the leaf swings and the camera goes out
+    await p.waitForFunction(() => window.__theatre.pieces.props.cross.out === true, null, { timeout: 300000, polling: 300 }).catch(() => {});
+    await settle(p);
+    const outside = await cross(p);
+    claim(outside.out && outside.shot === 'crossroads', `${w}x${h}: and the room walks out onto the country (plate up ${outside.out}, camera ${outside.shot})`);
+    claim(outside.sky === -1 && !outside.raining, `${w}x${h}: by day — no bank of cloud (sky ${outside.sky}), no rain (${outside.raining})`);
+    claim(outside.lights === before.lights, `${w}x${h}: and the room's own light is untouched (${outside.lights} both sides)`);
+    if (w === PLATE[0]) await shot(p, 'door-open-1280x800');
+    else await shot(p, 'door-open-390x844');
+    // the two castles still answer
+    const castles = await p.evaluate(() => {
+      const X = window.__theatre.pieces.props.cross;
+      const S = window.__theatre.pieces.props.switches;
+      const out = {};
+      for (const k of ['light', 'dark']) {
+        const c = X.castleBox(k);
+        out[k] = c ? S.at(c.x + c.w / 2, c.y + c.h / 2) : null;
+      }
+      return out;
+    });
+    claim(castles.light === 'cross-light' && castles.dark === 'cross-dark', `${w}x${h}: both castles answer as switches (${JSON.stringify(castles)})`);
+    // take one, and the door shuts and the visitor is walked home
+    const lb = await p.evaluate(() => window.__theatre.pieces.props.cross.castleBox('light'));
+    await p.mouse.click(Math.min(w - 2, Math.max(2, lb.x + lb.w / 2)), Math.min(h - 2, Math.max(2, lb.y + lb.h / 2)));
+    await p.waitForFunction(() => window.__theatre.pieces.props.cross.phase === 'shut', null, { timeout: 400000, polling: 300 }).catch(() => {});
+    await settle(p);
+    const done = await cross(p);
+    claim(done.phase === 'shut' && done.path === 'light', `${w}x${h}: a castle is the visitor's road (path ${done.path}) and the door shuts (${done.phase})`);
+    claim(!done.out && !done.leaf.shown && done.shot === 'home' && done.at === null, `${w}x${h}: nothing is left standing — plate ${done.out}, leaf ${done.leaf.shown}, camera ${done.shot}, walk ${done.at}`);
+
+    // …and again, out by ESCAPE
+    await p.evaluate(() => window.__theatre.pieces.walk.go('doorway'));
+    await settle(p);
+    await p.evaluate(() => window.__theatre.pieces.props.cross.openByDay());
+    await p.waitForFunction(() => window.__theatre.pieces.props.cross.out === true, null, { timeout: 300000, polling: 300 }).catch(() => {});
+    await settle(p);
+    await p.keyboard.press('Escape');
+    await p.waitForFunction(() => window.__theatre.pieces.props.cross.phase === 'shut', null, { timeout: 400000, polling: 300 }).catch(() => {});
+    await settle(p);
+    const esc = await cross(p);
+    claim(esc.phase === 'shut' && !esc.out && esc.shot === 'home' && esc.at === null, `${w}x${h}: Escape shuts the door and walks back (${esc.phase}, camera ${esc.shot}, walk ${esc.at})`);
+
+    // AND THE STORM STILL WORKS. The whole point of one state machine with two ways in.
+    const started = await p.evaluate(() => window.__theatre.pieces.props.cross.click());
+    claim(started === true, `${w}x${h}: the cross can still be clicked after an afternoon (${started})`);
+    await p.waitForFunction(() => window.__theatre.pieces.props.cross.phase === 'open', null, { timeout: 400000, polling: 300 }).catch(() => {});
+    const storm = await cross(p);
+    claim(storm.phase === 'open' && storm.raining, `${w}x${h}: the storm comes in as it always did (phase ${storm.phase}, raining ${storm.raining})`);
+    await p.evaluate(() => window.__theatre.pieces.props.cross.set('shut'));
+    await settle(p);
+    const back2 = await cross(p);
+    claim(back2.phase === 'shut' && !back2.raining && !back2.out, `${w}x${h}: and it puts itself away (${back2.phase}, raining ${back2.raining})`);
+    if (p.__errors.length) {
+      console.log(`   errors: ${p.__errors.join(' | ')}`);
+      bad++;
+    }
+    await p.close();
+  }
+}
+
 // ---- 4. HE CAN STILL TALK WHILE YOU STAND THERE ------------------------------------------------
 if (doing('talk')) {
   await fresh();

@@ -274,10 +274,12 @@ export async function build(ctx) {
     if (!at || ev.target !== glass) return;
     if (C.moving) return; // the walk out is still running; let it finish
     const r = glass.getBoundingClientRect();
-    if (inside(box(at), ev.clientX - r.left, ev.clientY - r.top)) {
-      // the place's own object. The door has something to say about that (step 3, egg-cross.js);
-      // the other two simply stay where they are.
-      if (onOwn(at, ev)) ev.stopImmediatePropagation();
+    const px = ev.clientX - r.left, py = ev.clientY - r.top;
+    // THE PLACE'S OWN ANSWER FIRST. The door has one (step 3: it opens, and once it is open any
+    // click that is not a castle shuts it again); the other two have none, and for them what is
+    // left is the rule itself — a click on the thing you are standing at is not a request to leave.
+    if (onOwn(at, px, py, ev) || inside(box(at), px, py)) {
+      ev.stopImmediatePropagation();
       return;
     }
     // the audio context's first-gesture unlock lives on this same window and is about to be
@@ -353,6 +355,47 @@ export async function build(ctx) {
       }
     },
   };
+
+  // ---- STEP 3: THE DOOR, OPENED ----------------------------------------------------------------
+  // The leaf, the plate outside it and the two castles all belong to the cross egg, and this piece
+  // does not own one line of any of them: what it owns is WHERE THE VISITOR IS STANDING, which is
+  // the only thing the egg could not know. So the two answers a door needs are handed over the
+  // counter — egg-cross.js's `openByDay` and `shutByDay`, which refuse from any phase but their own.
+  //
+  //   a click on the leaf or its architrave, standing at the doorway, with the cross quiet → it
+  //     opens by day, the camera walks out and the country is there;
+  //   a click on anything that is not a castle, once it is open → it shuts and the visitor walks
+  //     back to the chair. The camera is OUTSIDE by then, so the doorway has no box on the glass
+  //     at all and the test cannot be "was it on the door" — while the afternoon is up, every
+  //     click the arbiter did not give to a castle is the visitor saying they have seen enough;
+  //   Escape, the same.
+  const CROSS = () => ctx.pieces?.props?.cross ?? null;
+  api.hang({
+    onOwn: (place, px, py) => {
+      if (place !== 'doorway') return false;
+      const X = CROSS();
+      if (!X) return false;
+      if (X.daylight) return X.shutByDay();
+      if (X.phase === 'shut' && inside(box('doorway'), px, py)) return X.openByDay();
+      return false;
+    },
+    onEscape: (place) => {
+      const X = CROSS();
+      if (place !== 'doorway' || !X?.daylight) return false;
+      return X.shutByDay();
+    },
+  });
+  // AND THE VISITOR IS NO LONGER AT THE DOOR THE MOMENT IT STARTS SHUTTING. The egg walks the
+  // camera home itself (its own hold, its own dolly, its own release), so this piece lets go of
+  // both at `day-closing` rather than calling `back()` over the top of it — two walks home at once
+  // is the one thing the hold exists to prevent.
+  ctx.on?.('props:cross', ({ phase } = {}) => {
+    if (at !== 'doorway') return;
+    if (phase === 'day-closing' || phase === 'shut') {
+      at = null;
+      mine = null;
+    }
+  });
 
   const asked = ctx.params?.get?.('walk');
   if (asked && PLACES[asked]) pending = asked;
