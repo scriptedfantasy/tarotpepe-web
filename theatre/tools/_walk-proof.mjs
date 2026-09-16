@@ -32,7 +32,7 @@ const OUT = args.out ?? '/tmp/walk';
 mkdirSync(OUT, { recursive: true });
 const PLATE = [1280, 800];
 const PHONE = [390, 844];
-const PLACES = ['fireplace', 'doorway', 'case'];
+const PLACES = ['fireplace', 'doorway', 'case', 'piano'];
 const ONLY = args.only ? String(args.only).split(',') : null;
 const doing = (n) => !ONLY || ONLY.includes(n);
 
@@ -261,10 +261,35 @@ if (doing('switches')) {
   {
     await p.evaluate(() => window.__theatre.pieces.walk.go('case'));
     await settle(p);
-    for (const t of ['TAROT', 'MARSEILLE', 'CHIROMANCIE', 'LE DESTIN']) {
-      const b = await p.evaluate((k) => window.__theatre.pieces.walk.books.tapBox(k), t);
+    // ONE SPINE OPENS. The other three stopped being switches the round the cards went into the
+    // book ("for now it should be the only clickable one"), so they have no box at all and that is
+    // what is asked of them here.
+    {
+      const b = await p.evaluate(() => window.__theatre.pieces.walk.books.tapBox('TAROT'));
       const said = b ? await asks(p, b.x + b.w / 2, b.y + b.h / 2) : 'no box';
-      claim(said === `book-${t}`, `case: the ${t} spine answers "${said}"`);
+      claim(said === 'book-TAROT', `case: the TAROT spine answers "${said}"`);
+    }
+    for (const t of ['MARSEILLE', 'CHIROMANCIE', 'LE DESTIN']) {
+      const b = await p.evaluate((k) => window.__theatre.pieces.walk.books.tapBox(k), t);
+      claim(!b, `case: ${t} is a book on a shelf and has no thumb box (${b ? 'HAS ONE' : 'none'})`);
+    }
+    // …and the PIANO is a place now, so the fourth one answers from the chair as the other three do
+    {
+      await p.evaluate(() => window.__theatre.pieces.walk.back());
+      await settle(p);
+      const b = await p.evaluate(() => window.__theatre.pieces.walk.box('piano'));
+      const [W, H] = PLATE; // this section runs at 1280x800 only
+      if (b) {
+        let mine = 0;
+        for (let j = 1; j < 6; j++) for (let i = 1; i < 6; i++) {
+          const x = b.x + (b.w * i) / 6, y = b.y + (b.h * j) / 6;
+          if (x < 2 || x > W - 2 || y < 2 || y > H - 2) continue;
+          if ((await asks(p, x, y)) === 'walk-piano') mine++;
+        }
+        claim(mine > 0, `the piano can be clicked from the chair (${mine} of a 5 x 5 grid inside its box answer walk-piano)`);
+      }
+      await p.evaluate(() => window.__theatre.pieces.walk.go('case'));
+      await settle(p);
     }
     await p.evaluate(() => window.__theatre.pieces.walk.back());
     await settle(p);

@@ -45,6 +45,7 @@ import { eggDark } from './egg-dark.js';
 
 
 import { eggDroste } from './egg-droste.js';
+import { buildPiano } from './props-piano.js';
 
 import { eggPeep } from './egg-peep.js';
 
@@ -1459,6 +1460,11 @@ export async function build(ctx) {
   // It is given the pendant (which it lifts into a pivot at the rose so that it can swing) and the
   // room's own door rectangle; the rain, the light and the sound it asks for by their own apis.
   const CROSS = eggCross(ctx, { group: g, switches: SWITCHES, pendant, door: room.door, rain: RAIN });
+  // ---- THE SPINET under the wide window (src/pieces/props-piano.js) -----------------------------
+  // The user: "can we squeeze a piano between the fireplace and the wall under the window?" It is
+  // joinery like the tall case and it is the room's TENTH switch — the keys, which start and stop
+  // the song. The case itself is a PLACE (walk.js), not a switch, the way the chimney breast is.
+  const PIANO_ = buildPiano(ctx, { group: g, switches: SWITCHES, O, M });
 
   return {
     group: g,
@@ -1525,6 +1531,13 @@ export async function build(ctx) {
     // standing on its boards (each mesh carries `userData.title`), `boards` their heights and
     // `bounds` the carcase in world metres. src/pieces/walk-book.js finds four of them by title.
     tallCase,
+    // THE SPINET under the window. `box` is its own carcase in world metres, `keyboard` where the 88
+    // are and how far they run, `keyZ(m)` where one key stands, `playing` whether the song is on,
+    // `start()`/`stop()`/`toggle()` work the keys as a click does, `beat` where in the piece it is,
+    // `down` which keys are pressed in this drawing and `struck` every note the drawing has put a
+    // key down for, `hands` what his two rigs are doing, `hold(beat)` freezes a bar of it for a
+    // still and `piano-playing` is that as a judging state.
+    piano: PIANO_,
     // THE RADIO on the case's middle board, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb
@@ -1640,6 +1653,8 @@ export async function build(ctx) {
       // the only one besides the cross that takes the camera, and the cross's own `shut` sends the
       // lens home — a state that cut the plate before it would be shown from the parlour.
       DECK_OUT.setState(name);
+      // `piano-playing` is a bar of the Gymnopédie held with the keys down and his hands on them
+      PIANO_.setState(name);
     },
     update(ctx) {
       if (!ctx.clock.stepped) return;
@@ -1661,6 +1676,7 @@ export async function build(ctx) {
       KONAMI.update(ctx);
       DECK_OUT.update(ctx);
       CROSS.update(ctx); // after RAIN: the weather sets its own light and the storm sits over it
+      PIANO_.update(ctx);
     },
   };
 }

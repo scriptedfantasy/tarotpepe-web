@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 const VIEWS = {
   ink: ['default', 'lines-only', 'tone-only'],
   room: ['default'],
-  props: ['default', 'cat-lit', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'dark', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'],
+  props: ['default', 'cat-lit', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'dark', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark', 'piano-playing'],
   table: ['default'],
   pepe: ['default'],
   pepeAnim: ['idle', 'talk', 'gesture', 'consider'],
@@ -21,7 +21,7 @@ const VIEWS = {
   titles: ['title', 'chapter', 'closing', 'hidden'],
   dialogue: ['greeting', 'question', 'reading', 'farewell'],
   help: ['closed', 'hover', 'open', 'cards'],
-  walk: ['home', 'fireplace', 'doorway', 'case'],
+  walk: ['home', 'fireplace', 'doorway', 'case', 'piano'],
   // not a piece: what the notice DOES. ?view=keep draws page one of the sheet a visitor takes away
   // (src/pieces/help-keep.js) into the overlay, from a canned reading.
   keep: ['default'],

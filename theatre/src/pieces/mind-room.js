@@ -192,6 +192,18 @@ const PLAIN = [
     /\bduct\b|\bconduit\b|\bcleats?\b|\bterminal box\b|\bcables?\b|\bwires?\b|\btrough\b/,
     ['The cable duct. The town\'s calls ran along that wall in it. It is empty now, and it is still screwed to the plaster.'],
   ],
+  // THE SPINET, squeezed in under the wide window between the chimney breast and the corner. It is
+  // PLAIN and not a story: it came with the room, like the wallpaper and the duct, and he does not
+  // have a life in it. What he has is the one true thing about it — it is not his and he plays it —
+  // which is the register everything in this room that is not one of his ten objects is answered in.
+  [
+    /\bpianos?\b|\bspinets?\b|\bkeyboards?\b|\bupright\b|\bkeys? of the piano\b/,
+    [
+      'The spinet was here when I took the room. The post office had it from a chapel that closed and nobody ever came for it, so it stays under the window with the lid down.',
+      'It is not mine. It came with the room, out of a chapel down the hill, and it is half a tone flat in the bass and has been since before I arrived.',
+      'A spinet, under the window. I play one piece on it and I play it badly, and there is nobody up here to mind.',
+    ],
+  ],
   // THE PICTURE OF THIS ROOM (src/pieces/egg-droste.js), AND IT IS NOT ON THE WALL ANY MORE. The
   // user moved it: "the room image instead should be in a photo frame where the cat now stands." So
   // it is a small framed photograph standing on the right-hand bookcase top, and the lines say that
@@ -380,7 +392,11 @@ const ABSENT = [
   // left absent on this subject is the radiator, which came out of the room with the tall case's
   // legs and was replaced by nothing until the chimney breast went up.
   [/\bradiators?\b|\bheating\b|\bheater\b/, ['There is no radiator. There was, under the case, and it knocked at seven and again at eleven. There is a fireplace instead, which is older and quieter and no warmer.']],
-  [/\bpianos?\b|\bguitar\b|\bgramophone\b|\brecord player\b/, ['There is no piano. There is a radio that does not get switched on, which is quieter still.']],
+  // THE PIANO WAS ON THIS LIST FOR NINE ROUNDS AND IT IS IN THE ROOM NOW (src/pieces/props-piano.js).
+  // The user: "can we squeeze a piano between the fireplace and the wall under the window?" So the
+  // instrument has an entry of its own in PLAIN above, and what is left absent here is everything
+  // else somebody might ask for music with.
+  [/\bguitar\b|\bgramophone\b|\brecord player\b|\bviolin\b|\baccordion\b/, ['No. There is a spinet under the window and a radio that does not get switched on, and between them that is as much music as this room has.']],
   [/\bbed\b|\bkitchen\b|\bbathroom\b|\btoilet\b|\bthe lavatory\b/, ['Not in here. That is all upstairs, and it is a bed, a kettle and a window looking at another window.'],],
   [/\bwi.?fi\b|\binternet\b|\bsignal\b|\belectricity in here\b/, ['Nothing in this room is connected to anything. It used to be connected to the whole town.']],
   [/\bdogs?\b/, ['No dog. There is a cat, and it belongs to the building.']],

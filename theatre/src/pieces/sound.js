@@ -51,7 +51,7 @@
 //      toggleMute() · muted · running · cues · timeline · tune · setTune(id)
 //      render(name, seconds, opts) · measureTune(id, opts)   (the last two are for tools/)
 import { LEVEL, LENGTH, TRIM, CUES, VEIL, play as voice, tick as clockTick, roomTone } from './sound-voices.js';
-import { TUNES, TUNE_IDS, DEFAULT_TUNE, TUNE_LEVEL, makeTune, renderTune } from './sound-tune.js';
+import { TUNES, TUNE_IDS, DEFAULT_TUNE, TUNE_LEVEL, makeTune, renderTune, pianoNote } from './sound-tune.js';
 
 export const meta = {
   name: 'sound',
@@ -495,6 +495,32 @@ export async function build(ctx) {
 
     play(name, opts) {
       return api.at(0, name, opts);
+    },
+
+    // ---- ONE NOTE OF THE PIANO -------------------------------------------------------------
+    // The piano in the corner is not a CUE and it is not the room's tune: it is a song somebody
+    // started, dozens of notes long, laid a bar ahead on the audio clock by the piece that owns it
+    // (src/pieces/props-piano.js). So it has a door of its own, and the two things it does not go
+    // through are the cue budget — eighteen voices in a tenth of a second would drop a chord — and
+    // the figure de-duplicator, since a repeated note IS the piece. Everything else is the same:
+    // silent, muted and "no gesture yet" all refuse it, and it goes on the TUNE bus, so the room
+    // ducks it with the tune when he speaks.
+    //
+    // `m` is a MIDI number (69 = A4 = 440). `at` is seconds ahead on the audio clock; `dur` is how
+    // long the key is held, and the string rings past it.
+    key(m, { at = 0, dur = 0.8, level = 0.6 } = {}) {
+      if (silent || muted || !running || !ac || !tuneBus) return 0;
+      try {
+        const when = ac.currentTime + 0.01 + Math.max(0, at || 0);
+        const len = pianoNote(ac, tuneBus, { t: when, freq: 440 * Math.pow(2, (m - 69) / 12), dur, level: TUNE_LEVEL * level * 1.6 });
+        api.stats.played++;
+        timeline.push({ name: 'piano', at: +when.toFixed(4), wall: +(performance.now() / 1000).toFixed(4), m });
+        if (timeline.length > 128) timeline.shift();
+        return len;
+      } catch (e) {
+        console.warn('[sound] piano', e?.message ?? e);
+        return 0;
+      }
     },
 
     // The one door into the graph. `seconds` puts the cue that far in the future ON THE AUDIO

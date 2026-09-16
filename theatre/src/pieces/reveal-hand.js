@@ -592,8 +592,19 @@ function quadXZ(w, l, { z0 = 0, z1 = 1, flipV = false } = {}) {
 // (the behaviour every take had before round 11); a PAIR cannot, because each rig would switch the
 // other one's puppet hand back on every drawing, so buildHands hands both rigs one reconciliation.
 // `name` names the group, and `lockSide` fixes a rig to one of his hands whatever a take asks for.
-export function buildHand(ctx, { onShown = null, name = 'reveal-hand', lockSide = null } = {}) {
-  const Y = ctx.layout.spread.y;
+// THREE OPTIONS THE PIANO ADDED (src/pieces/props-piano.js), and each of them is one assumption
+// this rig had baked in because for nine rounds there was only one thing it could be doing:
+//   `anchors` {L, R}  where each sleeve runs BACK to, in world metres. Without it the arm goes to
+//                     the puppet's own wrist at the table, which is right over the cloth and wrong
+//                     anywhere else; the piano's shoulders are just off the bottom of its own frame.
+//   `floorY`          the height the drawing is measured from. The cloth is at 0.7625; the piano's
+//                     white keys are at 0.66.
+//   `onShown`         already existed, and giving it is what stops the rig taking the puppet's own
+//                     drawn hand off him. At the piano he is a metre and a half away with both
+//                     hands on the table, which is the joke.
+// A caller that passes none of them gets exactly what the cloth has always got.
+export function buildHand(ctx, { onShown = null, name = 'reveal-hand', lockSide = null, anchors = null, floorY = null } = {}) {
+  const Y = floorY ?? ctx.layout.spread.y;
   const group = new THREE.Group();
   group.name = name;
   group.visible = false;
@@ -650,11 +661,13 @@ export function buildHand(ctx, { onShown = null, name = 'reveal-hand', lockSide 
   arm.frustumCulled = false;
   group.add(arm);
   // where each arm goes: the puppet's own wrists at rest, read off him if he built
-  const ANCH = { R: new THREE.Vector3(...HAND.anchor), L: new THREE.Vector3(-HAND.anchor[0], HAND.anchor[1], HAND.anchor[2]) };
+  const ANCH = anchors
+    ? { R: new THREE.Vector3(...anchors.R), L: new THREE.Vector3(...anchors.L) }
+    : { R: new THREE.Vector3(...HAND.anchor), L: new THREE.Vector3(-HAND.anchor[0], HAND.anchor[1], HAND.anchor[2]) };
   ctx.pieces.pepe?.root?.updateMatrixWorld(true);
   for (const s of ['L', 'R']) {
     const h0 = puppetHand(s);
-    if (h0?.matrixWorld) h0.getWorldPosition(ANCH[s]);
+    if (!anchors && h0?.matrixWorld) h0.getWorldPosition(ANCH[s]); // a given anchor is a fixed shoulder
   }
 
   // the hand, hinged at the wrist so it can tilt up off the cloth

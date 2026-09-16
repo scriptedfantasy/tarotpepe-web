@@ -102,8 +102,8 @@ import { buildBooks } from './walk-book.js';
 
 export const meta = {
   name: 'walk',
-  judge: { shot: 'home', states: ['home', 'fireplace', 'doorway', 'case'] },
-  files: ['src/pieces/walk.js', 'src/pieces/walk-book.js', 'src/pieces/book-tarot.js'],
+  judge: { shot: 'home', states: ['home', 'fireplace', 'doorway', 'case', 'piano'] },
+  files: ['src/pieces/walk.js', 'src/pieces/walk-book.js', 'src/pieces/book-tarot.js', 'src/pieces/props-piano.js', 'src/pieces/piano-song.js'],
 };
 
 // 1.5 s, which at twelve a second is eighteen drawings. The cross egg's own walk out through the
@@ -123,10 +123,15 @@ const MIN_TAP = 44; // px: what a thumb needs, whatever the thing measures on th
 //              clear over the top of this box — so the two never share a point.
 //   case       the carcase: x −2.10 .. −1.06, the floor to the top board at 2.45, from the lining
 //              at z −2.46 to the front of the boards at −2.20.
+//   piano      the spinet's carcase — x −2.564 .. −1.994 (the case and the keys it carries), the
+//              floor to its lid at 0.98, z −2.10 .. −0.72. NOT the stool, which stands 0.32 m out
+//              in front of it and is furniture; and not the keys, which are their own switch and
+//              are subtracted from this one (`boxesOn`).
 const PLACES = {
   fireplace: { shot: 'fireplace', x: [-2.6, -2.36], y: [0, 1.26], z: [-0.66, 0.56] },
   doorway: { shot: 'doorway', x: [1.05, 1.95], y: [0, 2.45], z: [-2.5, -2.4] },
   case: { shot: 'case', x: [-2.1, -1.06], y: [0, 2.45], z: [-2.46, -2.2] },
+  piano: { shot: 'piano', x: [-2.564, -1.994], y: [0, 0.98], z: [-2.1, -0.72] },
 };
 const NAMES = Object.keys(PLACES);
 
@@ -137,7 +142,7 @@ const NAMES = Object.keys(PLACES);
 // floor plan the nearest any of the three chords passes to the table's axis is the fireplace's,
 // at x 1.29 as it crosses z 0, which is 0.67 m outside a rim of 0.62. The cross egg's walk needs
 // its waypoint because it goes THROUGH a 0.90 m opening; none of these leaves the room.
-const VIA = { fireplace: [], doorway: [], case: [] };
+const VIA = { fireplace: [], doorway: [], case: [], piano: [] };
 
 // the beats of a reading. A visitor may talk to him from the fireplace; they may not wander off in
 // the middle of having their cards read. (flow.js keeps the same set for the fire's one remark.)
@@ -278,6 +283,7 @@ export async function build(ctx) {
     const Pp = ctx.pieces?.props ?? null;
     if (name === 'fireplace') return [Pp?.fine?.tapBox?.()];
     if (name === 'doorway') return [Pp?.cross?.tapBox?.()];
+    if (name === 'piano') return [Pp?.piano?.tapBox?.()];
     return [Pp?.cat?.tapBox?.(), Pp?.wine?.tapBox?.(), Pp?.radio?.tapBox?.(), ...(api.books?.spineBoxes?.() ?? [])];
   };
   // A PLACE ANSWERS AS A DRAWING, AND THE THINGS ON IT ARE SUBTRACTED FROM IT.

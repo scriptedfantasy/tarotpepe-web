@@ -53,7 +53,7 @@ import { mountChevrons } from './camera-pan.js';
 
 export const meta = {
   name: 'camera',
-  judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'crossroads', 'fireplace', 'doorway', 'case', 'track', 'whip', 'zoom-half', 'zoom-deep', 'pan-left', 'pan-right'] },
+  judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'crossroads', 'fireplace', 'doorway', 'case', 'piano', 'track', 'whip', 'zoom-half', 'zoom-deep', 'pan-left', 'pan-right'] },
   files: ['src/pieces/camera.js', 'src/pieces/camera-shots.js', 'src/pieces/camera-frame.js', 'src/pieces/camera-plan.js', 'src/pieces/camera-pan.js'],
 };
 

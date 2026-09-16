@@ -277,6 +277,10 @@ const FIRE = { wall: -2.6, face: -2.36, z0: -0.6, z1: 0.5, mantel: 1.22, mid: -0
 // the skirting — so its front face is at z −2.20 and its lining at −2.46. The picture rail starts
 // at 2.60 and there is 150 mm of papered field over the top board.
 const TALL_CASE = { x0: -2.1, x1: -1.06, front: -2.2, top: 2.45, plinth: 0.07, boards: [0.52, 0.97, 1.442, 2.114] };
+// THE SPINET under the wide window (src/pieces/props-piano.js PIANO): the case z −2.10 .. −0.72 at
+// x −2.564 .. −2.144, 0.98 tall; the white keys at 0.66 reaching out to −1.994; the keyboard itself
+// z −2.02 .. −0.80, which is the 1.22 m of it that has keys on it.
+const SPINET = { back: -2.564, front: -2.144, keysOut: -1.994, z0: -2.1, z1: -0.72, top: 0.98, keyY: 0.66, kz0: -2.02, kz1: -0.8 };
 
 // a box of points: the corners of a thing, for "wholly in or wholly out"
 const box = (x0, x1, y0, y1, z0, z1) => {
@@ -710,6 +714,41 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
     //              same trade every portrait composition in this file makes.
     // Both are under a thumb's 44 px, so the four spines that open are given the arbiter's own
     // grown box, and a pointer actually on one of them hits the drawing (props.js, THE SWITCHES).
+    // THE PIANO, FROM OVER THE KEYBOARD, which is the shot the user asked for in so many words: "i
+    // think it'd be funny if we see a piano from above and see pepe's hand play a song."
+    //
+    // It is the one shot in this film that is neither square to a wall nor a plan. The lens stands
+    // 1.73 m out from the keys on their own centre line and looks DOWN at 46 degrees — steep enough
+    // that the 88 keys read as 88 keys and not as a grey band, shallow enough that the fall behind
+    // them and the music desk over that are still in the picture and the thing is legible as a
+    // piano. A true plan would be the honest room grammar and it would also be a sliver: the
+    // keyboard is 1.22 m long and 0.15 deep, so straight down it is a strip 8:1.
+    //
+    // AND THE FRAME TURNS ON ITS SIDE FOR A NARROW WINDOW, which is the one thing that makes this
+    // shot work on a phone. The keyboard runs along the room's z; with the ordinary up that is the
+    // frame's WIDTH, and 1.22 m of width at 1.73 m out is 39 degrees at 16:10 and 77 on a phone — a
+    // fisheye pointed at a wall. So a portrait window gets `up` along the room's −z and the keyboard
+    // runs DOWN the screen instead of across it: 27 degrees, the whole board, and the bass at the
+    // foot where the left hand is. It is the same trick the portrait compositions in this file make
+    // for the parlour, made with the frame's own axes instead of with its contents.
+    piano: (() => {
+      const mz = (SPINET.z0 + SPINET.z1) / 2;
+      // 2.20 m out on the keys' own centre line, at 46 degrees above them — which puts the lens at
+      // y 2.29, well under the 3.10 ceiling and 0.74 m clear of the pendant's own spread at x 0.
+      // It was 1.73 m for one pass and a phone paid 51.5 degrees for it; at 2.20 the same frame is
+      // 41.5, and a laptop's goes from 32.3 to 26.6, which is this film's kind of lens.
+      const look = [-2.25, 0.7, mz];
+      const pos = [look[0] + 1.524, look[1] + 1.587, mz];
+      // the whole board, its far corner and the fall behind it: the four corners of the keys, the
+      // two ends of the fall's top edge, and the music desk's own line over that
+      const keep = [
+        [SPINET.keysOut, SPINET.keyY, SPINET.kz0], [SPINET.keysOut, SPINET.keyY, SPINET.kz1],
+        [SPINET.front, SPINET.keyY, SPINET.kz0], [SPINET.front, SPINET.keyY, SPINET.kz1],
+        [SPINET.front + 0.03, SPINET.keyY + 0.22, SPINET.z0 + 0.02], [SPINET.front + 0.03, SPINET.keyY + 0.22, SPINET.z1 - 0.02],
+      ];
+      const tall = aspect < 1.05;
+      return fitEither({ pos, look, ...(tall ? { up: [0, 0, -1] } : null), keep, pad: tall ? 0.06 : 0.1 }, aspect);
+    })(),
     case: flat([(TALL_CASE.x0 + TALL_CASE.x1) / 2, 1.1, 3.2], {
       keep: [
         [TALL_CASE.x0, 0.45, TALL_CASE.front], [TALL_CASE.x1, 0.45, TALL_CASE.front],

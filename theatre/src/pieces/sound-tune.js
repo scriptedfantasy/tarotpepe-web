@@ -115,6 +115,42 @@ function pluck(ac, dest, { t, freq, dur, level, partials, type = 'sine', click =
   return t + dur;
 }
 
+// THE PIANO, and it is the pluck above with a piano's own partials on it. A struck string is not a
+// sine: the fundamental carries maybe half the energy and the rest is in the first six partials,
+// each dying quicker than the one below it, with a hammer knock across the front of all of them.
+// Three things make it a piano rather than the music box's tine:
+//   THE PARTIALS ARE HARMONIC and there are six of them. The tine's are bent sharp on purpose
+//   (`inharm`); a string's are not, and the ear hears the difference as wood against metal.
+//   THE DECAY IS LONG AND IT IS THE FUNDAMENTAL'S. A bass note rings for four seconds and its
+//   partials are gone in one, which is why the low notes of this piece turn into a hum under the
+//   melody rather than a row of separate events.
+//   AND THERE IS A KNOCK. 4 ms of banded noise at the onset — the hammer on the string and the key
+//   on its bed — at a tenth of the note's own level. Without it every note begins out of nothing,
+//   which is an organ.
+// `dur` is how long the note is HELD; the string rings a little past it, as a damper does.
+export function pianoNote(ac, dest, { t, freq, dur, level = 0.5 }) {
+  const ring = Math.min(5.5, Math.max(0.55, dur * 1.35 + 220 / Math.max(60, freq)));
+  // brighter at the bottom of the keyboard, where a real string has more of its energy up high
+  const bright = Math.min(1, 220 / Math.max(80, freq) + 0.42);
+  return pluck(ac, dest, {
+    t,
+    freq,
+    dur: ring,
+    level,
+    type: 'triangle',
+    click: 0.11,
+    seed: Math.round(freq),
+    partials: [
+      [1, 0.62, 1],
+      [2, 0.26 * bright, 0.42],
+      [3, 0.15 * bright, 0.3],
+      [4, 0.09 * bright, 0.22],
+      [5, 0.055 * bright, 0.16],
+      [6, 0.035 * bright, 0.12],
+    ],
+  });
+}
+
 // A blown / bowed voice: a sustained tone with a body, a de-click on and a cut off. Used by the
 // reed drone and by the mains hum; never by anything that is supposed to be struck.
 function held(ac, dest, { t, freq, dur, level, type = 'sawtooth', cut = 900, q = 0.7, attack = 0.03, detune = 0 }) {
