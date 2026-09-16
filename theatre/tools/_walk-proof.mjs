@@ -32,7 +32,7 @@ const OUT = args.out ?? '/tmp/walk';
 mkdirSync(OUT, { recursive: true });
 const PLATE = [1280, 800];
 const PHONE = [390, 844];
-const PLACES = ['fireplace', 'doorway', 'case', 'piano'];
+const PLACES = ['fireplace', 'doorway', 'case', 'piano', 'table'];
 const ONLY = args.only ? String(args.only).split(',') : null;
 const doing = (n) => !ONLY || ONLY.includes(n);
 
@@ -170,7 +170,13 @@ if (doing('walk')) {
       // The DOOR is the one place whose own object is not inert: step 3 makes it open, so what is
       // asked of it is that it opens and that the visitor is still standing there, and then it is
       // shut again and they walk back to it before the two ways out are tried.
-      const b2 = (await boxes(p))[n];
+      // …and ONE of the five does not hold its own click at all (walk.js, `holds`): the reading
+      // table's shot is a plan of the reading table, so the table IS the picture — 100 % of a
+      // 390x844 frame — and a click anywhere on it that is not the BOOK is the way out. The piece
+      // is asked which rule it is under rather than this file assuming it.
+      const ownRule = await p.evaluate((k) => window.__theatre.pieces.walk.owns(k), n);
+      if (!ownRule) claim(true, `${w}x${h} ${n}: this place's own object is the whole picture, so a click on it IS the way out`);
+      const b2 = ownRule ? (await boxes(p))[n] : null;
       if (b2) {
         const cx = Math.min(w - 2, Math.max(2, b2.x + b2.w / 2)), cy = Math.min(h - 2, Math.max(2, b2.y + b2.h / 2));
         await p.mouse.click(cx, cy);
@@ -186,8 +192,27 @@ if (doing('walk')) {
           await settle(p);
         } else claim(held.at === n, `${w}x${h} ${n}: a click on the place's own object leaves the visitor there (${held.at})`);
       }
-      // …and a click on nothing walks them home. The top-left corner is plaster in all three frames.
-      await p.mouse.click(4, 4);
+      // …AND A CLICK ON NOTHING WALKS THEM HOME, and «nothing» has to be FOUND rather than assumed.
+      // The top-left corner was plaster in the first three frames and is the FIREPLACE's own hotspot
+      // in the piano's (they stand on the same wall and the piano shot looks along it), so a click
+      // there walks to the fireplace — which is right, and is not what this claim is about. So the
+      // proof sweeps the frame for a point that is nobody's TWICE OVER: no switch answers for it,
+      // and it is not inside the box of the thing the visitor is standing at where that box holds
+      // its own click. That second half is the whole reason the sweep exists: at the piano the
+      // carcase covers 95.8 % of a laptop frame and 99.4 % of a phone's, and a point picked by hand
+      // would as likely as not land on it.
+      const nowhere = await p.evaluate(([W, H, k]) => {
+        const S = window.__theatre.pieces.props.switches, Wk = window.__theatre.pieces.walk;
+        const held = Wk.owns(k) ? Wk.box(k) : null;
+        const on = (b, x, y) => !!b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+        for (const y of [6, H - 3, H - 6, H / 2, H * 0.25, H * 0.75]) for (let i = 0; i <= 48; i++) {
+          const x = (W * i) / 48;
+          if (!S.at(x, y) && !on(held, x, y)) return [Math.round(Math.min(W - 2, Math.max(2, x))), Math.round(y)];
+        }
+        return null;
+      }, [w, h, n]);
+      claim(!!nowhere, `${w}x${h} ${n}: there is somewhere on the glass that belongs to nobody (${nowhere})`);
+      await p.mouse.click(nowhere ? nowhere[0] : 4, nowhere ? nowhere[1] : 4);
       await settle(p);
       const a2 = await at(p);
       claim(a2.at === null && a2.shot === 'home', `${w}x${h} ${n}: a click elsewhere walks home (at=${a2.at} camera=${a2.shot})`);
@@ -448,6 +473,96 @@ if (doing('door')) {
     await settle(p);
     const back2 = await cross(p);
     claim(back2.phase === 'shut' && !back2.raining && !back2.out, `${w}x${h}: and it puts itself away (${back2.phase}, raining ${back2.raining})`);
+    if (p.__errors.length) {
+      console.log(`   errors: ${p.__errors.join(' | ')}`);
+      bad++;
+    }
+    await p.close();
+  }
+}
+
+// ---- 3d. THE READING TABLE, AND THE BOOK ON IT -------------------------------------------------
+// The book left the tall case this round and came to the table: "the viewer basically moves to the
+// table and looks down on the book and can look through it." What is asked is that the walk works
+// by a real click, that the plan shot holds the book, that the book opens FROM THE TABLE and turns,
+// that the spine on the case is refused, and that the palm that stood here is gone.
+if (doing('table')) {
+  console.log('\nTABLE — the reading table where the palm stood, and his own book on it');
+  for (const [w, h] of [PLATE, PHONE]) {
+    await fresh();
+    const p = await room(w, h);
+    // the palm is out of the room
+    const plant = await p.evaluate(() => {
+      let n = 0;
+      window.__theatre.scene.traverse((o) => {
+        if (/palm|plant/i.test(o.name ?? '')) n++;
+      });
+      return n;
+    });
+    claim(plant === 0, `${w}x${h}: the potted palm and its stool are out of the room (${plant} objects named for one)`);
+    const T = await p.evaluate(() => ({ box: window.__theatre.pieces.props.table.box, chair: window.__theatre.pieces.props.table.chair, book: window.__theatre.pieces.props.table.book }));
+    console.log(`   the table x ${T.box.x0} .. ${T.box.x1}, z ${T.box.z0} .. ${T.box.z1}, top ${T.box.y1}; the chair to x ${T.chair.x0}; the book ${T.book.w} x ${T.book.h}`);
+    claim(T.chair.x0 >= 1.62, `and nothing of it is on the rug: the chair's front legs stand at x ${T.chair.x0} against the border at 1.60`);
+    // …and the room as the visitor actually sits in it, with the table standing where the palm did
+    if (w === PLATE[0]) await shot(p, 'table-from-chair-1280x800');
+
+    // the walk, by a real click
+    const hit = await pointOn(p, 'table', w, h);
+    if (hit) await p.mouse.click(hit[0], hit[1]);
+    else await p.evaluate(() => window.__theatre.pieces.walk.go('table'));
+    await settle(p);
+    const a = await at(p);
+    // the PLACE is `table` and the SHOT it stands on is `reading` — camera-shots.js already has a
+    // shot called `table`, which is his own table and the one the whole reading is played on
+    claim(a.at === 'table' && a.shot === 'reading', `${w}x${h}: ${hit ? `a real click at ${hit[0].toFixed(0)},${hit[1].toFixed(0)}` : 'called (off the frame from the chair)'} walks to the table (${a.at}, camera ${a.shot})`);
+    if (w === PLATE[0]) await shot(p, 'table-closed-1280x800');
+    else await shot(p, 'table-closed-390x844');
+
+    // the book is in the frame, and it is the book that answers
+    const bb = await p.evaluate(() => window.__theatre.pieces.props.table.hitBox());
+    const on = bb && bb.x + bb.w > 0 && bb.x < w && bb.y + bb.h > 0 && bb.y < h;
+    const who = bb ? await asks(p, bb.x + bb.w / 2, bb.y + bb.h / 2) : null;
+    console.log(`   the book is ${bb ? `${bb.w.toFixed(0)}x${bb.h.toFixed(0)} px at ${bb.x.toFixed(0)},${bb.y.toFixed(0)}` : 'not on the glass'} — ${((bb.w * bb.h) / (w * h) * 100).toFixed(1)}% of the frame`);
+    claim(on && who === 'table-book', `${w}x${h}: the whole of it is in the plan shot and the arbiter gives it to '${who}'`);
+
+    // …and a real click on it opens the sheet
+    await p.mouse.click(bb.x + bb.w / 2, bb.y + bb.h / 2);
+    await frames(p, 4);
+    const open = await p.evaluate(() => ({ showing: window.__theatre.pieces.walk.books.showing, title: window.__theatre.pieces.walk.books.title, leaf: window.__theatre.pieces.walk.books.leaf, leaves: window.__theatre.pieces.walk.books.leaves, box: window.__theatre.pieces.walk.books.box }));
+    claim(open.showing && open.title === 'TAROT', `${w}x${h}: a click on the book opens TAROT BY PEPE from the table (${open.title}, ${open.leaves} leaves)`);
+    if (w === PLATE[0]) await shot(p, 'table-open-1280x800');
+    else await shot(p, 'table-open-390x844');
+    // it turns
+    await p.mouse.click(open.box.x + open.box.w * 0.75, open.box.y + open.box.h * 0.5);
+    await frames(p, 3);
+    const turned = await p.evaluate(() => window.__theatre.pieces.walk.books.leaf);
+    claim(turned > open.leaf, `${w}x${h}: and a click on the right page turns it (${open.leaf + 1} → ${turned + 1})`);
+    // closing leaves the visitor at the table
+    await p.keyboard.press('Escape');
+    await frames(p, 3);
+    const shut2 = await at(p);
+    const showing = await p.evaluate(() => window.__theatre.pieces.walk.books.showing);
+    claim(!showing && shut2.at === 'table', `${w}x${h}: closing it leaves the visitor at the table (${shut2.at})`);
+    // …and a click off the book walks them back
+    await p.mouse.click(4, 4);
+    await settle(p);
+    const home = await at(p);
+    claim(home.at === null && home.shot === 'home', `${w}x${h}: a click off the book walks back to the chair (${home.at}, camera ${home.shot})`);
+
+    // THE SPINE ON THE CASE IS REFUSED. It is still cut, still re-lettered, and it is not a switch.
+    await p.evaluate(() => window.__theatre.pieces.walk.go('case'));
+    await settle(p);
+    // THE SPINE IS STILL CUT AND STILL RE-LETTERED — it is the same book and it says so on its back
+    // — and it is no longer a SWITCH. So the witness is the arbiter and not the box: the box is
+    // still computable (walk-book keeps the spine it found), and nobody answers for it.
+    const spine = await p.evaluate(() => {
+      const B = window.__theatre.pieces.walk.books, S = window.__theatre.pieces.props.switches;
+      const b = B.tapBox('TAROT');
+      return { title: B.spines[0]?.title ?? null, said: b ? S.at(b.x + b.w / 2, b.y + b.h / 2) : 'no box' };
+    });
+    claim(spine.said !== 'book-TAROT', `${w}x${h}: the ${spine.title} spine on the tall case is a book on a shelf again — the arbiter answers '${spine.said}' over it`);
+    await p.evaluate(() => window.__theatre.pieces.walk.back());
+    await settle(p);
     if (p.__errors.length) {
       console.log(`   errors: ${p.__errors.join(' | ')}`);
       bad++;

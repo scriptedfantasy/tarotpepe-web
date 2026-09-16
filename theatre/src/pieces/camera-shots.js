@@ -280,6 +280,12 @@ const TALL_CASE = { x0: -2.1, x1: -1.06, front: -2.2, top: 2.45, plinth: 0.07, b
 // THE SPINET under the wide window (src/pieces/props-piano.js PIANO): the case z −2.10 .. −0.72 at
 // x −2.564 .. −2.144, 0.98 tall; the white keys at 0.66 reaching out to −1.994; the keyboard itself
 // z −2.02 .. −0.80, which is the 1.22 m of it that has keys on it.
+// THE READING TABLE, stage right where the palm stood (src/pieces/props-table.js TABLE): a top
+// 0.54 by 0.64 at x 1.98 .. 2.52, z −0.62 .. 0.02, standing at 0.72, with the book lying face up in
+// the middle of it — 0.17 across by 0.24 along, 45 mm thick.
+const READING = { x0: 1.98, x1: 2.52, z0: -0.62, z1: 0.02, top: 0.72, bx: 0.17, bz: 0.24 };
+READING.cx = (READING.x0 + READING.x1) / 2;
+READING.cz = (READING.z0 + READING.z1) / 2;
 const SPINET = { back: -2.564, front: -2.144, keysOut: -1.994, z0: -2.1, z1: -0.72, top: 0.98, keyY: 0.66, kz0: -2.02, kz1: -0.8 };
 
 // a box of points: the corners of a thing, for "wholly in or wholly out"
@@ -714,6 +720,42 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
     //              same trade every portrait composition in this file makes.
     // Both are under a thumb's 44 px, so the four spines that open are given the arbiter's own
     // grown box, and a pointer actually on one of them hits the drawing (props.js, THE SWITCHES).
+    // THE READING TABLE, FROM STRAIGHT ABOVE IT. The user: "the viewer basically moves to the table
+    // and looks down on the book and can look through it." So this is a PLAN — the one shot outside
+    // the tabletop plates that is one — with the lens on the table's own axis, no rise at all, and
+    // the frame's own axes the room's. `up` is the room's −z, which puts the book's long side down
+    // the frame: a book on a table is read down the page, not across it.
+    //
+    // 1.53 m over the top, which at 16:10 is a 26 deg lens and on a phone a 41. What binds is not
+    // the same thing at the two shapes and that is why the composition changes: a landscape frame is
+    // bound by the table's 0.64 m ALONG the wall (the frame's vertical) and holds the whole piece of
+    // furniture; a portrait one would be bound by its 0.54 m of depth in a frame 0.462 as wide as it
+    // is tall, and holding the whole table there costs 55 deg of lens pointed at a tabletop. So a
+    // narrow window composes on the BOOK and a hand's breadth of table round it instead, and the
+    // book goes from a fifth of the frame's height to two thirds of it.
+    //
+    // AND IT IS CALLED `reading`, NOT `table`. There is already a shot called `table` in this file
+    // (line 432): the frontal one of HIS table that the whole reading is played on, and reveal.js
+    // judges eight of its ten states against it by name. The first cut of this round called this
+    // one `table` too, and since both are keys of one object literal the later simply replaced the
+    // earlier — every card shot in the room silently became a plan of a book on a side table. The
+    // PLACE in walk.js keeps the name `table`, which is what a visitor would call the thing; the
+    // shot is named for what the visitor does there.
+    reading: (() => {
+      const pos = [READING.cx, READING.top + 1.53, READING.cz];
+      const look = [READING.cx, READING.top, READING.cz];
+      const bx = READING.cx + 0.01, bz = READING.cz - 0.01;
+      // THE FRAME IS COMPOSED ON THE BOOK and not on the table, at both shapes — the user asked to
+      // LOOK DOWN ON THE BOOK, and a plan of the whole piece of furniture puts it at a tenth of the
+      // picture with half a square metre of empty top round it (measured: 200 x 280 px of a
+      // 1280 x 800 frame, 9 % of its area). What changes with the shape is only how much table is
+      // left round it: a hand's breadth on a laptop, 30 mm on a phone, where the frame is
+      // 0.462 as wide as it is tall and every millimetre of margin costs the book's own height.
+      const m = aspect < 1.05 ? 0.03 : 0.105;
+      const keep = [];
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) keep.push([bx + sx * (READING.bx / 2 + m), READING.top, bz + sz * (READING.bz / 2 + m)]);
+      return fitEither({ pos, look, up: [0, 0, -1], keep, pad: 0.05 }, aspect);
+    })(),
     // THE PIANO, FROM OVER THE KEYBOARD, which is the shot the user asked for in so many words: "i
     // think it'd be funny if we see a piano from above and see pepe's hand play a song."
     //

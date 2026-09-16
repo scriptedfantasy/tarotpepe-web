@@ -46,6 +46,7 @@ import { eggDark } from './egg-dark.js';
 
 import { eggDroste } from './egg-droste.js';
 import { buildPiano } from './props-piano.js';
+import { buildTable } from './props-table.js';
 
 import { eggPeep } from './egg-peep.js';
 
@@ -621,50 +622,16 @@ export async function build(ctx) {
       },
     };
   }
-  {
-    const stool = new THREE.Group();
-    const seat = O.cyl(0.17, 0.17, 0.025, M.wood, 20);
-    seat.position.y = 0.3;
-    stool.add(seat);
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * Math.PI * 2 + 0.5;
-      stool.add(O.rod([Math.cos(a) * 0.1, 0.29, Math.sin(a) * 0.1], [Math.cos(a) * 0.15, 0, Math.sin(a) * 0.15], 0.012, M.solid));
-    }
-    // ---- WHICH SIDE OF THE ROOM IT STANDS ON, AND IT HAS CHANGED SIDES ------------------------
-    // The user: "place the plant on the right hand side." It stood at (-2.36, -1.30) against the
-    // stage-left plaster for every round there has been a palm, a hand's width off the wall, set
-    // upstage so the home shot cropped it and the wide kept it whole.
-    //
-    // THE MIRROR OF THAT POINT IS NOT FREE. (2.36, -1.30) is dead in front of the stage-right
-    // WINDOW: that opening runs z -1.95 to -1.05 with a sill board that oversails to x 2.470 at
-    // y 0.900..1.040 and an apron and two brackets under it, and this palm's fronds stand from
-    // 0.31 to 1.62. The pot would be under the sill and the fronds through it. So the plant is
-    // mirrored ACROSS but not ALONG: same 0.24 m off the wall, moved downstage to where that wall
-    // is plain.
-    //
-    // WHERE IT GOES, z -0.30, and every edge of that is somebody else's (room.js):
-    //   z -0.500  THE DOWNSTAGE SHUTTER LEAF of the side window, folded flat over the plaster from
-    //             -0.96 to -0.50 and standing 36 mm proud. The stool is r 0.17 and its upstage edge
-    //             is at -0.47, which is 30 mm clear of the leaf's end — and clear is the point: a
-    //             black palm in front of a louvred shutter is one tangle of black spikes, which is
-    //             the note the floor lamp was taken out of this room for.
-    //   z  0.095  THE TERMINAL BOX'S CONDUIT, which drops the wall at x 2.572 on three saddles to
-    //             the floor. The stool's downstage edge is at -0.13, 225 mm short of it.
-    //   z  0.800  the way-in door's architrave. Not close; it is here because it is the next thing.
-    //   x  1.600  THE RUG's edge. The stool stands 2.19 to 2.53 and never touches it: this palm has
-    //             always stood on bare boards and it still does.
-    //   z -0.128  WHERE A 1280x800 `home` PLATE STOPS on this wall (tools/_left-wall-where.mjs
-    //             prints the same line for either side; the room is symmetrical about x 0). At
-    //             -0.30 the pot is inside that by 170 mm, so unlike the left-hand position this one
-    //             is IN the conversation shot and not only in the wide. That is the change the user
-    //             asked for as much as the side is: the plant is now something the visitor sees
-    //             while they are talking to him.
-    stool.position.set(W / 2 - 0.24, 0, -0.3);
-    g.add(stool);
-    const p = O.plant({ rng, leaves: 8, kind: 'palm', scale: 1.15 });
-    p.position.set(W / 2 - 0.24, 0.31, -0.3);
-    g.add(p);
-  }
+  // ---- THE READING TABLE, WHERE THE PALM STOOD (src/pieces/props-table.js) --------------------
+  // The user: "where we have the flower pot right now, we should have a little reading table with a
+  // chair and a book on the table." So the potted palm and its stool go out of the room — they had
+  // that stretch of stage-right plaster for three rounds, between the side window's downstage
+  // shutter leaf at z −0.50 and the terminal box's conduit at 0.095 — and a table, a chair and his
+  // own book take it. Everything about where it may stand is measured in that file.
+  //
+  // THE PALM IS NOT MOVED ANYWHERE. There is nowhere else on this wall for it (the mirror of its
+  // old place is dead in front of the casement's sill board) and the room already keeps one big
+  // empty area per wall. A visitor who asks after it is answered by ABSENT (mind-room.js).
 
   // ---- the door (stage right): the doormat, and the PTT's tall spares press beside it -------------
   {
@@ -1465,6 +1432,12 @@ export async function build(ctx) {
   // joinery like the tall case and it is the room's TENTH switch — the keys, which start and stop
   // the song. The case itself is a PLACE (walk.js), not a switch, the way the chimney breast is.
   const PIANO_ = buildPiano(ctx, { group: g, switches: SWITCHES, O, M });
+  // ---- THE READING TABLE, stage right (src/pieces/props-table.js) -------------------------------
+  // It is built HERE and not up where the palm it replaced stood, for one reason: the book on it is
+  // a switch, and SWITCHES is not made until the foot of this file. (The palm needed nothing and
+  // could be built with the furniture; the first cut of this was, and the page came up with
+  // «Cannot access 'SWITCHES' before initialization» and no props at all.)
+  const TABLE_ = buildTable(ctx, { group: g, switches: SWITCHES, O, M });
 
   return {
     group: g,
@@ -1531,6 +1504,11 @@ export async function build(ctx) {
     // standing on its boards (each mesh carries `userData.title`), `boards` their heights and
     // `bounds` the carcase in world metres. src/pieces/walk-book.js finds four of them by title.
     tallCase,
+    // THE READING TABLE, stage right where the palm stood. `box` is the table in world metres,
+    // `chair` the chair pulled to it, `book` the closed book lying on it and where, `hitBox()` and
+    // `tapBox()` its box on the glass and the box a thumb is given, and `open()` opens it — which is
+    // the very sheet walk-book.js draws, not a second copy of anything.
+    table: TABLE_,
     // THE SPINET under the window. `box` is its own carcase in world metres, `keyboard` where the 88
     // are and how far they run, `keyZ(m)` where one key stands, `playing` whether the song is on,
     // `start()`/`stop()`/`toggle()` work the keys as a click does, `beat` where in the piece it is,

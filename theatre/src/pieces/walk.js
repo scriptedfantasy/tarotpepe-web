@@ -102,8 +102,8 @@ import { buildBooks } from './walk-book.js';
 
 export const meta = {
   name: 'walk',
-  judge: { shot: 'home', states: ['home', 'fireplace', 'doorway', 'case', 'piano'] },
-  files: ['src/pieces/walk.js', 'src/pieces/walk-book.js', 'src/pieces/book-tarot.js', 'src/pieces/props-piano.js', 'src/pieces/piano-song.js'],
+  judge: { shot: 'home', states: ['home', 'fireplace', 'doorway', 'case', 'piano', 'table'] },
+  files: ['src/pieces/walk.js', 'src/pieces/walk-book.js', 'src/pieces/book-tarot.js', 'src/pieces/props-piano.js', 'src/pieces/piano-song.js', 'src/pieces/props-table.js'],
 };
 
 // 1.5 s, which at twelve a second is eighteen drawings. The cross egg's own walk out through the
@@ -132,6 +132,16 @@ const PLACES = {
   doorway: { shot: 'doorway', x: [1.05, 1.95], y: [0, 2.45], z: [-2.5, -2.4] },
   case: { shot: 'case', x: [-2.1, -1.06], y: [0, 2.45], z: [-2.46, -2.2] },
   piano: { shot: 'piano', x: [-2.564, -1.994], y: [0, 0.98], z: [-2.1, -0.72] },
+  //   table      the reading table stage right, where the palm stood: the top x 1.98 .. 2.52 at
+  //              z −0.62 .. 0.02, and the CHAIR pulled to it (x 1.66) taken into the same box, so a
+  //              visitor who points at either walks to both. The BOOK on it is a switch of its own
+  //              and is subtracted from this one.
+  //              Its shot is a PLAN of it, so its own box is the whole frame and the own-object
+  //              exemption lapses (see `holds`): the user's own sentence is the rule — "a click
+  //              off the book, or Escape, walks them back" — and the book is a switch.
+  //              The shot is called `reading` and not `table`: camera-shots.js already has a shot
+  //              of that name, which is HIS table and the one the reading is played on.
+  table: { shot: 'reading', holds: false, x: [1.66, 2.52], y: [0, 0.92], z: [-0.62, 0.02] },
 };
 const NAMES = Object.keys(PLACES);
 
@@ -142,7 +152,7 @@ const NAMES = Object.keys(PLACES);
 // floor plan the nearest any of the three chords passes to the table's axis is the fireplace's,
 // at x 1.29 as it crosses z 0, which is 0.67 m outside a rim of 0.62. The cross egg's walk needs
 // its waypoint because it goes THROUGH a 0.90 m opening; none of these leaves the room.
-const VIA = { fireplace: [], doorway: [], case: [], piano: [] };
+const VIA = { fireplace: [], doorway: [], case: [], piano: [], table: [] };
 
 // the beats of a reading. A visitor may talk to him from the fireplace; they may not wander off in
 // the middle of having their cards read. (flow.js keeps the same set for the fire's one remark.)
@@ -284,6 +294,7 @@ export async function build(ctx) {
     if (name === 'fireplace') return [Pp?.fine?.tapBox?.()];
     if (name === 'doorway') return [Pp?.cross?.tapBox?.()];
     if (name === 'piano') return [Pp?.piano?.tapBox?.()];
+    if (name === 'table') return [Pp?.table?.tapBox?.()];
     return [Pp?.cat?.tapBox?.(), Pp?.wine?.tapBox?.(), Pp?.radio?.tapBox?.(), ...(api.books?.spineBoxes?.() ?? [])];
   };
   // A PLACE ANSWERS AS A DRAWING, AND THE THINGS ON IT ARE SUBTRACTED FROM IT.
@@ -303,6 +314,29 @@ export async function build(ctx) {
   // case would take the cat off the shelf. Measured in tools/_walk-proof.mjs, at every place, for
   // every switch standing in it.
   const areaCap = () => (ctx.size?.w || window.innerWidth) * (ctx.size?.h || window.innerHeight) * 0.25;
+  // DOES A CLICK ON THE PLACE'S OWN OBJECT MEAN «I AM LOOKING AT THIS» OR «I HAVE SEEN ENOUGH»?
+  // Four of the five places say the first: you are standing in front of a thing that is IN a
+  // picture, and clicking it is not a request to leave. THE READING TABLE CANNOT SAY IT, because
+  // its shot is a plan of the table itself and the table is therefore the picture. Measured, its
+  // own box on the glass:
+  //     1280x800   90.1 % of the frame
+  //     1600x900   86.1 %
+  //      390x844  100.0 %  — there is no pixel of that frame which is not the table
+  // So with the exemption on, a visitor at the table on a phone has nowhere at all to click to get
+  // back to the chair and only Escape would do it. The user's own sentence is the rule — a click
+  // off the book, or Escape, walks them back — so `table` carries `holds: false` and every click
+  // that is not the book is the way out.
+  //
+  // IT IS A PROPERTY OF THE PLACE AND NOT A THRESHOLD ON THE AREA. The first cut of this made it a
+  // rule — the exemption lapses past 60 % of the frame — and that is a tidier-looking thing that
+  // quietly changes three places nobody asked about: the piano's carcase measures 95.8 / 100 / 99.4
+  // at its own shot and the case 89.2 on a phone, and all of them would have stopped holding their
+  // own click this round. Those are the same rooms they were yesterday. What the table needs is an
+  // answer for the table.
+  //
+  // What is never the way out at any place is the SWITCH standing on the thing — the grate, the
+  // keys, the book — because the arbiter takes that click before this listener ever sees it.
+  const ownsClick = (name) => PLACES[name]?.holds !== false;
   function hitOf(name, px, py) {
     if (!inside(box(name), px, py)) {
       const t = tapBox(name);
@@ -334,7 +368,7 @@ export async function build(ctx) {
     // THE PLACE'S OWN ANSWER FIRST. The door has one (step 3: it opens, and once it is open any
     // click that is not a castle shuts it again); the other two have none, and for them what is
     // left is the rule itself — a click on the thing you are standing at is not a request to leave.
-    if (onOwn(at, px, py, ev) || inside(box(at), px, py)) {
+    if (onOwn(at, px, py, ev) || (ownsClick(at) && inside(box(at), px, py))) {
       ev.stopImmediatePropagation();
       return;
     }
@@ -378,6 +412,8 @@ export async function build(ctx) {
     places: [...NAMES],
     shots: Object.fromEntries(NAMES.map((n) => [n, PLACES[n].shot])),
     bounds: (name) => (PLACES[name] ? { ...PLACES[name] } : null),
+    // whether a click on this place's own object means «stay» just now — see `ownsClick`
+    owns: (name) => ownsClick(name),
     box,
     tapBox,
     go,

@@ -341,8 +341,24 @@ const PLAIN = [
     /\bpicture\b|\bframes?\b|\bpaintings?\b/,
     ['Two frames and a small one. I hung none of them; the nails were already in the plaster.'],
   ],
-  [/\bplant\b|\bpalm\b|\bpot\b/, ['A palm in a post office tin. It is doing better than it looks.']],
-  [/\bstool\b/, ['A three-legged stool. The palm sits on it, and it has never been asked to do anything else.']],
+  // THE READING TABLE, where the palm and its stool stood until the user asked for one: "where we
+  // have the flower pot right now, we should have a little reading table with a chair and a book on
+  // the table." PLAIN, like the rest of the furniture that came with the room; what is on it is
+  // his, and he is short about it because a man does not introduce his own book.
+  [
+    /\breading table\b|\blittle table\b|\bside table\b|\bthat table\b|\bchair\b/,
+    [
+      'A table and a chair by the window. I read there in the afternoons, when nobody is on the stairs.',
+      'The table came up with the room. The chair did not match it then either.',
+    ],
+  ],
+  [
+    /\bbook on the table\b|\byour book\b|\bthe book\b/,
+    [
+      'That is mine. I wrote it down because people kept asking me the same eleven questions and I am not patient. You can open it; it is not a secret.',
+      'A book I wrote about the deck. It is shorter than the ones on the shelf, which is the only thing I will say for it.',
+    ],
+  ],
   [/\bmouse ?hole\b|\bmouse\b/, ['A mouse hole. The mouse is not a story either.']],
   [/\bdoor ?mat\b|\bmat\b/, ['A mat. People wipe their feet on it, which surprises me every time.']],
   [
@@ -396,6 +412,9 @@ const ABSENT = [
   // The user: "can we squeeze a piano between the fireplace and the wall under the window?" So the
   // instrument has an entry of its own in PLAIN above, and what is left absent here is everything
   // else somebody might ask for music with.
+  // THE PALM WENT OUT with the round that put a reading table where it stood. There is nowhere else
+  // on that wall for it, so it is absent rather than moved, and he says so plainly.
+  [/\bplant\b|\bpalm\b|\bflower ?pot\b|\bpot plant\b|\bfern\b/, ['There is no plant in here any more. There was a palm on a stool by the window and a table stands where it did; the palm went down to the sorting office, where there is a window that opens.']],
   [/\bguitar\b|\bgramophone\b|\brecord player\b|\bviolin\b|\baccordion\b/, ['No. There is a spinet under the window and a radio that does not get switched on, and between them that is as much music as this room has.']],
   [/\bbed\b|\bkitchen\b|\bbathroom\b|\btoilet\b|\bthe lavatory\b/, ['Not in here. That is all upstairs, and it is a bed, a kettle and a window looking at another window.'],],
   [/\bwi.?fi\b|\binternet\b|\bsignal\b|\belectricity in here\b/, ['Nothing in this room is connected to anything. It used to be connected to the whole town.']],

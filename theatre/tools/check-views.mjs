@@ -21,7 +21,7 @@ const VIEWS = {
   titles: ['title', 'chapter', 'closing', 'hidden'],
   dialogue: ['greeting', 'question', 'reading', 'farewell'],
   help: ['closed', 'hover', 'open', 'cards'],
-  walk: ['home', 'fireplace', 'doorway', 'case', 'piano'],
+  walk: ['home', 'fireplace', 'doorway', 'case', 'piano', 'table'],
   // not a piece: what the notice DOES. ?view=keep draws page one of the sheet a visitor takes away
   // (src/pieces/help-keep.js) into the overlay, from a canned reading.
   keep: ['default'],
