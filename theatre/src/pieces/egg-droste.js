@@ -22,6 +22,19 @@
 // basically have infinity scroll that always scrolls into the picture which is the room which is
 // the picture which is the room etc etc".
 //
+// AND THE SCROLL IS GONE; THE PICTURE IS A SWITCH. The user again, once the room had places in it to
+// walk to: "now that we're making it a point and click game where we can move around the room, the
+// scroll is suboptimal. So remove the scroll and just zoom into the room if the user clicks on the
+// photo. Just click on the photo." So the photograph is registered with the room's own pointer
+// arbiter like everything else a visitor can work — the cursor over it is a pointer and that is the
+// whole affordance, exactly as it is for the radio, the cat and the grate — and a click on it calls
+// camera.dive(): three seconds of walking into the picture at a constant rate, the wrap at the top,
+// and the room standing where it was left. Not one number of the walk changed; only the hand on it.
+// The frame the visitor clicks is the MOULDING and not the sheet, because the moulding is what a
+// hand reaches for and because the sheet is 121 px across at the home plate on a laptop and 46 on a
+// phone — under a thumb's 44 in one direction and barely over it in the other, so the box the
+// arbiter is given is the whole frame, grown to 44 where it has to be.
+//
 // IT IS NOT A DRAWING OF THE ROOM. It is the room's own composed frame, fed back into itself: ink.js
 // ping-pongs two render targets, the picture's map is the one that was finished last, and the one
 // being written has this picture in it showing the one before. That is the whole of the recursion —
@@ -60,7 +73,7 @@ const DEPTH = 0.028;
 // a frame on this wall has sat at in its rebate.
 const SHEET_Z = DEPTH / 2 - 0.008;
 
-export function eggDroste(ctx, { group, slot }) {
+export function eggDroste(ctx, { group, slot, switches = null }) {
   const M = O.materials();
   // `z` and `stand` are taken ONCE and are not re-laid: `setSlot` takes x, y, w and h, which are the
   // window's business, and the depth of a thing standing on a shelf is not. `stand` is the height of
@@ -164,7 +177,21 @@ export function eggDroste(ctx, { group, slot }) {
   }
   rebuild();
 
-  return {
+  // ---- THE SWITCH, and it is the moulding ------------------------------------------------------
+  // `hitBox` below is the frame's four corners projected from the live camera; the thumb's box is
+  // that grown about its own centre to 44 px, which it needs on every window this film ships at.
+  // The nearest other switch on this wall is the CLOCK (the vortex's), and props.js lays the row out
+  // with a measured gap between this frame's corner blocks and that dial, so the two never meet.
+  const MIN_TAP = 44;
+  let last = null;
+  function tapBox() {
+    const b = api.hitBox();
+    if (!b) return null;
+    const w = Math.max(b.w, MIN_TAP), h = Math.max(b.h, MIN_TAP);
+    return { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h, grown: w > b.w || h > b.h };
+  }
+
+  const api = {
     // WHERE THE ROW PUTS IT. props.js calls this at build and on every resize with the nail and the
     // frame's outer size it has just solved; nothing is rebuilt unless one of the four moved.
     setSlot(next) {
@@ -219,6 +246,30 @@ export function eggDroste(ctx, { group, slot }) {
       }
       return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
     },
+    // …and the box a thumb is actually given, for the arbiter and for a proof
+    tapBox,
+    // THE CLICK. `camera.dive()` answers with what it did — 'diving', 'pan' (the room was turned and
+    // the click squared it up instead) or 'refused' — and this file passes that back and acts on
+    // none of it. `dive` is the last thing it said, for a proof that wants to ask without clicking.
+    get dive() {
+      return last;
+    },
+    click() {
+      last = ctx.pieces?.camera?.dive?.() ?? 'no camera';
+      return last;
+    },
     rebuild,
   };
+  switches?.add?.({
+    name: 'droste',
+    object: () => g,
+    tapBox,
+    // A DIVE IS ONLY EVER ASKED FOR FROM THE CHAIR. The camera piece refuses it from anywhere else
+    // (camera.js, `zoomAllowed`), and the switch stands down with it rather than answering a click
+    // it is going to throw away — except while the room is PANNED, where the click has work to do:
+    // it squares the room up so the picture can be clicked again.
+    enabled: () => !!(ctx.pieces?.camera?.zoomable || ctx.pieces?.camera?.pan),
+    onDown: () => api.click(),
+  });
+  return api;
 }

@@ -29,11 +29,13 @@
 // the entrance could take the same road: its arrival is hand-rolled today because there was no such
 // call to make.
 //
-// TWO MODIFIERS ON THE PLATE THE EVENING IS WATCHED FROM, and they are never on together. THE
-// SCROLL walks into the picture of this room hanging on the back wall (THE SCROLL, below). THE PAN
-// turns the lens on its own station so a window too narrow to hold the room can look round it —
-// added the round the visitor got up out of the chair, because a phone's frame holds 2.0 m of a
-// 5.2 m wall and everything a visitor might walk to is outside it (THE PAN, below; the drawn
+// TWO MODIFIERS ON THE PLATE THE EVENING IS WATCHED FROM, and they are never on together. THE DIVE
+// walks the whole way into the photograph of this room standing on the bookcase and out the other
+// side of it, and it is asked for by CLICKING the photograph (THE WALK INTO THE PICTURE and THE
+// DIVE, below; the scroll that used to do it came out the round the room became point-and-click).
+// THE PAN turns the lens on its own station so a window too narrow to hold the room can look round
+// it — added the round the visitor got up out of the chair, because a phone's frame holds 2.0 m of
+// a 5.2 m wall and everything a visitor might walk to is outside it (THE PAN, below; the drawn
 // control is src/pieces/camera-pan.js).
 //
 // API: shots (the named shots; every layout name is kept, others added), current, cut(shot),
@@ -143,10 +145,16 @@ export async function build(ctx) {
     return { pos: cam.position.clone(), q: cam.quaternion.clone(), fov: cam.fov, shift: [...shift] };
   }
 
-  // ---- THE SCROLL ---------------------------------------------------------------------------
-  // The room has a picture of itself on the back wall (src/pieces/egg-droste.js) and the visitor can
-  // scroll INTO it. The user: "basically have infinity scroll that always scrolls into the picture
-  // which is the room which is the picture which is the room etc etc."
+  // ---- THE WALK INTO THE PICTURE --------------------------------------------------------------
+  // The room has a photograph of itself standing on the bookcase (src/pieces/egg-droste.js) and the
+  // visitor can go INTO it. The user: "basically have infinity scroll that always scrolls into the
+  // picture which is the room which is the picture which is the room etc etc."
+  //
+  // WHAT MOVES THE NUMBER HAS CHANGED AND THE NUMBER HAS NOT. It was a wheel, a pinch and a thumb
+  // for four rounds; it is a CLICK ON THE PHOTOGRAPH now, and the click runs the whole walk by
+  // itself over three seconds (THE DIVE, below). Everything in this section — the pose at every t,
+  // the short-circuit at t = 0, the wrap at t = 1 — is what it always was, which is why `?zoom=`,
+  // the two judging states and every frame either of them ever produced are untouched.
   //
   // IT IS A MODIFIER ON `home` AND NOTHING ELSE. `zoom` is an unbounded real; its fractional part
   // t is the pose. At t = 0 the camera is on the home plate, to the bit — there is a short-circuit
@@ -176,18 +184,18 @@ export async function build(ctx) {
   // the far edge is S·s + h0^s in s = 1-t, which is 1 at s = 0, less than 1 at s = 1, and convex.
   //
   // ON THE TWELVES. The dolly gets one new position per DRAWING and so does this: a smooth zoom
-  // would be the only smooth thing in a stop-motion room. The visitor's wheel moves a TARGET; the
-  // shown number closes 45 % of the gap on each stepped frame, so a flick drifts for four or five
-  // drawings and settles. 45 % puts a flick within a twentieth of its mark in five drawings — under
-  // half a second — which is a hand letting go of a wheel, not a tween.
+  // would be the only smooth thing in a stop-motion room. The DIVE walks the number itself, one
+  // drawing at a time (see THE DIVE); `setZoom` moves a TARGET and the shown number closes 45 % of
+  // the gap on each stepped frame, which is the drift a flick of the wheel used to get and is what
+  // a tool pointing the number somewhere still gets.
+  // …AND THE WHEEL, THE PINCH AND THE VERTICAL DRAG ARE GONE WITH THE ROUND THE SCROLL CAME OUT IN.
+  // WHEEL_WRAP, PINCH_WRAP and DRAG_WRAP described how much of a gesture was worth one wrap and
+  // there is no gesture to measure any more: the walk into the picture is a CLICK on the picture
+  // now (see THE DIVE). `ZOOM_CLOSE` survives because `setZoom` does — a tool that points the
+  // number somewhere still gets the drift that a flick used to get — and DRAG_SLOP survives because
+  // the PAN still uses it.
   const ZOOM_CLOSE = 0.45; // of the gap to the target, per drawing
-  const WHEEL_WRAP = 1200; // px of wheel for one whole wrap (the brief's number)
-  // …and a trackpad PINCH arrives as ctrl+wheel in deltas an order of magnitude smaller than a
-  // scroll's, so it gets its own gain. 300 px of pinch for a wrap is about one full spread of the
-  // fingers on a Mac trackpad.
-  const PINCH_WRAP = 300;
-  const DRAG_WRAP = 700; // px of one-finger drag for a wrap: ~0.8 of a 844 px phone
-  const DRAG_SLOP = 12; // px before a touch that started on nothing becomes a scroll
+  const DRAG_SLOP = 12; // px before a touch that started on nothing becomes a pan
   let zoomTarget = 0, zoomShown = 0;
   let pendingZoom = null; // ?zoom=<t>, spent on the first update; see the foot of this file
 
@@ -256,8 +264,8 @@ export async function build(ctx) {
   const drosteOf = () => ctx.pieces?.props?.droste ?? null;
 
   // ---- WHICH PLATE THE ROOM IS RESTING ON -----------------------------------------------------
-  // The scroll is a modifier on the frame the evening is actually watched from, and that is NOT
-  // `home` by name. entrance.js lands the visitor on `wide` (LANDS_ON — the user asked for the walk
+  // The walk into the picture is a modifier on the frame the evening is actually watched from, and
+  // that is NOT `home` by name. entrance.js lands the visitor on `wide` (LANDS_ON — the user asked for the walk
   // to end where the evening is watched from), flow.js holds the first exchange there and settles
   // into `home` from his first reply, and a reading returns to `home`. A page opened by a tool sits
   // on `home` because that is what main.js cuts to. All three are the same thing to this file: the
@@ -269,8 +277,8 @@ export async function build(ctx) {
   // "punctuation inside a turn": the camera cuts to his face for one sentence of a turn and back to
   // the frame the visitor answers in, a second and a half later. Adopting it as the plate would
   // re-draw the picture on the wall from his face and back again on every line he says — a picture
-  // whose contents flicker with the cutting — and would arm the scroll for a second and a half at a
-  // time. `table`, `door` and `threshold` are a judging frame and two frames of the arrival. So the
+  // whose contents flicker with the cutting — and would make the photograph clickable for a second
+  // and a half at a time. `table`, `door` and `threshold` are a judging frame and two frames of the arrival. So the
   // set is named here rather than derived, and the geometry is then CHECKED rather than assumed:
   // a plate this file will solve a zoom from has to look straight down -z from its own x and y,
   // with no lens roll and no sideways shift, or the end pose is not on the picture's normal.
@@ -353,15 +361,26 @@ export async function build(ctx) {
     if (F?.armed || F?.picking) return false;
     return true;
   }
-  // …AND THE TWO OF THEM ARE NEVER ON AT ONCE. The zoom is a walk INTO the picture on the back wall
-  // and it is solved from the home plate's own normal; a yawed camera is not on that normal and the
-  // arithmetic would be solving a picture the lens is looking at from the side. So a pan that is not
-  // at nought disarms the scroll, and a wheel or a pinch arriving while the room is turned spends
-  // itself easing the pan back to centre first (see THE WHEEL, below). At pan 0 every number, every
-  // hand-over and every frame is what it was before this round.
+  // …AND THE TWO OF THEM ARE NEVER ON AT ONCE. The dive is a walk INTO the photograph and it is
+  // solved from that sheet's own normal; a yawed camera is not on that normal and the arithmetic
+  // would be solving a picture the lens is looking at from the side. So a pan that is not at nought
+  // disarms the dive, and a CLICK ON THE PHOTOGRAPH while the room is turned spends itself easing
+  // the pan back to centre — the picture is still there to be clicked a second time, which is the
+  // manners the wheel had before it. At pan 0 every number and every frame is what it always was.
+  // WHEN THE ROOM WILL TAKE A DIVE AT ALL. `modifiable()` is the shared precondition — standing
+  // still on the resting plate, nobody holding it, nothing in the room owning the pointer — which
+  // already refuses a PLACE (a place is not the resting plate) and a reading (the fan's own flags),
+  // and the reading BEATS are refused here as well, because a visitor with three cards lying on the
+  // cloth is in the middle of something whether or not the fan is armed at this instant.
+  const READING_BEATS = new Set(['shuffle', 'fan', 'dealt', 'reading', 'recall', 'flip']);
+  function midReading() {
+    if ((ctx.pieces?.reveal?.picks?.length ?? 0) > 0) return true;
+    return READING_BEATS.has(ctx.pieces?.flow?.beat ?? '');
+  }
   function zoomAllowed() {
     if (!modifiable()) return false;
     if (panShown !== 0 || panTarget !== 0) return false;
+    if (midReading()) return false;
     return !!zoomSpan();
   }
   function panAllowed() {
@@ -404,7 +423,37 @@ export async function build(ctx) {
   function resetZoom() {
     zoomTarget = 0;
     zoomShown = 0;
+    dive = null;
   }
+
+  // ---- THE DIVE (the round the scroll came out) ------------------------------------------------
+  // A CLICK ON THE PHOTOGRAPH, and the room walks the whole way into it by itself.
+  //
+  // The walk is the scroll's walk, unchanged — `zoomShot(t)` and the wrap at t = 1 are the same
+  // arithmetic they have always been — so what this is, is a hand on the number instead of a wheel.
+  //
+  //   THREE SECONDS, which is DIVE_F = 36 drawings at twelve a second. Long enough to be a move
+  //   somebody is watching and not a cut; short enough that nobody reaches for a way out of it.
+  //   AT A CONSTANT RATE IN LOG SPACE, which is what t itself is: the picture's half-height on the
+  //   glass goes as h0^(1-t), so walking t at a constant speed grows the picture by a constant
+  //   FACTOR per drawing. A linear walk in the picture's size would crawl for two seconds and then
+  //   bolt; this is the same pace all the way down, which is what a dive is.
+  //   WITH A SHORT EASE IN AND NONE AT THE OUT. A quarter of a second of ramp, so the picture does
+  //   not jump on the drawing of the click — and no brake at all, because the end of this move is
+  //   not a stop, it is the WRAP: at t = 1 the picture fills the frame, the frame IS the picture,
+  //   and the number goes back to nought, which is the resting plate to the float. The room comes
+  //   to rest exactly where the visitor left it and the last drawing of the dive is the first
+  //   drawing of the room again.
+  //
+  // WHAT REFUSES IT is `zoomAllowed()`, which is the list the scroll was refused on, plus a reading
+  // in progress, plus a place (a dive is a modifier on the resting plate and nowhere else). AND A
+  // PAN FIRST: a room that is turned is not on the picture's own normal, so a click on the
+  // photograph while panned spends itself squaring the room up and the picture waits to be clicked
+  // again — the same manners a wheel had. A second click while a dive is running is ignored, and
+  // Escape is not taken: this is not a thing to be got out of, it is three seconds.
+  const DIVE_F = 36;
+  const DIVE_RAMP = 3; // drawings of ease at the leaving: a quarter of a second
+  let dive = null; // { k } — which drawing of the dive we are on
   // …and the tools' way in: a held t, with no drift, on whatever the camera is doing now.
   function holdZoom(t) {
     zoomTarget = zoomShown = t;
@@ -599,10 +648,10 @@ export async function build(ctx) {
     get holding() {
       return held;
     },
-    // ---- the scroll, for the tools and for anything that wants to know ------------------------
+    // ---- the walk into the picture, for the tools and for anything that wants to know ---------
     // `zoom` is the number the picture is actually AT (the shown one): a tool that measures a frame
-    // measures this. `zoomTarget` is where the visitor's last flick pointed it. They differ for the
-    // four or five drawings a flick takes to settle and are equal at rest.
+    // measures this, and a dive walks it one drawing at a time. `zoomTarget` is where `setZoom` last
+    // pointed it; the two are equal on every drawing of a dive and at rest.
     get zoom() {
       return zoomShown;
     },
@@ -676,6 +725,29 @@ export async function build(ctx) {
     },
     // the pose at any t, solved but not applied — the continuity table is taken off this
     zoomShotAt: (t) => zoomShot(fract(t)),
+    // ---- THE DIVE, which is what the photograph's own switch calls -----------------------------
+    // Returns 'diving' if one was started, 'pan' if the click spent itself squaring the room up
+    // first, or the reason it was refused. egg-droste.js reports the answer and nothing else acts
+    // on it; a proof reads it.
+    dive() {
+      if (dive) return 'diving'; // a second click during a dive is ignored
+      if (panShown !== 0 || panTarget !== 0) {
+        // the room is turned and the picture is not on its own normal: square up first
+        if (panAllowed()) panTarget = 0;
+        return 'pan';
+      }
+      if (!zoomAllowed()) return 'refused';
+      dive = { k: 0 };
+      zoomTarget = zoomShown = 0;
+      ctx.emit?.('camera:dive', { diving: true });
+      return 'diving';
+    },
+    get diving() {
+      return dive ? { drawing: dive.k, drawings: DIVE_F, t: zoomShown } : null;
+    },
+    get diveDrawings() {
+      return DIVE_F;
+    },
     // IS THE LIVE CAMERA STANDING ON THE RESTING PLATE, TO THE FLOAT? ink.js asks once a frame, and
     // a great deal hangs on the answer: when it is yes the frame about to be drawn IS the picture on
     // the back wall, so there is one scene pass and not two. Nothing is approximated here — the
@@ -687,7 +759,7 @@ export async function build(ctx) {
       const p = poseOf(s);
       return cam.position.equals(p.pos) && cam.quaternion.equals(p.q) && cam.fov === p.fov && shift[0] === p.shift[0] && shift[1] === p.shift[1];
     },
-    // the name of the plate the picture on the wall is drawn from, and the one a scroll walks into
+    // the name of the plate the picture on the bookcase is drawn from, and the one a dive walks into
     get restingShot() {
       return resting;
     },
@@ -855,9 +927,9 @@ export async function build(ctx) {
           if (from.pos.distanceTo(to.pos) > 0.004 || Math.abs(from.fov - to.fov) > 0.08) startMove('fan', 'open', OPEN_S);
         }
       }
-      // THE PAN, one new position per DRAWING, and it is stepped BEFORE the scroll because a pan
-      // that is not at nought disarms the scroll — the walk back to centre has to be able to reach
-      // nought on a drawing where the scroll is still refusing to run.
+      // THE PAN, one new position per DRAWING, and it is stepped BEFORE the dive because a pan that
+      // is not at nought disarms the dive — the walk back to centre has to be able to reach nought
+      // on a drawing where the dive is still refusing to start.
       if (panAllowed()) {
         if (pendingPan != null) {
           holdPan(pendingPan);
@@ -880,16 +952,34 @@ export async function build(ctx) {
         right: panTarget < 1 - 1e-3,
         parity: ctx.clock.frame % 2,
       });
-      // THE SCROLL, one new position per DRAWING. Nothing here runs on a tick the paper did not
-      // turn over, and nothing runs at all unless the camera is standing on the home plate with
-      // nobody else holding it — a wheel during a pick, a deck, a crossroads or the notice is a
-      // wheel that was meant for one of those, and it has already been refused at the listener.
+      // THE WALK INTO THE PICTURE, one new position per DRAWING. Nothing here runs on a tick the
+      // paper did not turn over, and nothing runs at all unless the camera is standing on the home
+      // plate with nobody else holding it — a click during a pick, a deck, a crossroads, a book or
+      // the notice was meant for one of those, and the switch on the photograph stands down for
+      // every one of them.
       if (zoomAllowed()) {
         if (pendingZoom != null) {
           holdZoom(pendingZoom);
           pendingZoom = null;
         }
-        if (zoomShown !== zoomTarget && ctx.clock.stepped) {
+        // THE DIVE, one new position per DRAWING. `u` walks 0 → 1 over DIVE_F drawings with a short
+        // ramp at the leaving and no brake at the arrival, and the drawing it reaches 1 on is the
+        // WRAP: the number goes to nought, which applyZoom strikes as the resting plate itself.
+        if (dive && ctx.clock.stepped) {
+          dive.k++;
+          const raw = Math.min(1, dive.k / DIVE_F);
+          const u = raw < DIVE_RAMP / DIVE_F ? (raw * raw * DIVE_F) / (2 * DIVE_RAMP) : raw - DIVE_RAMP / (2 * DIVE_F);
+          if (raw >= 1) {
+            dive = null;
+            zoomTarget = 0;
+            zoomShown = 0;
+            applyZoom();
+            ctx.emit?.('camera:dive', { diving: false });
+          } else {
+            zoomTarget = zoomShown = u;
+            applyZoom();
+          }
+        } else if (zoomShown !== zoomTarget && ctx.clock.stepped) {
           const gap = zoomTarget - zoomShown;
           zoomShown = Math.abs(gap) < 1e-4 ? zoomTarget : zoomShown + gap * ZOOM_CLOSE;
           applyZoom();
@@ -927,71 +1017,54 @@ export async function build(ctx) {
   };
   applyPose(poseOf(shots.home));
 
-  // ---- WHAT THE VISITOR SCROLLS WITH ----------------------------------------------------------
-  // Three ways in, and none of them announces itself. There is no cursor on the picture, no tag, no
-  // hint: the scroll IS the discovery, and a visitor who never touches the wheel never learns that
-  // the room has a picture of itself in it.
+  // ---- WHAT THE VISITOR WORKS IT WITH ---------------------------------------------------------
+  // THE SCROLL IS GONE. The user, once the room had places to walk to: "now that we're making it a
+  // point and click game where we can move around the room, the scroll is suboptimal. So remove the
+  // scroll and just zoom into the room if the user clicks on the photo. Just click on the photo."
   //
-  // Every one of them moves the TARGET and nothing else. The pose is stepped in update(), on the
-  // twelves, so a flick of the wheel is four or five drawings of drift and then a stop — the same
-  // arithmetic whether the flick came from a mouse, a trackpad or a thumb.
+  // So the wheel, the trackpad pinch, the touch pinch and the one-finger VERTICAL drag no longer
+  // drive the walk into the picture and are not listened for at all. What is left on the glass is
+  // the PAN's own gestures — a sideways wheel and a sideways one-finger drag — and everything else
+  // in the room is a click, which is what it always should have been: a scroll is a thing you do TO
+  // a page and this is a room.
+  //
+  // WHAT REPLACES IT is at the foot of this section: `dive()`, which the photograph on the bookcase
+  // calls when it is clicked (src/pieces/egg-droste.js registers it with the room's own pointer
+  // arbiter, with the pointer cursor and nothing else to announce it). The walk itself — the pose
+  // at every t, the wrap at the top, the pixel-exact hand-over — is untouched; only the hand that
+  // moves the number has changed.
   const glass = ctx.renderer?.domElement ?? null;
 
-  // THE WHEEL. deltaMode 1 is lines and 2 is pages; both are normalised to px so a Firefox line
-  // scroll and a Chrome pixel scroll cover the same ground. DOWN zooms IN, which is the direction
-  // the whole gesture reads in: the page you are looking at goes away from you and the picture in
-  // it comes towards you.
-  const wheelPx = (ev) => ev.deltaY * (ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? (ctx.size?.h || 800) : 1);
+  // THE PAN'S TWO GESTURES, and they are the only two the glass listens for now.
+  //
+  //   A SIDEWAYS WHEEL — a trackpad's two-finger swipe — arrives as deltaX and drives the pan. A
+  //   vertical wheel is not refused, it is simply not heard: nothing in this room answers one any
+  //   more, so the page does whatever it would do with it, which on a full-window scene is nothing.
+  //   A TRACKPAD PINCH still arrives as ctrl+wheel and is still preventDefault-ed, because the
+  //   browser would answer it by zooming the PAGE — the canvas and the placard and all — and that
+  //   was never what the visitor meant. It drives nothing.
   glass?.addEventListener(
     'wheel',
     (ev) => {
-      // A TRACKPAD PINCH arrives here as ctrl+wheel, and the browser would answer it by zooming the
-      // PAGE — the canvas and the placard and all — which is never what the visitor meant on a
-      // full-window scene. It is refused whether or not the room will take the scroll.
-      if (ev.ctrlKey) ev.preventDefault();
-      // A TRACKPAD'S TWO-FINGER SWIPE SIDEWAYS IS A PAN. It arrives as deltaX and it is the same
-      // gesture a thumb makes on the glass, so it drives the same number; a mouse with no
-      // horizontal wheel simply never sends one.
-      if (!ev.ctrlKey && panAllowed() && Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) {
+      if (ev.ctrlKey) {
         ev.preventDefault();
-        panTarget = Math.max(-1, Math.min(1, panTarget - (ev.deltaX * (ev.deltaMode === 1 ? 16 : 1)) / PAN_WHEEL));
         return;
       }
-      // …AND A WHEEL OR A PINCH ARRIVING WHILE THE ROOM IS TURNED SPENDS ITSELF SQUARING IT UP. The
-      // scroll is a walk into the picture on the back wall and it is solved from that wall's own
-      // normal; it cannot be asked for from an angle. So the first flick brings the room back to
-      // centre and the second one is the scroll, which is also what the hand means by it.
-      if ((panShown !== 0 || panTarget !== 0) && panAllowed()) {
-        ev.preventDefault();
-        panTarget = 0;
-        return;
-      }
-      if (!zoomAllowed()) return;
+      if (!panAllowed() || Math.abs(ev.deltaX) <= Math.abs(ev.deltaY)) return;
       ev.preventDefault();
-      // …and the pinch's sign is the other way round from the wheel's: spreading the fingers gives
-      // a NEGATIVE deltaY and means bigger, which is the direction every other pinch on the machine
-      // goes. Its deltas are an order of magnitude smaller, hence its own gain.
-      zoomTarget += ev.ctrlKey ? -wheelPx(ev) / PINCH_WRAP : wheelPx(ev) / WHEEL_WRAP;
+      panTarget = Math.max(-1, Math.min(1, panTarget - (ev.deltaX * (ev.deltaMode === 1 ? 16 : 1)) / PAN_WHEEL));
     },
     { passive: false }
   );
 
-  // THE THUMB. Two fingers pinch; one finger drags. `touch-action: none` on the canvas (index.html)
-  // is what stops the browser taking the gesture first.
-  //
-  // A PINCH IS A RATIO, not a distance: doubling the spread of the fingers doubles the picture on
-  // the glass, wherever the zoom already was. The picture's height on the glass goes as h0^(1-t),
-  // so a factor of `r` in size is ln(r) / ln(1/h0) of a wrap — 0.235 of one at 1280x800, where the
-  // sheet is a nineteenth of the window's height at home.
-  //
-  // A ONE-FINGER DRAG only ever becomes a scroll if it began on NOTHING: not on a switch (the
-  // arbiter is asked, so a thumb that landed on the cat is the cat's), not on a DOM layer (the
-  // placard, the notice, the titles — the test is that the touch started on the canvas itself), and
-  // not while the fan is armed for a pick. Then it has to travel 12 px before it counts, and the
-  // 12 px are subtracted when it does, so nothing jumps at the moment it takes over. Under that it
-  // is a tap and the tap belongs to whatever is under it.
-  let pinch = null, drag = null, pinched = false;
-  const touchDist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  //   A ONE-FINGER SIDEWAYS DRAG, and it only ever becomes a pan if it began on NOTHING: not on a
+  //   switch (the arbiter is asked, so a thumb that landed on the cat is the cat's), not on a DOM
+  //   layer (the placard, the notice, the book — the test is that the touch started on the canvas
+  //   itself), and not while the fan is armed for a pick. Then it has to travel 12 px before it
+  //   counts, and the 12 px are spent rather than banked, so nothing jumps when it takes over.
+  //   A drag that goes VERTICAL instead is given up: it used to be the scroll and it is now a thumb
+  //   moving on the glass, which is not a gesture this room has.
+  let drag = null;
   const onNothing = (touch) => {
     if (!glass || touch.target !== glass) return false;
     if (ctx.pieces?.reveal?._fan?.armed) return false;
@@ -1001,15 +1074,11 @@ export async function build(ctx) {
     'touchstart',
     (ev) => {
       const t = ev.touches;
-      if (t.length >= 2 && zoomAllowed()) {
-        const s = zoomSpan();
-        pinch = s ? { d0: Math.max(1, touchDist(t)), z0: zoomTarget, span: Math.log(1 / s.h0) } : null;
-        pinched = !!pinch;
+      if (t.length !== 1) {
         drag = null;
-      } else if (t.length === 1 && !pinched && (zoomAllowed() || panAllowed()) && onNothing(t[0])) {
-        // UNCOMMITTED until it has travelled: which axis crosses the slop first owns the gesture.
-        drag = { x0: t[0].clientX, y0: t[0].clientY, z0: zoomTarget, p0: panTarget, live: false, axis: null };
+        return;
       }
+      if (panAllowed() && onNothing(t[0])) drag = { x0: t[0].clientX, y0: t[0].clientY, p0: panTarget, live: false, axis: null };
     },
     { passive: true }
   );
@@ -1017,54 +1086,30 @@ export async function build(ctx) {
     'touchmove',
     (ev) => {
       const t = ev.touches;
-      if (pinch && t.length >= 2) {
-        if (!zoomAllowed()) return;
-        zoomTarget = pinch.z0 + Math.log(Math.max(1, touchDist(t)) / pinch.d0) / pinch.span;
-        return;
-      }
       if (!drag || t.length !== 1) return;
-      const dy = drag.y0 - t[0].clientY; // up is positive: up = scroll down = in
-      const dx = t[0].clientX - drag.x0; // right is positive: the hand drags the room to the right
-      // WHICH GESTURE IT IS, decided once and never revisited. The vertical drag was the scroll
-      // before this round and it still is; the horizontal one is the pan. The first of the two to
-      // travel DRAG_SLOP (12 px) takes the whole of the rest of the drag, so a thumb that wanders
-      // does not hand the room back and forth between two modifiers.
+      const dy = drag.y0 - t[0].clientY;
+      const dx = t[0].clientX - drag.x0;
       if (!drag.live) {
         const ay = Math.abs(dy), ax = Math.abs(dx);
         if (ay < DRAG_SLOP && ax < DRAG_SLOP) return;
-        drag.axis = ax > ay ? 'x' : 'y';
-        drag.live = true;
-        // THE SLOP IS SPENT, NOT BANKED, and it is taken off the START of the drag rather than off
-        // where the finger has got to. Rebasing to the finger's current position throws away every
-        // pixel it travelled before this handler ran, which on a touch that arrives as one big move
-        // is the whole gesture: it went live and reported the 12 px of slop as the whole of it.
-        if (drag.axis === 'y') drag.y0 -= Math.sign(dy) * DRAG_SLOP;
-        else drag.x0 += Math.sign(dx) * DRAG_SLOP;
-      }
-      if (drag.axis === 'x') {
-        if (!panAllowed()) {
-          drag = null;
+        if (ax <= ay) {
+          drag = null; // a vertical drag: nothing in this room answers one
           return;
         }
-        panTarget = Math.max(-1, Math.min(1, drag.p0 - (t[0].clientX - drag.x0) / PAN_WRAP));
-        return;
+        drag.axis = 'x';
+        drag.live = true;
+        drag.x0 += Math.sign(dx) * DRAG_SLOP;
       }
-      if (!zoomAllowed()) {
-        // the room is turned: the first vertical drag squares it up, as a wheel does
-        if (panAllowed() && (panShown !== 0 || panTarget !== 0)) panTarget = 0;
+      if (!panAllowed()) {
         drag = null;
         return;
       }
-      zoomTarget = drag.z0 + (drag.y0 - t[0].clientY) / DRAG_WRAP;
+      panTarget = Math.max(-1, Math.min(1, drag.p0 - (t[0].clientX - drag.x0) / PAN_WRAP));
     },
     { passive: true }
   );
   const endTouch = (ev) => {
-    if (ev.touches.length < 2) pinch = null;
-    if (ev.touches.length === 0) {
-      drag = null;
-      pinched = false;
-    }
+    if (ev.touches.length === 0) drag = null;
   };
   glass?.addEventListener('touchend', endTouch, { passive: true });
   glass?.addEventListener('touchcancel', endTouch, { passive: true });

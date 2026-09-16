@@ -1427,7 +1427,7 @@ export async function build(ctx) {
   // `z` IS TAKEN ONCE AND CANNOT BE RELAID. egg-droste.js destructures it at build (`const { z } =
   // slot`) and `setSlot` takes x, y, w and h and nothing else — which is right, because the depth of
   // a thing standing on a shelf is not a function of the window. It is passed here and only here.
-  const DROSTE = eggDroste(ctx, { group: g, slot: { ...layRow(rowAspect(), rowBuffer()).frame, z: ROW.shelfZ, stand: ROW.shelfTop } });
+  const DROSTE = eggDroste(ctx, { group: g, switches: SWITCHES, slot: { ...layRow(rowAspect(), rowBuffer()).frame, z: ROW.shelfZ, stand: ROW.shelfTop } });
   // …and the row is laid now and again on every resize, because the picture's width IS the window's
   // aspect: a wall that was even at 16:9 is not even on a phone unless the clock moves with it. The
   // clock is moved, never rebuilt, so egg-vortex.js's reference to it stays the reference it took.
@@ -1541,9 +1541,12 @@ export async function build(ctx) {
     // a thumb is actually given.
     globe: GLOBE,
     // THE PICTURE OF THIS ROOM, in the frame beside the clock. `geometry` is where the sheet is in
-    // world metres (centre, half-extents) — which is what camera.js solves the zoom from — `frame`
+    // world metres (centre, half-extents) — which is what camera.js solves the dive from — `frame`
     // is the whole moulding's size for this window's aspect, `material` is the surface ink.js binds
-    // its finished buffer to, and hitBox() is the moulding's box on the glass from the live camera.
+    // its finished buffer to, hitBox()/tapBox() are the moulding's box on the glass from the live
+    // camera and the box a thumb is given, and `click()` works it as a pointer does: the room walks
+    // the whole way into the picture and comes back out of it three seconds later. It is the room's
+    // ninth switch and the round the scroll came out made it one.
     droste: DROSTE,
     // THE ROW, solved for the window in front of it. The picture's nail is fixed at x 0; what moves
     // with the window's shape is the picture's SIZE and, from that, the clock's x. `gap` is what

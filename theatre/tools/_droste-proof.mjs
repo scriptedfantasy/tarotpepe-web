@@ -1,6 +1,13 @@
 #!/usr/bin/env node
-// THE PROOF for the picture of this room and the scroll into it (src/pieces/egg-droste.js, the
-// scroll section of src/pieces/camera.js, the feedback pair in src/pieces/ink.js).
+// THE PROOF for the picture of this room and the walk into it (src/pieces/egg-droste.js, THE WALK
+// INTO THE PICTURE and THE DIVE in src/pieces/camera.js, the feedback pair in src/pieces/ink.js).
+//
+// THE SCROLL CAME OUT THIS ROUND and the photograph became a switch: "now that we're making it a
+// point and click game where we can move around the room, the scroll is suboptimal. So remove the
+// scroll and just zoom into the room if the user clicks on the photo. Just click on the photo." So
+// sections 5, 7 and 8 are about a CLICK now — the wheel, the pinch and the vertical drag are gone
+// and 8 asks that they do nothing at all. Everything else is unchanged: the walk's arithmetic did
+// not move, only the hand on it.
 //
 //   BASE=http://127.0.0.1:8736 node tools/_droste-proof.mjs
 //
@@ -13,12 +20,15 @@
 //   3  THE PICTURE IS IN THE PICTURE at rest, with a 3x crop of the frame to look at and a count of
 //      how many nestings are still wider than a pixel.
 //   4  ONE SCENE PASS PER FRAME AT REST, counted at the renderer rather than reasoned about.
-//   5  THE WRAP, driven by a real wheel, in both directions.
+//   5  THE DIVE, driven by a real click on the photograph, at 1280x800 and 390x844: the picture's
+//      rectangle growing monotonically all the way down, the timing in drawings, and the frame the
+//      dive comes to rest on diffed against the frame it started from.
 //   6  THE ROOM STILL WORKS ZOOMED: a tap on a prop at t = 0.5 fires, and its box on the glass has
 //      moved with the camera (the arbiter is raycasting the live one, not a remembered pose).
-//   7  A WHEEL DURING A PICK, A DECK OR THE NOTICE DOES NOTHING.
-//   8  THE THUMB: a pinch and a one-finger drag on a 390x844 touch emulation, and a tap that is
-//      still a tap.
+//   7  A CLICK THE ROOM REFUSES: during a pick, a deck, the notice, a reading and from a place.
+//   8  THE THUMB on a 390x844 touch emulation: a tap on the photograph dives, a PINCH and a
+//      VERTICAL DRAG do nothing at all (they used to be the scroll), a sideways drag pans, and a
+//      tap on a prop is still a tap.
 // PNGs land in /tmp/droste.
 import { chromium } from 'playwright';
 import sharp from 'sharp';
@@ -383,37 +393,80 @@ if (want(4)) {
   await page.close();
 }
 
-// ── 5 · THE WRAP, BY WHEEL ──────────────────────────────────────────────────────────────────────
+// ── 5 · THE DIVE, BY A REAL CLICK ───────────────────────────────────────────────────────────────
+// A pointer on the photograph, through the room's own arbiter, and then nothing but watching: the
+// dive runs itself. What is asked is that the picture grows without ever going backwards, that it
+// takes the drawings it says it takes, and that the frame it finishes on is the frame it left.
 if (want(5)) {
-  say('\n=== 5 · the wrap, driven by a real wheel ===');
-  const page = await open({ w: 1280, h: 800 });
-  await drawings(page, 16);
-  // what the room looks like before anything is scrolled, off THIS page — the comparison after the
-  // wrap is against the same page's own resting frame rather than against a second browser, which
-  // on a machine carrying a dozen builders' headless Chromiums is a minute of waiting for nothing
-  const before = await shot(page);
-  const wheel = async (dy, times) => {
-    for (let i = 0; i < times; i++) await page.mouse.wheel(0, dy);
-    await drawings(page, 20);
-    return page.evaluate(() => {
-      const C = window.__theatre.pieces.camera;
-      return { zoom: C.zoom, target: C.zoomTarget, phase: C.zoomPhase, current: C.current };
+  say('\n=== 5 · the dive, driven by a real click on the photograph ===');
+  for (const [w, h] of [[1280, 800], [390, 844]]) {
+    const page = await open({ w, h });
+    await drawings(page, 16);
+    const box = await page.evaluate(() => window.__theatre.pieces.props.droste.tapBox());
+    const who = await page.evaluate(([x, y]) => window.__theatre.pieces.props.switches.at(x, y), [box.x + box.w / 2, box.y + box.h / 2]);
+    check(who === 'droste', `${w}x${h}: the arbiter gives the photograph's own box to '${who}' (${box.w.toFixed(0)}x${box.h.toFixed(0)} px at ${box.x.toFixed(0)},${box.y.toFixed(0)}${box.grown ? ', grown to a thumb' : ''})`);
+    // the room before anything is clicked, off THIS page — the comparison after the wrap is against
+    // the same page's own resting frame rather than against a second browser
+    const before = await shot(page);
+    await page.mouse.click(box.x + box.w / 2, box.y + box.h / 2);
+    // …and then watch it. Every rendered frame is one drawing of the dive (the page runs at about a
+    // frame a second under swiftshader and the dive steps on `clock.stepped`), so the sample is
+    // taken per drawing and the whole walk is seen rather than three points of it.
+    const seen = [];
+    let mid = null;
+    for (let i = 0; i < 60; i++) {
+      await drawings(page, 1);
+      const d = await page.evaluate(() => ({
+        diving: window.__theatre.pieces.camera.diving,
+        zoom: window.__theatre.pieces.camera.zoom,
+        box: window.__theatre.pieces.props.droste.hitBox(),
+      }));
+      if (d.box) seen.push({ k: d.diving?.drawing ?? null, t: d.zoom, w: d.box.w, h: d.box.h });
+      if (d.diving && d.diving.drawing >= 18 && !mid) {
+        mid = true;
+        await sharp(await shot(page)).toFile(`${OUT}/dive-mid-${w}x${h}.png`);
+      }
+      if (!d.diving) break;
+    }
+    const grown = seen.filter((r) => r.k != null);
+    const backwards = grown.filter((r, i) => i && (r.w < grown[i - 1].w - 0.5 || r.h < grown[i - 1].h - 0.5)).length;
+    check(grown.length > 4, `${w}x${h}: the click started a dive and ${grown.length} of its drawings were caught`);
+    check(backwards === 0, `${w}x${h}: the picture grows and never goes backwards — ${grown[0].w.toFixed(0)}x${grown[0].h.toFixed(0)} px at t ${grown[0].t.toFixed(3)} to ${grown[grown.length - 1].w.toFixed(0)}x${grown[grown.length - 1].h.toFixed(0)} at t ${grown[grown.length - 1].t.toFixed(3)}, ${backwards} steps backwards`);
+    // AND AT A CONSTANT RATE IN LOG SPACE, which is the thing the brief asked for: the picture's
+    // width should grow by the same FACTOR per drawing all the way down. The ramp at the leaving is
+    // three drawings, so the ratios are measured past it.
+    const past = grown.filter((r) => r.k > 6);
+    const ratios = past.slice(1).map((r, i) => Math.log(r.w / past[i].w) / Math.max(1, r.k - past[i].k));
+    const lo = Math.min(...ratios), hi = Math.max(...ratios);
+    check(ratios.length > 2 && hi - lo < 0.02, `${w}x${h}: and at a steady rate — the picture's width grows by e^${((lo + hi) / 2).toFixed(4)} a drawing past the ramp, spread ${(hi - lo).toFixed(4)}`);
+    const timing = await page.evaluate(() => window.__theatre.pieces.camera.diveDrawings);
+    check(timing === 36, `${w}x${h}: the dive is ${timing} drawings — ${(timing / 12).toFixed(1)} s at twelve a second`);
+    const end = await page.evaluate(() => ({ zoom: window.__theatre.pieces.camera.zoom, diving: window.__theatre.pieces.camera.diving, rest: window.__theatre.pieces.camera.atRest, cur: window.__theatre.pieces.camera.current }));
+    check(end.zoom === 0 && !end.diving && end.cur === 'home', `${w}x${h}: it comes to rest in the room again (zoom ${end.zoom}, shot '${end.cur}', atRest ${end.rest})`);
+    const after = await shot(page);
+    await sharp(after).toFile(`${OUT}/after-dive-${w}x${h}.png`);
+    const d = await diff(before, after, { edge: 0 });
+    check(d.frac < 0.01, `${w}x${h}: and the frame it finishes on IS the frame it left — ${pct(d.frac)} of pixels differ, mean |Δ| ${d.mae.toFixed(2)}/255`);
+    // a second click while it is running is ignored
+    await page.mouse.click(box.x + box.w / 2, box.y + box.h / 2);
+    await drawings(page, 2);
+    const again = await page.evaluate(() => window.__theatre.pieces.camera.diving);
+    await page.evaluate(() => {
+      const c = window.__theatre.pieces.camera;
+      return c.dive();
     });
-  };
-  const a = await wheel(200, 3); // 600 px down: half a wrap in
-  check(a.phase > 0.4 && a.phase < 0.6, `600 px of wheel down is half a wrap in (t = ${a.phase.toFixed(3)}, target ${a.target.toFixed(3)})`);
-  const b = await wheel(200, 3); // another 600: over the top and back to 0
-  // t = 0 and t = 1 are the same pose, so "back where it started" is the distance to the nearer of
-  // the two — the shown number closes 45% of its gap per drawing and settles just under the wrap.
-  const wrapGap = Math.min(b.phase, 1 - b.phase);
-  check(Math.abs(b.target - 1) < 0.02 && wrapGap < 0.02, `1200 px is one whole wrap: zoom ${b.target.toFixed(3)}, t = ${b.phase.toFixed(4)} — ${wrapGap.toFixed(4)} from the plate it started on`);
-  const after = await shot(page);
-  await sharp(after).toFile(`${OUT}/after-wrap-1280x800.png`);
-  const d = await diff(before, after, { edge: 0 });
-  check(d.frac < 0.01, `and after the wrap it is the room it started in: ${pct(d.frac)} of pixels differ from the same page before it was scrolled, mean |Δ| ${d.mae.toFixed(2)}/255`);
-  const c = await wheel(-200, 3); // out the other way
-  check(c.phase > 0.4 && c.phase < 0.6, `scrolling OUT wraps the other way: 600 px up leaves t = ${c.phase.toFixed(3)} (zoom ${c.target.toFixed(3)}), the room seen from inside its own picture`);
-  await page.close();
+    const second = await page.evaluate(() => window.__theatre.pieces.camera.dive());
+    check(second === 'diving', `${w}x${h}: a second click during a dive is ignored, not queued ('${second}')`);
+    void again;
+    // Escape does nothing to it
+    await page.keyboard.press('Escape');
+    await drawings(page, 2);
+    const esc = await page.evaluate(() => !!window.__theatre.pieces.camera.diving);
+    check(esc === true, `${w}x${h}: Escape does not take the visitor out of a dive (still diving ${esc})`);
+    await page.evaluate(() => window.__theatre.pieces.camera.cut('home'));
+    if (page.__errors.length) check(false, `${w}x${h} page errors ${JSON.stringify(page.__errors.slice(0, 2))}`);
+    await page.close();
+  }
 }
 
 // ── 6 · THE ROOM STILL WORKS ZOOMED ─────────────────────────────────────────────────────────────
@@ -530,33 +583,40 @@ if (want(6)) {
   await page.close();
 }
 
-// ── 7 · A WHEEL THAT WAS MEANT FOR SOMETHING ELSE ───────────────────────────────────────────────
+// ── 7 · A CLICK THE ROOM REFUSES ────────────────────────────────────────────────────────────────
+// Four things in this room own the pointer while they are out, and a visitor standing anywhere but
+// the chair is not on the picture's own normal. The switch stands down for every one of them, and
+// asking the camera directly gets 'refused'.
 if (want(7)) {
-  say('\n=== 7 · a wheel the room refuses ===');
+  say('\n=== 7 · a click the room refuses ===');
   const page = await open({ w: 1280, h: 800 });
   await drawings(page, 8);
-  const tryWheel = async (label, setup, teardown) => {
+  const tryClick = async (label, setup, teardown) => {
     await page.evaluate(setup);
-    await drawings(page, 8);
-    const can = await page.evaluate(() => ({ z: window.__theatre.pieces.camera.zoomable, cur: window.__theatre.pieces.camera.current, armed: !!window.__theatre.pieces.reveal?._fan?.armed }));
-    for (let i = 0; i < 4; i++) await page.mouse.wheel(0, 200);
-    await drawings(page, 12);
-    const after = await page.evaluate(() => ({ zoom: window.__theatre.pieces.camera.zoom, target: window.__theatre.pieces.camera.zoomTarget }));
-    check(!can.z && after.target === 0 && after.zoom === 0, `${label}: zoomable ${can.z}, shot '${can.cur}'${can.armed ? ', fan armed' : ''}, 800 px of wheel left zoom at ${after.zoom}`);
-    if (teardown) await page.evaluate(teardown);
     await drawings(page, 10);
+    const can = await page.evaluate(() => ({
+      z: window.__theatre.pieces.camera.zoomable,
+      cur: window.__theatre.pieces.camera.current,
+      armed: !!window.__theatre.pieces.reveal?._fan?.armed,
+      said: window.__theatre.pieces.props.droste.click(),
+    }));
+    await drawings(page, 8);
+    const after = await page.evaluate(() => ({ zoom: window.__theatre.pieces.camera.zoom, diving: !!window.__theatre.pieces.camera.diving }));
+    check(!can.z && can.said === 'refused' && !after.diving && after.zoom === 0, `${label}: zoomable ${can.z}, shot '${can.cur}'${can.armed ? ', fan armed' : ''}, the photograph answers '${can.said}' and the room is still at ${after.zoom}`);
+    if (teardown) await page.evaluate(teardown);
+    await drawings(page, 12);
   };
-  await tryWheel(
+  await tryClick(
     'the notice card is up',
     () => window.__theatre.pieces.help.open(),
     () => window.__theatre.pieces.help.close(),
   );
-  await tryWheel(
+  await tryClick(
     'the deck is laid out on the cloth',
     () => window.__theatre.pieces.props.deck.click?.() ?? window.__theatre.pieces.props.deck.setState?.('deck-out'),
     () => window.__theatre.pieces.props.deck.setState?.('default'),
   );
-  await tryWheel(
+  await tryClick(
     'the fan is armed for a pick',
     () => {
       const R = window.__theatre.pieces.reveal;
@@ -565,10 +625,33 @@ if (want(7)) {
     },
     () => window.__theatre.pieces.reveal.setState('dealt'),
   );
+  await tryClick(
+    'a reading is lying on the cloth',
+    () => window.__theatre.pieces.reveal.setState('revealed'),
+    () => window.__theatre.pieces.reveal.setState('dealt'),
+  );
+  // …AND FROM A PLACE. The visitor walks to the tall case and the picture is not a switch there:
+  // a dive is a modifier on the plate the evening is watched from and nowhere else.
+  await page.evaluate(() => window.__theatre.pieces.reveal.setState('default'));
+  await drawings(page, 6);
+  await page.evaluate(() => window.__theatre.pieces.walk.go('case'));
+  await page.waitForFunction(() => !window.__theatre.pieces.camera.moving, null, { timeout: 300000, polling: 250 });
+  await drawings(page, 4);
+  const atPlace = await page.evaluate(() => ({ at: window.__theatre.pieces.walk.at, said: window.__theatre.pieces.props.droste.click(), zoom: window.__theatre.pieces.camera.zoom }));
+  check(atPlace.said === 'refused' && atPlace.zoom === 0, `standing at the ${atPlace.at}: the photograph answers '${atPlace.said}' and nothing dives`);
+  await page.evaluate(() => window.__theatre.pieces.walk.back());
+  await page.waitForFunction(() => !window.__theatre.pieces.camera.moving, null, { timeout: 300000, polling: 250 });
+  await drawings(page, 4);
+  const home = await page.evaluate(() => ({ at: window.__theatre.pieces.walk.at, z: window.__theatre.pieces.camera.zoomable }));
+  check(home.at === null && home.z === true, `…and back in the chair it is a switch again (zoomable ${home.z})`);
   await page.close();
 }
 
 // ── 8 · THE THUMB ───────────────────────────────────────────────────────────────────────────────
+// The round the scroll came out turned three quarters of this section upside down: what used to be
+// asked of the pinch and the one-finger drag UP is now asked of them the other way round — that they
+// do nothing whatsoever. What a phone has instead is a TAP on the photograph, and a sideways drag
+// that pans (camera.js, THE PAN), and every other tap in the room exactly as it was.
 if (want(8)) {
   say('\n=== 8 · the thumb, on a 390x844 phone ===');
   const page = await open({ w: 390, h: 844, touch: true });
@@ -577,10 +660,9 @@ if (want(8)) {
   const touchAction = await page.evaluate(() => getComputedStyle(document.querySelector('#stage canvas')).touchAction);
   check(touchAction === 'none', `the canvas takes the gesture first: touch-action ${touchAction}`);
 
-  // A ONE-FINGER DRAG UP, starting on bare floorboards (nothing interactive there)
   const at = (x, y) => ({ identifier: 1, clientX: x, clientY: y, pageX: x, pageY: y });
-  const touch = (page, type, pts) =>
-    page.evaluate(
+  const touch = (page2, type, pts) =>
+    page2.evaluate(
       ([t, p]) => {
         const c = document.querySelector('#stage canvas');
         const list = p.map((q, i) => new Touch({ identifier: i, target: c, clientX: q.clientX, clientY: q.clientY, pageX: q.clientX, pageY: q.clientY }));
@@ -588,41 +670,65 @@ if (want(8)) {
       },
       [type, pts],
     );
+
+  // A ONE-FINGER DRAG UP, starting on bare floorboards. It was the scroll for four rounds; it is
+  // nothing now, and that is the claim.
   await touch(page, 'touchstart', [at(195, 700)]);
-  await touch(page, 'touchmove', [at(195, 694)]); // under the slop: nothing
-  const underSlop = await zoomNow();
   await touch(page, 'touchmove', [at(195, 420)]);
   await touch(page, 'touchend', [at(195, 420)]);
-  await drawings(page, 20);
+  await drawings(page, 16);
   const dragged = await zoomNow();
-  check(underSlop.target === 0, `6 px of drag is a tap, not a scroll (zoom ${underSlop.target})`);
-  check(dragged.zoom > 0.2, `a one-finger drag UP of 280 px zooms in: t = ${dragged.zoom.toFixed(3)} (target ${dragged.target.toFixed(3)}, 700 px to a wrap, 12 px of slop spent)`);
+  check(dragged.zoom === 0 && dragged.target === 0, `a one-finger drag UP of 280 px does nothing at all now (zoom ${dragged.zoom}, target ${dragged.target})`);
 
-  // A PINCH: doubling the spread doubles the picture
-  await page.evaluate(() => window.__theatre.pieces.camera.setZoom(0, { hold: true }));
-  await drawings(page, 4);
-  const span = await page.evaluate(() => window.__theatre.pieces.camera.zoomSpan);
+  // A PINCH: also nothing. The browser's own page zoom is still refused (camera.js preventDefaults
+  // ctrl+wheel), which is the one thing about the pinch that survives.
   await touch(page, 'touchstart', [at(195, 380), { clientX: 195, clientY: 480 }]);
   await touch(page, 'touchmove', [at(195, 330), { clientX: 195, clientY: 530 }]); // 100 px → 200 px
   await touch(page, 'touchend', [at(195, 330)]);
-  await drawings(page, 20);
+  await drawings(page, 16);
   const pinched = await zoomNow();
-  const want = Math.log(2) / Math.log(1 / span.h0);
-  check(Math.abs(pinched.target - want) < 0.01, `doubling the spread doubles the picture: t = ${pinched.target.toFixed(4)} against the ${want.toFixed(4)} that ln 2 / ln(1/h0) asks for`);
+  check(pinched.zoom === 0 && pinched.target === 0, `a pinch that doubles the spread does nothing either (zoom ${pinched.zoom})`);
+
+  // A SIDEWAYS DRAG IS THE PAN, which is the gesture that replaced them on this axis.
+  const panned = await page.evaluate(async () => {
+    const c = document.querySelector('#stage canvas');
+    const fire = (type, x, y) => {
+      const t = new Touch({ identifier: 1, target: c, clientX: x, clientY: y, pageX: x, pageY: y });
+      c.dispatchEvent(new TouchEvent(type, { touches: type === 'touchend' ? [] : [t], targetTouches: type === 'touchend' ? [] : [t], changedTouches: [t], bubbles: true, cancelable: true }));
+    };
+    fire('touchstart', 195, 700);
+    for (let k = 1; k <= 8; k++) fire('touchmove', 195 + k * 18, 700);
+    fire('touchend', 339, 700);
+    await new Promise((r) => requestAnimationFrame(r));
+    return { pan: window.__theatre.pieces.camera.panTarget, zoom: window.__theatre.pieces.camera.zoomTarget };
+  });
+  check(panned.pan < -0.05 && panned.zoom === 0, `a SIDEWAYS one-finger drag pans instead (pan ${panned.pan.toFixed(3)}, zoom ${panned.zoom})`);
+  await page.evaluate(() => window.__theatre.pieces.camera.setPan(0, { hold: true }));
+  await drawings(page, 4);
+
+  // A TAP ON THE PHOTOGRAPH DIVES, which is the whole of the round.
+  const pb = await page.evaluate(() => window.__theatre.pieces.props.droste.tapBox());
+  const pWho = await page.evaluate(([x, y]) => window.__theatre.pieces.props.switches.at(x, y), [pb.x + pb.w / 2, pb.y + pb.h / 2]);
+  await page.touchscreen.tap(pb.x + pb.w / 2, pb.y + pb.h / 2);
+  await drawings(page, 4);
+  const dove = await page.evaluate(() => ({ diving: !!window.__theatre.pieces.camera.diving, zoom: window.__theatre.pieces.camera.zoom }));
+  check(pWho === 'droste' && dove.diving, `a tap on the photograph dives: the arbiter answers '${pWho}' at its ${pb.w.toFixed(0)}x${pb.h.toFixed(0)} px box and the room is at t ${dove.zoom.toFixed(3)}`);
+  // A CUT IS WHAT STOPS A DIVE, and it is the only thing that does — `setZoom` points a target the
+  // dive is overwriting every drawing. Anything measuring boxes after this has to be square to the
+  // wall again or it is measuring a room three quarters of the way inside its own photograph.
+  await page.evaluate(() => window.__theatre.pieces.camera.cut('home'));
+  await drawings(page, 6);
 
   // A TAP ON A PROP IS STILL A TAP, AND THE PROP IS CHOSEN BY MEASUREMENT AND NOT BY NAME.
   // This asked the cat for four rounds, because the cat sat on the right-hand bookcase top and a
-  // phone could see it. The user has moved the cat into the tall case on the stage-left wall — "you
-  // can put the cat in the book shelf on the left" — and a 390x844 plate does not see that wall at
-  // all (tools/_props-r9-cat.mjs prints the cat at x -66 on this plate). So the subject is now
-  // whichever egg a phone actually HAS, found by asking each of them for its box, and the fact that
-  // the cat is not one of them is printed rather than asserted away.
-  await page.evaluate(() => window.__theatre.pieces.camera.setZoom(0, { hold: true }));
-  await drawings(page, 6);
+  // phone could see it. The user has moved the cat into the tall case on the stage-left wall, and a
+  // 390x844 plate does not see that wall at all. So the subject is whichever egg a phone actually
+  // HAS, found by asking each of them for its box, and the fact that the cat is not one of them is
+  // printed rather than asserted away.
   const onGlass = await page.evaluate((wh) => {
     const P = window.__theatre.pieces.props;
     const out = [];
-    for (const n of ['vase', 'deck', 'cat', 'globe', 'fine', 'fuse']) {
+    for (const n of ['vase', 'deck', 'cat', 'globe', 'fine', 'fuse', 'droste']) {
       const b = P[n]?.tapBox?.();
       const whole = !!b && b.x >= 0 && b.y >= 0 && b.x + b.w <= wh[0] && b.y + b.h <= wh[1];
       out.push({ n, box: b ? { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) } : null, whole });
@@ -630,27 +736,17 @@ if (want(8)) {
     return out;
   }, [390, 844]);
   for (const e of onGlass) say(`    ${e.n.padEnd(6)} ${e.box ? `${e.box.w}x${e.box.h} at ${e.box.x},${e.box.y}` : 'no box'}  ${e.whole ? 'a phone has it' : 'off this frame'}`);
-  const mine = onGlass.find((e) => e.whole);
-  check(!!mine, `a phone has at least one egg to put a thumb on (${onGlass.filter((e) => e.whole).map((e) => e.n).join(', ') || 'NONE'})`);
-  if (!mine) throw new Error('no egg is inside a 390x844 frame');
-  const tx = mine.box.x + mine.box.w / 2, ty = mine.box.y + mine.box.h / 2;
-  const answered = await page.evaluate(([x, y]) => window.__theatre.pieces.props.switches.at(x, y), [tx, ty]);
-  await page.touchscreen.tap(tx, ty);
-  await drawings(page, 8);
-  const tapped = await page.evaluate(() => ({ zoom: window.__theatre.pieces.camera.zoom }));
-  check(answered === mine.n, `a tap on the ${mine.n} is still a tap: the arbiter answers '${answered}' at ${tx | 0},${ty | 0}`);
-  check(tapped.zoom === 0, `and it did not scroll the room (zoom ${tapped.zoom})`);
-
-  // a drag that begins ON a switch belongs to the switch, not to the room
-  await page.evaluate(() => window.__theatre.pieces.camera.setZoom(0, { hold: true }));
-  await drawings(page, 4);
-  const b2 = await page.evaluate(() => window.__theatre.pieces.props.cat.tapBox());
-  await touch(page, 'touchstart', [at(b2.x + b2.w / 2, b2.y + b2.h / 2)]);
-  await touch(page, 'touchmove', [at(b2.x + b2.w / 2, b2.y + b2.h / 2 - 200)]);
-  await touch(page, 'touchend', [at(b2.x + b2.w / 2, b2.y + b2.h / 2 - 200)]);
-  await drawings(page, 12);
-  const onSwitch = await zoomNow();
-  check(onSwitch.target === 0, `a drag that began on the cat is the cat's: zoom ${onSwitch.target}`);
+  const mine = onGlass.find((e) => e.whole && e.n !== 'droste');
+  check(!!mine, `a phone has at least one egg besides the photograph to put a thumb on (${onGlass.filter((e) => e.whole).map((e) => e.n).join(', ') || 'NONE'})`);
+  if (mine) {
+    const tx = mine.box.x + mine.box.w / 2, ty = mine.box.y + mine.box.h / 2;
+    const answered = await page.evaluate(([x, y]) => window.__theatre.pieces.props.switches.at(x, y), [tx, ty]);
+    await page.touchscreen.tap(tx, ty);
+    await drawings(page, 8);
+    const tapped = await page.evaluate(() => ({ zoom: window.__theatre.pieces.camera.zoom, diving: !!window.__theatre.pieces.camera.diving }));
+    check(answered === mine.n, `a tap on the ${mine.n} is still a tap: the arbiter answers '${answered}' at ${tx | 0},${ty | 0}`);
+    check(tapped.zoom === 0 && !tapped.diving, `and it did not dive the room (zoom ${tapped.zoom})`);
+  }
   if (page.__errors.length) check(false, `phone page errors ${JSON.stringify(page.__errors.slice(0, 2))}`);
   await page.close();
 }
