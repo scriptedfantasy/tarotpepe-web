@@ -24,11 +24,14 @@
 // lettering. An entry that will not fit even then spills onto the next leaf, which is what a book
 // does — each entry still STARTS on a leaf of its own, so the trumps are one to a page whenever the
 // window has room for them. What that comes out at, measured (tools/_book-proof.mjs prints it):
-//   1280x800   a spread, 950 x 660, two pages of 436 — and the whole of TAROT BY PEPE in 30 leaves
+//   1280x800   a spread, 950 x 660, two pages of 436 across, set at a 13 px cap — and the whole of
+//              TAROT BY PEPE in 34 leaves, which is 17 openings
 //   390x844    ONE page, because two pages of 170 px is not a book, it is a column of hyphens. The
-//              sheet is 374 x 524 and the spread is CROPPED to its recto: the gutter and the far
+//              sheet is 374 x 580 and the spread is CROPPED to its recto: the gutter and the far
 //              page's edge still run down the left, so what is on the phone is an open book seen
-//              close, and turning goes one leaf at a time exactly as it does on a laptop.
+//              close, and turning goes one leaf at a time exactly as it does on a laptop. The same
+//              thirty entries come to 62 leaves there, which is what a small book is.
+// Both counts are turned through and counted by tools/_book-proof.mjs rather than asserted here.
 //
 // api (ctx.pieces.walk.books):
 //   open(title) · close() · turn(+1|-1) · showing · title · leaf · leaves · spines
@@ -533,6 +536,8 @@ export function buildBooks(ctx, { switches, place }) {
       return found.map((f) => ({ title: f.key, was: f.was, at: f.at.map((n) => +n.toFixed(3)), off: +f.d.toFixed(3) }));
     },
     tapBox: (key) => tapBoxOf(found.find((f) => f.key === key)?.mesh),
+    // every spine's own thumb box, for the case's hotspot to subtract from itself (walk.js, `hitOf`)
+    spineBoxes: () => found.map((f) => tapBoxOf(f.mesh)).filter(Boolean),
     // the text of the leaf that is up, in the hand's own folded case, for a proof that has to read
     // the page rather than look at it
     text: () => {

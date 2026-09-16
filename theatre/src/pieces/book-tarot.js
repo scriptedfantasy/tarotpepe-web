@@ -19,13 +19,17 @@
 // emoji, and no sentence that could be read aloud at a fair. A card is a mirror; the book says what
 // is in the picture and what that is in the person sitting in front of him, and stops.
 //
-// THE SHAPE OF IT, and the page count is the contract walk-book.js pages through:
+// THE SHAPE OF IT. Thirty ENTRIES, and each of them starts on a leaf of its own:
 //   1   the title page
-//   2   what the cards are (two pages)
-//   22  the trumps, one page each, in the order of the deck (src/core/deck.js MAJORS)
-//   4   the four suits, one page each
+//   2   what the cards are (two entries)
+//   22  the trumps, one to an entry, in the order of the deck (src/core/deck.js MAJORS)
+//   4   the four suits, one to an entry
 //   1   the last page
-//   30 pages · 15 openings
+// An entry is not always one LEAF, because a leaf is however much paper the window has: at
+// 1280x800 the book runs to 34 leaves (17 openings) and on a 390x844 phone, which gets one page at
+// a time, to 62. walk-book.js sets one cap for the whole book and spills an entry that will not fit
+// onto the leaf after it, which is what a book does; tools/_book-proof.mjs turns every leaf and
+// counts them.
 //
 // A page is { head, num, lines }. `head` is the running head, `num` its numeral where it has one,
 // and `lines` are paragraphs — the renderer wraps them to the measure it has and sets the leading.

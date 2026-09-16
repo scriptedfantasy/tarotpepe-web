@@ -17,12 +17,13 @@
 //   listener of its own: two controls with their own listeners are two controls that can answer the
 //   same tap, and this room settled that argument once. The hotspot is the thing itself — the
 //   chimney breast and its mantel, the door leaf and its architrave, the case's carcase — and NOT
-//   the things standing on or in it. The grate, the radio, the bottle, the cat and the spines keep
-//   their own switches and keep taking their own clicks: the arbiter ranks the margin boxes by
-//   SNUGNESS, so the small box inside the big one always wins the points it covers, and the big one
-//   takes what is left. That is measured rather than asserted — tools/_walk-proof.mjs puts a
-//   pointer on the grate at the fireplace and on the cat, the bottle and the radio at the case, and
-//   reports which switch the arbiter handed each one to.
+//   the things standing on or in it. The grate, the radio, the bottle, the cat and the four spines
+//   that open keep their own switches and keep taking their own clicks: the hotspot answers as a
+//   DRAWING and every one of those is SUBTRACTED from it by name (`boxesOn`, `hitOf` below), so the
+//   big thing takes only what is left over. That is measured rather than asserted —
+//   tools/_walk-proof.mjs puts a pointer on the grate at the fireplace and on the cat, the bottle,
+//   the radio and each of the spines at the case, and reports which switch the arbiter handed each
+//   one to.
 //
 //   A NAMED SHOT (camera-shots.js: `fireplace`, `doorway`, `case`), solved for the window like
 //   every other shot in the film. Square to the wall the thing stands on, framed by a rise of the
@@ -63,7 +64,8 @@
 // at a 7 x 7 grid of points inside each box which switch it would give them to:
 //     1280x800   fireplace 3.7 % of the frame (16 of 28 sampled points are the breast's; the rest
 //                are the GRATE's, which is the snugger box winning the hole it is) · doorway 7.3 %
-//                (49 of 49) · case 8.9 % (42 of 49; the other seven are the cat's and the bottle's)
+//                (49 of 49) · case 8.9 % (40 of 49; the other nine belong to the cat, the bottle
+//                and two of the four spines that open)
 //     1600x900   fireplace 5.6 % · doorway 6.5 % · case 8.1 %                    all three
 //     1200x1100  doorway 10.7 % · case 13.1 % · fireplace OFF                    two of three
 //     390x844    ALL THREE OFF THE FRAME
@@ -73,6 +75,17 @@
 // A phone watches the evening through the middle of the back wall and the whole of this piece is
 // outside it. Nothing here invents a menu to fix that; what fixes it is the pan (camera.js, THE
 // PAN), which lets a narrow window look round the room and then click what it has looked at.
+// MEASURED, PANNED, on the live page (tools/_walk-proof.mjs, the PAN section): at 390x844 one tap
+// on the left chevron puts the TALL CASE within reach at 102,107 and two put the FIREPLACE at
+// 90,345, and a real click on either walks the visitor there. The door is the one place a narrow
+// window was always going to reach most easily — it is eleven pixels off the right edge at rest and
+// one tap of the right chevron brings it in.
+//
+// AND EACH PLACE ANSWERS AS A DRAWING, NOT AS A MARGIN. The arbiter refuses a margin box bigger
+// than a quarter of the window, and panned round to it on a phone the case projects to
+// 217 x 497 = 107849 px against a cap of 82290 — so as a margin it stopped answering at exactly the
+// window that needs it most. It is a hit test now (`hitOf`), with the thumb's margin carried inside
+// it and everything that STANDS on the place subtracted by name.
 //
 // api (ctx.pieces.walk):
 //   at              which place the visitor is standing at, or null for the chair
@@ -254,16 +267,50 @@ export async function build(ctx) {
   }
 
   // ---- THE POINTER ----------------------------------------------------------------------------
-  // Three hotspots on the room's own arbiter. `enabled` takes each of them out of the room while
-  // the visitor is standing at it — a switch that would do nothing is not a switch — which also
-  // keeps the arbiter's quarter-of-the-window cap on margin boxes out of this: at its own shot a
-  // place fills a good half of the frame and would be refused as a margin, and it must not then
-  // fall through to the window and read as "a click on nothing".
+  // Three hotspots on the room's own arbiter. `enabled` takes each of them out of the room while the
+  // visitor is standing at it — a switch that would do nothing is not a switch — and the window
+  // listener below then reads a click on the thing you are standing at from its own box instead.
+  //
+  // WHAT STANDS ON EACH PLACE AND KEEPS ITS OWN CLICK. This list is the whole of the "two things on
+  // one object" arrangement, written down rather than hoped for, and it is needed because the
+  // hotspots answer as DRAWINGS and not as margins — see `hitOf` below.
+  const boxesOn = (name) => {
+    const Pp = ctx.pieces?.props ?? null;
+    if (name === 'fireplace') return [Pp?.fine?.tapBox?.()];
+    if (name === 'doorway') return [Pp?.cross?.tapBox?.()];
+    return [Pp?.cat?.tapBox?.(), Pp?.wine?.tapBox?.(), Pp?.radio?.tapBox?.(), ...(api.books?.spineBoxes?.() ?? [])];
+  };
+  // A PLACE ANSWERS AS A DRAWING, AND THE THINGS ON IT ARE SUBTRACTED FROM IT.
+  //
+  // It was a margin for one round and the arbiter refused it where it mattered most: a margin box
+  // bigger than a quarter of the window is not a margin (props.js measured that rule against the
+  // squared deck's 13912 x 33305 px), and on a 390x844 phone panned round to it the TALL CASE
+  // projects to 217 x 497 = 107849 px against a cap of 82290. The case simply stopped answering at
+  // the one window that most needs it. (The fireplace's 194 x 395 = 76630 squeaks under; the grate
+  // inside it did not, and egg-fine.js took the same medicine this round.)
+  //
+  // So the test is the place's own rectangle — every corner of which is checked to be IN FRONT of
+  // the lens before it is a rectangle at all, which is the fault the cap was written against — plus
+  // the thumb's margin round it while that is still a margin. And then everything that STANDS on it
+  // is subtracted, because the first pass ranks by distance to the lens and this anchor sits at the
+  // face of the thing: without the subtraction the breast would take the grate's own hole and the
+  // case would take the cat off the shelf. Measured in tools/_walk-proof.mjs, at every place, for
+  // every switch standing in it.
+  const areaCap = () => (ctx.size?.w || window.innerWidth) * (ctx.size?.h || window.innerHeight) * 0.25;
+  function hitOf(name, px, py) {
+    if (!inside(box(name), px, py)) {
+      const t = tapBox(name);
+      if (!t || t.w * t.h > areaCap() || !inside(t, px, py)) return false;
+    }
+    for (const b of boxesOn(name)) if (inside(b, px, py)) return false;
+    return true;
+  }
   for (const name of NAMES) {
     P?.switches?.add?.({
       name: `walk-${name}`,
       object: () => anchors[name],
       tapBox: () => tapBox(name),
+      hit: (px, py) => hitOf(name, px, py),
       enabled: () => at !== name && !blocked(),
       onDown: () => go(name),
     });
@@ -356,6 +403,14 @@ export async function build(ctx) {
     },
     update() {
       api.books?.update?.();
+      // SELF-HEALING. If the camera left a place by a road that did not come through this piece —
+      // a judging state, a tool putting the cross away, anything that cuts — then the visitor is
+      // not standing there any more and this piece must stop saying they are. It cannot fire during
+      // a walk (the camera is moving) or during the door's excursion (the cross egg is holding it).
+      if (at && C && !C.moving && C.holding == null && C.current !== PLACES[at].shot) {
+        at = null;
+        mine = null;
+      }
       // ?walk=<place> is parked and spent on the first update, for main.js's own reason: it cuts
       // the camera to a shot after every piece is built, and a cut is a cut.
       if (pending) {

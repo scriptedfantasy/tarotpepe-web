@@ -625,15 +625,17 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
     // flow.js name it, and its geometry may not move). This is a different frame of the same thing:
     // the visitor standing at it rather than looking across the room at it.
     //
-    // AND ALL THREE FRAME THE SAME AT EVERY WINDOW SHAPE, which is not luck — it is what the
-    // distances were chosen for. Solved at 1280x800 (1.60) and at 390x844 (0.462):
-    //   fireplace  28.6 deg at both. Landscape is bound by the HEIGHT (hearth to over the mantel);
-    //              portrait would be bound by the breast's 1.22 m of width at 36.5 deg, so the
-    //              narrow window gives up the breast's two returns and keeps the chimneypiece —
-    //              the `narrow` composition below — and lands on the same lens.
-    //   doorway    33.1 deg at both: the opening is 0.90 wide against 2.45 high, so even a phone is
-    //              bound by the height and there is nothing for a second composition to buy.
-    //   case       29.4 deg at both, for the same reason: 1.04 wide against 2.38 high.
+    // WHAT THEY SOLVE TO, measured with tools/_walk-geom.mjs at four window shapes:
+    //                 1280x800 · 1600x900 · 1200x1100      390x844
+    //   fireplace     30.2 deg, rise 0.409                 28.5 deg, rise 0.403
+    //   doorway       35.0 deg, rise 0.123                 35.0 deg, rise 0.123
+    //   case          15.6 deg, rise 0.040                 24.5 deg, rise 0.040
+    // Two of the three are the SAME LENS at every shape and that is not luck: the doorway holds an
+    // opening 0.90 m wide against 2.45 high and the fireplace's portrait composition (below) gives up
+    // the breast's two returns, so in both the HEIGHT binds however narrow the window gets. The case
+    // is the one that changes, and it changes the other way about — a phone is bound by its 1.04 m
+    // of WIDTH and opens to 24.5 deg, which is what puts nearly the whole carcase on a phone and
+    // only three bays of it on a laptop.
     // Their positions are all clear of the table (radius 0.62 about the origin) and of him: the
     // nearest any of them stands to the cloth is the fireplace's 1.30 m of x.
     //
@@ -659,8 +661,13 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
       return fitEither({
         pos: P,
         look,
-        // the whole breast in a window that has room for it; the chimneypiece alone in one that has
-        // not (`narrow`, below). Either way the firebox is the business and it is whole.
+        // THE WHOLE BREAST IN A WINDOW THAT HAS ROOM FOR IT; THE CHIMNEYPIECE ALONE IN ONE THAT
+        // HAS NOT. The breast is 1.22 m across its mantel and 3.66 m from the lens, so holding it
+        // whole in a portrait frame costs 36.5 deg — the width binding on a frame a phone makes
+        // 0.462 as wide as it is tall. Giving up the two returns and keeping the opening, the
+        // mantel over it and a hand's breadth either side brings it back to 28.5, which is the
+        // lens the landscape frame happens to want anyway. Either way the firebox is the business
+        // and it is whole.
         keep: aspect < 1.05 ? chimney : [...chimney, [FIRE.face, 0.1, FIRE.z0 - 0.06], [FIRE.face, 0.1, FIRE.z1 + 0.06], [FIRE.face, FIRE.mantel + 0.04, FIRE.z0 - 0.06], [FIRE.face, FIRE.mantel + 0.04, FIRE.z1 + 0.06]],
         // over the mantel, in the bare plaster the user's own note keeps empty: the shelf tops out
         // at 1.26 and the picture rail starts at 2.60, so 1.80 is a clean line at this depth and

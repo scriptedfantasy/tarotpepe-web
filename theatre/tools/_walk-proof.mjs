@@ -164,16 +164,27 @@ if (doing('walk')) {
       claim(a1.zoomable === false, `${w}x${h} ${n}: the scroll is refused at the place (zoomable=${a1.zoomable})`);
       claim(a1.resting === 'home', `${w}x${h} ${n}: the resting plate is still home (${a1.resting})`);
       await shot(p, `${n}-${w}x${h}`);
-      // a click on the place's own object does NOT walk back. At its own shot the hotspot is
+      // A CLICK ON THE PLACE'S OWN OBJECT DOES NOT WALK BACK. At its own shot the hotspot is
       // switched off (a switch that would do nothing is not a switch), so this point is found from
       // the box rather than from the arbiter — which is exactly the case the rule is written for.
+      // The DOOR is the one place whose own object is not inert: step 3 makes it open, so what is
+      // asked of it is that it opens and that the visitor is still standing there, and then it is
+      // shut again and they walk back to it before the two ways out are tried.
       const b2 = (await boxes(p))[n];
       if (b2) {
         const cx = Math.min(w - 2, Math.max(2, b2.x + b2.w / 2)), cy = Math.min(h - 2, Math.max(2, b2.y + b2.h / 2));
         await p.mouse.click(cx, cy);
-        await frames(p, 3);
+        await frames(p, 4);
         const held = await at(p);
-        claim(held.at === n, `${w}x${h} ${n}: a click on the place's own object leaves the visitor there (${held.at})`);
+        if (n === 'doorway') {
+          const phase = await p.evaluate(() => window.__theatre.pieces.props.cross.phase);
+          claim(held.at === n && phase === 'day', `${w}x${h} ${n}: a click on the leaf opens the door instead of leaving (phase ${phase}, still at ${held.at})`);
+          await p.evaluate(() => window.__theatre.pieces.props.cross.shutByDay());
+          await p.waitForFunction(() => window.__theatre.pieces.props.cross.phase === 'shut', null, { timeout: 400000, polling: 300 }).catch(() => {});
+          await settle(p);
+          await p.evaluate(() => window.__theatre.pieces.walk.go('doorway'));
+          await settle(p);
+        } else claim(held.at === n, `${w}x${h} ${n}: a click on the place's own object leaves the visitor there (${held.at})`);
       }
       // …and a click on nothing walks them home. The top-left corner is plaster in all three frames.
       await p.mouse.click(4, 4);
@@ -439,6 +450,132 @@ if (doing('talk')) {
   claim(text.length > 0, `the placard is carrying words at the place: "${text.slice(0, 120)}"`);
   await shot(p, 'case-talking-1280x800');
   await p.close();
+}
+
+// ---- 5. THE PAN, AND WHAT IT PUTS WITHIN REACH -------------------------------------------------
+// A narrow window looks round the room, and the two places a phone could not click from the chair
+// become clickable. Driven with a real touch drag and with a real tap on the drawn chevron.
+if (doing('pan')) {
+  console.log('\nPAN — a narrow window looks round the room');
+  for (const [w, h] of [PLATE, [1200, 1100], PHONE]) {
+    await fresh();
+    const p = await room(w, h);
+    const armed = await p.evaluate(() => ({ needed: window.__theatre.pieces.camera.panNeeded, able: window.__theatre.pieces.camera.panable, boxes: window.__theatre.pieces.camera.panBoxes, max: window.__theatre.pieces.camera.panMax }));
+    await frames(p, 3);
+    const boxes2 = await p.evaluate(() => window.__theatre.pieces.camera.panBoxes);
+    console.log(`  ${w}x${h}  the room ${armed.needed ? 'does NOT fit the frame — the pan is armed' : 'fits the frame — no pan, no chevrons'}; chevrons ${boxes2 ? `at ${boxes2.l.x.toFixed(0)},${boxes2.l.y.toFixed(0)} and ${boxes2.r.x.toFixed(0)},${boxes2.r.y.toFixed(0)} (${boxes2.l.w.toFixed(0)}x${boxes2.l.h.toFixed(0)} px)` : 'not drawn'}`);
+    if (w === PLATE[0]) {
+      claim(!armed.needed && !boxes2, `${w}x${h}: a laptop holds the room and gets no control at all`);
+      await p.close();
+      continue;
+    }
+    claim(armed.needed && !!boxes2, `${w}x${h}: the pan is armed and the two chevrons are drawn`);
+    // a real TAP on the left chevron — twice, which is the whole range
+    await p.mouse.click(boxes2.l.x + boxes2.l.w / 2, boxes2.l.y + boxes2.l.h / 2);
+    await p.mouse.click(boxes2.l.x + boxes2.l.w / 2, boxes2.l.y + boxes2.l.h / 2);
+    await p.waitForFunction(() => Math.abs(window.__theatre.pieces.camera.pan - window.__theatre.pieces.camera.panTarget) < 1e-3, null, { timeout: 120000, polling: 200 }).catch(() => {});
+    const left = await p.evaluate(() => ({ pan: window.__theatre.pieces.camera.pan, deg: window.__theatre.pieces.camera.panDegrees, zoomable: window.__theatre.pieces.camera.zoomable, shot: window.__theatre.pieces.camera.current }));
+    claim(Math.abs(left.pan + 1) < 0.01, `${w}x${h}: two taps on the left chevron turn the room hard over (pan ${left.pan.toFixed(2)}, ${left.deg}°)`);
+    claim(left.zoomable === false, `${w}x${h}: and the scroll is disarmed while the room is turned`);
+    claim(left.shot === 'home', `${w}x${h}: the camera is still standing on the resting plate (${left.shot})`);
+    if (w === PHONE[0]) await shot(p, 'pan-left-390x844');
+    // WHAT IS NOW WITHIN REACH: the two places a phone could not click from the chair
+    const reach = await p.evaluate(() => {
+      const W = window.__theatre.pieces.walk, S = window.__theatre.pieces.props.switches;
+      const out = {};
+      for (const n of W.places) {
+        const b = W.box(n);
+        if (!b) {
+          out[n] = null;
+          continue;
+        }
+        let hit = null;
+        for (let j = 1; j < 10 && !hit; j++) for (let i = 1; i < 10 && !hit; i++) {
+          const x = b.x + (b.w * i) / 10, y = b.y + (b.h * j) / 10;
+          if (x < 2 || x > innerWidth - 2 || y < 2 || y > innerHeight - 2) continue;
+          if (S.at(x, y) === `walk-${n}`) hit = [Math.round(x), Math.round(y)];
+        }
+        out[n] = hit;
+      }
+      return out;
+    });
+    console.log(`   panned left, the arbiter answers for: ${Object.entries(reach).filter(([, v]) => v).map(([k, v]) => `${k} at ${v[0]},${v[1]}`).join(' · ') || 'nothing'}`);
+    claim(!!reach.fireplace, `${w}x${h}: panned left, the FIREPLACE can be clicked (${reach.fireplace})`);
+    // …and clicking it really walks
+    await p.mouse.click(reach.fireplace[0], reach.fireplace[1]);
+    await settle(p);
+    const stood = await at(p);
+    claim(stood.at === 'fireplace', `${w}x${h}: a phone reaches the fireplace by panning and tapping (walk.at=${stood.at})`);
+    const panAfter = await p.evaluate(() => window.__theatre.pieces.camera.pan);
+    claim(panAfter === 0, `${w}x${h}: and the walk put the pan back to nought (${panAfter})`);
+    await p.evaluate(() => window.__theatre.pieces.walk.back());
+    await settle(p);
+    // the CASE, the other way about: one tap left, then find it
+    const bx = await p.evaluate(() => window.__theatre.pieces.camera.panBoxes);
+    await p.mouse.click(bx.l.x + bx.l.w / 2, bx.l.y + bx.l.h / 2);
+    await p.waitForFunction(() => Math.abs(window.__theatre.pieces.camera.pan - window.__theatre.pieces.camera.panTarget) < 1e-3, null, { timeout: 120000, polling: 200 }).catch(() => {});
+    const caseHit = await p.evaluate(() => {
+      const W = window.__theatre.pieces.walk, S = window.__theatre.pieces.props.switches;
+      const b = W.box('case');
+      if (!b) return null;
+      for (let j = 1; j < 10; j++) for (let i = 1; i < 10; i++) {
+        const x = b.x + (b.w * i) / 10, y = b.y + (b.h * j) / 10;
+        if (x < 2 || x > innerWidth - 2 || y < 2 || y > innerHeight - 2) continue;
+        if (S.at(x, y) === 'walk-case') return [Math.round(x), Math.round(y)];
+      }
+      return null;
+    });
+    claim(!!caseHit, `${w}x${h}: one tap left puts the TALL CASE within reach (${caseHit})`);
+    if (caseHit) {
+      await p.mouse.click(caseHit[0], caseHit[1]);
+      await settle(p);
+      const s2 = await at(p);
+      claim(s2.at === 'case', `${w}x${h}: and tapping it walks there (${s2.at})`);
+      await p.evaluate(() => window.__theatre.pieces.walk.back());
+      await settle(p);
+    }
+    // the other way: the right chevron, and the drag. Square the room up first — the tests above
+    // leave it turned when one of them does not reach, and two taps from −0.5 is only +0.5.
+    await p.evaluate(() => window.__theatre.pieces.camera.setPan(0, { hold: true }));
+    await frames(p, 2);
+    const bx2 = await p.evaluate(() => window.__theatre.pieces.camera.panBoxes);
+    await p.mouse.click(bx2.r.x + bx2.r.w / 2, bx2.r.y + bx2.r.h / 2);
+    await p.mouse.click(bx2.r.x + bx2.r.w / 2, bx2.r.y + bx2.r.h / 2);
+    await p.waitForFunction(() => Math.abs(window.__theatre.pieces.camera.pan - window.__theatre.pieces.camera.panTarget) < 1e-3, null, { timeout: 120000, polling: 200 }).catch(() => {});
+    const right = await p.evaluate(() => window.__theatre.pieces.camera.pan);
+    claim(Math.abs(right - 1) < 0.01, `${w}x${h}: the right chevron turns it the other way (${right.toFixed(2)})`);
+    if (w === PHONE[0]) await shot(p, 'pan-right-390x844');
+    // A REAL ONE-FINGER DRAG, and the axis split. Horizontal pans; vertical is still the scroll.
+    await p.evaluate(() => window.__theatre.pieces.camera.setPan(0, { hold: true }));
+    await frames(p, 2);
+    const cx = Math.round(w / 2), cy = Math.round(h / 2);
+    await p.touchscreen.tap(cx, cy).catch(() => {});
+    const dragged = await p.evaluate(async ([x, y]) => {
+      const el = window.__theatre.renderer.domElement;
+      const t = (id, X, Y) => new Touch({ identifier: id, target: el, clientX: X, clientY: Y });
+      const fire = (type, X, Y) => {
+        const touch = t(1, X, Y);
+        el.dispatchEvent(new TouchEvent(type, { touches: type === 'touchend' ? [] : [touch], targetTouches: type === 'touchend' ? [] : [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+      };
+      fire('touchstart', x, y);
+      for (let k = 1; k <= 8; k++) fire('touchmove', x + k * 18, y);
+      fire('touchend', x + 144, y);
+      await new Promise((r) => requestAnimationFrame(r));
+      return { panTarget: window.__theatre.pieces.camera.panTarget, zoomTarget: window.__theatre.pieces.camera.zoomTarget };
+    }, [cx, cy]);
+    claim(dragged.panTarget < -0.05 && dragged.zoomTarget === 0, `${w}x${h}: a sideways one-finger drag pans and does not scroll (pan ${dragged.panTarget.toFixed(3)}, zoom ${dragged.zoomTarget})`);
+    // …and a wheel while turned squares the room up before it zooms
+    await p.mouse.move(cx, cy);
+    await p.mouse.wheel(0, 240);
+    await frames(p, 2);
+    const wheeled = await p.evaluate(() => ({ pan: window.__theatre.pieces.camera.panTarget, zoom: window.__theatre.pieces.camera.zoomTarget }));
+    claim(wheeled.pan === 0 && wheeled.zoom === 0, `${w}x${h}: a wheel while turned eases the pan back to centre and does not zoom (pan ${wheeled.pan}, zoom ${wheeled.zoom})`);
+    if (p.__errors.length) {
+      console.log(`   errors: ${p.__errors.join(' | ')}`);
+      bad++;
+    }
+    await p.close();
+  }
 }
 
 console.log(bad ? `\n${bad} claim(s) failed` : '\nevery claim holds');

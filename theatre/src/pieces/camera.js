@@ -29,6 +29,13 @@
 // the entrance could take the same road: its arrival is hand-rolled today because there was no such
 // call to make.
 //
+// TWO MODIFIERS ON THE PLATE THE EVENING IS WATCHED FROM, and they are never on together. THE
+// SCROLL walks into the picture of this room hanging on the back wall (THE SCROLL, below). THE PAN
+// turns the lens on its own station so a window too narrow to hold the room can look round it —
+// added the round the visitor got up out of the chair, because a phone's frame holds 2.0 m of a
+// 5.2 m wall and everything a visitor might walk to is outside it (THE PAN, below; the drawn
+// control is src/pieces/camera-pan.js).
+//
 // API: shots (the named shots; every layout name is kept, others added), current, cut(shot),
 //      hold(shot, {jump}) / release(shot) / holding — one shot nobody else may cut away from,
 //      move(shot, {kind: 'cut'|'push'|'track'|'whip', duration})   — the rail, and
@@ -40,11 +47,12 @@
 import * as THREE from 'three';
 import { buildShots } from './camera-shots.js';
 import { tanHalf } from './camera-frame.js';
+import { mountChevrons } from './camera-pan.js';
 
 export const meta = {
   name: 'camera',
-  judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'crossroads', 'fireplace', 'doorway', 'case', 'track', 'whip', 'zoom-half', 'zoom-deep'] },
-  files: ['src/pieces/camera.js', 'src/pieces/camera-shots.js', 'src/pieces/camera-frame.js', 'src/pieces/camera-plan.js'],
+  judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'crossroads', 'fireplace', 'doorway', 'case', 'track', 'whip', 'zoom-half', 'zoom-deep', 'pan-left', 'pan-right'] },
+  files: ['src/pieces/camera.js', 'src/pieces/camera-shots.js', 'src/pieces/camera-frame.js', 'src/pieces/camera-plan.js', 'src/pieces/camera-pan.js'],
 };
 
 // Motor speeds of the rail: a lateral track, a push. Metres per second.
@@ -183,6 +191,68 @@ export async function build(ctx) {
   let zoomTarget = 0, zoomShown = 0;
   let pendingZoom = null; // ?zoom=<t>, spent on the first update; see the foot of this file
 
+  // ---- THE PAN --------------------------------------------------------------------------------
+  // The room's SECOND modifier on the resting plate, and the first control this film has ever drawn.
+  //
+  // The user: "the phone should have a pan control, so the user can look around the room." A phone's
+  // resting frame holds 2.00 m of a wall 5.20 m wide — the middle of the back wall and nothing else
+  // — so the fireplace, the tall case, the door, both windows and the press are simply not in the
+  // picture, and neither is anything a visitor might click on them (src/pieces/walk.js measures
+  // exactly that: all three of its places are off a 390x844 frame).
+  //
+  // WHAT IT IS. A YAW ABOUT THE LENS'S OWN POSITION — the visitor turns their head; the camera does
+  // not slide along the wall. The lens axis stays horizontal, so verticals stay vertical and the
+  // lens rise is untouched: this room's whole grammar is that the frame is hung by a rise and never
+  // by a tilt, and a yaw about a vertical axis leaves both of those alone. It is a modifier on the
+  // resting plate exactly as the zoom is, which means it is the same three rules: it runs on the
+  // TWELVES, it is REMEMBERED while the visitor stays at rest, and any cut, move or walk puts it
+  // back to nought.
+  //
+  // HOW FAR, AND WHY NOT FURTHER. 20 degrees each way, which is measured against what is standing on
+  // the two side walls rather than chosen. From the chair at (0, 1.62, 6.40):
+  //   the FIREPLACE's breast (x −2.36, z −0.66 .. 0.56)      18.5° .. 22.0° left
+  //   the TALL CASE (x −2.10 .. −1.06 at z −2.20)             6.9° .. 13.7° left
+  //   the DOORWAY (x 1.05 .. 1.95 at z −2.50)                 6.7° .. 12.4° right
+  //   the PALM on its stool (x 2.36, z −0.30)                19.4° right
+  // A phone's frame is 12.7° across, so at a yaw of 20° the fireplace stands in the middle of it
+  // with 2.9° of paper either side, and the palm and the side door do on the other. Past 20° the
+  // frame comes off the furniture onto bare plaster and, at about 26°, onto the corner: the rule is
+  // that a pan shows what is ON a side wall and then stops.
+  // The control itself is drawn in src/pieces/camera-pan.js and mounted at the foot of this file;
+  // the update loop and the resize handler both reach it, so the binding is made here.
+  let CHEV = { update() {}, boxes: () => null, resize() {} };
+  const PAN_MAX = (20 * Math.PI) / 180;
+  const PAN_CLOSE = 0.42; // of the gap to the target per drawing: the zoom's own hand, a shade slower
+  const PAN_WRAP = 620; // px of one-finger drag for the whole 20° — about 1.6 phone widths end to end
+  const PAN_STEP = 0.5; // what one tap on a chevron is worth
+  const PAN_WHEEL = 1400; // px of a horizontal wheel (a trackpad's two-finger swipe) for the whole range
+  let panTarget = 0, panShown = 0;
+  let pendingPan = null; // ?pan=<-1..1>, spent on the first update
+  // IS THE WINDOW NARROWER THAN THE ROOM NEEDS. The one test, and it is the one the user's sentence
+  // makes: does the resting frame hold the back wall from corner to corner. The frame's horizontal
+  // half-width at the wall is t·aspect·d; the room's half-width is 2.60. Measured:
+  //   1600x900  ±3.97 m · 1280x800 ±3.57 m   the room is in the picture — NO CHEVRONS, NO PAN
+  //   1200x1100 ±2.43 m · 390x844 ±1.00 m    it is not — the pan is armed
+  const ROOM_HALF = () => (ctx.layout?.room?.width ?? 5.2) / 2;
+  function panNeeded() {
+    const s = flatPlate(resting) ?? shots.home;
+    if (!s) return false;
+    const w = ctx.size?.w || window.innerWidth || 1600, h = ctx.size?.h || window.innerHeight || 900;
+    const d = s.pos[2] - (-(ctx.layout?.room?.depth ?? 5) / 2); // the lens to the back wall
+    return Math.tan(((s.fov ?? 30) * Math.PI) / 360) * (w / h) * d < ROOM_HALF();
+  }
+  // The resting plate, turned. `p` is −1 (looking hard left) to +1; the LOOK point is rotated about
+  // the camera's own position, so nothing but the direction changes — not the station, not the lens,
+  // not the rise.
+  function panShot(p) {
+    const s = flatPlate(resting) ?? shots.home;
+    if (!s) return null;
+    const th = -p * PAN_MAX;
+    const dx = s.look[0] - s.pos[0], dz = s.look[2] - s.pos[2];
+    const c = Math.cos(th), sn = Math.sin(th);
+    return { ...s, look: [s.pos[0] + dx * c + dz * sn, s.look[1], s.pos[2] - dx * sn + dz * c] };
+  }
+
   const drosteOf = () => ctx.pieces?.props?.droste ?? null;
 
   // ---- WHICH PLATE THE ROOM IS RESTING ON -----------------------------------------------------
@@ -267,16 +337,56 @@ export async function build(ctx) {
   // wheel the visitor meant for that thing: the deck laid on the cloth, the crossroads outside the
   // door, the notice card, and a pick (the fan arms the pointer and the camera is on `fan` for it,
   // but the flag is asked anyway — it costs nothing and it is the honest test).
-  function zoomAllowed() {
+  // THE PRECONDITION BOTH MODIFIERS SHARE, hoisted out of zoomAllowed when the pan arrived: the
+  // camera is standing still on the plate the evening is watched from, nobody is holding it, and
+  // nothing in the room has the pointer. The list grew by one this round — a BOOK standing open
+  // over the room (src/pieces/walk-book.js) owns the pointer exactly as the notice does.
+  function modifiable() {
     if (held != null || move || api.current !== resting) return false;
     const P = ctx.pieces?.props;
     if (P?.deck?.out || P?.cross?.out) return false;
     if (ctx.pieces?.help?.showing) return false;
+    if (ctx.pieces?.walk?.books?.showing) return false;
     // the fan's own flag, which lives on the piece that owns the pointer rather than on reveal's
     // front door (reveal-pick.js; camera-shots.js reads `_fan` the same way for the same reason)
     const F = ctx.pieces?.reveal?._fan;
     if (F?.armed || F?.picking) return false;
+    return true;
+  }
+  // …AND THE TWO OF THEM ARE NEVER ON AT ONCE. The zoom is a walk INTO the picture on the back wall
+  // and it is solved from the home plate's own normal; a yawed camera is not on that normal and the
+  // arithmetic would be solving a picture the lens is looking at from the side. So a pan that is not
+  // at nought disarms the scroll, and a wheel or a pinch arriving while the room is turned spends
+  // itself easing the pan back to centre first (see THE WHEEL, below). At pan 0 every number, every
+  // hand-over and every frame is what it was before this round.
+  function zoomAllowed() {
+    if (!modifiable()) return false;
+    if (panShown !== 0 || panTarget !== 0) return false;
     return !!zoomSpan();
+  }
+  function panAllowed() {
+    return modifiable() && panNeeded();
+  }
+  function applyPan() {
+    // NOTHING IS APPLIED UNLESS THE CAMERA IS ACTUALLY STANDING ON THE PLATE THIS IS A MODIFIER ON.
+    // `setPan(0, {hold: true})` from a tool is the case that needs it: without this guard it would
+    // strike the home pose over whatever the camera was doing — a place, a plate, a walk — because
+    // pan 0 IS the home pose.
+    if (move || held != null || api.current !== resting) return;
+    if (panShown === 0) {
+      applyPose(poseOf(shots[resting] ?? shots.home));
+      return;
+    }
+    const s = panShot(panShown);
+    if (s) applyPose(poseOf(s));
+  }
+  function resetPan() {
+    panTarget = 0;
+    panShown = 0;
+  }
+  function holdPan(p) {
+    panTarget = panShown = Math.max(-1, Math.min(1, p));
+    applyPan();
   }
 
   const fract = (v) => v - Math.floor(v);
@@ -314,6 +424,16 @@ export async function build(ctx) {
     // the sheet was re-cut for the new aspect a moment ago (props builds before this piece, so its
     // resize handler has already run); a held zoom is re-solved against the frame's new shape
     if (!move && api.current === resting && zoomShown !== 0) applyZoom();
+    // …and a pan the same way — except that a window that has just become WIDE ENOUGH to hold the
+    // room has no pan to re-apply and is put back square (panNeeded is the only thing that arms it)
+    if (!move && api.current === resting && panShown !== 0) {
+      if (panAllowed()) applyPan();
+      else {
+        resetPan();
+        applyPose(poseOf(shots[resting] ?? shots.home));
+      }
+    }
+    CHEV?.resize?.();
   });
 
   // ---- moves ----
@@ -378,6 +498,7 @@ export async function build(ctx) {
     // home plate. Zeroing it does not move anything: only applyZoom() does, and it is now blocked
     // by the move this call is about to start.
     resetZoom();
+    resetPan(); // a walk leaves from where the visitor turned to, and the way back is the plate
     const from = fromShot == null ? currentPose() : poseOf(resolve(fromShot));
     const to = poseOf(resolve(toShot));
     api.current = typeof toShot === 'string' ? toShot : 'custom';
@@ -433,6 +554,7 @@ export async function build(ctx) {
   function jump(shot) {
     finish();
     resetZoom(); // a cut is a cut: the room is at t = 0 wherever it lands, the resting plate included
+    resetPan(); // …and square to the wall again, whatever the visitor had turned to look at
     api.current = typeof shot === 'string' ? shot : 'custom';
     noteResting();
     applyPose(poseOf(resolve(shot)));
@@ -440,6 +562,7 @@ export async function build(ctx) {
   function startMove(shot, kind, duration) {
     finish();
     resetZoom(); // …and the rail leaves from the zoomed pose; see dolly() above
+    resetPan();
     const to = poseOf(resolve(shot));
     api.current = typeof shot === 'string' ? shot : 'custom';
     noteResting();
@@ -493,6 +616,47 @@ export async function build(ctx) {
     get zoomable() {
       return zoomAllowed();
     },
+    // ---- THE PAN, for the tools and for anything that wants to know ---------------------------
+    // `pan` is where the room is actually TURNED TO, −1 (hard left) to +1; `panTarget` is where the
+    // visitor's last drag or tap pointed it. They differ for the four or five drawings a flick takes
+    // to settle and are equal at rest. `panable` is whether the window is narrow enough to need one
+    // at all — which is the only thing that puts the chevrons in the picture.
+    get pan() {
+      return panShown;
+    },
+    get panTarget() {
+      return panTarget;
+    },
+    get panable() {
+      return panAllowed();
+    },
+    get panNeeded() {
+      return panNeeded();
+    },
+    get panDegrees() {
+      return +(((-panShown * PAN_MAX * 180) / Math.PI).toFixed(2));
+    },
+    get panMax() {
+      return +((PAN_MAX * 180) / Math.PI).toFixed(2);
+    },
+    // the chevrons' own boxes on the glass, or null when the window is wide enough not to have them
+    get panBoxes() {
+      return CHEV.boxes();
+    },
+    // set the TARGET; the shown number walks to it on the twelves. `{hold: true}` puts both there at
+    // once, which is what ?pan= and the judging states want — a still does not drift.
+    setPan(p, { hold = false } = {}) {
+      if (!Number.isFinite(p)) return false;
+      const q = Math.max(-1, Math.min(1, p));
+      if (hold) {
+        holdPan(q);
+        return true;
+      }
+      panTarget = q;
+      return true;
+    },
+    // the pose at any p, solved but not applied
+    panShotAt: (p) => panShot(Math.max(-1, Math.min(1, p))),
     // set the TARGET; the shown number walks to it on the twelves. `{ hold: true }` puts both there
     // at once, which is what ?zoom= and the judging states want — a still does not drift.
     setZoom(t, { hold = false } = {}) {
@@ -517,7 +681,7 @@ export async function build(ctx) {
     // the back wall, so there is one scene pass and not two. Nothing is approximated here — the
     // pose the camera is holding was copied out of poseOf(shots[resting]) and is compared to it.
     get atRest() {
-      if (move || api.current !== resting || fract(zoomShown) !== 0) return false;
+      if (move || api.current !== resting || fract(zoomShown) !== 0 || panShown !== 0) return false;
       const s = shots[resting];
       if (!s) return false;
       const p = poseOf(s);
@@ -661,6 +825,13 @@ export async function build(ctx) {
       // to home first, so the number is applied to the plate it is a modifier on.
       api.cut('home');
       holdZoom(name === 'zoom-deep' ? 0.95 : 0.5);
+    } else if (name === 'pan-left' || name === 'pan-right') {
+      // the room turned as far as it goes, held, on the plate the pan is a modifier on. It is CUT to
+      // home first so the number is applied to the plate it belongs to, exactly as the zoom's states
+      // are. A window wide enough to hold the room has no pan and the state is then simply `home`,
+      // which is the honest still for it.
+      api.cut('home');
+      if (panNeeded()) holdPan(name === 'pan-left' ? -1 : 1);
     } else api.cut(name in shots ? name : 'home');
     },
     update(ctx) {
@@ -684,6 +855,31 @@ export async function build(ctx) {
           if (from.pos.distanceTo(to.pos) > 0.004 || Math.abs(from.fov - to.fov) > 0.08) startMove('fan', 'open', OPEN_S);
         }
       }
+      // THE PAN, one new position per DRAWING, and it is stepped BEFORE the scroll because a pan
+      // that is not at nought disarms the scroll — the walk back to centre has to be able to reach
+      // nought on a drawing where the scroll is still refusing to run.
+      if (panAllowed()) {
+        if (pendingPan != null) {
+          holdPan(pendingPan);
+          pendingPan = null;
+        }
+        if (panShown !== panTarget && ctx.clock.stepped) {
+          const gap = panTarget - panShown;
+          panShown = Math.abs(gap) < 1e-4 ? panTarget : panShown + gap * PAN_CLOSE;
+          applyPan();
+        }
+      } else if (panShown !== 0 || panTarget !== 0) {
+        // the room was turned and something took the camera (a walk, a book, a reading): it comes
+        // back square, the same rule the zoom keeps
+        resetPan();
+        if (api.current === resting && !move && held == null) applyPose(poseOf(shots[resting] ?? shots.home));
+      } else if (pendingPan != null && !panNeeded()) pendingPan = null;
+      CHEV.update({
+        show: panAllowed(),
+        left: panTarget > -1 + 1e-3,
+        right: panTarget < 1 - 1e-3,
+        parity: ctx.clock.frame % 2,
+      });
       // THE SCROLL, one new position per DRAWING. Nothing here runs on a tick the paper did not
       // turn over, and nothing runs at all unless the camera is standing on the home plate with
       // nobody else holding it — a wheel during a pick, a deck, a crossroads or the notice is a
@@ -753,6 +949,23 @@ export async function build(ctx) {
       // PAGE — the canvas and the placard and all — which is never what the visitor meant on a
       // full-window scene. It is refused whether or not the room will take the scroll.
       if (ev.ctrlKey) ev.preventDefault();
+      // A TRACKPAD'S TWO-FINGER SWIPE SIDEWAYS IS A PAN. It arrives as deltaX and it is the same
+      // gesture a thumb makes on the glass, so it drives the same number; a mouse with no
+      // horizontal wheel simply never sends one.
+      if (!ev.ctrlKey && panAllowed() && Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) {
+        ev.preventDefault();
+        panTarget = Math.max(-1, Math.min(1, panTarget - (ev.deltaX * (ev.deltaMode === 1 ? 16 : 1)) / PAN_WHEEL));
+        return;
+      }
+      // …AND A WHEEL OR A PINCH ARRIVING WHILE THE ROOM IS TURNED SPENDS ITSELF SQUARING IT UP. The
+      // scroll is a walk into the picture on the back wall and it is solved from that wall's own
+      // normal; it cannot be asked for from an angle. So the first flick brings the room back to
+      // centre and the second one is the scroll, which is also what the hand means by it.
+      if ((panShown !== 0 || panTarget !== 0) && panAllowed()) {
+        ev.preventDefault();
+        panTarget = 0;
+        return;
+      }
       if (!zoomAllowed()) return;
       ev.preventDefault();
       // …and the pinch's sign is the other way round from the wheel's: spreading the fingers gives
@@ -793,8 +1006,9 @@ export async function build(ctx) {
         pinch = s ? { d0: Math.max(1, touchDist(t)), z0: zoomTarget, span: Math.log(1 / s.h0) } : null;
         pinched = !!pinch;
         drag = null;
-      } else if (t.length === 1 && !pinched && zoomAllowed() && onNothing(t[0])) {
-        drag = { y0: t[0].clientY, z0: zoomTarget, live: false };
+      } else if (t.length === 1 && !pinched && (zoomAllowed() || panAllowed()) && onNothing(t[0])) {
+        // UNCOMMITTED until it has travelled: which axis crosses the slop first owns the gesture.
+        drag = { x0: t[0].clientX, y0: t[0].clientY, z0: zoomTarget, p0: panTarget, live: false, axis: null };
       }
     },
     { passive: true }
@@ -809,19 +1023,37 @@ export async function build(ctx) {
         return;
       }
       if (!drag || t.length !== 1) return;
-      if (!zoomAllowed()) {
-        drag = null;
-        return;
-      }
-      const moved = drag.y0 - t[0].clientY; // up is positive: up = scroll down = in
+      const dy = drag.y0 - t[0].clientY; // up is positive: up = scroll down = in
+      const dx = t[0].clientX - drag.x0; // right is positive: the hand drags the room to the right
+      // WHICH GESTURE IT IS, decided once and never revisited. The vertical drag was the scroll
+      // before this round and it still is; the horizontal one is the pan. The first of the two to
+      // travel DRAG_SLOP (12 px) takes the whole of the rest of the drag, so a thumb that wanders
+      // does not hand the room back and forth between two modifiers.
       if (!drag.live) {
-        if (Math.abs(moved) < DRAG_SLOP) return;
+        const ay = Math.abs(dy), ax = Math.abs(dx);
+        if (ay < DRAG_SLOP && ax < DRAG_SLOP) return;
+        drag.axis = ax > ay ? 'x' : 'y';
         drag.live = true;
         // THE SLOP IS SPENT, NOT BANKED, and it is taken off the START of the drag rather than off
         // where the finger has got to. Rebasing to the finger's current position throws away every
         // pixel it travelled before this handler ran, which on a touch that arrives as one big move
         // is the whole gesture: it went live and reported the 12 px of slop as the whole of it.
-        drag.y0 -= Math.sign(moved) * DRAG_SLOP;
+        if (drag.axis === 'y') drag.y0 -= Math.sign(dy) * DRAG_SLOP;
+        else drag.x0 += Math.sign(dx) * DRAG_SLOP;
+      }
+      if (drag.axis === 'x') {
+        if (!panAllowed()) {
+          drag = null;
+          return;
+        }
+        panTarget = Math.max(-1, Math.min(1, drag.p0 - (t[0].clientX - drag.x0) / PAN_WRAP));
+        return;
+      }
+      if (!zoomAllowed()) {
+        // the room is turned: the first vertical drag squares it up, as a wheel does
+        if (panAllowed() && (panShown !== 0 || panTarget !== 0)) panTarget = 0;
+        drag = null;
+        return;
       }
       zoomTarget = drag.z0 + (drag.y0 - t[0].clientY) / DRAG_WRAP;
     },
@@ -843,6 +1075,19 @@ export async function build(ctx) {
   // on the first update, which is the first tick after that cut.
   const askedZoom = ctx.params?.get?.('zoom');
   pendingZoom = askedZoom != null && askedZoom !== '' && Number.isFinite(+askedZoom) ? +askedZoom : null;
+  // ?pan=<-1..1> holds the room turned that far, with no drift, for a still. Parked and spent on the
+  // first update for the reason ?zoom= is: main.js cuts the camera after every piece is built.
+  const askedPan = ctx.params?.get?.('pan');
+  pendingPan = askedPan != null && askedPan !== '' && Number.isFinite(+askedPan) ? +askedPan : null;
+
+  // ---- AND THE ONE CONTROL THIS FILM DRAWS ------------------------------------------------------
+  // A tap on a chevron is worth half the range, so two taps take the room from square to hard over
+  // and the walk between them is the same eased one a drag gets. It moves the TARGET and nothing
+  // else; the pose is stepped in update(), on the twelves.
+  CHEV = mountChevrons(ctx, (dir) => {
+    if (!panAllowed()) return;
+    panTarget = Math.max(-1, Math.min(1, panTarget + dir * PAN_STEP));
+  });
 
   return api;
 }
