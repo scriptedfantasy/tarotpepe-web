@@ -25,14 +25,15 @@
 // lettering. An entry that will not fit even then spills onto the next leaf, which is what a book
 // does — each entry still STARTS on a leaf of its own, so the trumps are one to a page whenever the
 // window has room for them. What that comes out at, measured (tools/_book-proof.mjs prints it):
-//   1280x800   a spread, 950 x 660, two pages of 436 across, set at a 13 px cap. 63 leaves — 32
-//              openings — of which 26 are CARDS and 3 are a printer's blanks facing a plate.
+//   1280x800   a spread, 950 x 660, two pages of 436 across, set at a 13 px cap. 234 leaves — 117
+//              openings — of which 78 are CARDS, 5 are the contents and 29 are printer's blanks
+//              facing a plate.
 //   390x844    ONE page, because two pages of 170 px is not a book, it is a column of hyphens. The
 //              sheet is 374 x 580 and the spread is CROPPED to its recto: the gutter and the far
 //              page's edge still run down the left, so what is on the phone is an open book seen
 //              close, and turning goes one leaf at a time exactly as it does on a laptop. The same
-//              thirty entries come to 87 leaves there, 26 of them cards and none of them blank —
-//              a single page needs no verso to face.
+//              eighty-seven entries come to 260 leaves there, 78 of them cards, 6 of them the
+//              contents, and none of them blank — a single page needs no verso to face.
 // Both counts are turned through, and every plate's own ink counted inside its box on the glass, by
 // tools/_book-proof.mjs rather than asserted here.
 //
@@ -43,8 +44,28 @@
 // nothing in this film's pen goes near it: no ink pass, no boil, no contour, no hatch. 320 x 560 px
 // on a laptop and 282 x 493 on a phone, which is a card somebody can actually look at.
 //
+// AND IT HAS A CONTENTS, BECAUSE SEVENTY-EIGHT CARDS IS NOT A THING YOU READ FRONT TO BACK. The
+// user: "the tarot pepe book actually needs an index page — so the user can jump straight where they
+// want, and also jump back to the index page — we also need every single card explained, even in the
+// 4 suits." So the leaf after the title is a LIST OF WHAT IS IN IT, set in the same hand: the two
+// opening pages, the twenty-two trumps by numeral and name, then each suit and its fourteen cards
+// indented under it, and the last page. Every line carries the folio it is on and clicking the line
+// turns straight there.
+//
+// THE FOLIOS ARE MEASURED AND NOT WRITTEN DOWN. The book paginates per window, so the number beside
+// a line on a phone is not the number beside it on a laptop. The index is built from the SAME walk
+// that cuts the leaves (paginate, below): the walk records which leaf each entry started on and the
+// list is lettered from that, so a line cannot disagree with the page it lands on.
+//
+// AND THE WAY BACK IS A FOLDED CORNER. Every leaf that is not the contents and not the title has its
+// top outer corner turned down — a crease and four strokes of hatch in the book's own pen, nothing
+// written on it, no tag and no label — and a click on it goes back to the contents, at the leaf of
+// the list the visitor jumped from rather than the top of it. Turning by clicking the right page and
+// the left page is untouched; the corner is tested first and it is 44 px to a thumb.
+//
 // api (ctx.pieces.walk.books):
-//   open(title) · close() · turn(+1|-1) · showing · title · leaf · leaves · spines · card · sheetLeaves
+//   open(title) · close() · turn(+1|-1) · goLeaf(n) · back() · showing · title · leaf · leaves
+//   spines · card · sheetLeaves · index · indexAt · indexHits · foldBoxes
 import { INK, PAPER, inkLine } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
 import { signCaps, signWidth, signFold } from './titles-sign.js';
@@ -81,7 +102,15 @@ import { BOOKS, TAROT_BY_PEPE } from './book-tarot.js';
 // which is the rule every other thing in this room is worked by. Their pages are still written and
 // still in the data module, marked unused (src/pieces/book-tarot.js, OTHERS): the writing costs
 // nothing to keep and the next round may want it.
-const SPINES = [{ key: 'TAROT', at: [-2.039, 0.97], letter: TAROT_BY_PEPE.spine }];
+// …AND NOW NO SPINE OPENS AT ALL. The user, once there was a reading table in the room: "that book
+// is TAROT by PEPE and the viewer basically moves to the table and looks down on the book and can
+// look through it." So the trigger left the shelf: the TAROT spine is re-lettered exactly as it was
+// and is a book on a shelf like the other thirty-two, and what opens this sheet is the BOOK LYING ON
+// THE READING TABLE (src/pieces/props-table.js, which registers that switch and calls `open`).
+// Nothing else about this file changed: the spine is still cut, still found, still re-lettered, so
+// putting `switch: true` back on the entry below is the whole of what it would take to have it open
+// from the case again.
+const SPINES = [{ key: 'TAROT', at: [-2.039, 0.97], letter: TAROT_BY_PEPE.spine, switch: false }];
 const MIN_TAP = 44; // px: what a thumb needs, whatever a 45 mm spine measures on the glass
 
 // ---- the sheet -----------------------------------------------------------------------------------
@@ -94,6 +123,10 @@ const SPREAD_RATIO = 1.44; // two pages open: a shade wider than it is tall
 // because on a phone this sheet is bound by the WIDTH at every size — 374 px of a 390 px screen —
 // and the difference is three more lines on every leaf of it for nothing.
 const PAGE_RATIO = 1.55;
+// the contents is set on the body's own leading opened out by a seventh, which is what turns a
+// 25 px row into a 29 px one a thumb can pick a line out of without the list running to twice the
+// leaves. A contents line is one short line and never wraps, so the extra air costs nothing to read.
+const INDEX_LEAD = 1.15;
 
 // a ruled line with the pen's overshoot at both ends (help-bill's own rule, cut again here so this
 // file can be read on its own)
@@ -166,21 +199,52 @@ function setPage(entry, S, capH) {
   return { head, headCap, top, lead, capH, rows, height: y, fits: y <= room, room };
 }
 
+// WHAT THE CONTENTS HOLDS, one line to an entry. Everything in the book except the title page and
+// the contents itself is in it, in the order it is printed: the two opening pages, the twenty-two
+// trumps with their numeral, each suit, and each suit's fourteen cards indented under it.
+const inIndex = (e) => e.kind !== 'title' && e.kind !== 'index';
+// how many lines of list one leaf holds at this hand
+const indexRoom = (S, cap) => {
+  const top = S.padY + cap * 1.22 * 2.3;
+  return Math.max(1, Math.floor((S.sh - top - S.padY) / (cap * LEAD * INDEX_LEAD)));
+};
+
 // THE WHOLE BOOK, CUT INTO LEAVES for this window. One cap for all of it — the largest at which the
 // longest entry still fits a single leaf — and then every entry is laid out at that hand, starting
 // on a leaf of its own and spilling only if it must.
 function paginate(book, S) {
   let cap = CAP_MAX;
   for (; cap > CAP_MIN; cap -= 0.5) {
-    if (book.pages.every((e) => setPage(e, S, cap).fits)) break;
+    if (book.pages.every((e) => e.kind === 'index' || setPage(e, S, cap).fits)) break;
   }
   // …and the floor is the floor. Once the cards went into the book an entry's text got ONE page of
   // the opening instead of two, so the longest of his takes no longer fits a single leaf at any
   // hand this film will set: the loop walks all the way down to CAP_MIN and the long ones spill,
   // which is the same answer a printer gives and is why the leaf count is measured and not assumed.
   cap = Math.max(CAP_MIN, cap);
+  // THE CONTENTS IS CUT BEFORE THE WALK AND LETTERED AFTER IT. How many leaves the list needs is
+  // known from the line count alone — one line to an entry, never wrapped — so the walk can lay that
+  // many blank leaves of list where the contents stands and letter them once it knows what folio
+  // everything landed on. No guess, no second pagination, and nothing about the numbers is written
+  // down in the data: they are the walk's own count.
+  const perLeaf = indexRoom(S, cap);
+  const idxLead = cap * LEAD * INDEX_LEAD;
+  const idxTop = S.padY + cap * 1.22 * 2.3;
+  const listed = book.pages.filter(inIndex);
+  const slots = Math.max(1, Math.ceil(listed.length / perLeaf));
+  const firstLeaf = new Map(); // an entry, and the leaf a visitor has to be on to see it start
+  let indexAt = 0;
   const leaves = [];
   for (const entry of book.pages) {
+    if (entry.kind === 'index') {
+      indexAt = leaves.length;
+      for (let i = 0; i < slots; i++) {
+        leaves.push({ entry, index: true, rows: [], head: signFold(entry.head), headCap: cap * 1.22, capH: cap, lead: idxLead, top: idxTop, part: i, parts: slots });
+      }
+      continue;
+    }
+    // where the entry BEGINS, which for a card is its plate and not the printer's blank in front of it
+    firstLeaf.set(entry, leaves.length + (entry.slug && S.spread && leaves.length % 2 === 1 ? 1 : 0));
     // A CARD GETS A LEAF OF ITS OWN AND HIS TAKE FACES IT. On a spread that means the plate has to
     // land on a VERSO, or the two halves of an entry would be in two different openings and the
     // visitor would be reading about a card they cannot see. So a blank leaf is pushed when the
@@ -211,7 +275,19 @@ function paginate(book, S) {
     }
     cut.forEach((rows2, i) => leaves.push({ entry, ...L, rows: rows2, part: i, parts: cut.length }));
   }
-  return { cap, leaves };
+  // …and now the list, lettered off the walk that has just happened
+  const index = listed.map((e) => ({
+    label: signFold(e.head),
+    num: e.num ? signFold(e.num) : null,
+    indent: !!e.minor,
+    target: firstLeaf.get(e) ?? 0,
+    folio: String((firstLeaf.get(e) ?? 0) + 1),
+  }));
+  index.forEach((ln, i) => {
+    const leaf = leaves[indexAt + Math.floor(i / perLeaf)];
+    if (leaf) leaf.rows.push({ ...ln, text: signFold(`${ln.num ? `${ln.num} · ` : ''}${ln.label}`), y: (i % perLeaf) * idxLead });
+  });
+  return { cap, leaves, index, indexAt };
 }
 
 // ---- THE PEN -------------------------------------------------------------------------------------
@@ -282,6 +358,35 @@ function strike(S, leaves, i, parity, dpr) {
     const L = leaves[i + k];
     if (!L) return;
     if (L.blank) return; // a printer's blank, facing a plate
+    // the way back, on every leaf but the contents and the title page — there is nothing for either
+    // of those to go back TO
+    if (!L.index && L.entry.kind !== 'title') dogEar(g, S, box, k, nib, pen);
+    if (L.index) {
+      // THE CONTENTS. A running head, the rule under it, and then one line to an entry: the numeral
+      // where the card has one, the name, a dotted lead across the measure and the folio out at the
+      // fore-edge — which is the folio the walk actually put it on and not a number anybody typed.
+      const x0 = box.x + S.padX;
+      const right = box.x + box.w - S.padX;
+      signCaps(g, L.head, x0, S.padY + L.headCap * 0.5, { capH: L.headCap, tracking: 0.22, pen: Math.max(1.45, L.headCap * 0.13), align: 'left', seed: 11 + i + k, boil });
+      const ry = S.padY + L.headCap * 1.5;
+      rule(g, x0, ry, right, ry, S.pen * 0.7, nib, 3, 0.85);
+      for (const row of L.rows) {
+        const x = x0 + (row.indent ? L.capH * 1.7 : 0);
+        const base = L.top + row.y + L.capH * 0.5;
+        signCaps(g, row.text, x, base, { capH: L.capH, tracking: TRACK, pen: Math.max(1.3, L.capH * 0.12), align: 'left', seed: 620 + (i + k) * 17 + Math.round(row.y), boil, alpha: row.indent ? 0.9 : 1 });
+        signCaps(g, row.folio, right, base, { capH: L.capH, tracking: 0.18, pen: 1.3, align: 'right', seed: 640 + (i + k) * 17 + Math.round(row.y), boil, alpha: 0.8 });
+        // the lead: points laid between the name and its folio, thin enough that the eye runs along
+        // them and does not read them
+        const from = x + signWidth(row.text, { capH: L.capH, tracking: TRACK }) + L.capH * 0.7;
+        const to = right - signWidth(row.folio, { capH: L.capH, tracking: 0.18 }) - L.capH * 0.7;
+        for (let dx = from; dx < to; dx += L.capH * 0.62) {
+          inkLine(g, dx, base - L.capH * 0.06, dx + L.capH * 0.1, base - L.capH * 0.06, { width: S.pen * 0.5, wobble: 0.3, rng: put, alpha: 0.3 });
+        }
+      }
+      const folio = String(i + k + 1);
+      signCaps(g, folio, k === 0 && S.spread ? x0 : right, S.sh - S.padY * 0.45, { capH: L.capH * 0.82, tracking: 0.18, pen: 1.3, align: k === 0 && S.spread ? 'left' : 'right', seed: 90 + i + k, boil, alpha: 0.75 });
+      return;
+    }
     if (L.plate) {
       // THE CARD'S OWN PAGE, and the pen does almost nothing on it: the plate is an IMAGE lying on
       // the paper (the DOM puts it there, see `img` below) exactly as it lies on the ? card's third
@@ -359,6 +464,39 @@ function plateBox(S, box) {
   return { x: box.x + (box.w - w) / 2, y: (S.sh - h) / 2, w, h };
 }
 
+// ---- THE FOLDED CORNER ---------------------------------------------------------------------------
+// The way back to the contents, and it is a mark rather than a control: the top OUTER corner of the
+// leaf turned down, which is what a person does to a page they mean to come back to. No word on it,
+// no box round it, no cursor of its own — the same rule as the spine that opens the book and the
+// tab cut into the placard's edge. It stands at the fore-edge corner, clear of the running head's
+// own margin (padX is 37 px on a laptop and 29 on a phone against a fold of 27 and 24), and clear of
+// the plate, which is centred in a page that leaves 58 px of margin at the laptop and 30 at the phone.
+const foldSize = (S) => Math.max(16, Math.min(30, S.sh * 0.042));
+function foldBox(S, box, k) {
+  const f = foldSize(S);
+  const left = S.spread && k === 0; // the verso's outer edge is the left one
+  return { x: left ? box.x : box.x + box.w - f, y: 0, w: f, h: f, left };
+}
+// …grown about its own corner to the 44 px a thumb needs, which it always does
+function foldTap(S, box, k) {
+  const b = foldBox(S, box, k);
+  const s = Math.max(MIN_TAP, b.w);
+  return { x: b.left ? b.x : b.x + b.w - s, y: 0, w: s, h: s, left: b.left };
+}
+function dogEar(g, S, box, k, nib, pen) {
+  const b = foldBox(S, box, k);
+  const corner = b.left ? b.x : b.x + b.w; // the corner of the page itself
+  const dir = b.left ? 1 : -1;
+  const f = b.w;
+  rule(g, corner + dir * f, 0, corner, f, pen * 0.62, nib, 2, 0.9); // the crease
+  // the flap lying on the page: hatch parallel to the crease, the room's own mark for one sheet on
+  // another, and it thins as it goes into the corner
+  for (let i = 1; i <= 4; i++) {
+    const t = i / 5.2;
+    inkLine(g, corner + dir * f * t, 0, corner, f * t, { width: pen * 0.34, wobble: 0.55, rng: nib, alpha: 0.34 - 0.05 * i });
+  }
+}
+
 // the one or two page boxes on the sheet, in sheet coordinates
 function pageBoxes(S) {
   if (!S.spread) return [{ x: S.edge + S.gut, w: S.pageW }];
@@ -404,7 +542,7 @@ export function buildBooks(ctx, { switches, place }) {
       if (!best || bestD > 0.35) continue; // nothing of that name anywhere near where it was
       taken.add(best);
       if (s.letter) reletter(best, { title: s.letter.title, sub: s.letter.sub, seed: 907 });
-      found.push({ key: s.key, mesh: best, was: best.userData.title, at: at(best), d: bestD });
+      found.push({ key: s.key, mesh: best, was: best.userData.title, at: at(best), d: bestD, switch: s.switch !== false });
     }
   }
 
@@ -506,10 +644,10 @@ export function buildBooks(ctx, { switches, place }) {
     if (!book) return null;
     const page = S.spread ? leaf - (leaf % 2) : leaf;
     const reuse = cut && cut.key === key && cut.S.sw === S.sw && cut.S.sh === S.sh;
-    const { cap, leaves } = reuse ? cut : paginate(book, S);
+    const { cap, leaves, index, indexAt } = reuse ? cut : paginate(book, S);
     cutAt = want;
     cut = {
-      key, S, book, cap, leaves, page,
+      key, S, book, cap, leaves, index, indexAt, page,
       plates: [0, 1].map((parity) => strike(S, leaves, page, parity, dpr)),
       box: { x: Math.round((w - S.sw) / 2), y: Math.round((h - S.sh) / 2), w: S.sw, h: S.sh },
       dpr,
@@ -537,13 +675,13 @@ export function buildBooks(ctx, { switches, place }) {
   }
 
   function open(key) {
-    // …AND ONLY A BOOK THE CASE ACTUALLY CARRIES AS A SWITCH. `BOOKS` is the list (book-tarot.js)
-    // and `found` is what was found on the shelf; a title that is neither — one of the three that
-    // stopped opening this round, or a typo in a tool — gets nothing, rather than a sheet standing
-    // over the room that no spine could have produced.
-    if (!BOOKS[key] || !found.some((f) => f.key === key)) return false;
+    // …AND ONLY A BOOK THE ROOM ACTUALLY HAS. `BOOKS` is the list (book-tarot.js) and it is the
+    // whole of the test now: the trigger moved off the shelf and onto the reading table this round,
+    // so requiring a SPINE for it would refuse the very click that is meant to open it.
+    if (!BOOKS[key]) return false;
     showing = key;
     leaf = 0;
+    fromList = null;
     cutAt = '';
     root.classList.add('up');
     ctx.pieces.sound?.play?.('settle');
@@ -572,9 +710,57 @@ export function buildBooks(ctx, { switches, place }) {
     paint(ctx.clock.frame % 2);
     return true;
   }
+  // STRAIGHT THERE, off a line of the contents or off the folded corner. The same act as a turn as
+  // far as the book is concerned — one leaf is put in front of the visitor and the pen strikes it —
+  // but it remembers WHICH LEAF OF THE LIST it was sent from, so the corner brings the visitor back
+  // to the line they were reading rather than to the top of a list five leaves long.
+  let fromList = null;
+  function goLeaf(n, from = null) {
+    if (!showing || !cut) return false;
+    const next = Math.max(0, Math.min(cut.leaves.length - 1, Math.round(n)));
+    if (from != null) fromList = from;
+    if (next === leaf) return false;
+    leaf = next;
+    cutAt = '';
+    ctx.pieces.sound?.play?.('card');
+    ctx.emit?.('book', { title: showing, leaf });
+    paint(ctx.clock.frame % 2);
+    return true;
+  }
+  // back to the contents: the leaf of the list the visitor left from, or the head of it
+  function back() {
+    if (!showing || !cut) return false;
+    const at = cut.indexAt ?? 0;
+    const slots = cut.leaves.filter((L) => L.index).length;
+    const want = fromList != null && fromList >= at && fromList < at + slots ? fromList : at;
+    return goLeaf(want);
+  }
+  // what is under a click on the sheet, in the sheet's own coordinates: a folded corner, a line of
+  // the contents, or nothing — in that order, because the corner sits inside the half of the page
+  // that would otherwise turn it.
+  function hitAt(x, y) {
+    if (!cut) return null;
+    const boxes = pageBoxes(cut.S);
+    for (let k = 0; k < boxes.length; k++) {
+      const L = cut.leaves[cut.page + k];
+      if (!L || L.blank) continue;
+      if (!L.index && L.entry.kind !== 'title') {
+        const f = foldTap(cut.S, boxes[k], k);
+        if (x >= f.x && x <= f.x + f.w && y >= f.y && y <= f.y + f.h) return { kind: 'fold' };
+      }
+      if (!L.index) continue;
+      for (const row of L.rows) {
+        const top = L.top + row.y - L.lead * 0.2;
+        if (y >= top && y <= top + L.lead && x >= boxes[k].x + cut.S.padX * 0.35 && x <= boxes[k].x + boxes[k].w - cut.S.padX * 0.35) {
+          return { kind: 'line', target: row.target, label: row.text, from: cut.page + k };
+        }
+      }
+    }
+    return null;
+  }
 
   // ---- 3. THE POINTER ---------------------------------------------------------------------------
-  for (const f of found) {
+  for (const f of found.filter((q) => q.switch)) {
     switches?.add?.({
       name: `book-${f.key}`,
       object: () => f.mesh,
@@ -595,6 +781,16 @@ export function buildBooks(ctx, { switches, place }) {
     const b = cut.box;
     if (x < b.x || x > b.x + b.w || y < b.y || y > b.y + b.h) {
       close();
+      return;
+    }
+    // the corner first, then a line of the contents, then the page itself
+    const hit = hitAt(x - b.x, y - b.y);
+    if (hit?.kind === 'fold') {
+      back();
+      return;
+    }
+    if (hit?.kind === 'line') {
+      goLeaf(hit.target, hit.from);
       return;
     }
     turn(x - b.x > b.w / 2 ? 1 : -1);
@@ -646,10 +842,60 @@ export function buildBooks(ctx, { switches, place }) {
       const b = cut.card.at;
       return { slug: cut.card.slug, x: Math.round(cut.box.x + b.x + r.left), y: Math.round(cut.box.y + b.y + r.top), w: Math.round(b.w), h: Math.round(b.h) };
     },
-    // every leaf, as a word: 'title' · 'plate:<slug>' · 'blank' · a running head. A proof walks this
-    // instead of turning the book twice.
+    // every leaf, as a word: 'title' · 'index' · 'plate:<slug>' · 'blank' · a running head. A proof
+    // walks this instead of turning the book twice.
     get sheetLeaves() {
-      return (cut?.leaves ?? []).map((L) => (L.plate ? `plate:${L.plate}` : L.blank ? 'blank' : L.entry.kind === 'title' ? 'title' : L.head ?? '?'));
+      return (cut?.leaves ?? []).map((L) => (L.plate ? `plate:${L.plate}` : L.blank ? 'blank' : L.index ? 'index' : L.entry.kind === 'title' ? 'title' : L.head ?? '?'));
+    },
+    // THE CONTENTS AS A LIST: every line, the folio lettered beside it and the leaf it turns to. A
+    // proof reads this and then clicks each line on the glass to see whether the book agrees with
+    // its own list.
+    get index() {
+      return (cut?.index ?? []).map((ln) => ({ label: ln.label, num: ln.num, indent: ln.indent, target: ln.target, folio: ln.folio }));
+    },
+    get indexAt() {
+      return cut?.indexAt ?? 0;
+    },
+    get indexLeaves() {
+      return (cut?.leaves ?? []).filter((L) => L.index).length;
+    },
+    // the lines of the contents that are on the opening in front of the visitor, as boxes on the
+    // GLASS — what a proof clicks
+    indexHits: () => {
+      if (!showing || !cut) return [];
+      const r = root.getBoundingClientRect();
+      const out = [];
+      pageBoxes(cut.S).forEach((box, k) => {
+        const L = cut.leaves[cut.page + k];
+        if (!L?.index) return;
+        for (const row of L.rows) {
+          out.push({
+            label: row.label, // the name on its own, which is the entry's running head
+            text: row.text, // …and the line as it is lettered, numeral and all
+            folio: row.folio,
+            target: row.target,
+            leaf: cut.page + k,
+            x: Math.round(cut.box.x + r.left + box.x + cut.S.padX * 0.35),
+            y: Math.round(cut.box.y + r.top + L.top + row.y - L.lead * 0.2),
+            w: Math.round(box.w - cut.S.padX * 0.7),
+            h: Math.round(L.lead),
+          });
+        }
+      });
+      return out;
+    },
+    // the folded corners on the opening in front of the visitor, as boxes on the glass
+    foldBoxes: () => {
+      if (!showing || !cut) return [];
+      const r = root.getBoundingClientRect();
+      return pageBoxes(cut.S)
+        .map((box, k) => {
+          const L = cut.leaves[cut.page + k];
+          if (!L || L.blank || L.index || L.entry.kind === 'title') return null;
+          const f = foldTap(cut.S, box, k);
+          return { x: Math.round(cut.box.x + r.left + f.x), y: Math.round(cut.box.y + r.top + f.y), w: Math.round(f.w), h: Math.round(f.h) };
+        })
+        .filter(Boolean);
     },
     // the four spines, as the room found them: what they read now, what they read before, and where
     // they stand. A proof reports this instead of taking the list above on trust.
@@ -673,6 +919,8 @@ export function buildBooks(ctx, { switches, place }) {
     open,
     close,
     turn,
+    goLeaf,
+    back,
     update() {
       if (!showing) return;
       paint(ctx.clock.frame % 2);
