@@ -549,10 +549,14 @@ if (doing('table')) {
     await frames(p, 3);
     if (w === PLATE[0]) await shot(p, 'table-open-1280x800');
     else await shot(p, 'table-open-390x844');
-    // it turns: on a spread that is the right page, on one leaf the right half of the page in front
+    // IT TURNS, AND THE CLICK GOES IN THE FORE-EDGE MARGIN. The book opens on the title facing the
+    // CONTENTS, and a click in the middle of that page is a click on a line of the list: it riffled
+    // to leaf 41 and the claim passed on a jump rather than on a turn. The page's own margin is
+    // 8.5 % of its width (walk-book-page.js, sheetOf) and carries no line at all, so 0.96 across is
+    // paper and nothing else — and on a phone, where the leaf IS the page, the same point is in the
+    // right half and turns it forward just the same.
     const leafBox = await p.evaluate(() => window.__theatre.pieces.walk.books.leafBox());
-    const spread = await p.evaluate(() => window.__theatre.pieces.walk.books.spread);
-    await p.mouse.click(leafBox.x + leafBox.w * (spread ? 0.5 : 0.8), leafBox.y + leafBox.h * 0.62);
+    await p.mouse.click(leafBox.x + leafBox.w * 0.96, leafBox.y + leafBox.h * 0.62);
     await bookRest();
     await frames(p, 2);
     const turned = await p.evaluate(() => window.__theatre.pieces.walk.books.leaf);
