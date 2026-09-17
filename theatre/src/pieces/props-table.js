@@ -37,6 +37,7 @@
 import { signCaps, signWidth, signFold } from './titles-sign.js';
 import { INK, PAPER, inkLine, inkMaterial, canvasTexture, makeCanvas } from '../core/strokes.js';
 import { mulberry32 } from '../core/rng.js';
+import MANIFEST from '../../public/pepe/cutout.json';
 
 export const TABLE = {
   x0: 1.98,
@@ -67,8 +68,56 @@ TABLE.cz = (TABLE.z0 + TABLE.z1) / 2;
 // THE COVER, lettered in the signwriter's hand — the same case the notice, the book's own pages and
 // the shop's board are set in. Boards, a blind rule inset from the edge, the title across the middle
 // and his name under it, which is what the spine on the tall case says and what is on the title page.
-function coverTexture(w, h) {
-  const c = makeCanvas(w, h);
+// HIS OWN FACE ON THE BOARD. The user: "tarot by pepe should have tarotpepe on the cover btw." So
+// the front board carries a PLATE, the way a printed cover does: a ruled frame with him inside it,
+// TAROT over it and BY PEPE under.
+//
+// AND IT IS HIM AND NOT A DRAWING OF HIM. The room already owns this frog twice over — once as the
+// puppet at the table (src/pieces/pepe.js, cut from public/pepe/pepe-meditation.webp into the
+// layers in public/pepe/cutout.json) and once as a few pen lines on the backs of the cards
+// (cards-art.js `frogGlyph`). The glyph would have been three lines of code and it would have been
+// a DIFFERENT frog on the cover of his own book. So this composites the cut-out sheets — the same
+// PNGs, at their own boxes in the sheet's 1024 x 981 frame, in pepe.js's own stacking order — which
+// makes the face on the board the face at the table, to the pixel, with his green already in it:
+// the sheets carry pigment (cutout.json `palette.green` is [107, 187, 103], which is SKIN #69b964),
+// so nothing here has to know what colour he is.
+//
+// The board's material is `colorful` for that reason and for that reason only. Everything else on
+// the cover is paper and ink and does not care.
+// …and the lids are NOT among them. pepe.js builds him with `lids.show(false)` and only brings them
+// down to blink, so a cover drawn with them is a cover of him with his eyes shut — which the first
+// cut of this was. Head, pupils, eyelines, mouth at rest: the face he wears at the table.
+// WHERE THE PLATE SITS ON THE BOARD, as fractions of the cover: left, top, right, bottom. The
+// drawing below and `plateBox()` at the foot of this file both read it, so what a proof measures is
+// where the plate actually is and not a number somebody typed twice.
+const PLATE = [0.2, 0.36, 0.8, 0.74];
+const PLATE_LAYERS = ['head', 'pupilL', 'pupilR', 'eyelines', 'mouthRest'];
+function drawPepePlate(g, box, sheets) {
+  const L = MANIFEST.layers;
+  let ux0 = Infinity, uy0 = Infinity, ux1 = -Infinity, uy1 = -Infinity;
+  for (const n of PLATE_LAYERS) {
+    const b = L[n]?.box;
+    if (!b) continue;
+    ux0 = Math.min(ux0, b[0]);
+    uy0 = Math.min(uy0, b[1]);
+    ux1 = Math.max(ux1, b[0] + b[2]);
+    uy1 = Math.max(uy1, b[1] + b[3]);
+  }
+  const uw = ux1 - ux0, uh = uy1 - uy0;
+  if (!(uw > 0 && uh > 0)) return;
+  // he is half again as wide as he is tall, so a square-ish plate is bound by his WIDTH and the
+  // air is left over his crown and under his chin, which is where a printer would leave it
+  const k = Math.min(box.w / uw, box.h / uh) * 0.9;
+  const ox = box.x + (box.w - uw * k) / 2, oy = box.y + (box.h - uh * k) / 2;
+  for (const n of PLATE_LAYERS) {
+    const img = sheets?.[n], b = L[n]?.box;
+    if (!img || !b) continue;
+    g.drawImage(img, ox + (b[0] - ux0) * k, oy + (b[1] - uy0) * k, b[2] * k, b[3] * k);
+  }
+}
+
+function coverTexture(w, h, sheets = null, into = null) {
+  const c = into ?? makeCanvas(w, h);
   const g = c.getContext('2d');
   const nib = mulberry32(0x9a17b);
   g.fillStyle = PAPER;
@@ -78,26 +127,64 @@ function coverTexture(w, h) {
   // is 280 px tall and those strokes came back as a hatched mass with the title fighting through it.
   // Twenty-eight short marks at 0.08 is a tooth; anything more is a texture, and a texture on a
   // drawn object in this room is the one thing the pen never does.
-  g.save();
-  g.globalAlpha = 0.08;
+  // (and it keeps off the plate and off the lettering: at 512 px across, 28 marks over the whole
+  // board read as scratches through TAROT and across his face rather than as a weave. They are laid
+  // in the two bands the printing leaves empty — over the title and under the imprint — at 0.05.)
   for (let i = 0; i < 28; i++) {
-    const y = h * 0.12 + nib() * h * 0.76;
+    const y = (i % 2 ? 0.1 + nib() * 0.1 : 0.88 + nib() * 0.07) * h;
     const x = w * 0.16 + nib() * w * 0.5;
-    inkLine(g, x, y, x + w * 0.1 + nib() * w * 0.12, y + (nib() - 0.5) * 2, { width: 1, wobble: 0.4, rng: nib, color: INK });
+    inkLine(g, x, y, x + w * 0.1 + nib() * w * 0.12, y + (nib() - 0.5) * 2, { width: 1, wobble: 0.4, rng: nib, color: INK, alpha: 0.05 });
   }
-  g.restore();
   const inset = Math.round(w * 0.1);
   const rule = (x1, y1, x2, y2) => inkLine(g, x1, y1, x2, y2, { width: Math.max(1.4, w / 150), wobble: 0.9, rng: nib, color: INK, alpha: 0.9 });
   rule(inset, inset, w - inset, inset);
   rule(w - inset, inset, w - inset, h - inset);
   rule(w - inset, h - inset, inset, h - inset);
   rule(inset, h - inset, inset, inset);
+  // THE PLATE, and the title moves up and the imprint down to leave it the middle of the board.
+  // 0.60 of the width by 0.38 of the height is 102 x 91 mm of a 170 x 240 board — at the reading
+  // shot that is 174 x 155 px at 1280x800 and 157 x 140 at 390x844, and from the chair at rest,
+  // where the whole book is about 20 px, it is the ten or twelve pixels of green that say there is
+  // something on the cover at all.
+  const px0 = w * PLATE[0], px1 = w * PLATE[2], py0 = h * PLATE[1], py1 = h * PLATE[3];
+  drawPepePlate(g, { x: px0, y: py0, w: px1 - px0, h: py1 - py0 }, sheets);
+  // …in a plain frame: one line and a hair of a second inside it, which is how a plate is set on a
+  // cover and is the same blind rule the board already carries, one step finer.
+  for (const [d, wd] of [[0, Math.max(1.5, w / 190)], [Math.round(w * 0.014), Math.max(1, w / 330)]]) {
+    const q = { width: wd, wobble: 0.8, rng: nib, color: INK, alpha: 0.9 };
+    inkLine(g, px0 + d, py0 + d, px1 - d, py0 + d, q);
+    inkLine(g, px1 - d, py0 + d, px1 - d, py1 - d, q);
+    inkLine(g, px1 - d, py1 - d, px0 + d, py1 - d, q);
+    inkLine(g, px0 + d, py1 - d, px0 + d, py0 + d, q);
+  }
   const cap = Math.round(w * 0.17);
-  signCaps(g, signFold('TAROT'), w / 2, h * 0.42, { capH: cap, tracking: 0.22, pen: Math.max(2, cap * 0.13), seed: 61 });
+  signCaps(g, signFold('TAROT'), w / 2, h * 0.235, { capH: cap, tracking: 0.22, pen: Math.max(2, cap * 0.13), seed: 61 });
   const sub = Math.round(w * 0.085);
-  signCaps(g, signFold('BY PEPE'), w / 2, h * 0.58, { capH: sub, tracking: 0.2, pen: Math.max(1.6, sub * 0.14), seed: 62 });
+  signCaps(g, signFold('BY PEPE'), w / 2, h * 0.845, { capH: sub, tracking: 0.2, pen: Math.max(1.6, sub * 0.14), seed: 62 });
   void signWidth;
   return c;
+}
+
+// The sheets, fetched once and drawn into the cover when they land. The board is on the table from
+// the first drawing either way: what arrives late is his face, not the book.
+function loadPepeSheets(then) {
+  const got = {};
+  let want = 0, have = 0;
+  for (const n of PLATE_LAYERS) {
+    const file = MANIFEST.layers?.[n]?.file;
+    if (!file) continue;
+    want++;
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      got[n] = img;
+      if (++have === want) then(got);
+    };
+    img.onerror = () => {
+      if (++have === want && Object.keys(got).length) then(got);
+    };
+    img.src = `/pepe/${file}`;
+  }
 }
 
 // THE TOP ITSELF, DRAWN. The user, looking down at the open book: "i want to see some table texture
@@ -232,7 +319,18 @@ export function buildTable(ctx, { group, switches, O, M }) {
   // this came back as a black slab with TAROT just legible through it. hatch 0.04 is the notice's
   // own answer to the same question (help.js's ? card) and lineWeight 0 stops the pass drawing a
   // second edge a hair beside the one in the drawing.
-  const cover = inkMaterial({ map: canvasTexture(coverTexture(320, 452)), hatch: 0.04, lineWeight: 0 });
+  // 512 x 723 and not 320 x 452: the board measures 290 x 409 px on the glass at 1280x800 and the
+  // plate is 0.6 of that, so the old canvas gave his face 174 px of drawing to land 174 px of
+  // picture, with nothing in hand for the 1600x900 shot. `colorful` is what lets his green through
+  // the pass — the cut-out sheets carry the pigment and the pass draws contour and tone over it,
+  // exactly as it does over the puppet itself (pepe.js).
+  const coverCanvas = coverTexture(512, 723);
+  const coverMap = canvasTexture(coverCanvas);
+  const cover = inkMaterial({ map: coverMap, hatch: 0.04, lineWeight: 0, colorful: true });
+  loadPepeSheets((sheets) => {
+    coverTexture(512, 723, sheets, coverCanvas);
+    coverMap.needsUpdate = true;
+  });
   const bookMesh = new THREE.Mesh(
     new THREE.BoxGeometry(B.w, B.t, B.h),
     // +y is the cover; the block of leaves is the pages' own paper; the spine is the dark edge
@@ -293,6 +391,25 @@ export function buildTable(ctx, { group, switches, O, M }) {
 
   return {
     group: root,
+    // THE PLATE'S OWN BOX ON THE GLASS, projected off the board rather than guessed off the book's:
+    // the cover's u runs along the board's +x and its v down the board's −z, so the four corners of
+    // PLATE are four points on the top face and this is what they measure. A proof asks for it to
+    // count his green where his green is meant to be.
+    plateBox: () => {
+      if (!ctx.camera) return null;
+      const xs = [], ys = [];
+      const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
+      ctx.camera.updateMatrixWorld();
+      bookMesh.updateWorldMatrix(true, false);
+      for (const [fx, fy] of [[PLATE[0], PLATE[1]], [PLATE[2], PLATE[1]], [PLATE[2], PLATE[3]], [PLATE[0], PLATE[3]]]) {
+        const v = new THREE.Vector3((fx - 0.5) * B.w, B.t / 2, (fy - 0.5) * B.h);
+        bookMesh.localToWorld(v).project(ctx.camera);
+        xs.push(((v.x + 1) / 2) * W);
+        ys.push(((1 - v.y) / 2) * H);
+      }
+      const x = Math.min(...xs), y = Math.min(...ys);
+      return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+    },
     box: { x0: T.x0, x1: T.x1, y0: 0, y1: T.top, z0: T.z0, z1: T.z1 },
     chair: { ...C },
     book: { ...B, at: [bookMesh.position.x, bookMesh.position.y, bookMesh.position.z] },

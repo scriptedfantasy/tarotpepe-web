@@ -131,6 +131,22 @@ async function inkRows(page, box, w, h) {
   return { top, bot, rows: bot - top + 1, ink, w: info.width, h: info.height };
 }
 
+// HIS GREEN IN A BOX. The one colour in this room outside the card faces is Pepe's skin (pepe.js
+// SKIN #69b964, hsl(116 38% 56%)), so "is he on the cover" is a question a proof can answer by
+// counting: a pixel is his if its green channel leads both the others by 14 and is not a dark line.
+// Paper is neutral and ink is dark, so nothing else on that board can answer to it.
+async function greenIn(page, box, w, h) {
+  const clip = { x: Math.max(0, Math.round(box.x)), y: Math.max(0, Math.round(box.y)), width: Math.min(Math.round(box.w), w - Math.round(box.x)), height: Math.min(Math.round(box.h), h - Math.round(box.y)) };
+  if (clip.width < 2 || clip.height < 2) return null;
+  const { data, info } = await sharp(await page.screenshot({ clip })).raw().toBuffer({ resolveWithObject: true });
+  let n = 0;
+  for (let i = 0; i < info.width * info.height; i++) {
+    const q = i * info.channels;
+    if (data[q + 1] > data[q] + 14 && data[q + 1] > data[q + 2] + 14 && data[q + 1] > 70) n++;
+  }
+  return { px: n, of: info.width * info.height, w: info.width, h: info.height };
+}
+
 // THE TRIGGER, FOUND RATHER THAN KNOWN — the old proof's own sweep, kept. The book is opened by
 // something in the room and what that something is is not this proof's business.
 async function openTheBook(page, w, h, reset) {
@@ -204,6 +220,34 @@ for (const [w, h] of [PLATE, PHONE]) {
   }, SHUT);
   claim(closed.every((r) => !r.box && r.opens === false), `the three shut books are books on a shelf: ${closed.map((r) => `${r.n} ${r.box ? 'HAS A BOX' : 'no box'}/${r.opens}`).join(', ')}`);
 
+  // ---- AND HE IS ON THE COVER, before anybody opens it ------------------------------------------
+  // The user: "tarot by pepe should have tarotpepe on the cover btw." The board carries a plate with
+  // his own face in it (props-table.js), and his skin is the one colour in this room outside the
+  // cards — so the claim is his GREEN, counted inside the plate's own box, and counted again in the
+  // band above it where the title is and where there must be none. The page is loaded again
+  // afterwards so that the sweep for the trigger still begins in a room nobody has touched.
+  {
+    await page.evaluate(() => window.__theatre.pieces.walk.go('table'));
+    await page.waitForFunction(() => !window.__theatre.pieces.camera.moving, null, { timeout: 120000 }).catch(() => {});
+    await frames(page, 3);
+    const plate = await page.evaluate(() => window.__theatre.pieces.props.table.plateBox());
+    const board = await page.evaluate(() => window.__theatre.pieces.props.table.hitBox());
+    const g1 = plate ? await greenIn(page, plate, w, h) : null;
+    claim(!!g1 && g1.px > 200, `he is on the cover of his own book: ${g1?.px} px of his green inside the plate's own ${Math.round(plate?.w)}x${Math.round(plate?.h)} px box, on a board ${Math.round(board?.w)}x${Math.round(board?.h)} px on the glass`);
+    const above = board && plate ? await greenIn(page, { x: board.x, y: board.y, w: board.w, h: Math.max(2, plate.y - board.y) }, w, h) : null;
+    claim(!!above && above.px === 0, `and the lettering over him is lettering: ${above?.px} px of green in the band above the plate`);
+    await page.screenshot({ path: `${OUT}/cover-${tag}.png` });
+    // …and the board on its own at 3x, nearest-neighbour, so the plate can be looked at at the size
+    // it was drawn rather than the size it is printed
+    if (board) {
+      const c = { x: Math.max(0, Math.round(board.x)), y: Math.max(0, Math.round(board.y)), width: Math.min(Math.round(board.w), w - Math.round(board.x)), height: Math.min(Math.round(board.h), h - Math.round(board.y)) };
+      if (c.width > 2 && c.height > 2) {
+        await sharp(await page.screenshot({ clip: c })).resize({ width: c.width * 3, kernel: 'nearest' }).toFile(`${OUT}/cover-crop-${tag}.png`);
+      }
+    }
+    await load();
+  }
+
   // ---- the closed book on the table, and the click that opens it --------------------------------
   const trigger = await openTheBook(page, w, h, load);
   claim(!!trigger, `a real click opens the book${trigger ? ` — ${trigger.who}, worked from ${trigger.place}, box ${Math.round(trigger.box.w)}x${Math.round(trigger.box.h)} px` : ': NOTHING IN THE ROOM OPENED IT'}`);
@@ -224,6 +268,11 @@ for (const [w, h] of [PLATE, PHONE]) {
   await frames(page, 3);
   const open = await state(page);
   claim(open.showing && open.title === 'TAROT', `…and what is lying open on the table is TAROT BY PEPE (${open.title}), at the ${open.shot} shot`);
+  // …and the cover has gone face down on the table with him on it, so there is no green in the room
+  {
+    const g = await greenIn(page, { x: 0, y: 0, w, h }, w, h);
+    claim(!!g && g.px === 0, `…and open, he is not in the picture at all: ${g?.px} px of green in the whole ${w}x${h} frame, the board being face down on the table`);
+  }
   console.log(`   ${open.bound.pages} pages bound in ${open.bound.leaves} leaves of ${open.bound.leafMm} mm; the page is ${open.bound.page[0]}x${open.bound.page[1]} px on the glass, its texture ${open.bound.texture[0]}x${open.bound.texture[1]}, ${open.bound.faces} faces struck`);
   await page.screenshot({ path: `${OUT}/open-${tag}.png` });
 
@@ -578,7 +627,13 @@ for (const [w, h] of [PLATE, PHONE]) {
   console.log(`\n=== 1600x900 dpr 2, at the reading shot`);
   console.log(`   the page is ${st.bound.page[0]}x${st.bound.page[1]} px on the glass, its texture ${st.bound.texture[0]}x${st.bound.texture[1]}, ${st.bound.faces} faces struck`);
   console.log(`   frame time, median of 22: book shut ${med(shutMs)} ms, book open ${med(openMs)} ms (software GL)`);
-  await page.screenshot({ path: `${OUT}/open-1600x900.png` });
+  // …and this one is given two minutes and allowed to fail. It is a 3200 x 1800 capture off a
+  // software renderer taken at the end of everything: under load it has timed out at the default
+  // thirty seconds and taken the whole run's verdict down with it, which is a picture costing a
+  // proof. The claims are all in by here; what is left is a souvenir.
+  await page
+    .screenshot({ path: `${OUT}/open-1600x900.png`, timeout: 120000 })
+    .catch((e) => console.log(`   (the 1600x900 souvenir did not come off the glass in two minutes: ${String(e).split('\n')[0]})`));
   await page.close();
 }
 
