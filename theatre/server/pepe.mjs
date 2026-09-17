@@ -907,6 +907,23 @@ const said = (s) => words(s).map((w) => chunk({ content: w }));
 const FAKES = {
   // ordinary talk: text, no tool call
   talk: () => [...said('You have said the same sentence twice now. The second time was quieter. Since when?'), chunk({}, 'stop')],
+  // ---- A PARAGRAPH, AND IT ARRIVES OVER SECONDS --------------------------------------------------
+  // Six sentences of two hundred-odd characters each, which is the shape a real turn of his actually
+  // has and the one the placard cuts into three and four takes a sentence. With PEPE_PACE set it is
+  // delivered a word and a half at a time, so the first card is up while the fourth sentence is
+  // still being written — the case the card's own gate is only worth anything against, and the one
+  // the instant fake could never put in front of it (tools/_dlg-r16-stream.mjs).
+  long: () => [
+    ...said(
+      'Anon, you are not failing to finish these things so much as using their beginnings to keep a version of yourself alive that has never once been contradicted by a finished object sitting on a table. ' +
+        'A person who starts is admired for his range, and a person who ends is judged on one specific ugly result, which is why the shed at the bottom of your garden has four good ideas rotting quietly in it. ' +
+        'I am not going to tell you to finish them, because you would agree with me warmly, go home, and start a fifth one about finishing things, and then you would have lied to a frog. ' +
+        'What is actually happening is that the first hour pays you in feeling and the fourth asks you to pay it back in attention, and nobody has ever enjoyed that exchange rate. ' +
+        'So take the smallest of the four, put it on the kitchen table where it is in the way of dinner, and leave it there until somebody in the house complains about it out loud twice. ' +
+        'Then finish it badly, in one sitting, and notice that the ceiling of your life did not come down when a mediocre thing of yours became real.',
+    ),
+    chunk({}, 'stop'),
+  ],
   // he agrees in one line and pulls the lever: the common shape
   deal: () => [
     ...said('Very well.'),
@@ -986,6 +1003,9 @@ function fakeScript(cfg, body) {
   if (/Ask them what it says/.test(note)) return FAKES['flip-ask']();
   if (/Answer as the one whose card it is/.test(note)) return FAKES['flip-hear']();
   if (/hand the evening back to them/.test(note)) return FAKES['flip-close']();
+  // …and the paragraph, asked for in the visitor's own words, so PEPE_FAKE=1 can give a short
+  // greeting (the field has to open before anybody can ask) and a six-sentence turn on request.
+  if (/\bat length\b|\bsix (long )?sentences\b/.test(t)) return FAKES.long();
   const offered = (body.tools ?? []).map((x) => x.function?.name);
   // the offer to read FOR him is read first: "let me read your cards" would trip the deal stub too
   if (offered.includes('let_them_read') && /\b(read (for|to) you|read your (cards|fortune|tarot)|your turn|let me read|pull (a |one )?cards? for you)\b/.test(t))
@@ -995,15 +1015,26 @@ function fakeScript(cfg, body) {
   return FAKES.talk();
 }
 
+// AND IT CAN BE MADE TO TAKE ITS TIME. The canned upstream hands the whole reply over in one breath
+// — every chunk is already in memory and `pull` never waits — so a tool driven by it has never seen
+// the thing a real provider does: a paragraph arriving over five or ten seconds, the placard given
+// its first sentence while the fourth is still being written. PEPE_PACE=<ms> puts that wait back,
+// per chunk of 37 bytes, which is about a word and a half. Default 0, so every tool written before
+// this one is driven exactly as it was.
+const PACE_MS = () => Math.max(0, +(process.env.PEPE_PACE ?? 0) || 0);
+const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+
 function fakeUpstream(cfg, body) {
   const parts = [...fakeScript(cfg, body), 'data: [DONE]\n\n'];
   const enc = new TextEncoder();
   // deliberately cut across the SSE frames as well: two events in one chunk, one event in two.
   const all = enc.encode(parts.join(''));
+  const pace = PACE_MS();
   let i = 0;
   const stream = new ReadableStream({
-    pull(c) {
+    async pull(c) {
       if (i >= all.length) return c.close();
+      if (pace) await nap(pace);
       const n = Math.min(37, all.length - i); // a size that lands nowhere useful, which is the point
       c.enqueue(all.slice(i, i + n));
       i += n;

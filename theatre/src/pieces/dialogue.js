@@ -78,8 +78,8 @@
 // lessons, the reveal's lines over the cards and the notice's prompts all reach the card through
 // `say` and are closed by the same hinge):
 //
-//   TAKE_WAIT in update()   the six-second backstop: off a full take, kept for a take that ended
-//                           short of the fourth line with another behind it (see THE ARROW);
+//   TAKE_WAIT in update()   the six-second backstop: off a full take, and off every take of a cut
+//                           line in round 16, which removed the number altogether (see THE ARROW);
 //   the hold in update()    the last take of a line settled and flow played the next card over it:
 //                           a full last take is held instead, and the arrow says so;
 //   skip() mid-typing       the visitor's first gesture shows the take whole and used to shorten
@@ -98,8 +98,13 @@
 //                          arrows he asks for      cards the reply takes
 //     1280x800  round 13          0                        6
 //               round 14          0                        6
+//               round 16          0                        6
 //     390x844   round 13          1                        7
 //               round 14          6                        9
+//               round 16          9                        9
+//
+// (Round 16's row is the last take of each of the three sentences a phone has to cut — the three
+// cards that used to go past on the clock. It buys them for three clicks and not one card.)
 //
 // A laptop pays nothing: at 589 px of card his sentences rarely reach the fourth line at all. A
 // phone pays five clicks and two cards, and the two cards are the corner: a last take that used to
@@ -109,8 +114,18 @@
 // asked for, and nothing they have not read goes past them.
 //
 // The gate itself is proved in tools/_dlg-r14-turn.mjs: three takes, the first two full, standing
-// unattended for fifteen seconds each (TAKE_WAIT is six) with the mark up and `say` unsettled, then
-// turned by a real mouse — on the card, and on the mark — at 1280x800 and at 390x844.
+// unattended for fifteen seconds each with the mark up and `say` unsettled, then turned by a real
+// mouse — on the card, and on the mark — at 1280x800 and at 390x844.
+//
+// AND ROUND 16 TURNED THE LAST LINE OF THAT TABLE ROUND. Everything above stands; what it got wrong
+// was the exemption — the take that ends short of the fourth line, kept on the clock because "white
+// paper hides nothing". It does not, when the paper under two words is all that separates a card
+// they were reading from the next one: a click on a full card turned it to the SCRAP at the end of
+// the sentence, and 1.9 s later the clock settled the scrap, settled `say`, and let flow play the
+// next four-line card over the lot. The user, on the live site: "pepe's text still switches from one
+// full text box to the next without the user having to click — full text boxes should not auto
+// change, not all users have the same reading speed." So the gate is the whole of a cut line now
+// and TAKE_WAIT is gone; the reasoning, the log lines and the arithmetic are under THE ARROW.
 //
 // ROUND 15: THE CARD FOLDS AWAY, AND A TAB BRINGS IT BACK. The user: "i think the placard should be
 // hidable." The card is opaque paper standing in the picture all evening, and there are moments
@@ -260,10 +275,10 @@
 //                                              promise settles on the LAST of them — so a line the
 //                                              visitor is still turning through has not been said
 //                                              yet, and nothing downstream of it happens early.
-//                                              A take that FILLED the card settles on the visitor's
-//                                              own gesture and on nothing else, so this promise may
-//                                              be outstanding for as long as they read (round 14;
-//                                              see THE ARROW)
+//                                              A line CUT into takes, and a single take that filled
+//                                              the card, settle on the visitor's own gesture and on
+//                                              nothing else, so this promise may be outstanding for
+//                                              as long as they read (rounds 14 and 16; THE ARROW)
 //   ask(prompt, {respond, signal, timeout, value, instant}) → Promise<string|null>
 //                                              says the prompt, opens the visitor's block, resolves
 //                                              with the text on Return ('' on Escape); null when
@@ -272,6 +287,12 @@
 //   skip()                                     the visitor's gesture: the take typed out in full,
 //                                              then (again) the next take of the line — one at a time
 //   asking                                     true while the visitor's block is up
+//   window.__dlg                               THE CARD'S LOGBOOK (round 16): the last 400 events
+//                                              that changed what is in the well, each with the
+//                                              cause — `?dlg=1` prints them as they happen. It is
+//                                              how this round found a fault two rounds of reasoning
+//                                              had missed, and how tools/_dlg-r16-stream.mjs proves
+//                                              that only the visitor's hand turns a card
 //   reply(answer) → string                     the line that folds the answer back, verbatim
 //   intertitle(slug, position, {hold})         the card's held title, on a card of its own
 //   read(slug, position) → Promise             intertitle, then the card's lines
@@ -364,12 +385,43 @@ const capForCard = (w) => Math.max(CAP_MIN, Math.min(CAP_MAX, w * CAP_OF_CARD));
 // sentence over their reading and `ask` cannot open the field under it. The card he filled is the
 // one thing on this placard that a clock may not turn.
 //
-// AND THE EVENING STILL CANNOT HANG ON A TAKE THAT LEFT PAPER. TAKE_WAIT is kept for the one case
-// that is not the user's: a take that ends SHORT of the fourth line with another take behind it —
-// the clause break or the widow rule handed a word or two back, so there is white paper on the card
-// and nothing is hidden by waiting. That take behaves as it always did. Everything the visitor
-// actually meets on a long line of his is the full card above.
-const TAKE_WAIT = 6; // seconds a take that did NOT fill the card waits before it moves on by itself
+// ROUND 16: THE GATE IS THE WHOLE LINE, AND THE STOPWATCH IS GONE. Round 14 left TAKE_WAIT under
+// the one take it thought was safe — a take that ended SHORT of the fourth line, on the argument
+// that white paper hides nothing — and the user watched the fault survive it: "pepe's text still
+// switches from one full text box to the next without the user having to click".
+//
+// THE PATH, off the card's own logbook (`?dlg=1`), on a real streamed reply on a phone. Three of
+// his sentences, each cut into takes; the mark on take 1, the visitor clicks, the mark on take 2,
+// the visitor clicks — and then:
+//
+//     435.083  skip      <- card-tap   {typing:true, full:true}     their second click
+//     435.083  nextTake  <- skip:card-tap  {to:2, of:3}
+//     435.083  setTake                 {lines:1, full:false, words:2}   « IN PUBLIC. »
+//       437    finish    <- hold       {ti:2, of:3, full:false}     the CLOCK, 1.9 s later
+//       437    show      <- say        «kierkegaard would call it dread, but…»
+//       437    setTake                 {lines:4, full:true}         a new FULL card, unasked
+//
+// The tail of a long sentence is a SCRAP — two words on one line, because round 14 stopped refilling
+// a take once the mark had its corner — and a scrap is short, so the hold settled it, and settling
+// it settled `say`, and flow played the next sentence straight over the reading. One click bought
+// them a word and a half they could not read and a four-line card they never asked for. The card
+// they were reading was full; what replaced it came off a clock. (Round 14's own proof asserted
+// that last step as correct: "the short last take ends the line on the clock". It was the bug.)
+//
+// So a line that had to be CUT AT ALL is the visitor's, take by take, from the first to the last.
+// Not "a take that filled the card" — the whole line, because the moment a sentence is cut they are
+// being read to in installments and the mark has promised them a hand on every one. There is no
+// clock anywhere inside it: no TAKE_WAIT between the takes and no hold at the end of the last, so
+// `say`'s promise settles on their gesture and his next sentence, and their own field, are behind
+// it. TAKE_WAIT is gone rather than raised; a number that turns a card is the fault.
+//
+// A LINE THAT FITS ON ONE CARD IS UNTOUCHED, and that is most of them: it is said, it is held for
+// `hold`, it resolves, and the evening runs on its own clock exactly as it always has — unless that
+// one take filled all four lines, which is round 14 and stands.
+//
+// AND THE SCRAP ITSELF IS GONE (see splitTakes): a tail of one or two words is handed back words by
+// the take in front of it until it is worth the card it stands on. A gate the visitor has to open
+// for «IN PUBLIC.» is the right rule printed on the wrong card.
 // What the mouth is told, since the true length of a line is now the visitor's business: the typing
 // plus an unhurried beat between one take and the next. He finishes the sentence at a human pace
 // and then holds; he does not mouth along with somebody else's reading speed.
@@ -871,6 +923,22 @@ export async function build(ctx) {
   // what the card shows while he answers.
   let lastAnswer = '';
 
+  // ---- THE CARD'S OWN LOGBOOK -------------------------------------------------------------------
+  // Every event that changes what is in the well, and WHO asked for it. Round 14 shut four doors on
+  // a full card turning by itself and the user still watched one turn, so this round stopped
+  // reasoning about the paths and wrote them down: `?dlg=1` prints them, `window.__dlg` keeps the
+  // last four hundred for a tool to read back, and every one of them carries the cause. It costs an
+  // array push on events that happen a few times a sentence.
+  const LOG = [];
+  const logging = () => !!ctx.params?.get?.('dlg');
+  function note(what, why, extra = null) {
+    const row = { t: Math.round((ctx.clock?.t ?? 0) * 1000) / 1000, what, why, ...(extra ?? {}) };
+    LOG.push(row);
+    if (LOG.length > 400) LOG.shift();
+    if (typeof window !== 'undefined') window.__dlg = LOG;
+    if (logging()) console.log(`[dlg] ${row.t.toFixed(2)} ${what} <- ${why}`, extra ?? '');
+  }
+
   // ---- placing the block ------------------------------------------------------------------------
   const shotName = () => ctx.pieces.camera?.current ?? 'home';
   // How tall the letterbox bar is right now (fraction of the frame), from either piece that draws one.
@@ -1335,6 +1403,7 @@ export async function build(ctx) {
   // rather than two, which is the whole of what the user asked for.
   const BREAKS = [/[.?!…]["'”’)»]?$/, /[;:]$/, /,$/];
   const CLAUSE_REACH = 2; // words the cut may walk back to reach a clause ending, and no further
+  const TAIL_MIN = 3; // words: the fewest a take of its own is worth (round 16)
   function splitTakes(text, maxLines = BODY_LINES) {
     const M = hand;
     const words = foldWords(text, M);
@@ -1362,8 +1431,16 @@ export async function build(ctx) {
             }
           if (cut !== max) break;
         }
-        // never a single word alone on a take: the one before it hands a word back
-        if (words.length - cut === 1 && cut - i > 2) cut -= 1;
+        // NEVER A SCRAP ALONE ON THE LAST TAKE. It was one word, handed back one word (round 9,
+        // where a take nothing followed was refilled without the mark's corner anyway and the case
+        // hardly arose). Round 14 took the refill away, so a sentence that filled the fourth line
+        // exactly began handing its last word or two to a card of its own — and round 16 puts a
+        // gate on that card, which is a click for «IN PUBLIC.» and nothing else. So the take in
+        // front hands words back until the tail is worth the card it stands on, keeping at least
+        // three words of its own; the tail can never spill past one line, since it comes in at one
+        // or two words and the most it is ever given is the two that bring it to three.
+        const rest = words.length - cut;
+        if (rest && rest < TAIL_MIN) cut -= Math.min(TAIL_MIN - rest, Math.max(0, cut - i - 3));
       }
       takes.push(words.slice(i, cut).join(' '));
       i = cut;
@@ -1398,7 +1475,8 @@ export async function build(ctx) {
   // one another inside a card that stands — and it is kept for the four cases that mean it: a new
   // caption standing up where there was nothing (via show), `clear()`, a beat that ends with
   // nothing to say, and the door.
-  function cut() {
+  function cut(why = '?') {
+    if (!cap.hidden) note('cut', why);
     arrowStill = false;
     setArrow(false);
     // the card is off the paper: the next one stands up on its anchor, not folded away. The state
@@ -1427,6 +1505,7 @@ export async function build(ctx) {
   // Return and stayed blank for the whole of his turn.
   function closeField() {
     if (!field) return;
+    note('closeField', 'closeField');
     const f = field;
     field = null;
     armed = false;
@@ -1440,7 +1519,8 @@ export async function build(ctx) {
   // that filled all four lines (round 13). It is not `cut()` — the placard keeps its place, its
   // measure and its seed, and the pen does not redraw it — and it is not `clear()`, which takes the
   // whole card off the paper.
-  function clearWell() {
+  function clearWell(why = '?') {
+    note('clearWell', why);
     const well = cap.querySelector('.well');
     if (well) well.innerHTML = '';
     wellInk = null;
@@ -1484,6 +1564,7 @@ export async function build(ctx) {
       // the corner the arrow will stand in, kept with the strike so the boil re-cuts it the same
       inset: reserve && lines.length >= BODY_LINES ? reserve : 0,
     };
+    note('setTake', 'setTake', { lines: lines.length, full: lines.length >= BODY_LINES, words: text.split(' ').length });
     paintWell();
     // HE HAS WRITTEN: the card comes back if the visitor had folded it away. One of the four doors
     // (round 15) — this one covers both a fresh line of his and the next take of one he is already
@@ -1520,6 +1601,18 @@ export async function build(ctx) {
   // when the take was set and before a word of it was struck, so the answer is known from the take's
   // first frame and does not change while it types.
   const wellFull = () => !!wellInk && wellInk.lines.length >= BODY_LINES;
+  // THE CARD IS THE VISITOR'S TO TURN (round 16). Two cards are, and this is the only place either
+  // is decided — the gate in update(), the mark that says so, and the shortened hold in skip() all
+  // ask here:
+  //
+  //   · a take of a line that had to be CUT at all, first take to last. They are being read to in
+  //     installments and the mark has promised them a hand on every one of them; a clock between
+  //     two of those cards is the fault this round exists to remove;
+  //   · a single take that FILLED all four lines (round 14), where there is no paper left under his
+  //     words for anything else to stand on.
+  //
+  // Everything else — one take, short of the fourth line — is untouched and runs on the clock.
+  const gated = (t) => !!t && (t.takes.length > 1 || wellFull());
   // How many of the card's four lines are left for them: what his take did not use. It is at least
   // one — a take that used all four has been taken off the card by the time the field opens (see
   // openBlock), and the dots are one line of his like any other.
@@ -1564,7 +1657,8 @@ export async function build(ctx) {
   // "one object" has meant on paper since round 3 and what the takes of a long line already did;
   // the seed is what makes it literal. A fresh sheet is cut only when there was nothing on the
   // paper a moment ago.
-  function show(text) {
+  function show(text, why = '?') {
+    note('show', why, { text: String(text).slice(0, 48) });
     arrowStill = false;
     const fresh = cap.hidden;
     closeField(); // an ask still waiting resolves null; the visitor's register is emptied
@@ -1597,7 +1691,8 @@ export async function build(ctx) {
     paintWell();
   }
   // Move on to the next take of a line: the same card, a new set of words in its well.
-  function nextTake(t) {
+  function nextTake(t, why = '?') {
+    note('nextTake', why, { to: t.ti + 1, of: t.takes.length });
     setArrow(false); // the mark belongs to the take that has just gone
     t.ti += 1;
     t.words = setTake(t.takes[t.ti]);
@@ -1616,12 +1711,13 @@ export async function build(ctx) {
   //
   // A line still in its takes is finished on its LAST take, whole — never half-said — and that last
   // take is the one that stands.
-  function finish() {
+  function finish(why = '?') {
+    if (typing || inter) note('finish', why, { ti: typing?.ti ?? null, of: typing?.takes.length ?? null, full: wellFull() });
     setArrow(false);
     if (typing) {
       const t = typing;
       typing = null;
-      while (t.ti < t.takes.length - 1) nextTake(t);
+      while (t.ti < t.takes.length - 1) nextTake(t, 'finish:' + why);
       reveal(t.words, Infinity);
       standing = true;
       t.done?.();
@@ -1640,14 +1736,20 @@ export async function build(ctx) {
   // either of:
   //
   //   · another take of this line, whether the take showing filled the card or ended short of it
-  //     (unchanged: the mark is the invitation, and a short take still moves on by itself);
+  //     (unchanged: the mark is the invitation);
   //   · a take that FILLED the card, last of its line or not. There is no line of paper left under
   //     his words, so whatever comes next — his next sentence, the visitor's own field on the card
   //     cleared for it — is behind the mark, and the mark is the only way through to it.
   //
+  // ROUND 16 ADDS THE THIRD, which is the one that was missing: the LAST take of a line that was
+  // cut, full or not. The scrap at the end of a long sentence carried no mark and was settled by
+  // the clock, and settling it let the next sentence up over the card the visitor had just clicked
+  // to reach. It carries the mark now like every other card of that line.
+  //
   // Never while the visitor's field is open (a take cannot wait there — `ask` says its prompt to
-  // the end and waits for the gate before the field is opened), and never on a last take that left
-  // a line of paper, where the card simply holds his words and their caret goes under them.
+  // the end and waits for the gate before the field is opened), and never on a line that fitted on
+  // one card without filling it, where the card simply holds his words and their caret goes under
+  // them.
   let arrowUp = false;
   // A judging still has no clock running under it, so nothing would put the mark up or keep it
   // there. This says the still asked for it: see setState's `still`.
@@ -1679,7 +1781,7 @@ export async function build(ctx) {
     e.preventDefault(); // ... and the button does not take the focus off a pointer
     e.stopPropagation();
     setArrow(false);
-    api.skip();
+    api.skip(e.type === 'click' ? 'arrow-key' : 'card-tap');
   }
   // A tap anywhere on the card, while the card is waiting. `.cap.waiting` is the only state in
   // which the card takes pointer events at all — every other moment it is transparent to them, so
@@ -1809,6 +1911,7 @@ export async function build(ctx) {
     drawThink();
     fit();
     drawCard();
+    note('standThink', 'tickThinking');
     ctx.emit?.('dialogue:thinking', { on: true });
   }
   // Is a turn of his actually in flight? flow's own beat says so (see THINKING_BEATS), and the
@@ -1830,7 +1933,7 @@ export async function build(ctx) {
       if (think) {
         dropThink();
         ctx.emit?.('dialogue:thinking', { on: false });
-        if (bareCard()) cut(); // nothing said, nothing asked: the card has no business standing
+        if (bareCard()) cut('thinking-off'); // nothing said, nothing asked: the card has no business standing
       }
       return;
     }
@@ -1876,7 +1979,7 @@ export async function build(ctx) {
     // ROUND 14 puts the visitor in front of this: a full take is a gate and `ask` awaits it, so the
     // card is never cleared out from under words they were still reading. By the time this runs
     // they have turned past his last take themselves.
-    if (wellFull()) clearWell();
+    if (wellFull()) clearWell('openBlock');
     cap.classList.add('asking');
     const c = document.createElement('span');
     c.className = 'caret';
@@ -1983,12 +2086,20 @@ export async function build(ctx) {
     // (`keep` and `who` are accepted and do nothing: every line keeps now, and round 6 took the
     // speaker's name off the card altogether.)
     say(text, { hold = 1.2, keep = false } = {}) {
-      finish();
-      const { takes, words } = show(text);
+      // NOTHING GOES UP OVER A CARD THEY HAVE NOT TURNED, and this is where that claim is checkable
+      // rather than argued. The queue is flow's own `await`: every sentence of the evening is
+      // sequenced off the promise below, which does not settle until the visitor's hand has passed
+      // the gate, so a reply still arriving on the wire simply waits in the generator it is being
+      // read out of. If a line ever DOES arrive over a standing gate it is a caller that forgot to
+      // await, and the logbook says so by name instead of the visitor losing a card to it.
+      if (typing && arrowUp && gated(typing)) note('say-over-gate', 'say', { ti: typing.ti, of: typing.takes.length });
+      finish('say');
+      const { takes, words } = show(text, 'say');
       // How long he is TALKING, which since round 9 is no longer how long the line is up: a line in
       // more than one take waits for the visitor between them, and how long they take over it is
       // their business and not his mouth's. So the puppet (and the sound piece's typing) is given
       // the typing plus an unhurried beat per cut, which is the pace he would say it at.
+      note('say', 'say', { beat, takes: takes.length, chars: text.length });
       const seconds = text.length / CPS + (takes.length - 1) * TAKE_PACE;
       ctx.pieces.pepeAnim?.say?.(text, seconds + 0.2);
       ctx.emit?.('dialogue:say', { text, seconds, takes: takes.length });
@@ -2000,7 +2111,7 @@ export async function build(ctx) {
 
     // The card's title: numeral (or ordinal), name, position, on the bare paper beside the card.
     intertitle(slug, position, { hold = INTER_HOLD } = {}) {
-      finish();
+      finish('intertitle');
       const [n, name, label] = interLines(slug, position);
       const fresh = cap.hidden;
       closeField();
@@ -2053,8 +2164,8 @@ export async function build(ctx) {
       // and third card of a reading, where the user asked for one line and not three — hands no
       // prompt and the card is left exactly as it is.
       const said = prompt ? api.say(prompt, { hold, keep: true }) : Promise.resolve();
-      if (instant) finish();
-      const onAbortSay = () => finish();
+      if (instant) finish('ask:instant');
+      const onAbortSay = () => finish('ask:signal-abort');
       signal?.addEventListener('abort', onAbortSay, { once: true });
       await said;
       signal?.removeEventListener('abort', onAbortSay);
@@ -2163,7 +2274,8 @@ export async function build(ctx) {
     // the clock does not settle the line 0.7 s later — the visitor's next gesture does. On a take
     // that left a line of paper the 0.7 is unchanged: they have read ahead of him and there is no
     // reason to make them wait out a hold written for somebody reading at his pace.
-    skip() {
+    skip(why = 'skip') {
+      note('skip', why, { typing: !!typing, full: wellFull(), gesture });
       if (typing) {
         const t = typing;
         const last = t.words[t.words.length - 1];
@@ -2173,13 +2285,13 @@ export async function build(ctx) {
           reveal(t.words, Infinity);
           t.chars = total;
           t.start = ctx.clock.t - total / CPS;
-          if (!wellFull()) t.hold = Math.min(t.hold, 0.7); // a full take is held for the next gesture
-        } else if (t.ti < t.takes.length - 1) nextTake(t);
-        else finish();
+          if (!gated(t)) t.hold = Math.min(t.hold, 0.7); // a card they are owed waits for the next gesture
+        } else if (t.ti < t.takes.length - 1) nextTake(t, 'skip:' + why);
+        else finish('skip:' + why);
         return true;
       }
       if (inter) {
-        finish();
+        finish('skip:inter');
         return true;
       }
       return false;
@@ -2224,15 +2336,15 @@ export async function build(ctx) {
       if (think) {
         dropThink();
         ctx.emit?.('dialogue:thinking', { on: false });
-        if (bareCard()) cut();
+        if (bareCard()) cut('thinking(false)');
       }
     },
 
     // The one thing that takes a line off the paper without putting another in its place: a new
     // evening, the visitor's Escape, the walk back out through the door.
     clear() {
-      finish();
-      cut();
+      finish('clear');
+      cut('clear');
       thinkForced = false;
       owedAt = 0;
       wasPending = false;
@@ -2243,8 +2355,8 @@ export async function build(ctx) {
     //   ?line=<n>  which line of the beat   ?card=<slug>&pos=<0..2>  the reading   ?inter=1  its title
     //   ?answer=<text>  what the visitor has written so far
     setState(name) {
-      finish();
-      cut();
+      finish('setState');
+      cut('setState');
       thinkForced = false;
       owedAt = 0;
       wasPending = false;
@@ -2254,11 +2366,12 @@ export async function build(ctx) {
       // moment: the first take, whole, with the arrow waiting at the corner for the visitor. Round
       // 14 adds the other card the mark stands on — one that FILLED the four lines with nothing
       // behind it — because that card waits for the visitor too, and a still of it without the mark
-      // would be a frame of a state the film never reaches.
+      // would be a frame of a state the film never reaches. (It is `gated`'s own question, asked of
+      // a line that is not being typed: the takes are in hand and the first of them is in the well.)
       const still = (text) => {
         const { takes, words } = show(text);
         reveal(words, Infinity);
-        if (takes.length > 1 || wellFull()) {
+        if (gated({ takes })) {
           arrowStill = true;
           setArrow(true);
         }
@@ -2314,7 +2427,7 @@ export async function build(ctx) {
       // A line that is only STANDING (said, read, and waiting to be replaced) comes off at the
       // door: the evening ends on the drawn door and the sign-off card, and neither of them is a
       // frame his last sentence belongs in. A line still being said is left alone.
-      if (standing && !typing && !inter && !field && BARE_SHOTS.includes(shotName())) cut();
+      if (standing && !typing && !inter && !field && BARE_SHOTS.includes(shotName())) cut('bare-shot');
       // the thinking mark: struck while a turn of his is in flight, gone the moment he writes
       tickThinking();
       if (!cap.hidden) {
@@ -2336,7 +2449,7 @@ export async function build(ctx) {
         const off = !ctx.shotMode && Math.floor(ctx.clock.frame / BLINK) % 2 === 1;
         for (const c of field.caret) c.classList.toggle('off', off);
       }
-      if (inter && t >= inter.until) finish();
+      if (inter && t >= inter.until) finish('inter:hold');
       // the arrow boils like every other line on the card, on the same 12 fps step
       if (arrowUp) drawTheArrow();
       if (!typing) {
@@ -2352,25 +2465,21 @@ export async function build(ctx) {
       const typed = typing.start + (last ? last.at - 1 : 0) / CPS;
       const more = typing.ti < typing.takes.length - 1;
       const whole = t >= typed;
-      // THE GATE (round 14). A take that has filled all four lines is HELD the moment its last word
-      // lands: the mark goes up and the clock is finished with it — no TAKE_WAIT under it if
-      // another take is behind it, no hold under it if it is the last of the line. Only `skip()`
-      // moves it, and skip() is the visitor: their tap on the card, the mark, Space, Return.
+      // THE GATE (round 14, widened to the whole line in round 16 — see THE ARROW). A card the
+      // visitor is owed is HELD the moment its last word lands: the mark goes up and the clock is
+      // finished with it. There is no stopwatch between the takes of a cut line any more and no
+      // hold at the end of its last take; the only thing that moves either is `skip()`, and skip()
+      // is the visitor — their tap on the card, the mark, Space, Return.
       //
       // Holding the LAST take is what keeps his next sentence off it as well. `say`'s promise
       // settles in finish(), flow plays the evening one awaited sentence at a time, and `ask` opens
-      // the field on the promise too — so a card he filled stands until they turn it, whatever was
-      // going to come next.
-      const held = whole && wellFull();
-      if (more) {
-        setArrow(whole);
-        if (whole && !held && t >= typed + TAKE_WAIT) nextTake(typing);
-      } else {
-        // the mark on a full LAST take says the same thing it always said — there is more behind
-        // this, read on — and what is behind it is his next sentence or their own field
-        setArrow(held);
-        if (!held && t >= typed + typing.hold) finish();
-      }
+      // the field on the promise too — so a card they have not turned stands there whatever was
+      // going to come next, and what was going to come next waits in flow's own await.
+      const held = whole && gated(typing);
+      // The mark says the same thing it always said — there is more behind this, read on — and what
+      // is behind it is the next take, his next sentence, or their own field.
+      setArrow(held);
+      if (!more && !held && t >= typed + typing.hold) finish('hold');
     },
   };
   ctx.on('resize', () => {

@@ -11,11 +11,14 @@
 //
 //   1  a reply cut into three takes, the first two of them four lines deep:
 //        · the mark comes up when the last word lands, and the card is STILL the same take
-//          fifteen seconds later — TAKE_WAIT is 6, so the old build had turned it twice over;
+//          fifteen seconds later — TAKE_WAIT was 6, so the old build had turned it twice over;
 //        · a click on the card turns it, and only then;
 //        · take two, the same: fifteen seconds standing, then a click on the mark itself;
-//        · take three is short, so it behaves as it always did — the clock ends the line and the
-//          visitor's field opens on the line under his words, with no click at all;
+//        · take three, ROUND 16, and this is the line of this tool that the user's second report
+//          turned round: it used to end the line on the CLOCK because it was short of the fourth
+//          line, and settling it settled `say` and let flow play the next four-line card straight
+//          over the reading. The last take of a cut line waits like the rest of it now, and their
+//          third click is what ends the line and opens the field;
 //   2  a short reply, one take, no mark: said, held and resolved on the clock, hands off;
 //   3  a take that FILLS the card with nothing behind it: the mark is up, the line does not
 //      resolve, and the field opens on the cleared card only after the visitor has turned it;
@@ -30,8 +33,8 @@ import { mkdirSync } from 'node:fs';
 const OUT = '/tmp/dlg-turn';
 mkdirSync(OUT, { recursive: true });
 const BASE = process.env.BASE ?? 'http://127.0.0.1:8740';
-// How long a full card is watched. TAKE_WAIT is 6 s and the hold at the end of a line is ~1.2, so
-// fifteen seconds is the old build turning the card twice and starting on a third.
+// How long a card the visitor is owed is watched. The stopwatch round 16 deleted was 6 s and the
+// hold at the end of a line is ~1.2, so fifteen seconds is the old build turning it twice over.
 const DWELL = +(process.env.DWELL ?? 15);
 
 const NO_HMR =
@@ -201,7 +204,7 @@ async function pass(label, viewport) {
   const dwell1 = (Date.now() - t0) / 1000;
   check(
     held1 && held1.take === a.take && held1.arrow && !held1.caret,
-    `${label} take 1 stands ${dwell1.toFixed(1)} s with the mark up and the same words on it (rows ${a.rows}, TAKE_WAIT is 6)`,
+    `${label} take 1 stands ${dwell1.toFixed(1)} s with the mark up and the same words on it (rows ${a.rows}; the old stopwatch was 6 s)`,
   );
   check(a.rows === 4, `${label} take 1 fills the card (${a.rows} of 4 lines)`);
   check((await page.evaluate(() => window.__done)) === null, `${label} the line has not resolved while take 1 waits`);
@@ -231,12 +234,29 @@ async function pass(label, viewport) {
   await page
     .waitForFunction((prev) => (document.querySelector('#dialogue .well .sr')?.textContent ?? '').trim() !== prev, b.take, { timeout: 8000 })
     .catch(() => {});
-  const turned = await wait(page, () => window.__done !== null, 120, 100);
   await page.waitForTimeout(500);
   const c = await card(page);
-  check(turned, `${label} a click on the mark turns take 2, and the short last take ends the line on the clock`);
-  check(c.take !== b.take && c.rows > 0 && c.rows < 4, `${label} take 3 is short (${c.rows} of 4 lines) and his words stay on the card`);
-  check(c.caret && c.caretTop != null, `${label} the field opens on the line under his words (caret at ${c.caretTop} px of the card)`);
+  check(c.take !== b.take && c.rows > 0, `${label} a click on the mark turns take 2 → take 3 (${c.rows} of 4 lines)`);
+
+  // ROUND 16 TURNED THIS CLAIM ROUND, and it is the fault the user came back with. It used to read:
+  // "the short last take ends the line on the clock", and the field opened under his words with no
+  // click at all — which is exactly what handed the next four-line card up unasked, since settling
+  // the line settles `say` and flow plays the next sentence off that promise. So the LAST take of a
+  // line that had to be cut waits for the visitor like every other take of it: the mark is up on it,
+  // nothing resolves, and their third click is what ends the line and opens the field.
+  const t3 = Date.now();
+  await page.waitForTimeout(DWELL * 1000);
+  const held3 = await card(page);
+  check(
+    held3.take === c.take && held3.arrow && !held3.caret && (await page.evaluate(() => window.__done)) === null,
+    `${label} the short LAST take of a cut line stands ${((Date.now() - t3) / 1000).toFixed(1)} s with the mark up, unresolved and with no field under it (round 16)`,
+  );
+  await page.mouse.click(held3.arrowAt.x, held3.arrowAt.y);
+  const turned = await wait(page, () => window.__done !== null, 120, 100);
+  await page.waitForTimeout(500);
+  const d = await card(page);
+  check(turned, `${label} their third click ends the line, and nothing else did`);
+  check(d.caret && d.caretTop != null, `${label} the field opens on the line under his words (caret at ${d.caretTop} px of the card)`);
   await shot(page, `${label}-2-take3-field`);
   took.push([3, c]);
 
