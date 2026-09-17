@@ -306,6 +306,55 @@ for (const [w, h] of [PLATE, PHONE]) {
   claim(ribWho === 'book-ribbon', `the ribbon is a switch of its own: the arbiter gives the middle of its ${Math.round(rib?.w)}x${Math.round(rib?.h)} box to «${ribWho}»`);
   await page.screenshot({ path: `${OUT}/ribbon-${tag}.png` });
 
+  // ---- AND AT ITS OWN PAGE IT LIES ACROSS THAT PAGE ----------------------------------------------
+  // The user, on the first cut: "the ribbon should be over the index page obviously, otherwise it
+  // doesn't make sense." Three things have to be true and none of them is the piece's own word for
+  // it: with the contents open the strip runs the length of the leaf and there is INK of it there;
+  // it covers no line of the list by more than its own width; and on a card page it is back to being
+  // a tail at the head.
+  await page.evaluate(() => window.__theatre.pieces.walk.books.goLeaf(window.__theatre.pieces.walk.books.indexAt));
+  await rest(page);
+  await frames(page, 2);
+  const onList = await page.evaluate(() => {
+    const K = window.__theatre.pieces.walk.books;
+    return { rib: K.ribbonBox(), leaf: K.leafBox(), hits: K.indexHits(), leafNo: K.leaf };
+  });
+  const down = onList.rib && onList.leaf ? Math.max(0, Math.min(onList.rib.y + onList.rib.h, onList.leaf.y + onList.leaf.h) - Math.max(onList.rib.y, onList.leaf.y)) / onList.leaf.h : 0;
+  claim(down > 0.9, `with the contents open the ribbon lies DOWN the page - a ${Math.round(onList.rib?.w)}x${Math.round(onList.rib?.h)} px strip covering ${Math.round(down * 100)} % of a ${Math.round(onList.leaf?.w)}x${Math.round(onList.leaf?.h)} px leaf`);
+  const ribInk = onList.rib ? await inkRows(page, { x: onList.rib.x, y: onList.rib.y + onList.rib.h * 0.4, w: onList.rib.w, h: Math.max(6, onList.rib.h * 0.2) }, w, h) : null;
+  claim(!!ribInk && ribInk.ink > 40, `...and it is DRAWN there and not merely placed: ${ribInk?.ink} px of ink in the middle fifth of the strip`);
+  const worst = (onList.hits ?? []).reduce(
+    (m, ln) => {
+      const o = Math.max(0, Math.min(ln.x + ln.w, onList.rib.x + onList.rib.w) - Math.max(ln.x, onList.rib.x));
+      return o > m.o ? { o, text: ln.text } : m;
+    },
+    { o: 0, text: null },
+  );
+  claim(!!onList.rib && worst.o <= onList.rib.w, `and it covers no line of the list by more than its own width (worst ${Math.round(worst.o)} px of ${Math.round(onList.rib?.w)}${worst.text ? `, on the line ${worst.text.slice(0, 18)}` : ''})`);
+  const nearest = (onList.hits ?? []).slice().sort((a1, a2) => a1.x - a2.x)[0];
+  if (nearest) {
+    const cx = nearest.x + Math.min(40, nearest.w / 2), cy = nearest.y + nearest.h / 2;
+    const who = await page.evaluate((q) => window.__theatre.pieces.props.switches.at(q[0], q[1]), [cx, cy]);
+    await page.mouse.click(cx, cy);
+    await rest(page);
+    const land = await page.evaluate(() => window.__theatre.pieces.walk.books.leaf);
+    claim(who === 'book-page' && Math.abs(land - nearest.target) <= 1, `and a line beside it still takes the click: ${nearest.text?.slice(0, 20)} went to «${who}» and landed on ${land + 1} (wanted ${nearest.target + 1})`);
+  }
+  {
+    const t = idx.find((ln) => ln.label === 'THE FOOL') ?? idx[8];
+    await page.evaluate((n) => window.__theatre.pieces.walk.books.goLeaf(n), t.target);
+    await rest(page);
+    await frames(page, 2);
+    const onCard = await page.evaluate(() => {
+      const K = window.__theatre.pieces.walk.books;
+      return { rib: K.ribbonBox(), leaf: K.leafBox() };
+    });
+    const tail = onCard.rib && onCard.leaf ? onCard.rib.h / onCard.leaf.h : 1;
+    claim(tail < 0.25, `and on a card page only the tail shows: ${Math.round(onCard.rib?.h)} px of ribbon against ${Math.round(onCard.leaf?.h)} px of leaf (${Math.round(tail * 100)} %)`);
+  }
+  await page.evaluate(() => window.__theatre.pieces.walk.books.goLeaf(window.__theatre.pieces.walk.books.indexAt));
+  await rest(page);
+
   // ---- and from here the drawings are skipped ----------------------------------------------------
   // `snap` is a flag for tools: the same clicks through the same code, landing on the drawing they
   // start. Ninety lines of contents and seventy-eight plates are twenty minutes with the drawings.
@@ -336,7 +385,15 @@ for (const [w, h] of [PLATE, PHONE]) {
   const backFrom = { trump: null, pip: null, court: null };
   const seenLine = new Set();
   for (let j = 0; j < open.indexLeaves; j++) {
+    // AND THE BOOK IS LET SETTLE BEFORE ITS BOXES ARE READ. `snap` lands a riffle on the drawing it
+    // starts, but the leaves are not re-laid and the faces are not struck until the next `dress` —
+    // and `indexHits` is read off those faces. Without this wait the sweep read the boxes of the
+    // leaf it had just LEFT and clicked them: measured, under load, two of the eighty-five lines
+    // (TEMPERANCE and THE DEVIL, the first two of the second leaf of the list) went to a point that
+    // was no longer on the paper, which shuts the book — and the claim reported them landing on the
+    // title. One frame of patience, twice a leaf.
     await page.evaluate((n) => window.__theatre.pieces.walk.books.goLeaf(n), open.indexAt + j);
+    await rest(page);
     const here = (await state(page)).leaf;
     const hits = await page.evaluate(() => window.__theatre.pieces.walk.books.indexHits());
     for (const want of hits) {
@@ -346,11 +403,18 @@ for (const [w, h] of [PLATE, PHONE]) {
       // line and the next the book has been to a card and back, and a box is a PROJECTION: it belongs
       // to the frame it was measured in.
       const hit = (await page.evaluate(() => window.__theatre.pieces.walk.books.indexHits())).find((q) => q.target === want.target) ?? want;
-      await page.mouse.click(Math.max(2, Math.min(w - 2, hit.x + Math.min(40, hit.w / 2))), Math.max(2, Math.min(h - 2, hit.y + hit.h / 2)));
+      const cx = Math.max(2, Math.min(w - 2, hit.x + Math.min(40, hit.w / 2)));
+      const cy = Math.max(2, Math.min(h - 2, hit.y + hit.h / 2));
+      // WHAT IS UNDER THE POINT BEFORE THE CLICK, so that a line that misses says why it missed
+      // rather than leaving the next reader to guess: the arbiter's own answer, and the book's.
+      const who = await page.evaluate((q) => window.__theatre.pieces.props.switches.at(q[0], q[1]), [cx, cy]);
+      const says = await page.evaluate((q) => window.__theatre.pieces.walk.books.at(q[0], q[1]), [cx, cy]);
+      const from = (await state(page)).leaf;
+      await page.mouse.click(cx, cy);
       const saw = await seeing(page);
       const landed = opening(saw.leaf) === opening(hit.target);
       const named = saw.kind === `plate:${slugOf(hit.label)}` || saw.next === `plate:${slugOf(hit.label)}` || saw.kind === hit.label || saw.next === hit.label || String(saw.text).includes(hit.label);
-      if (!landed) wrong.push(`${hit.text} wanted leaf ${hit.target + 1}, landed on ${saw.leaf + 1} («${saw.kind}»)`);
+      if (!landed) wrong.push(`${hit.text} wanted leaf ${hit.target + 1}, landed on ${saw.leaf + 1} («${saw.kind}») — from leaf ${from + 1}, clicked ${Math.round(cx)},${Math.round(cy)} in a box ${Math.round(hit.x)},${Math.round(hit.y)} ${Math.round(hit.w)}x${Math.round(hit.h)} on page ${hit.leaf}; the arbiter said «${who}» and the book said ${JSON.stringify(says)}`);
       else if (!named) wrong.push(`${hit.text} landed on leaf ${saw.leaf + 1} but it reads «${saw.kind}»`);
       checked++;
       // THE WAY BACK, on one trump, one pip and one court: the RIBBON, clicked on the glass
@@ -371,6 +435,7 @@ for (const [w, h] of [PLATE, PHONE]) {
         }
       }
       await page.evaluate((n) => window.__theatre.pieces.walk.books.goLeaf(n), here);
+      await rest(page);
     }
   }
   claim(checked === idx.length, `every one of the ${idx.length} lines of the contents was clicked on the glass (${checked})`);

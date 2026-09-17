@@ -36,14 +36,17 @@
 // arrangements somebody has to keep in step. See HINGE.
 //
 // AND IT SQUARES ITSELF UP AS IT OPENS. A book opened at its first leaf puts the front board on the
-// table to the LEFT of the block and the whole spread then hangs off that side: measured, with the
-// block left exactly where props-table lays it, the open spread runs x 1.995 .. 2.355 against a
-// table that ends at 1.980 — fifteen millimetres of board, and a frame composed on the spread has
-// 62 px of FLOORBOARD down its left edge at 1280x800 and none down its right. So the block slides
-// 75 mm along its own long axis over the same eight drawings the board swings through, which puts
-// the spine on the table's own centre line (2.250) with 90 mm of table either side of the spread.
-// It is what a person does with the hand that is not holding the cover, and it slides back when the
-// book shuts, so the closed book is where props-table put it to the millimetre.
+// table to one side of the block and the whole spread then sits over there: measured, with the
+// block left exactly where props-table lays it and the book turned to face the chair, the spread
+// runs z −0.575 .. −0.215 on a table running −0.620 .. 0.020 — 45 mm of table at the near edge and
+// 235 mm at the far one, which is a book shoved up against the side somebody is sitting at. So the
+// block slides 95 mm along its own long axis over the same eight drawings the board swings through,
+// and 95 is not taste: it is half of 235 − 45, and it puts 140 mm of table either side of the
+// spread. It is what a person does with the hand that is not holding the cover, and it slides back
+// when the book shuts, so the closed book is where props-table put it to the millimetre.
+// (Before the quarter turn toward the chair this was 75 mm, and it was buying something else: the
+// spread then hung 15 mm off the table's edge and the frame had 62 px of floorboard down one side.
+// Turned, the spread has the table's own 640 mm to lie along and hangs off nothing at all.)
 //
 // ---- THE PAGES PASS THE INK PASS VERBATIM ------------------------------------------------------
 // Every leaf's two faces are canvases struck by src/pieces/walk-book-page.js and laid on the leaf as
@@ -85,6 +88,22 @@
 // The 35 mm it hung out at first put its tip off the top of the frame at 1280x800 — the spread shot
 // keeps 20 mm of table round the book and the tail was 15 mm longer than that — so it is 20 mm, and
 // the whole of it is in the picture at every window.
+//
+// AND AT THE PAGE IT MARKS IT LIES ACROSS THAT PAGE. The user, on the first cut: "the ribbon should
+// be over the index page obviously, otherwise it doesn't make sense." It is right and it was the
+// thing that was wrong: a ribbon tucked under the top leaf marks nothing a visitor can see. So when
+// a leaf of the contents is one of the two in front of them, the strip comes out of the head, turns
+// down onto that leaf over the first 40 mm of it and runs the whole 240 mm to the foot, 7 mm off
+// the gutter. Which side it lies on is which side the list is on, and the leaf the visitor is
+// standing on wins if both are contents. On every other page it goes back under the top leaf and
+// only the tail shows, exactly as before.
+//
+// IT COVERS NO LINE OF THE LIST. The strip is 8 mm wide laid 7 mm off the gutter, so it occupies
+// 3 .. 11 mm of a page whose own inner margin is 8.5 % of 160 mm = 13.6 mm: it stops 2.6 mm short
+// of the first letter of every line, and a click anywhere on the lettering still goes to the line
+// under it. That is not only arithmetic — the arbiter asks the DRAWINGS before it asks anybody's
+// box (props.js), and the ribbon lying on the leaf is the nearer drawing, so the strip takes the
+// clicks that land on the strip and the leaf takes every other one.
 //
 // ---- HOW A PAGE IS BOUND TO A LEAF -------------------------------------------------------------
 // The pagination pairs EVEN with ODD — page 2k and 2k+1 are one opening, and the printer's blank in
@@ -161,7 +180,7 @@ const BOARD = { w: 0.17, h: 0.24, t: 0.0025 }; // the closed book's own footprin
 const LEAF = { w: 0.16, h: 0.226 }; // the top sheet …
 const PILE = { w: 0.17, h: 0.24 }; // … and the block under it, flush with the boards
 const BLOCK = 0.04; // 45 mm closed, less the two boards
-const SLIDE = 0.075; // the squaring-up as it opens: see AND IT SQUARES ITSELF UP
+const SLIDE = 0.095; // the squaring-up as it opens: half of 235 mm − 45 mm, see AND IT SQUARES ITSELF UP
 const LIFT = 0.00014; // a leaf mesh stands this far off the pile it lies on
 const SEGS = 18; // spans along a leaf, which is what makes the bow a curve and not a crease
 // THE CURL, in radians across the whole leaf at the top of a turn — and it is SMALL, which is a fact
@@ -174,7 +193,14 @@ const SEGS = 18; // spans along a leaf, which is what makes the bow a curve and 
 // is the whole of what a turn looks like from a plan. 0.4 is enough bow to keep it off being a
 // perfectly flat plane (which would vanish edge-on) and little enough to let the cosine show.
 const BOW = 0.4;
-const RIBBON = { w: 0.008, out: 0.02, in: 0.03 }; // the sign: its width, its tail, and how far into the gutter
+// THE SIGN: its width, its tail out past the head, how far into the gutter it goes when it is
+// marking a page nobody is looking at, and how far ONTO the page it lies when they are — see THE
+// BOOK SIGN. 6 mm from the gutter to the ribbon's own middle puts the 12 mm strip at 0 .. 12 mm off
+// the gutter, and the page's inner margin is 8.5 % of 160 mm = 13.6 mm, so the strip fills that
+// margin, stops 1.6 mm short of the first letter of every line, and covers no line's hit box at
+// all. `foot` is the 12 mm it carries on past the foot of the block and droops over the edge, which
+// is what makes a strip lying down a page read as a ribbon and not as a crease in the gutter.
+const RIBBON = { w: 0.012, out: 0.02, in: 0.03, lay: 0.006, foot: 0.012 };
 // THE ONE AXIS EVERYTHING IN THIS BOOK TURNS ON: the spine, at the block's own mid-height. It is not
 // a convenience, it is the joint of a case binding, and it is the only hinge that makes the shut
 // book and the open one the SAME object. A rotation of π about a horizontal axis at height hy sends
@@ -207,24 +233,31 @@ function ribbonTexture() {
   g.clearRect(0, 0, w, h);
   g.fillStyle = PAPER;
   g.fillRect(0, 0, w, h);
+  // A SWALLOWTAIL AT EACH END, because either end can be the one in the picture: the tail hanging
+  // out past the head is what shows on every page of the book, and the far end is the one that
+  // hangs over the FOOT when the strip is lying out across the page it marks.
   const notch = 34; // the depth of the V, in the strip's own pixels
   g.globalCompositeOperation = 'destination-out';
-  g.beginPath();
-  g.moveTo(-1, h + 1);
-  g.lineTo(-1, h - 1);
-  g.lineTo(w / 2, h - notch);
-  g.lineTo(w + 1, h - 1);
-  g.lineTo(w + 1, h + 1);
-  g.closePath();
-  g.fill();
+  for (const [y0, dir] of [[h, -1], [0, 1]]) {
+    g.beginPath();
+    g.moveTo(-1, y0 + dir);
+    g.lineTo(-1, y0 - dir);
+    g.lineTo(w / 2, y0 + dir * notch);
+    g.lineTo(w + 1, y0 - dir);
+    g.lineTo(w + 1, y0 + dir);
+    g.closePath();
+    g.fill();
+  }
   g.globalCompositeOperation = 'source-over';
   // the weave, close enough that the pass reads it as tone and not as a pattern
   hatch(g, 0, 0, w, h - 2, { angle: 1.05, spacing: 5, width: 1.3, wobble: 0.5, broken: 0.16, rng: r, alpha: 0.8 });
   // a line down each selvedge, and the two cut edges of the swallowtail
-  inkLine(g, 2.5, 0, 2.5, h - 2, { width: 1.8, wobble: 0.7, rng: r, color: INK });
-  inkLine(g, w - 2.5, 0, w - 2.5, h - 2, { width: 1.8, wobble: 0.7, rng: r, color: INK });
-  inkLine(g, 2, h - 3, w / 2, h - notch + 2, { width: 1.8, wobble: 0.6, rng: r, color: INK });
-  inkLine(g, w - 2, h - 3, w / 2, h - notch + 2, { width: 1.8, wobble: 0.6, rng: r, color: INK });
+  inkLine(g, 2.5, 2, 2.5, h - 2, { width: 1.8, wobble: 0.7, rng: r, color: INK });
+  inkLine(g, w - 2.5, 2, w - 2.5, h - 2, { width: 1.8, wobble: 0.7, rng: r, color: INK });
+  for (const [y0, dir] of [[h, -1], [0, 1]]) {
+    inkLine(g, 2, y0 + dir * 3, w / 2, y0 + dir * (notch - 2), { width: 1.8, wobble: 0.6, rng: r, color: INK });
+    inkLine(g, w - 2, y0 + dir * 3, w / 2, y0 + dir * (notch - 2), { width: 1.8, wobble: 0.6, rng: r, color: INK });
+  }
   return c;
 }
 
@@ -563,7 +596,9 @@ export function buildBooks(ctx, { switches, place }) {
     return m;
   })();
   const ribbon = (() => {
-    const n = 6;
+    // twelve spans, which is what the two jobs together need: four of them carry the 20 mm of tail
+    // that bends over the head of the block, and the eight behind them run 240 mm down a page
+    const n = 12;
     const pos = new Float32Array((n + 1) * 2 * 3);
     const uv = new Float32Array((n + 1) * 2 * 2);
     const idx = [];
@@ -801,28 +836,50 @@ export function buildBooks(ctx, { switches, place }) {
     L.pivot.rotation.z = phi;
     L.pivot.visible = true;
   }
-  // the ribbon and the sewn back lie in the gutter, on the shallower of the two piles
-  function layGutter(nUnder) {
+  // the ribbon and the sewn back lie in the gutter, on the shallower of the two piles — and when the
+  // page the ribbon MARKS is the page in front of the visitor, the ribbon lies out across it
+  let laid = null; // what the strip is doing at this moment, for the box a thumb is given
+  function layGutter(nUnder, over = null) {
     const y = pileTop(nUnder);
     const t = Math.max(0.0022, y);
     sewn.scale.y = t;
     sewn.position.set(xs, t / 2, 0);
-    // …and the ribbon lies UNDER the top leaf of that pile, which is where a ribbon in a book is:
-    // what a visitor ever sees of it is the 20 mm of tail hanging out past the head of the block,
-    // drooping onto the table over the block's own edge. That tail is the whole affordance.
+    // AND A RIBBON AT ITS OWN PAGE LIES ON THAT PAGE. The user, seeing the first cut of this: "the
+    // ribbon should be over the index page obviously, otherwise it doesn't make sense" — and they
+    // are right, a ribbon that is not on the page it marks is not marking anything. So: with the
+    // contents open the strip comes out of the head, turns down onto the leaf and runs the whole
+    // 240 mm of it to the foot, 7 mm off the gutter where the page's own 13.6 mm margin is; on every
+    // other page it goes back under the top leaf and what shows is the 20 mm of tail out past the
+    // head, drooping onto the table over the block's own edge. Both are one strip and one function.
+    const head = -PILE.h / 2, foot = PILE.h / 2;
+    const z0 = head - RIBBON.out;
+    const z1 = over ? foot + RIBBON.foot : head + RIBBON.in;
+    const xc = over ? xs + over.side * RIBBON.lay : xs;
+    const yIn = over ? over.y + 0.00006 : y + 0.00004;
     const p = ribbon.geo.attributes.position.array;
-    const z0 = -PILE.h / 2 - RIBBON.out, z1 = -PILE.h / 2 + RIBBON.in;
+    // the tail is the part that BENDS, so it gets a third of the samples whatever the run behind it
+    // is doing: four segments over 20 mm of droop and the rest along 240 mm of flat page
+    const TAIL = 0.3;
     for (let i = 0; i <= ribbon.n; i++) {
-      const z = z0 + ((z1 - z0) * i) / ribbon.n;
-      const off = Math.min(1, Math.max(0, (-PILE.h / 2 - z) / (RIBBON.out * 0.8)));
-      const yy = (y + 0.00004) * (1 - off) + 0.0006 * off;
+      const u = i / ribbon.n;
+      const z = u < TAIL ? z0 + ((head - z0) * u) / TAIL : head + ((z1 - head) * (u - TAIL)) / (1 - TAIL);
+      // …and it goes down onto the TABLE at whichever end is hanging off the block
+      const off = Math.max(
+        Math.min(1, Math.max(0, (head - z) / (RIBBON.out * 0.8))),
+        over ? Math.min(1, Math.max(0, (z - foot) / (RIBBON.foot * 0.8))) : 0,
+      );
+      const yy = yIn * (1 - off) + 0.0006 * off;
+      // …and it slides onto the page over the first 40 mm of it rather than stepping across, which
+      // is a ribbon coming out of a gutter and not a ruled line drawn beside one
+      const x = xs + (xc - xs) * Math.min(1, Math.max(0, (z - head) / 0.04));
       for (let j = 0; j < 2; j++) {
         const o = (j * (ribbon.n + 1) + i) * 3;
-        p[o] = xs + (j === 0 ? -RIBBON.w / 2 : RIBBON.w / 2);
+        p[o] = x + (j === 0 ? -RIBBON.w / 2 : RIBBON.w / 2);
         p[o + 1] = yy;
         p[o + 2] = z;
       }
     }
+    laid = { z0, z1, xc, yIn, over: !!over };
     ribbon.geo.attributes.position.needsUpdate = true;
     ribbon.geo.computeVertexNormals();
     ribbon.geo.computeBoundingSphere();
@@ -967,7 +1024,15 @@ export function buildBooks(ctx, { switches, place }) {
     Cc.pivot.visible = false;
     setPile(pileR, nL - k, false);
     setPile(pileL, k, true);
-    layGutter(Math.min(k, nL - k));
+    // THE RIBBON'S OWN PAGE, which is a page of the contents. If one of the two in front of the
+    // visitor is a leaf of the list, the strip lies out across it; if both are, it takes the one the
+    // visitor is standing on, which on a phone is the only one they can see anyway.
+    const onR = !!b.leaves[rp]?.index, onV = !!b.leaves[vp]?.index;
+    const side = page === vp && onV ? -1 : onR ? 1 : onV ? -1 : 0;
+    layGutter(
+      Math.min(k, nL - k),
+      side > 0 ? { side: 1, y: pileTop(nL - k) + LIFT } : side < 0 ? { side: -1, y: pileTop(k) + LIFT } : null,
+    );
     prune(new Set([vp, rp]));
   }
 
@@ -1157,12 +1222,31 @@ export function buildBooks(ctx, { switches, place }) {
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const glass = ctx.renderer?.domElement ?? null;
+  // AND A DRAWING THAT IS NOT IN THE PICTURE IS NOT ASKED. three.js raycasts a mesh whether or not
+  // it is visible — `intersectObject` walks the children and never looks at the flag — and this book
+  // keeps a THIRD leaf parked (see THE LEAVES): at rest it is invisible and it is still lying
+  // wherever the last turn left it, which is on top of the two that are being read. Measured, on the
+  // contents at 1280x800: the first two lines of the second leaf of the list, TEMPERANCE and THE
+  // DEVIL, were answered by that parked leaf; the page under it never heard the click, and the book
+  // fell through to «which side of the gutter is this» and turned the page BACK to the title. So the
+  // nearest hit is the nearest hit ON SOMETHING THAT IS DRAWN, and the parked leaf is skipped.
   function castAt(ev, target) {
     if (!glass || !ctx.camera) return null;
     const r = glass.getBoundingClientRect();
     ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, ctx.camera);
-    return ray.intersectObject(target, true)[0] ?? null;
+    for (const q of ray.intersectObject(target, true)) {
+      let o = q.object, on = true;
+      while (o && o !== target) {
+        if (o.visible === false) {
+          on = false;
+          break;
+        }
+        o = o.parent;
+      }
+      if (on) return q;
+    }
+    return null;
   }
   // WHAT A POINT ON A LEAF IS, in the page's own pixels. A verso's texture is mirrored in u (see
   // `faceOf`), so the two are put back together here and nowhere else — and a click on a line of the
@@ -1303,12 +1387,20 @@ export function buildBooks(ctx, { switches, place }) {
   // twenty millimetres INSIDE the block — so a thumb aimed at the middle of that box lands on the
   // page and turns it, which is what the first cut of this did.
   function ribbonTap() {
-    if (!showing || !ctx.camera) return null;
+    if (!showing || !ctx.camera || !laid) return null;
     const xsv = [], ysv = [];
-    const y1 = pileTop(ribbonUnder()) + 0.0008;
-    for (const dx of [-RIBBON.w / 2, RIBBON.w / 2]) {
-      for (const [z, y] of [[-PILE.h / 2 - RIBBON.out, 0.0006], [-PILE.h / 2, y1]]) {
-        const q = toGlass(new THREE.Vector3(xs + dx, y, z));
+    // …and the box is the box of the strip AS IT IS ACTUALLY LAID: the two ends of it, which is the
+    // tip of the tail out over the table and either the foot of the page it is lying on or the head
+    // of the block it goes under. Over the contents that is 8 x 260 mm of ribbon and the box round
+    // it is a tall sliver, which is the honest target — and it costs the list nothing, because the
+    // ribbon is a DRAWING and the arbiter asks the drawings before it ever asks a box: a click on
+    // the paper beside the strip hits the leaf and goes to the line under it.
+    for (const [ex, ey, ez] of [
+      [xs, 0.0006, laid.z0],
+      [laid.xc, laid.over ? laid.yIn : pileTop(ribbonUnder()) + 0.0008, laid.over ? laid.z1 : -PILE.h / 2],
+    ]) {
+      for (const dx of [-RIBBON.w / 2, RIBBON.w / 2]) {
+        const q = toGlass(new THREE.Vector3(ex + dx, ey, ez));
         if (!q) return null;
         xsv.push(q[0]);
         ysv.push(q[1]);

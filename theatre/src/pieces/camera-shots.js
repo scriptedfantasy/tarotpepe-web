@@ -286,6 +286,15 @@ const TALL_CASE = { x0: -2.1, x1: -1.06, front: -2.2, top: 2.45, plinth: 0.07, b
 const READING = { x0: 1.98, x1: 2.52, z0: -0.62, z1: 0.02, top: 0.72, bx: 0.17, bz: 0.24 };
 READING.cx = (READING.x0 + READING.x1) / 2;
 READING.cz = (READING.z0 + READING.z1) / 2;
+// THE BOOK'S OWN YAW, and it must be the number props-table.js lays the mesh at (TABLE.book.yaw).
+// This file is imported by tools that run with no room in them, so it copies the table's arithmetic
+// rather than importing the piece — the same bargain READING itself makes two lines up. A quarter
+// turn puts the book's foot toward the chair; the 0.09 on top of it is the few degrees off square a
+// book somebody put down lies at. `BOOK_UP` is the book's head, which is what a page is read up.
+const BOOK_YAW = -Math.PI / 2 - 0.09;
+const BOOK_CY = Math.cos(BOOK_YAW), BOOK_SY = Math.sin(BOOK_YAW);
+const BOOK_ROT = (x, z) => [x * BOOK_CY + z * BOOK_SY, -x * BOOK_SY + z * BOOK_CY];
+const BOOK_UP = [-BOOK_SY, 0, -BOOK_CY];
 const SPINET = { back: -2.564, front: -2.144, keysOut: -1.994, z0: -2.1, z1: -0.72, top: 0.98, keyY: 0.66, kz0: -2.02, kz1: -0.8 };
 
 // a box of points: the corners of a thing, for "wholly in or wholly out"
@@ -735,12 +744,18 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
     //
     // AND THE TWO SHAPES ARE BOUND BY DIFFERENT EDGES OF THE BOOK, which is worth writing down
     // because it is why one margin does not serve both. A laptop's frame is wider than the kept
-    // box, so it is bound by the box's DEPTH and the book stands 54 % of the frame's height; a
-    // phone's is far narrower, so it is bound by the box's WIDTH and the book stands 76 % of the
+    // box, so it is bound by the box's DEPTH and the book stands half the frame's height; a phone's
+    // is far narrower, so it is bound by the box's WIDTH and the book stands two thirds of the
     // frame's width with slack above and below. Measured, closed, on the plate:
-    //     1280x800   325 x 433 px — 54 % of the frame's height, 13.8 % of its area
-    //     1600x900   366 x 487 px — 54 % of its height, 12.4 % of its area
-    //      390x844   295 x 392 px — 76 % of its WIDTH, 35.1 % of its area
+    //     1280x800   290 x 409 px — 51 % of the frame's height, 11.5 % of its area
+    //     1600x900   326 x 460 px — 51 % of its height, 10.4 % of its area
+    //      390x844   261 x 368 px — 67 % of its WIDTH, 29.1 % of its area
+    // Those three numbers all came DOWN when the book was turned to face the chair and they are not
+    // a smaller book: what is measured is the box round the cover's four corners on the glass, and a
+    // rectangle lying nine degrees off square in a frame square to the ROOM has a box bigger than
+    // itself. The frame is square to the BOOK now, so the box is the cover and nothing else. The
+    // book on the glass is the size it always was — the leaf inside it measures the same 431 px it
+    // did before the turn.
     //
     // AND IT IS CALLED `reading`, NOT `table`. There is already a shot called `table` in this file
     // (line 432): the frontal one of HIS table that the whole reading is played on, and reveal.js
@@ -753,6 +768,14 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
       const pos = [READING.cx, READING.top + 1.53, READING.cz];
       const look = [READING.cx, READING.top, READING.cz];
       const bx = READING.cx + 0.01, bz = READING.cz - 0.01;
+      // …AND THE FRAME IS SQUARE TO THE BOOK, WHICH IS NOW SQUARE TO THE CHAIR. The book lies a
+      // quarter turn round from where it did (props-table.js, `yaw`: its foot toward the chair,
+      // because that is how a book lies for the person sitting at the table), so `up` is no longer
+      // the room's −z but the book's own head — and the kept box is the book's own rectangle turned
+      // with it rather than a room-square box drawn round it. The frame comes out the same size to
+      // the pixel, since a box 0.17 x 0.24 with a margin round it is that box whichever way it is
+      // pointing; what changed is that the TABLE now stands crooked in the picture and the page
+      // does not, which is the right way round for a thing somebody reads.
       // THE FRAME IS COMPOSED ON THE BOOK and not on the table, at both shapes — the user asked to
       // LOOK DOWN ON THE BOOK, and a plan of the whole piece of furniture puts it at a tenth of the
       // picture with half a square metre of empty top round it (measured: 200 x 280 px of a
@@ -761,24 +784,29 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
       // 0.462 as wide as it is tall and every millimetre of margin comes off the book's own width.
       const m = aspect < 1.05 ? 0.03 : 0.105;
       const keep = [];
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) keep.push([bx + sx * (READING.bx / 2 + m), READING.top, bz + sz * (READING.bz / 2 + m)]);
-      return fitEither({ pos, look, up: [0, 0, -1], keep, pad: 0.05 }, aspect);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const [dx, dz] = BOOK_ROT(sx * (READING.bx / 2 + m), sz * (READING.bz / 2 + m));
+        keep.push([bx + dx, READING.top, bz + dz]);
+      }
+      return fitEither({ pos, look, up: BOOK_UP, keep, pad: 0.05 }, aspect);
     })(),
     // THE SAME BOOK, OPEN. src/pieces/walk-book.js swings the front board over and lays the block
     // out as a spread on the same table; these are the three frames a visitor reads it in, and they
     // differ from `reading` in three ways, each of which is a fact about the open object.
     //
-    //  1. THE FRAME IS SQUARE TO THE BOOK AND NOT TO THE ROOM. The book lies nine degrees off square
-    //     (props-table.js, `yaw`), which a closed book can carry — it is a rectangle on a table — and
-    //     an open one cannot: nine degrees of tilt on a page of lettering is a page somebody has to
-    //     turn their head to read. So `up` is the BOOK's own −z and the table is the thing that
-    //     stands crooked in the picture, which is the right way round.
+    //  1. THE FRAME IS SQUARE TO THE BOOK AND NOT TO THE ROOM. The book lies a quarter turn round
+    //     with nine degrees off square on top of it (props-table.js, `yaw`: its foot toward the
+    //     chair). Nine degrees a closed book can carry — it is a rectangle on a table — and an open
+    //     one cannot: nine degrees of tilt on a page of lettering is a page somebody has to turn
+    //     their head to read. So `up` is the BOOK's own head and the table is the thing that stands
+    //     crooked in the picture, which is the right way round. `reading` is composed the same way
+    //     now, so shutting the book does not turn the picture under the visitor.
     //  2. IT IS COMPOSED ON THE SPINE, which is where the open book's centre is — the block stays
-    //     where it lay and the front board goes down on the table to the left of it, so the spread
-    //     is 340 mm wide about a gutter 75 mm left of the closed book's own middle. The piece slides
-    //     the block those 75 mm as it opens (walk-book.js says why: without it the spread hangs
-    //     15 mm off the table's edge and a frame composed on it has 62 px of floorboard down one
-    //     side and none down the other), so the gutter lands on the table's own centre line.
+    //     where it lay and the front board goes down on the table beside it, so the spread is 340 mm
+    //     wide about a gutter 95 mm along from the closed book's own middle. The piece slides the
+    //     block those 95 mm as it opens (walk-book.js says why: half of the 235 mm and 45 mm of
+    //     table the turned spread otherwise leaves at its two ends), so the gutter lands within
+    //     20 mm of the table's own centre line and the frame is table from edge to edge.
     //  3. AND A NARROW WINDOW GETS ONE LEAF. Two 160 mm pages seen from 1.5 m above cannot be read on
     //     a 390 px screen: measured, the leaf comes out 162 px across, and the sign hand at the film's
     //     floor of 13 px then has a measure of 134 px inside the page's own margins — nine characters
@@ -796,9 +824,8 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
     // being cut off. At 20 the tip has 5.6 mm of air over it.
     ...(() => {
       // the book's own frame: the yaw props-table lays it at, and the 75 mm it squares up by
-      const yaw = -0.09, cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const rot = (x, z) => [x * cy + z * sy, -x * sy + z * cy];
-      const g = rot(0.075, 0);
+      const rot = BOOK_ROT;
+      const g = rot(0.095, 0); // walk-book.js SLIDE: the 95 mm the block squares up by
       const gx = READING.cx + 0.01 + g[0], gz = READING.cz - 0.01 + g[1];
       const spine = -READING.bx / 2; // the gutter, in the book's own coordinates
       const plane = READING.top + 0.0225; // the leaves' own mid-height in a 45 mm block
@@ -810,7 +837,7 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
           const [dx, dz] = rot(sx * (halfX + m), sz * (READING.bz / 2 + m));
           keep.push([c[0] + dx, plane, c[1] + dz]);
         }
-        return fitEither({ pos: [c[0], READING.top + 1.53, c[1]], look: [c[0], plane, c[1]], up: [-sy, 0, -cy], keep, pad: 0.05 }, aspect);
+        return fitEither({ pos: [c[0], READING.top + 1.53, c[1]], look: [c[0], plane, c[1]], up: BOOK_UP, keep, pad: 0.05 }, aspect);
       };
       return {
         book: plan(spine, READING.bx, 0.02),

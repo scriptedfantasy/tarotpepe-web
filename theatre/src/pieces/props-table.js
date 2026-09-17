@@ -46,9 +46,20 @@ export const TABLE = {
   top: 0.72,
   thick: 0.028,
   chair: { x0: 1.66, x1: 2.06, z0: -0.52, z1: -0.08, seat: 0.45, back: 0.92 },
-  // the book, lying face up in the middle of the table and turned a few degrees off square, the way
-  // a book somebody put down is. 0.17 x 0.24 of cover and 45 mm of block, which is this book.
-  book: { w: 0.17, h: 0.24, t: 0.045, yaw: -0.09 },
+  // THE BOOK, LYING FACE UP IN THE MIDDLE OF THE TABLE AND TURNED TOWARD THE CHAIR. 0.17 x 0.24 of
+  // cover and 45 mm of block, which is this book.
+  //
+  // AND THE QUARTER TURN IS THE WHOLE OF IT. The user, on seeing it open: "i think the book should
+  // be oriented towards the chair, not the original position of the user." The chair stands at
+  // x 1.66 .. 2.06 — off the table's SHORT end, on its own centre line — so somebody sitting in it
+  // faces +x, and a book laid out for them has its foot toward them at −x and its head away at +x.
+  // The book's own head is its local −z, so the turn is −90 degrees about y and the few degrees off
+  // square go on top of that, the way a book somebody put down is. Everything else in this round
+  // follows from this one number: walk-book.js reads the open book's pose off this mesh (`station`)
+  // and slides the block along the book's own long axis, and camera-shots.js composes `reading`,
+  // `book`, `book-recto` and `book-verso` on the book's own axes with `up` its head — so all four
+  // frames turn with it and nothing had to be re-solved by hand.
+  book: { w: 0.17, h: 0.24, t: 0.045, yaw: -Math.PI / 2 - 0.09 },
 };
 TABLE.cx = (TABLE.x0 + TABLE.x1) / 2;
 TABLE.cz = (TABLE.z0 + TABLE.z1) / 2;
@@ -89,6 +100,79 @@ function coverTexture(w, h) {
   return c;
 }
 
+// THE TOP ITSELF, DRAWN. The user, looking down at the open book: "i want to see some table texture
+// on the background". They are looking at a plan from 1.53 m up composed on a 340 mm spread, and at
+// 1280x800 that frame is table from edge to edge — every pixel behind the page was bare paper.
+//
+// So: four boards running the length of the table with the seams between them, a butt joint in two
+// of them, and one broken stroke of grain here and there. It is the floor's own grammar one storey
+// smaller (src/pieces/room-textures.js, floorTexture) and it is drawn at the SCALE THE READING SHOT
+// GIVES IT rather than at the floor's:
+//
+//   the glass       the closed book is 0.17 m of cover measuring 325 px at 1280x800 and 295 at
+//                   390x844 — 1912 px per metre and 1735 px per metre
+//   so the canvas   1900 px per metre, which is 1026 x 1216 for a top 0.54 x 0.64, and a stroke
+//                   drawn W px wide on it lands about W px on a laptop's glass and 0.91 W on a
+//                   phone's
+//   so the pen      2 px for a seam, 1.9 for a joint, 1.8 for grain — and those are not the numbers
+//                   the arithmetic first gave, which were 2.4 and 2.2. What a stroke MEASURES on
+//                   the glass is wider than what it was drawn at, because a wobbled line is laid
+//                   down with an anti-aliased skirt either side of it and the pass darkens that
+//                   skirt: at 2.4 the seams came back 2.69 px mean across 150 crossings of the
+//                   table at 1280x800, which is over the 2 .. 2.4 px band every other drawn line in
+//                   this room is held to. At 2 they measure 2.31 px mean at 1280x800 and 2.03 at
+//                   390x844 — both inside it. The number that matters is the one off the glass.
+//
+// AND IT IS STRUCK ONCE. The wobble in these strokes is the pen's own and is baked into the map:
+// the boil in this film is a thing the pen does to a drawing that is RE-struck on the twelve, and a
+// table top is not re-struck any more than the floorboards or the wallpaper are. What moves over it
+// is the hatch and the contour the ink pass puts on the object itself, which is where the room's
+// own life comes from and is why a static map under it never reads as a photograph.
+const TOP_PPM = 1900;
+function topTexture() {
+  const T = TABLE;
+  const w = Math.round((T.x1 - T.x0) * TOP_PPM), h = Math.round((T.z1 - T.z0) * TOP_PPM);
+  const c = makeCanvas(w, h);
+  const g = c.getContext('2d');
+  const nib = mulberry32(0x7ab1e);
+  g.fillStyle = PAPER;
+  g.fillRect(0, 0, w, h);
+  // FIVE BOARDS DOWN THE TABLE'S LENGTH, 108 mm each, no two seams quite where the arithmetic puts
+  // them. A seam is one stroke that wanders a board's own thickness over the length of the table.
+  // Five and not four because of what the reading shot sees: that frame is 280 mm ACROSS the boards,
+  // so 135 mm boards put two seams in the picture and 108 mm ones put three — and two lines behind
+  // an open book is a top somebody has cracked, where three is a top somebody has made.
+  const boards = 5;
+  const seams = [];
+  for (let i = 1; i < boards; i++) seams.push((w * i) / boards + (nib() - 0.5) * w * 0.02);
+  for (const x of seams) {
+    const r = mulberry32(0x5ea0 + Math.round(x));
+    inkLine(g, x, -6, x + (r() - 0.5) * 6, h + 6, { width: 2, wobble: 1.6, rng: r, color: INK, alpha: 0.55, segments: 24 });
+  }
+  // A JOINT OR TWO: a board is not the length of a room, so two of the four are made of two lengths
+  // butted together, and the joint is a short stroke across that board and nothing else.
+  const edges = [0, ...seams, w];
+  for (const i of [0, 2]) {
+    const x0 = edges[i], x1 = edges[i + 1];
+    const y = h * (0.28 + nib() * 0.44);
+    const r = mulberry32(0x10117 + i);
+    inkLine(g, x0 + 2, y, x1 - 2, y + (r() - 0.5) * 5, { width: 1.9, wobble: 1.2, rng: r, color: INK, alpha: 0.5, segments: 6 });
+  }
+  // GRAIN: one broken stroke down part of a board, on rather more than half of them, at a tenth of
+  // the ink. Any more than this and a top drawn in a room like this reads as a texture rather than
+  // as a thing, which is the one thing the pen never does.
+  for (let i = 0; i < boards; i++) {
+    const x0 = edges[i], x1 = edges[i + 1];
+    for (let k = 0; k < (nib() < 0.75 ? 2 : 1); k++) {
+      const x = x0 + (0.22 + nib() * 0.56) * (x1 - x0);
+      const y0 = h * nib() * 0.5, y1 = y0 + h * (0.3 + nib() * 0.45);
+      const r = mulberry32(0x9a1e + i * 31 + k);
+      inkLine(g, x, y0, x + (r() - 0.5) * 8, y1, { width: 1.8, wobble: 2, rng: r, color: INK, alpha: 0.12, segments: 10 });
+    }
+  }
+  return c;
+}
+
 export function buildTable(ctx, { group, switches, O, M }) {
   const THREE = ctx.THREE;
   const T = TABLE;
@@ -106,8 +190,17 @@ export function buildTable(ctx, { group, switches, O, M }) {
   };
 
   // ---- 1. THE TABLE. A top, an apron under it and four square legs ------------------------------
+  // The top's UPPER FACE is the drawn one and the other five are the paper they always were: a
+  // BoxGeometry's groups run [+x, −x, +y, −y, +z, −z], so the boards go on index 2 and the 28 mm
+  // edge the visitor sees from the chair keeps the plain tone it had. Same hatch as M.paper on all
+  // six, so nothing under the book changes tone — what changes is that there is something there.
   const tw = T.x1 - T.x0, td = T.z1 - T.z0;
-  box(tw, T.thick, td, M.paper, T.cx, T.top - T.thick / 2, T.cz, 'table-top');
+  const topFaces = (() => {
+    const plain = M.paper;
+    const drawn = inkMaterial({ map: canvasTexture(topTexture()), hatch: 0.4 });
+    return [plain, plain, drawn, plain, plain, plain];
+  })();
+  box(tw, T.thick, td, topFaces, T.cx, T.top - T.thick / 2, T.cz, 'table-top');
   box(tw - 0.08, 0.05, td - 0.08, M.wood, T.cx, T.top - T.thick - 0.025, T.cz, 'table-apron');
   for (const ox of [-1, 1]) for (const oz of [-1, 1]) {
     const lx = T.cx + ox * (tw / 2 - 0.05), lz = T.cz + oz * (td / 2 - 0.05);

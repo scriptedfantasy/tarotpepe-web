@@ -13,9 +13,9 @@ READING.cz = (READING.z0 + READING.z1) / 2;
 const BOARD = { w: 0.17, h: 0.24, t: 0.0025 };
 const LEAF = { w: 0.16, h: 0.226 };
 const BLOCK = 0.04;
-const yaw = -0.09, cy = Math.cos(yaw), sy = Math.sin(yaw);
+const yaw = -Math.PI / 2 - 0.09, cy = Math.cos(yaw), sy = Math.sin(yaw); // props-table.js TABLE.book.yaw: the foot toward the chair
 const rot = (x, z) => [x * cy + z * sy, -x * sy + z * cy];
-const g = rot(0.075, 0);
+const g = rot(0.095, 0); // walk-book.js SLIDE
 const gx = READING.cx + 0.01 + g[0], gz = READING.cz - 0.01 + g[1];
 const spine = -READING.bx / 2;
 const plane = READING.top + 0.0225;
