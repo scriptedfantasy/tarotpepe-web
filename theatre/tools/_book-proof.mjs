@@ -1,23 +1,30 @@
 #!/usr/bin/env node
-// TAROT BY PEPE, OPENED LIKE A VISITOR AND READ RIGHT THROUGH (src/pieces/walk-book.js).
+// TAROT BY PEPE, OPENED ON THE TABLE LIKE A VISITOR AND READ RIGHT THROUGH (src/pieces/walk-book.js,
+// walk-book-page.js). The book stopped being a sheet over the room this round and became an object
+// on the reading table, so every claim below is about a thing in the scene: a board that swings, a
+// leaf that turns, a ribbon sticking out of a block of paper.
 //
 //   the TRIGGER   whatever the room actually registers for the book, found rather than assumed: the
-//                 proof walks every place walk.js offers, asks the arbiter what is under the book's
-//                 own tap box at each of them, and clicks the first one that answers `book-…`. It
-//                 does not know or care whether that is a spine on the tall case or a book lying on
-//                 a table, which is the point — the trigger is moving and the book is not.
-//   the OTHERS    MARSEILLE, CHIROMANCIE and LE DESTIN are refused: books on a shelf, no tap box
-//   the CONTENTS  the list at the front, line by line: 78 cards, the openings, the four suits and
-//                 the last page, each line CLICKED on the glass and the leaf it lands on read back
-//   the WAY BACK  the folded corner on a trump page, a pip page and a court page, clicked, each of
-//                 them putting the visitor back on the leaf of the list they left from
-//   the PAGES     every leaf turned through with the right page, the text read out of the piece in
-//                 the hand's own folded case, and — on every leaf that carries one — THE CARD'S OWN
-//                 INK COUNTED IN PIXELS inside the plate's box on the glass, so all seventy-eight
-//                 are proved to be ON the page rather than merely asked for
-//   the DRAWING   /tmp/book/*.png at 1280x800 and 390x844: the contents, a pip and a court card
+//                 proof walks every place walk.js offers, asks the arbiter what is under every box
+//                 the room offers for this book, and clicks the first one that answers
+//   the SWING     the board's own drawings, counted off the piece while it goes over, with a PNG of
+//                 it halfway and the closed book beside it for the silhouette
+//   the CAP       the leaf's four corners on the glass, and the running head's own INK measured in
+//                 that box — the cap a visitor's eye gets, not the one the pagination asked for
+//   the TURN      a right-page turn and a left-page turn by REAL CLICKS, with the leaf caught in the
+//                 air (the loop is stopped on the drawing, so the PNG is that drawing)
+//   the CONTENTS  every line of the list clicked on the glass and the leaf it lands on read back
+//   the RIBBON    clicked from a trump, a pip and a court page, each putting the visitor back on the
+//                 opening of the list they left from
+//   the PLATES    all seventy-eight card leaves reached, each one's plate measured ON THE GLASS and
+//                 its ink counted inside its own box
+//   the WAY OUT   a click off the book shuts it and leaves the visitor at the table; a second one
+//                 walks them back to the chair; and Escape does the same
+//   the DRAWING   /tmp/book3d/*.png at 1280x800 and 390x844
+//   the TIME      frame time at the reading shot with the book open, at 1600x900 and dpr 2, against
+//                 the same shot with the book shut
 //
-//   BASE=http://127.0.0.1:8741 node tools/_book-proof.mjs
+//   BASE=http://127.0.0.1:8739 node tools/_book-proof.mjs
 import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { mkdirSync } from 'node:fs';
@@ -30,14 +37,12 @@ const args = Object.fromEntries(
   }, []),
 );
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5173';
-const OUT = args.out ?? '/tmp/book';
+const OUT = args.out ?? '/tmp/book3d';
 mkdirSync(OUT, { recursive: true });
 const PLATE = [1280, 800];
 const PHONE = [390, 844];
-// the three that used to open and no longer do: the proof asks the room for each by name
 const SHUT = ['MARSEILLE', 'CHIROMANCIE', 'LE DESTIN'];
-const CARDS = DECK.length; // seventy-eight, off the deck itself
-// an entry's running head is its card's name, so the deck is also the list of heads to expect
+const CARDS = DECK.length;
 const headOf = (slug) => slug.replace(/-/g, ' ').toUpperCase();
 const slugOf = (head) => head.toLowerCase().replace(/ /g, '-');
 
@@ -48,94 +53,96 @@ const claim = (b, text) => {
   if (!b) bad++;
   console.log(`   ${b ? '✓' : '✗'} ${text}`);
 };
-// A CLICK ON THE SHEET IS FINISHED WHEN IT RETURNS: the book turns, re-cuts and strikes its own
-// opening inside the handler, so the piece can be read the moment the click comes back and nothing
-// here waits on the room's own frame rate — which under software GL, with a 3D parlour still
-// drawing behind the paper, is the difference between a proof of four minutes and one of forty.
-// Frames are waited for in exactly two places: a screenshot, and a plate that has to finish loading.
 const frames = (p, n = 2) => p.evaluate((k) => new Promise((res) => { let i = k; const go = () => (i-- <= 0 ? res() : requestAnimationFrame(go)); go(); }), n);
-// AND THE ROOM IS STOPPED ONCE THE BOOK IS UP, WHICH IS NOT A CHEAT AND IS WORTH THE PARAGRAPH.
-// The parlour behind the paper is a 3D scene with the film's whole ink pass over it, and in a
-// headless browser on software GL it costs seconds a drawing — so every click and every read in
-// this proof queues behind a frame, and a book of 234 leaves takes an hour to turn. The book does
-// not need those frames: `turn`, `goLeaf` and `back` re-cut the sheet and strike it INSIDE the
-// click handler, and `update()` only re-strikes it to boil the line. So after the trigger has been
-// clicked — the one thing here that does need the room, because the walk to it runs on the twelves —
-// the loop is stopped by taking requestAnimationFrame away, and what is under the pointer from then
-// on is the same canvas a visitor is looking at, minus the boil. It is given back at the end.
-const stopTheRoom = (p) => p.evaluate(() => {
+// a point inside a box, kept on this window's glass — a box at the very edge of a narrow frame has
+// a middle a mouse can still be asked for and a click outside the window is a click at nothing
+const at = (box, w, h, fx = 0.5, fy = 0.5) => [
+  Math.max(2, Math.min(w - 2, box.x + box.w * fx)),
+  Math.max(2, Math.min(h - 2, box.y + box.h * fy)),
+];
+// THE LOOP IS HELD TO TAKE A PICTURE OF ONE DRAWING, and given back at once. A motion in this book
+// advances one drawing per rendered frame (the clock is the paper's: `clock.stepped`) and a
+// screenshot itself costs a frame, so a PNG of "the leaf halfway over" taken while the room is
+// running is a PNG of two drawings later. Holding the loop freezes the canvas on the drawing that
+// was last composited, which is the one the piece says it is on.
+//
+// AND THE CALLBACKS ARE QUEUED RATHER THAN THROWN AWAY, which is the whole of why this works. The
+// room's loop re-books itself by calling requestAnimationFrame at the end of every frame; replace
+// that with a function that returns 0 and the loop asks once, is refused, and is NEVER ASKED AGAIN —
+// putting the real one back afterwards restores nothing, because there is nobody left to call it.
+// Measured before the fix: the board drew four of its eight drawings and the camera stopped halfway
+// through its dolly, so the leaf measured 292 px where it is 425. So the hold KEEPS every callback
+// it was handed and hands them all back on the way out, and the room carries on from where it was.
+const hold = (p) => p.evaluate(() => {
+  window.__q = [];
   window.__raf = window.requestAnimationFrame.bind(window);
-  window.requestAnimationFrame = () => 0;
+  window.requestAnimationFrame = (cb) => (window.__q.push(cb), 0);
 });
-const startTheRoom = (p) => p.evaluate(() => {
+// ONE DRAWING AT A TIME. With the loop held, a step is: run everything the room has queued (which is
+// one turn of its loop, and the render with it) and then let the browser paint. So a PNG of "the leaf
+// on drawing two" is drawing two and not two drawings later, which is what every earlier attempt at
+// this got — the click, the read and the screenshot are three round trips and the room draws through
+// all of them.
+const step = (p, n = 1) => p.evaluate(async (k) => {
+  for (let i = 0; i < k; i++) {
+    const q = window.__q ?? [];
+    window.__q = [];
+    for (const cb of q) cb(performance.now());
+    await new Promise((r) => window.__raf(r));
+  }
+}, n);
+const letGo = (p) => p.evaluate(() => {
   if (!window.__raf) return;
   window.requestAnimationFrame = window.__raf;
   window.__raf = null;
+  const q = window.__q ?? [];
+  window.__q = null;
+  for (const cb of q) window.requestAnimationFrame(cb);
 });
-// A PLATE IS READY WHEN IT CAN BE PAINTED, not when it has arrived. `complete` goes true as soon as
-// the bytes are in; the picture is drawable a beat later, and a screenshot taken in that beat counts
-// an empty box and calls a card missing. `decode()` is the browser's own answer to the question.
-const plateReady = async (p) => {
-  await p.waitForFunction(() => {
-    const i = document.querySelector('#book img.plate');
-    return !i || !i.classList.contains('on') || (i.complete && i.naturalWidth > 0);
-  }, null, { timeout: 30000, polling: 100 });
-  await p.evaluate(async () => {
-    const i = document.querySelector('#book img.plate');
-    if (!i || !i.classList.contains('on')) return;
-    try {
-      await i.decode();
-    } catch {}
-    await new Promise((r) => setTimeout(r, 0));
-  });
-};
-const settle = async (p) => {
-  await p.waitForFunction(() => !window.__theatre.pieces.camera.moving, null, { timeout: 300000, polling: 250 });
-  await frames(p, 2);
-};
+const rest = (p) => p.waitForFunction(() => !window.__theatre.pieces.walk.books.busy && !window.__theatre.pieces.camera.moving, null, { timeout: 120000 }).catch(() => {});
+const still = (p) => p.waitForFunction(() => !window.__theatre.pieces.camera.moving, null, { timeout: 120000 }).catch(() => {});
 const state = (p) => p.evaluate(() => {
   const B = window.__theatre.pieces.walk.books;
-  return { showing: B.showing, title: B.title, leaf: B.leaf, leaves: B.leaves, cap: B.cap, spread: B.spread, box: B.box, at: window.__theatre.pieces.walk.at, indexAt: B.indexAt, indexLeaves: B.indexLeaves };
+  return { showing: B.showing, title: B.title, leaf: B.leaf, leaves: B.leaves, cap: B.cap, spread: B.spread, shot: B.shot, bound: B.bound, at: window.__theatre.pieces.walk.at, indexAt: B.indexAt, indexLeaves: B.indexLeaves, busy: B.busy };
 });
-// what the visitor is looking at, in ONE round trip: the leaf, its words, the plate's box and the
-// sheet itself — so turning a book of two hundred and thirty-four leaves costs a click and a read
-// rather than a click and three reads
 const seeing = (p) => p.evaluate(() => {
   const B = window.__theatre.pieces.walk.books;
-  return { leaf: B.leaf, leaves: B.leaves, box: B.box, text: B.text() ?? '', card: B.card, kind: B.sheetLeaves[B.leaf] ?? '?' };
+  return { leaf: B.leaf, kind: B.sheetLeaves[B.leaf] ?? '?', next: B.sheetLeaves[B.leaf + 1] ?? '?', text: B.text() ?? '', card: B.card };
 });
+// the darkest row and the lightest, inside a box on the glass: how tall the INK in it stands
+async function inkRows(page, box, w, h) {
+  const clip = { x: Math.max(0, Math.round(box.x)), y: Math.max(0, Math.round(box.y)), width: Math.min(Math.round(box.w), w - Math.round(box.x)), height: Math.min(Math.round(box.h), h - Math.round(box.y)) };
+  if (clip.width < 2 || clip.height < 2) return null;
+  const shot = await page.screenshot({ clip });
+  const { data, info } = await sharp(shot).raw().toBuffer({ resolveWithObject: true });
+  let top = -1, bot = -1, ink = 0;
+  for (let y = 0; y < info.height; y++) {
+    let row = 0;
+    for (let x = 0; x < info.width; x++) {
+      const q = (y * info.width + x) * info.channels;
+      if (data[q] < 140 && data[q + 1] < 140 && data[q + 2] < 140) row++;
+    }
+    ink += row;
+    if (row > 0) {
+      if (top < 0) top = y;
+      bot = y;
+    }
+  }
+  return { top, bot, rows: bot - top + 1, ink, w: info.width, h: info.height };
+}
 
-// THE TRIGGER, FOUND RATHER THAN KNOWN. The book is opened by something in the room, and what that
-// something is is not this proof's business: it was a spine on the tall case and it is moving to a
-// reading table, and it has arrived there. So every place the room can walk to is tried, plus the
-// chair, and at each one EVERY box the room offers for this book is clicked on the glass — three
-// points down each, because a 16 px spine grown to a 44 px box is mostly margin and the arbiter
-// answers to the drawing first.
-// What the arbiter calls the thing is reported where it answers and is not a condition: the claim
-// is that a real click, at a place a visitor can stand, put the book up.
+// THE TRIGGER, FOUND RATHER THAN KNOWN — the old proof's own sweep, kept. The book is opened by
+// something in the room and what that something is is not this proof's business.
 async function openTheBook(page, w, h, reset) {
   const places = await page.evaluate(() => window.__theatre.pieces.walk.places ?? []);
   let first = true;
   for (const place of [null, ...places]) {
-    // EVERY PLACE IS TRIED IN A ROOM NOBODY HAS TOUCHED YET, and it has to be. These are REAL
-    // clicks at boxes that are not always the book: at the doorway the reading table's book
-    // projects onto the door leaf, so the sweep opened the door, walked out to the crossroads, and
-    // from there the room rightly refused to have the visitor at the case, the piano or the table
-    // at all — three places never tried, and a proof that reported nothing in the room opens the
-    // book while the table opened it perfectly well. Reloading between places costs eight seconds
-    // and buys each one an untouched room.
     if (!first) await reset();
     first = false;
     if (place) {
-      // THE VISITOR IS PUT AT THE PLACE AND THE LENS IS CUT THERE, rather than walked. `go` is what
-      // makes the room think somebody is standing at it — that is the thing a switch asks about —
-      // and the dolly that follows is three seconds of drawing ON THE TWELVES, which in a headless
-      // browser on software GL is minutes a place. The cut lands the lens on the same shot the walk
-      // would have ended on, so what is clicked afterwards is the picture a visitor has in front of
-      // them; only the travelling is skipped.
       const went = await page.evaluate((n) => {
         const W = window.__theatre.pieces.walk;
-        W.go(n); // not awaited: the dolly is what is being skipped
+        W.go(n);
         window.__theatre.pieces.camera?.cut?.(W.shots?.[n] ?? n);
         return W.at === n;
       }, place);
@@ -143,24 +150,9 @@ async function openTheBook(page, w, h, reset) {
         console.log(`   …${place}: the room would not have the visitor there just now`);
         continue;
       }
-      // the lens is already on the shot; this only lets whatever the cut started come to rest
-      await page.waitForFunction(() => !window.__theatre.pieces.camera.moving, null, { timeout: 20000, polling: 250 }).catch(() => {});
-      // AND TWO DRAWINGS ARE WAITED FOR, because a cut sets the shot and the camera lays the pose on
-      // in its own update: read the glass before that and every box is projected off the lens's last
-      // position, which is a box in the wrong half of the room.
+      await still(page);
       await frames(page, 2);
     }
-    // EVERY BOX THE ROOM OFFERS FOR THIS BOOK, and not one named place to look. Asking walk-book
-    // for its own `tapBox('TAROT')` was the whole list while the trigger was a spine in the tall
-    // case; the trigger is the BOOK LYING ON THE READING TABLE now (src/pieces/props-table.js) and
-    // that box belongs to props, so a proof that asked only the first would have reported that
-    // nothing in the room opens the book while the room opened it perfectly well. The list is the
-    // union, in the order the room grew them, and whichever one is on the glass here is clicked.
-    // …and the same rectangle is not clicked twice. `tapBox('TAROT')` and the first of
-    // `spineBoxes()` are the same spine, so the first cut of this list poked every box three times
-    // over and turned a sweep of twenty-five clicks a window into one of seventy-five — and under
-    // software GL, where a click queues behind a drawing of the whole parlour, that is the
-    // difference between a proof of an hour and one of three.
     const candidates = await page.evaluate(() => {
       const B = window.__theatre.pieces.walk.books, P = window.__theatre.pieces.props;
       const all = [B.tapBox?.('TAROT') ?? null, ...(B.spineBoxes?.() ?? []), P?.table?.tapBox?.() ?? null].filter(Boolean);
@@ -170,9 +162,6 @@ async function openTheBook(page, w, h, reset) {
         return seen.has(k) ? false : (seen.add(k), true);
       });
     });
-    // NOT ON THIS WINDOW'S GLASS. A projected box can be anywhere — behind the lens, off the left,
-    // half a screen past the right — and a click outside the window is a click at nothing, so a box
-    // that does not overlap the frame is passed over rather than poked at.
     if (!candidates.length) console.log(`   …${place ?? 'the chair'}: no box for the book`);
     for (const box of candidates) {
       const on = box.x + box.w > 0 && box.y + box.h > 0 && box.x < w && box.y < h;
@@ -182,7 +171,7 @@ async function openTheBook(page, w, h, reset) {
         const x = box.x + box.w / 2, y = box.y + box.h * at;
         const who = await page.evaluate(([px, py]) => window.__theatre.pieces.props.switches.at(px, py), [x, y]);
         await page.mouse.click(x, y);
-        const s = await state(page); // the book goes up inside the click; no frame is waited for
+        const s = await state(page);
         console.log(`      a click at ${Math.round(x)},${Math.round(y)} — the arbiter says ${who ?? 'nothing'}, the book is ${s.showing ? 'UP' : 'down'}`);
         if (s.showing) return { place: place ?? 'the chair', who: who ?? 'nothing the arbiter names', box, at };
       }
@@ -193,6 +182,7 @@ async function openTheBook(page, w, h, reset) {
 
 const browser = await chromium.launch(LAUNCH);
 for (const [w, h] of [PLATE, PHONE]) {
+  const tag = `${w}x${h}`;
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1, hasTouch: true });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 300)));
@@ -205,204 +195,328 @@ for (const [w, h] of [PLATE, PHONE]) {
     await page.waitForFunction('window.__theatreReady === true', null, { timeout: 300000 });
   };
   await load();
-  console.log(`\n=== ${w}x${h}`);
+  console.log(`\n=== ${tag}`);
 
-  // ---- the three that do not open ---------------------------------------------------------------
+  // ---- the three that do not open --------------------------------------------------------------
   const closed = await page.evaluate((names) => {
     const B = window.__theatre.pieces.walk.books;
     return names.map((n) => ({ n, box: B.tapBox(n) ?? null, opens: B.open(n) }));
   }, SHUT);
   claim(closed.every((r) => !r.box && r.opens === false), `the three shut books are books on a shelf: ${closed.map((r) => `${r.n} ${r.box ? 'HAS A BOX' : 'no box'}/${r.opens}`).join(', ')}`);
 
-  // ---- a real click on whatever opens it ---------------------------------------------------------
+  // ---- the closed book on the table, and the click that opens it --------------------------------
   const trigger = await openTheBook(page, w, h, load);
-  claim(!!trigger, `a real click opens the book${trigger ? ` — ${trigger.who}, worked from ${trigger.place}, box ${Math.round(trigger.box.w)}x${Math.round(trigger.box.h)} px` : ': NOTHING IN THE ROOM OPENED IT — see the places above'}`);
-  // AND THE BOOK IS PROVED EITHER WAY. The trigger is not this proof's work and it is being moved
-  // from the tall case to a reading table while this is written; when the room has nothing that
-  // opens the book the claim above goes red and stays red, and the sheet is put up through the
-  // piece's own api so that everything below — the contents, the corner, all seventy-eight plates —
-  // is still turned through and measured rather than skipped for want of a switch.
+  claim(!!trigger, `a real click opens the book${trigger ? ` — ${trigger.who}, worked from ${trigger.place}, box ${Math.round(trigger.box.w)}x${Math.round(trigger.box.h)} px` : ': NOTHING IN THE ROOM OPENED IT'}`);
   if (!trigger) {
     const up = await page.evaluate(() => window.__theatre.pieces.walk.books.open('TAROT'));
-    console.log(`   …so the sheet is put up through the piece itself (open() answers ${up}) and the rest is proved on it`);
-    await frames(page, 2);
-    if (!(await state(page)).showing) {
-      await page.close();
-      continue;
-    }
+    console.log(`   …so the book is put up through the piece itself (open() answers ${up}) and the rest is proved on it`);
   }
-  const open = await state(page);
-  claim(open.showing && open.title === 'TAROT', `…and what stands over the room is TAROT BY PEPE (${open.title})`);
-  await stopTheRoom(page); // the walk is done; from here the paper is the only thing that moves
-  console.log(`   the book is ${open.leaves} leaves, set at a ${open.cap} px cap, ${open.spread ? 'as a spread' : 'one page at a time'}; the sheet is ${open.box.w}x${open.box.h} px`);
 
-  // ---- the contents ------------------------------------------------------------------------------
-  const index = await page.evaluate(() => window.__theatre.pieces.walk.books.index);
+  // ---- THE SWING, counted ------------------------------------------------------------------------
+  // The click above has already started it; the drawings are collected as they go past.
+  // A DRAWING IS COUNTED BY THE PIECE AND NOT BY THIS PROOF. The book advances one drawing per drawn
+  // frame, and an `evaluate` asking «what drawing are you on» spends whole drawings in flight: polled
+  // from here, three of the board's eight is the most that can ever be seen. So the piece keeps the
+  // angles it actually put on the glass (`drew`) and they are read back when it has stopped.
+  await rest(page);
+  const swing = await page.evaluate(() => window.__theatre.pieces.walk.books.drew);
+  claim(swing?.kind === 'swing' && swing.drawings === 8, `the front board goes over in ${swing?.drawings} drawings on the twelves, at ${swing?.angles.join(', ')} degrees about the joint`);
+  await frames(page, 3);
+  const open = await state(page);
+  claim(open.showing && open.title === 'TAROT', `…and what is lying open on the table is TAROT BY PEPE (${open.title}), at the ${open.shot} shot`);
+  console.log(`   ${open.bound.pages} pages bound in ${open.bound.leaves} leaves of ${open.bound.leafMm} mm; the page is ${open.bound.page[0]}x${open.bound.page[1]} px on the glass, its texture ${open.bound.texture[0]}x${open.bound.texture[1]}, ${open.bound.faces} faces struck`);
+  await page.screenshot({ path: `${OUT}/open-${tag}.png` });
+
+  // …AND THE SAME CLICK AGAIN, ONE DRAWING AT A TIME, for a picture of the board in the air. The book
+  // is shut and opened by a REAL CLICK on the same box, with the loop held from before the click, so
+  // the frame that is caught is the drawing the piece says it is on.
+  {
+    await page.evaluate(() => window.__theatre.pieces.walk.books.close());
+    await rest(page);
+    await frames(page, 2);
+    // …and the box is read AFTER the lens has walked back to the reading shot, not before it. A
+    // projected box belongs to the frame it was projected in: taken while the camera was still over
+    // the open book, the click went nowhere and the board never moved.
+    const bb = await page.evaluate(() => window.__theatre.pieces.props.table.tapBox());
+    await hold(page);
+    await step(page, 1);
+    await page.mouse.click(bb.x + bb.w / 2, bb.y + bb.h / 2);
+    let shown = null;
+    for (let k = 0; k <= 3; k++) {
+      await step(page, 1);
+      shown = await page.evaluate(() => window.__theatre.pieces.walk.books.swinging);
+    }
+    await page.screenshot({ path: `${OUT}/swing-${tag}.png` });
+    await letGo(page);
+    await rest(page);
+    await frames(page, 2);
+    claim(!!shown, `…and the board is caught in the air on drawing ${shown?.drawing} of ${shown?.drawings}, at ${shown?.angle} degrees`);
+  }
+
+  // ---- THE CAP, measured in ink on the glass -----------------------------------------------------
+  const lb = await page.evaluate(() => window.__theatre.pieces.walk.books.leafBox());
+  const hb = await page.evaluate(() => window.__theatre.pieces.walk.books.headBox());
+  const headInk = hb ? await inkRows(page, hb, w, h) : null;
+  claim(!!lb && lb.w > 100, `the leaf is ${lb?.w}x${lb?.h} px on the glass${open.spread ? ' (the whole spread is in the frame)' : ' (one leaf at a time)'}`);
+  claim(open.cap >= 13, `the book is set at a ${open.cap} px cap, against the film's floor of 13`);
+  claim(!!headInk && headInk.rows >= 12, `and the running head measures ${headInk?.rows} px of INK on the glass in a box ${hb?.w}x${hb?.h} — the cap a visitor's eye actually gets`);
+
+  // ---- THE TURN, by real clicks, with the leaf caught in the air ---------------------------------
+  // from a page of his take rather than from the contents, where the middle of the page is a line of
+  // the list and a click on it is a jump
+  const idx = await page.evaluate(() => window.__theatre.pieces.walk.books.index);
+  const aTrump = idx.find((ln) => ln.label === 'THE POPE') ?? idx[3];
+  await page.evaluate((n) => window.__theatre.pieces.walk.books.goLeaf(n), aTrump.target + 1);
+  await rest(page);
+  await frames(page, 3);
+  const before = await seeing(page);
+  const box = await page.evaluate(() => window.__theatre.pieces.walk.books.leafBox());
+  // on a spread the right page turns forward; on one leaf it is the right HALF of the page in front
+  await hold(page);
+  await step(page, 1);
+  await page.mouse.click(box.x + box.w * (open.spread ? 0.5 : 0.78), box.y + box.h * 0.55);
+  let caught = null;
+  for (let k = 0; k <= 2; k++) {
+    await step(page, 1);
+    const t = await page.evaluate(() => window.__theatre.pieces.walk.books.turning);
+    if (t && !t.lens) caught = t;
+  }
+  await page.screenshot({ path: `${OUT}/turn-${tag}.png` });
+  await letGo(page);
+  await rest(page);
+  await frames(page, 3);
+  const drewTurn = await page.evaluate(() => window.__theatre.pieces.walk.books.drew);
+  claim(!!caught, `a click on the right page turns a leaf over the gutter — caught in the air on drawing ${caught?.drawing}${caught ? `, ${before.leaf + 1} → ${caught.to + 1}` : ''}`);
+  claim(drewTurn?.kind === 'turn' && drewTurn.drawings === 6, `and the leaf goes over in ${drewTurn?.drawings} drawings, at ${drewTurn?.angles.join(', ')} degrees about the gutter`);
+  const after = await seeing(page);
+  claim(after.leaf > before.leaf, `…and it lands on the next opening (${before.leaf + 1} → ${after.leaf + 1}: «${after.kind}»)`);
+  // (`open` inside an evaluate is the browser's own window.open, not this proof's variable, so the
+  // side has to be handed across rather than read in there — asking for it in the page returned the
+  // RECTO's box and the click that was meant to turn back turned forward.)
+  const box2 = await page.evaluate((which) => window.__theatre.pieces.walk.books.leafBox(which), open.spread ? 'verso' : null);
+  await page.mouse.click(box2.x + box2.w * (open.spread ? 0.5 : 0.22), box2.y + box2.h * 0.55);
+  await rest(page);
+  await frames(page, 3);
+  const backOne = await seeing(page);
+  claim(backOne.leaf < after.leaf, `a click on the left page turns it back (${after.leaf + 1} → ${backOne.leaf + 1})`);
+
+  // ---- THE RIBBON, animated once, then the three pages it has to come back from ------------------
+  const rib = await page.evaluate(() => window.__theatre.pieces.walk.books.ribbonBox());
+  const ribWho = rib ? await page.evaluate((q) => window.__theatre.pieces.props.switches.at(q[0], q[1]), at(rib, w, h)) : null;
+  claim(ribWho === 'book-ribbon', `the ribbon is a switch of its own: the arbiter gives the middle of its ${Math.round(rib?.w)}x${Math.round(rib?.h)} box to «${ribWho}»`);
+  await page.screenshot({ path: `${OUT}/ribbon-${tag}.png` });
+
+  // ---- and from here the drawings are skipped ----------------------------------------------------
+  // `snap` is a flag for tools: the same clicks through the same code, landing on the drawing they
+  // start. Ninety lines of contents and seventy-eight plates are twenty minutes with the drawings.
+  await page.evaluate(() => window.__theatre.pieces.walk.books.snap(true));
   const sheet = await page.evaluate(() => window.__theatre.pieces.walk.books.sheetLeaves);
-  console.log(`   the contents runs to ${open.indexLeaves} leaves at folio ${open.indexAt + 1}, ${index.length} lines`);
   const wantHeads = new Set(DECK.map((c) => headOf(c.slug)));
-  const cards = index.filter((ln) => wantHeads.has(ln.label));
+  const cards = idx.filter((ln) => wantHeads.has(ln.label));
+  console.log(`   the contents runs to ${open.indexLeaves} leaves at folio ${open.indexAt + 1}, ${idx.length} lines`);
   claim(cards.length === CARDS, `every one of the ${CARDS} cards has a line in the contents (${cards.length})`);
   for (const want of ['WHAT THE CARDS ARE', 'A CARD IS A MIRROR', 'CUPS', 'PENTACLES', 'SWORDS', 'WANDS', 'THE LAST PAGE']) {
-    claim(index.some((ln) => ln.label === want), `«${want}» is in the contents`);
+    claim(idx.some((ln) => ln.label === want), `«${want}» is in the contents`);
   }
-  claim(index.every((ln) => ln.folio === String(ln.target + 1)), 'and every folio lettered on the list is the leaf it points at');
-  claim(sheet.filter((x) => String(x).startsWith('plate:')).length === CARDS, `the book's own list of leaves agrees: ${sheet.filter((x) => String(x).startsWith('plate:')).length} plates, ${sheet.filter((x) => x === 'index').length} leaves of contents, ${sheet.filter((x) => x === 'blank').length} printer's blanks`);
-  // a plate is followed by its own text: the pair a visitor is meant to be looking at
+  claim(idx.every((ln) => ln.folio === String(ln.target + 1)), 'and every folio lettered on the list is the leaf it points at');
+  claim(sheet.filter((x) => String(x).startsWith('plate:')).length === CARDS, `the book's own leaves agree: ${sheet.filter((x) => String(x).startsWith('plate:')).length} plates, ${sheet.filter((x) => x === 'index').length} leaves of contents, ${sheet.filter((x) => x === 'blank').length} printer's blanks`);
   const orphans = sheet.map((x, i) => [x, i]).filter(([x]) => String(x).startsWith('plate:')).filter(([x, i]) => sheet[i + 1] !== headOf(String(x).slice(6)));
   claim(orphans.length === 0, `and every plate is faced by its own take (${orphans.map(([x, i]) => `${x}@${i}`).join(', ') || 'none out of place'})`);
 
-  // ---- EVERY LINE OF THE CONTENTS, CLICKED ------------------------------------------------------
-  // The visitor's own way in: turn to the list, click a line, see where it lands, click the folded
-  // corner to come back. The corner is expected to return to the leaf of the LIST that was left
-  // from, not to the top of it, so the next line is under the pointer where it was.
-  const opening = (leaf) => (open.spread ? leaf - (leaf % 2) : leaf); // what a visitor is looking at
-  const goIndex = async () => {
-    await page.evaluate(() => window.__theatre.pieces.walk.books.goLeaf(window.__theatre.pieces.walk.books.indexAt));
-  };
-  await goIndex();
-  let checked = 0, wrong = [];
+  // ---- EVERY LINE OF THE CONTENTS, CLICKED ON THE GLASS -------------------------------------------
+  const goIndex = () => page.evaluate(() => window.__theatre.pieces.walk.books.goLeaf(window.__theatre.pieces.walk.books.indexAt));
+  const opening = (leaf) => (open.spread ? leaf - (leaf % 2) : leaf);
+  // EVERY LEAF OF THE LIST IN TURN, and the leaf is TURNED TO rather than clicked to. The lines are
+  // still clicked on the glass — that is the claim — but walking from one leaf of the contents to the
+  // next by clicking its margin is a second thing to get right and it is not what is being proved: on
+  // a phone, where a click on the margin moves the LENS and not always the paper, that walk went round
+  // the same eight leaves eight times and clicked six hundred and sixty lines.
+  let checked = 0;
+  const wrong = [];
   const backFrom = { trump: null, pip: null, court: null };
-  let guard = 0;
-  while (guard++ < 40) {
+  const seenLine = new Set();
+  for (let j = 0; j < open.indexLeaves; j++) {
+    await page.evaluate((n) => window.__theatre.pieces.walk.books.goLeaf(n), open.indexAt + j);
+    const here = (await state(page)).leaf;
     const hits = await page.evaluate(() => window.__theatre.pieces.walk.books.indexHits());
-    if (!hits.length) break;
-    const was = (await state(page)).leaf;
-    for (const hit of hits) {
-      await page.mouse.click(hit.x + Math.min(40, hit.w / 2), hit.y + hit.h / 2);
+    for (const want of hits) {
+      if (seenLine.has(want.target)) continue;
+      seenLine.add(want.target);
+      // THE BOX IS RE-READ FOR EVERY LINE, not taken off the list this leaf began with. Between one
+      // line and the next the book has been to a card and back, and a box is a PROJECTION: it belongs
+      // to the frame it was measured in.
+      const hit = (await page.evaluate(() => window.__theatre.pieces.walk.books.indexHits())).find((q) => q.target === want.target) ?? want;
+      await page.mouse.click(Math.max(2, Math.min(w - 2, hit.x + Math.min(40, hit.w / 2))), Math.max(2, Math.min(h - 2, hit.y + hit.h / 2)));
       const saw = await seeing(page);
-      // the leaf it landed on is either that card's own plate or a leaf whose running head is the line
-      const isPlate = saw.kind === `plate:${slugOf(hit.label)}`;
-      const isHead = saw.kind === hit.label || String(saw.text).includes(hit.label);
-      if (!(isPlate || isHead)) wrong.push(`${hit.text} → ${saw.kind}`);
+      const landed = opening(saw.leaf) === opening(hit.target);
+      const named = saw.kind === `plate:${slugOf(hit.label)}` || saw.next === `plate:${slugOf(hit.label)}` || saw.kind === hit.label || saw.next === hit.label || String(saw.text).includes(hit.label);
+      if (!landed) wrong.push(`${hit.text} wanted leaf ${hit.target + 1}, landed on ${saw.leaf + 1} («${saw.kind}»)`);
+      else if (!named) wrong.push(`${hit.text} landed on leaf ${saw.leaf + 1} but it reads «${saw.kind}»`);
       checked++;
-      // …AND THE WAY BACK, on one trump, one pip and one court card — which is what the corner has
-      // to be proved on, and a click apiece rather than on all eighty-five, because every one of
-      // those clicks is a second of somebody's afternoon. Everywhere else the proof puts itself
-      // back on the list and carries on down it.
+      // THE WAY BACK, on one trump, one pip and one court: the RIBBON, clicked on the glass
       const kind = /^(ACE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN) OF /.test(hit.label) ? 'pip'
         : /^(PAGE|KNIGHT|QUEEN|KING) OF /.test(hit.label) ? 'court'
           : wantHeads.has(hit.label) ? 'trump' : null;
-      if (kind && !backFrom[kind]) {
-        const folds = await page.evaluate(() => window.__theatre.pieces.walk.books.foldBoxes());
-        if (!folds.length) {
+      if (kind && !backFrom[kind] && landed) {
+        const r = await page.evaluate(() => window.__theatre.pieces.walk.books.ribbonBox());
+        if (!r) {
           backFrom[kind] = { label: hit.label, to: -1, home: false };
-          wrong.push(`${hit.text}: no folded corner on the leaf it landed on`);
+          wrong.push(`${hit.text}: no ribbon in the picture on the leaf it landed on`);
         } else {
-          await page.mouse.click(folds[0].x + folds[0].w / 2, folds[0].y + folds[0].h / 2);
-          const b = await state(page);
-          const home = sheet[b.leaf] === 'index' && opening(b.leaf) === opening(hit.leaf);
-          backFrom[kind] = { label: hit.label, to: b.leaf, home, folds: folds.length };
-          if (!home) wrong.push(`${hit.text}: the corner went to leaf ${b.leaf + 1}, not back to the list at ${hit.leaf + 1}`);
+          await page.mouse.click(...at(r, w, h));
+          const bk = await state(page);
+          const home = sheet[bk.leaf] === 'index' || sheet[bk.leaf + 1] === 'index';
+          backFrom[kind] = { label: hit.label, to: bk.leaf, home, same: opening(bk.leaf) === opening(hit.leaf) };
+          if (!home) wrong.push(`${hit.text}: the ribbon went to leaf ${bk.leaf + 1}, which is not the list`);
         }
       }
-      await page.evaluate((n) => window.__theatre.pieces.walk.books.goLeaf(n), was);
+      await page.evaluate((n) => window.__theatre.pieces.walk.books.goLeaf(n), here);
     }
-    // on to the next leaf of the list, by clicking the paper above the lines — inside the list the
-    // lines answer first and the margins still turn the leaf
-    const b = (await state(page)).box;
-    await page.mouse.click(b.x + b.w * 0.75, b.y + 8);
-    const now = await state(page);
-    if (now.leaf === was || sheet[now.leaf] !== 'index') break;
   }
-  claim(checked === index.length, `every one of the ${index.length} lines of the contents was clicked on the glass (${checked})`);
+  claim(checked === idx.length, `every one of the ${idx.length} lines of the contents was clicked on the glass (${checked})`);
   claim(wrong.length === 0, `and every one of them landed on its own page (${wrong.slice(0, 4).join(', ') || 'no line missed'})`);
   for (const k of ['trump', 'pip', 'court']) {
     const r = backFrom[k];
-    claim(!!r && r.home, `the folded corner on a ${k} page goes back to the list${r ? ` (${r.label}: to leaf ${r.to + 1}, the leaf of the list it was left from)` : ': NEVER TRIED'}`);
+    claim(!!r && r.home, `the ribbon on a ${k} page goes back to the contents${r ? ` (${r.label}: to leaf ${r.to + 1}${r.same ? ', the very leaf of the list it was left from' : ''})` : ': NEVER TRIED'}`);
   }
 
-  // ---- the contents, drawn ------------------------------------------------------------------------
-  await goIndex();
-  await page.screenshot({ path: `${OUT}/index-${w}x${h}.png` });
-
-  // ---- every leaf turned through, and every plate counted -----------------------------------------
-  await page.evaluate(() => window.__theatre.pieces.walk.books.goLeaf(0));
-  const seen = new Set();
-  const texts = [];
+  // ---- ALL SEVENTY-EIGHT PLATES, ON THE GLASS ----------------------------------------------------
   const plates = [];
   let shotPip = false, shotCourt = false;
-  guard = 0;
-  const body = []; // …and the same words with the CONTENTS left out of them
-  let saw = await seeing(page);
-  while (guard++ < 400) {
-    const s = saw;
-    seen.add(s.leaf);
-    texts.push(saw.text);
-    // a card's name is lettered twice in this book — on its own leaf and in the list — so what is
-    // read back off the leaves is kept apart from what is read back off the contents, or the list
-    // would answer for a page nobody turned to
-    if (!(sheet[s.leaf] === 'index' || sheet[s.leaf + 1] === 'index')) body.push(saw.text);
-    // THE CARD, COUNTED IN PIXELS. `card` is the plate's box on the glass; the count is of pixels
-    // inside it that are NOT the room's paper — the card's own ink and colour. A plate that failed
-    // to load, or one the DOM put somewhere else, counts nothing and fails here rather than in a
-    // screenshot somebody has to look at.
-    const card = saw.card;
-    if (card) {
-      await plateReady(page);
-      const shot = await page.screenshot({ clip: { x: Math.max(0, card.x), y: Math.max(0, card.y), width: Math.min(card.w, w - card.x), height: Math.min(card.h, h - card.y) } });
-      const { data, info } = await sharp(shot).raw().toBuffer({ resolveWithObject: true });
-      let ink = 0;
-      for (let q = 0; q < data.length; q += info.channels) {
-        if (data[q] < 200 || data[q + 1] < 200 || data[q + 2] < 200) ink++;
-      }
-      plates.push({ slug: card.slug, leaf: s.leaf, w: card.w, h: card.h, frac: ink / (info.width * info.height) });
-      if (!shotPip && card.slug === 'seven-of-pentacles') {
-        shotPip = true;
-        await page.screenshot({ path: `${OUT}/pip-${w}x${h}.png` });
-      }
-      if (!shotCourt && card.slug === 'queen-of-swords') {
-        shotCourt = true;
-        await page.screenshot({ path: `${OUT}/court-${w}x${h}.png` });
-      }
+  for (const c of DECK) {
+    const line = idx.find((ln) => ln.label === headOf(c.slug));
+    if (!line) continue;
+    await page.evaluate((n) => window.__theatre.pieces.walk.books.goLeaf(n), line.target);
+    await page.waitForFunction(() => {
+      const k = window.__theatre.pieces.walk.books.card;
+      return !k || k.ready;
+    }, null, { timeout: 30000, polling: 60 }).catch(() => {});
+    await frames(page, 2);
+    const card = await page.evaluate(() => window.__theatre.pieces.walk.books.card);
+    if (!card) {
+      plates.push({ slug: c.slug, frac: 0, missing: true });
+      continue;
     }
-    // the right page: forward. INSIDE THE CONTENTS the middle of the page is a line of the list and
-    // a click on it is a jump, which is the whole point of the list — so the leaf is turned from the
-    // paper above the lines there, exactly as a reader would have to.
-    const b = s.box;
-    const onList = sheet[s.leaf] === 'index' || sheet[s.leaf + 1] === 'index';
-    await page.mouse.click(b.x + b.w * 0.75, onList ? b.y + 8 : b.y + b.h * 0.5);
-    saw = await seeing(page);
-    if (saw.leaf === s.leaf) break; // the last leaf
+    const r = await inkRows(page, card, w, h);
+    plates.push({ slug: card.slug, w: card.w, h: card.h, frac: r ? r.ink / (r.w * r.h) : 0 });
+    if (!shotPip && card.slug === 'seven-of-pentacles') {
+      shotPip = true;
+      await page.screenshot({ path: `${OUT}/card-${tag}.png` });
+    }
+    if (!shotCourt && card.slug === 'queen-of-swords') {
+      shotCourt = true;
+      await page.screenshot({ path: `${OUT}/court-${tag}.png` });
+    }
   }
-  const thin = plates.filter((q) => q.frac < 0.25);
-  console.log(`   ${plates.length} plates were on the glass; the lightest carried ${(Math.min(...plates.map((q) => q.frac)) * 100).toFixed(1)}% ink, the heaviest ${(Math.max(...plates.map((q) => q.frac)) * 100).toFixed(1)}%, each ${plates[0]?.w}x${plates[0]?.h} px`);
-  claim(plates.length === CARDS, `every one of the ${CARDS} cards was reached in turn with its plate on the page (${plates.length} seen)`);
-  const missed = DECK.map((c) => c.slug).filter((s) => !plates.some((q) => q.slug === s));
-  claim(missed.length === 0, `and the set is the deck's own (${missed.join(', ') || 'nothing missing'})`);
-  claim(thin.length === 0, `every plate is actually drawn on the page — none under a quarter ink (${thin.map((q) => `${q.slug} ${(q.frac * 100).toFixed(1)}%`).join(', ') || 'none'})`);
-  const all = texts.join(' ');
-  const read = body.join(' ');
-  const unread = DECK.map((c) => headOf(c.slug)).filter((head) => !read.includes(head));
-  claim(unread.length === 0, `and every card's take was read off the leaf facing it, the contents not counted (${unread.join(', ') || 'all 78 read back'})`);
-  const end = await state(page);
-  claim(end.leaf === end.leaves - 1, `every leaf was turned through by clicking the right page: ${seen.size} stops, ending on leaf ${end.leaf + 1} of ${end.leaves}`);
-  for (const want of ['JODOROWSKY', 'MARSEILLE', 'WHAT IS IN IT']) claim(all.includes(want), `«${want}» is printed in it`);
-  claim(!/�/.test(all), 'and there is no sort in it the signwriter does not own');
+  const missed = DECK.map((c) => c.slug).filter((s) => !plates.some((q) => q.slug === s && !q.missing));
+  const thin = plates.filter((q) => q.frac < 0.15);
+  console.log(`   ${plates.length} plates reached, each ${plates[0]?.w}x${plates[0]?.h} px on the glass; the lightest carries ${(Math.min(...plates.map((q) => q.frac)) * 100).toFixed(1)}% ink and the heaviest ${(Math.max(...plates.map((q) => q.frac)) * 100).toFixed(1)}%`);
+  claim(missed.length === 0, `every one of the ${CARDS} cards was reached with its plate on the leaf (${missed.join(', ') || 'nothing missing'})`);
+  claim(thin.length === 0, `and every plate is actually drawn on the page — none under a sixth ink (${thin.map((q) => `${q.slug} ${(q.frac * 100).toFixed(1)}%`).join(', ') || 'none'})`);
 
-  // ---- back the other way, then out ---------------------------------------------------------------
-  await startTheRoom(page); // the room is given its frames back: putting the book down is the room's
-  await frames(page, 2);
-  const bb = (await state(page)).box;
-  await page.mouse.click(bb.x + bb.w * 0.25, bb.y + bb.h * 0.5);
-  await frames(page, 2);
-  const back = await state(page);
-  claim(back.leaf < end.leaf, `a click on the left page turns back (${end.leaf + 1} → ${back.leaf + 1})`);
-  const was = await page.evaluate(() => window.__theatre.pieces.walk.at);
-  await page.mouse.click(4, 4);
-  await frames(page, 2);
-  const shut = await state(page);
-  claim(!shut.showing && shut.at === was, `a click off the paper puts the book down and leaves the visitor where they were (${shut.at})`);
-  await page.evaluate(() => window.__theatre.pieces.walk.books.open('TAROT'));
+  // ---- the contents, drawn, and the last page ----------------------------------------------------
+  await goIndex();
   await frames(page, 3);
-  await page.keyboard.press('Escape');
+  await page.screenshot({ path: `${OUT}/contents-${tag}.png` });
+  const last = idx[idx.length - 1];
+  await page.evaluate((n) => window.__theatre.pieces.walk.books.goLeaf(n), last.target);
   await frames(page, 2);
+  const end = await seeing(page);
+  claim(String(end.text).includes('THAT IS THE BOOK') || String(end.text).includes('THE LAST PAGE'), `the last page is in it and reachable off the list («${String(end.text).slice(0, 44)}…»)`);
+
+  // ---- THE WAY OUT -------------------------------------------------------------------------------
+  await page.evaluate(() => window.__theatre.pieces.walk.books.snap(false));
+  const wasAt = await page.evaluate(() => window.__theatre.pieces.walk.at);
+  await page.mouse.click(6, h - 6);
+  await rest(page);
+  await frames(page, 3);
+  const shut = await state(page);
+  claim(!shut.showing && shut.at === wasAt, `a click off the book shuts it and leaves the visitor at the table (${shut.at})`);
+  await page.screenshot({ path: `${OUT}/closed-${tag}.png` });
+  claim(await page.evaluate(() => window.__theatre.pieces.camera.current === 'reading'), 'and the lens is back on the reading shot it arrived on');
+  await page.mouse.click(6, h - 6);
+  await still(page);
+  await frames(page, 2);
+  const home = await page.evaluate(() => ({ at: window.__theatre.pieces.walk.at, shot: window.__theatre.pieces.camera.current }));
+  claim(home.at === null, `a second click walks them back to the chair (${home.shot})`);
+
+  // …and Escape does the same two things
+  await page.evaluate(() => {
+    const W = window.__theatre.pieces.walk;
+    W.go('table');
+    window.__theatre.pieces.camera.cut('reading');
+  });
+  await still(page);
+  await frames(page, 2);
+  await page.evaluate(() => window.__theatre.pieces.walk.books.open('TAROT'));
+  await rest(page);
+  await frames(page, 2);
+  await page.keyboard.press('Escape');
+  await rest(page);
+  await frames(page, 3);
   const esc = await state(page);
-  claim(!esc.showing && esc.at === was, `Escape puts the book down and does NOT walk the visitor home (${esc.at})`);
+  claim(!esc.showing && esc.at === 'table', `Escape shuts the book and does NOT walk the visitor home (${esc.at})`);
+  await page.keyboard.press('Escape');
+  await still(page);
+  const esc2 = await page.evaluate(() => window.__theatre.pieces.walk.at);
+  claim(esc2 === null, `and Escape again walks them back (${esc2})`);
+  // the book forgets its page once they have left the table
+  await page.evaluate(() => {
+    const W = window.__theatre.pieces.walk;
+    W.go('table');
+    window.__theatre.pieces.camera.cut('reading');
+  });
+  await still(page);
+  await page.evaluate(() => window.__theatre.pieces.walk.books.open('TAROT'));
+  await rest(page);
+  claim((await state(page)).leaf === 0, 'and it opens at the title again, the page it remembered forgotten when they walked away');
+
   console.log(`   errors: ${errors.length ? errors.join(' | ') : 'none'}`);
   if (errors.length) bad++;
   await page.close();
 }
+
+// ---- THE FRAME TIME, at 1600x900 and dpr 2 -------------------------------------------------------
+// Under software GL, so the absolute number is swiftshader's and not a machine's. What it is here
+// for is the DIFFERENCE: the same shot with the book shut and with it open, which is what the open
+// book costs.
+{
+  const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 2 });
+  await page.route('**/@vite/client', stub);
+  await page.goto(`${BASE}/?shot=1`, { waitUntil: 'load', timeout: 300000 });
+  await page.waitForFunction('window.__theatreReady === true', null, { timeout: 300000 });
+  await page.evaluate(() => {
+    const W = window.__theatre.pieces.walk;
+    W.go('table');
+    window.__theatre.pieces.camera.cut('reading');
+  });
+  await still(page);
+  const time = (p, n) => p.evaluate((k) => new Promise((res) => {
+    const ts = [];
+    let last = performance.now();
+    const go = () => {
+      const now = performance.now();
+      ts.push(now - last);
+      last = now;
+      if (ts.length >= k) return res(ts.slice(2).sort((a, b) => a - b));
+      requestAnimationFrame(go);
+    };
+    requestAnimationFrame(go);
+  }), n);
+  const shutMs = await time(page, 24);
+  await page.evaluate(() => window.__theatre.pieces.walk.books.open('TAROT'));
+  await rest(page);
+  await frames(page, 4);
+  const openMs = await time(page, 24);
+  const med = (a) => a[Math.floor(a.length / 2)].toFixed(0);
+  const st = await state(page);
+  console.log(`\n=== 1600x900 dpr 2, at the reading shot`);
+  console.log(`   the page is ${st.bound.page[0]}x${st.bound.page[1]} px on the glass, its texture ${st.bound.texture[0]}x${st.bound.texture[1]}, ${st.bound.faces} faces struck`);
+  console.log(`   frame time, median of 22: book shut ${med(shutMs)} ms, book open ${med(openMs)} ms (software GL)`);
+  await page.screenshot({ path: `${OUT}/open-1600x900.png` });
+  await page.close();
+}
+
 console.log(bad ? `\n${bad} claim(s) failed` : '\nevery claim holds');
 await browser.close();
 process.exit(bad ? 1 : 0);

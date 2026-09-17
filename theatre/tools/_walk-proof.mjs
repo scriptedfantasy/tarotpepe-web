@@ -537,21 +537,30 @@ if (doing('table')) {
     console.log(`   the book is ${bb ? `${bb.w.toFixed(0)}x${bb.h.toFixed(0)} px at ${bb.x.toFixed(0)},${bb.y.toFixed(0)}` : 'not on the glass'} — ${((bb.w * bb.h) / (w * h) * 100).toFixed(1)}% of the frame`);
     claim(on && who === 'table-book', `${w}x${h}: the whole of it is in the plan shot and the arbiter gives it to '${who}'`);
 
-    // …and a real click on it opens the sheet
+    // …AND A REAL CLICK ON IT SWINGS IT OPEN. The book stopped being a sheet over the room this round
+    // and became an object on the table (src/pieces/walk-book.js), so `showing` is true on the drawing
+    // of the click and the board then takes eight more to go over; everything after that waits for
+    // the piece to say it has stopped moving rather than counting frames.
+    const bookRest = () => p.waitForFunction(() => !window.__theatre.pieces.walk.books.busy && !window.__theatre.pieces.camera.moving, null, { timeout: 120000 }).catch(() => {});
     await p.mouse.click(bb.x + bb.w / 2, bb.y + bb.h / 2);
-    await frames(p, 4);
-    const open = await p.evaluate(() => ({ showing: window.__theatre.pieces.walk.books.showing, title: window.__theatre.pieces.walk.books.title, leaf: window.__theatre.pieces.walk.books.leaf, leaves: window.__theatre.pieces.walk.books.leaves, box: window.__theatre.pieces.walk.books.box }));
-    claim(open.showing && open.title === 'TAROT', `${w}x${h}: a click on the book opens TAROT BY PEPE from the table (${open.title}, ${open.leaves} leaves)`);
+    const open = await p.evaluate(() => ({ showing: window.__theatre.pieces.walk.books.showing, title: window.__theatre.pieces.walk.books.title, leaf: window.__theatre.pieces.walk.books.leaf, leaves: window.__theatre.pieces.walk.books.leaves }));
+    claim(open.showing && open.title === 'TAROT', `${w}x${h}: a click on the book opens TAROT BY PEPE on the table (${open.title}, ${open.leaves} pages)`);
+    await bookRest();
+    await frames(p, 3);
     if (w === PLATE[0]) await shot(p, 'table-open-1280x800');
     else await shot(p, 'table-open-390x844');
-    // it turns
-    await p.mouse.click(open.box.x + open.box.w * 0.75, open.box.y + open.box.h * 0.5);
-    await frames(p, 3);
+    // it turns: on a spread that is the right page, on one leaf the right half of the page in front
+    const leafBox = await p.evaluate(() => window.__theatre.pieces.walk.books.leafBox());
+    const spread = await p.evaluate(() => window.__theatre.pieces.walk.books.spread);
+    await p.mouse.click(leafBox.x + leafBox.w * (spread ? 0.5 : 0.8), leafBox.y + leafBox.h * 0.62);
+    await bookRest();
+    await frames(p, 2);
     const turned = await p.evaluate(() => window.__theatre.pieces.walk.books.leaf);
     claim(turned > open.leaf, `${w}x${h}: and a click on the right page turns it (${open.leaf + 1} → ${turned + 1})`);
     // closing leaves the visitor at the table
     await p.keyboard.press('Escape');
-    await frames(p, 3);
+    await bookRest();
+    await frames(p, 2);
     const shut2 = await at(p);
     const showing = await p.evaluate(() => window.__theatre.pieces.walk.books.showing);
     claim(!showing && shut2.at === 'table', `${w}x${h}: closing it leaves the visitor at the table (${shut2.at})`);
