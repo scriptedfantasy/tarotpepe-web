@@ -164,7 +164,16 @@ const BLOCK = 0.04; // 45 mm closed, less the two boards
 const SLIDE = 0.075; // the squaring-up as it opens: see AND IT SQUARES ITSELF UP
 const LIFT = 0.00014; // a leaf mesh stands this far off the pile it lies on
 const SEGS = 18; // spans along a leaf, which is what makes the bow a curve and not a crease
-const BOW = 1.05; // radians of curl at the top of a turn; past 1.571 a leaf would fold under itself
+// THE CURL, in radians across the whole leaf at the top of a turn — and it is SMALL, which is a fact
+// about the shot and not about paper. A page going over is watched here from straight above, and a
+// leaf that arches up as it goes projects from up there to very nearly the rectangle it lay in:
+// measured at 0.66 pi with a curl of 1.05, the turning leaf's tip landed 6 % short of where the flat
+// page's fore-edge is, so the drawing halfway through a turn was a full page sitting where a full
+// page had been and nothing read as turning at all. A leaf with almost no curl foreshortens as the
+// cosine does — a little under half its width at 0.66 pi — so the page under it is uncovered, which
+// is the whole of what a turn looks like from a plan. 0.4 is enough bow to keep it off being a
+// perfectly flat plane (which would vanish edge-on) and little enough to let the cosine show.
+const BOW = 0.4;
 const RIBBON = { w: 0.008, out: 0.02, in: 0.03 }; // the sign: its width, its tail, and how far into the gutter
 // THE ONE AXIS EVERYTHING IN THIS BOOK TURNS ON: the spine, at the block's own mid-height. It is not
 // a convenience, it is the joint of a case binding, and it is the only hinge that makes the shut
@@ -339,9 +348,18 @@ export function buildBooks(ctx, { switches, place }) {
   group.name = 'tarot-book';
   group.visible = false;
   ctx.scene.add(group);
-  const paper = new THREE.Group(); // everything a click on the PAGE may land on
+  const paper = new THREE.Group(); // everything a click on the BOOK may land on
   paper.name = 'tarot-book-paper';
   group.add(paper);
+  // …and THE LEAVES ON THEIR OWN, because a click on a page has to find the PAGE. The leaf lying on
+  // a pile stands a seventh of a millimetre off it, and a ray asked for the nearest thing in the
+  // whole book will now and then answer the block instead of the sheet on top of it — measured, on
+  // the contents at 1280x800: twenty of eighty-five lines went to `book-pile-left` and the click
+  // fell through to «which side of the gutter is this» and turned the page back. So the leaves are
+  // asked FIRST, by themselves, and the rest of the book only answers the question a page could not.
+  const leafGroup = new THREE.Group();
+  leafGroup.name = 'tarot-book-leaves';
+  paper.add(leafGroup);
   const signGroup = new THREE.Group(); // …and the ribbon, which is its own switch
   group.add(signGroup);
 
@@ -389,7 +407,7 @@ export function buildBooks(ctx, { switches, place }) {
       m.receiveShadow = false;
       pivot.add(m);
     }
-    paper.add(pivot);
+    leafGroup.add(pivot);
     pivot.position.set(xs, HINGE, 0); // the joint of the binding: see HINGE
     const L = { pivot, geo, front, back, curl: NaN, off: NaN, faces: [null, null] };
     bend(L, 0, 0);
@@ -1153,7 +1171,7 @@ export function buildBooks(ctx, { switches, place }) {
     const b = cut;
     if (!b || !hit?.uv) return null;
     const L = leaves3.find((q) => q.pivot === hit.object.parent);
-    if (!L) return null;
+    if (!L || !L.pivot.visible) return null; // a leaf that is not in the picture cannot be clicked
     const isBack = hit.object.material === L.back;
     const p = L.faces[isBack ? 1 : 0];
     if (p == null) return null;
@@ -1162,9 +1180,10 @@ export function buildBooks(ctx, { switches, place }) {
   }
   function onPaper(ev) {
     if (!showing || motion) return;
-    const hit = castAt(ev, paper);
+    const leaf = castAt(ev, leafGroup);
+    const at = pageHit(leaf);
+    const hit = leaf ?? castAt(ev, paper); // a click that missed the paper still hit the book
     if (!hit) return;
-    const at = pageHit(hit);
     if (at) {
       for (const ln of faces.get(at.page)?.a?.lines ?? []) {
         if (at.x >= ln.x && at.x <= ln.x + ln.w && at.y >= ln.y && at.y <= ln.y + ln.h) {
@@ -1318,8 +1337,10 @@ export function buildBooks(ctx, { switches, place }) {
       // the board landing, on the drawing it lands — going over or coming back, a board on a table
       // makes the same sound
       if ((motion.kind === 'swing' || motion.kind === 'shut') && motion.k === 5) sound('thud', { gain: 0.45 });
-      if (motion.kind === 'swing' && motion.k >= SWING.length - 1) motion = null;
-      else if (motion.kind === 'shut' && motion.k >= SWING.length - 1) return finishShut();
+      // …and the LAST of the eight is drawn before the move is over, not handed to the rest state:
+      // the settle is a drawing of the swing and is counted as one (`drew`).
+      if (motion.kind === 'swing' && motion.k >= SWING.length) motion = null;
+      else if (motion.kind === 'shut' && motion.k >= SWING.length) return finishShut();
       else if (motion.kind === 'turn' && motion.k >= TURN.length) return landTurn();
       else if (motion.kind === 'riffle' && motion.k >= motion.drawings) return landRiffle();
     }
@@ -1438,6 +1459,25 @@ export function buildBooks(ctx, { switches, place }) {
     },
     // the ribbon's own box on the glass: the way back, and the only control the book has
     ribbonBox: () => ribbonTap(),
+    // WHAT A CLICK AT A POINT WOULD FIND, without making one. For a proof that has to say why a
+    // click on a line of the contents did what it did rather than guess: the leaf it lands on, the
+    // page that leaf is carrying, the point in that page's own pixels, and the line it is inside.
+    at: (px, py) => {
+      const ev = { clientX: px, clientY: py };
+      const leaf = castAt(ev, leafGroup);
+      const on = leaf ? leaves3.findIndex((q) => q.pivot === leaf.object.parent) : -1;
+      const p = pageHit(leaf);
+      const line = p ? (faces.get(p.page)?.a?.lines ?? []).find((ln) => p.x >= ln.x && p.x <= ln.x + ln.w && p.y >= ln.y && p.y <= ln.y + ln.h) : null;
+      return {
+        leaf: on < 0 ? null : ['a', 'b', 'c'][on],
+        visible: on < 0 ? null : leaves3[on].pivot.visible,
+        faces: on < 0 ? null : leaves3[on].faces,
+        page: p?.page ?? null,
+        at: p ? [+p.x.toFixed(1), +p.y.toFixed(1)] : null,
+        line: line ? { label: line.label, target: line.target, box: [line.x, line.y, line.w, line.h].map((n) => +n.toFixed(1)) } : null,
+        lines: p ? (faces.get(p.page)?.a?.lines ?? []).length : 0,
+      };
+    },
     get spines() {
       return found.map((f) => ({ title: f.key, was: f.was, at: f.at.map((n) => +n.toFixed(3)), off: +f.d.toFixed(3) }));
     },
