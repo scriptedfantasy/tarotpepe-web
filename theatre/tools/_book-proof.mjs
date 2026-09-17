@@ -41,6 +41,11 @@ const OUT = args.out ?? '/tmp/book3d';
 mkdirSync(OUT, { recursive: true });
 const PLATE = [1280, 800];
 const PHONE = [390, 844];
+// HOW LONG A READING OFF THE GLASS IS GIVEN. Playwright's own default is thirty seconds, and on a
+// software renderer under load a clipped capture has twice run past it and thrown — killing a run
+// in which every claim had already held, once in the plate sweep and once on the last souvenir.
+// These screenshots are MEASUREMENTS; the right answer to a slow one is to wait for it.
+const SHOT_MS = 120000;
 const SHUT = ['MARSEILLE', 'CHIROMANCIE', 'LE DESTIN'];
 const CARDS = DECK.length;
 const headOf = (slug) => slug.replace(/-/g, ' ').toUpperCase();
@@ -113,7 +118,7 @@ const seeing = (p) => p.evaluate(() => {
 async function inkRows(page, box, w, h) {
   const clip = { x: Math.max(0, Math.round(box.x)), y: Math.max(0, Math.round(box.y)), width: Math.min(Math.round(box.w), w - Math.round(box.x)), height: Math.min(Math.round(box.h), h - Math.round(box.y)) };
   if (clip.width < 2 || clip.height < 2) return null;
-  const shot = await page.screenshot({ clip });
+  const shot = await page.screenshot({ clip, timeout: SHOT_MS });
   const { data, info } = await sharp(shot).raw().toBuffer({ resolveWithObject: true });
   let top = -1, bot = -1, ink = 0;
   for (let y = 0; y < info.height; y++) {
@@ -138,7 +143,7 @@ async function inkRows(page, box, w, h) {
 async function greenIn(page, box, w, h) {
   const clip = { x: Math.max(0, Math.round(box.x)), y: Math.max(0, Math.round(box.y)), width: Math.min(Math.round(box.w), w - Math.round(box.x)), height: Math.min(Math.round(box.h), h - Math.round(box.y)) };
   if (clip.width < 2 || clip.height < 2) return null;
-  const { data, info } = await sharp(await page.screenshot({ clip })).raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = await sharp(await page.screenshot({ clip, timeout: SHOT_MS })).raw().toBuffer({ resolveWithObject: true });
   let n = 0;
   for (let i = 0; i < info.width * info.height; i++) {
     const q = i * info.channels;
@@ -234,15 +239,20 @@ for (const [w, h] of [PLATE, PHONE]) {
     const board = await page.evaluate(() => window.__theatre.pieces.props.table.hitBox());
     const g1 = plate ? await greenIn(page, plate, w, h) : null;
     claim(!!g1 && g1.px > 200, `he is on the cover of his own book: ${g1?.px} px of his green inside the plate's own ${Math.round(plate?.w)}x${Math.round(plate?.h)} px box, on a board ${Math.round(board?.w)}x${Math.round(board?.h)} px on the glass`);
+    // …and the two bands the lettering sits in are lettering and nothing else. He fills nearly the
+    // whole board now (the plate is square, because a man sitting cross-legged is), so the question
+    // of whether TAROT and BY PEPE still have board of their own is a question about his green
+    // being INSIDE the frame and nowhere else.
     const above = board && plate ? await greenIn(page, { x: board.x, y: board.y, w: board.w, h: Math.max(2, plate.y - board.y) }, w, h) : null;
-    claim(!!above && above.px === 0, `and the lettering over him is lettering: ${above?.px} px of green in the band above the plate`);
+    const below = board && plate ? await greenIn(page, { x: board.x, y: plate.y + plate.h, w: board.w, h: Math.max(2, board.y + board.h - plate.y - plate.h) }, w, h) : null;
+    claim(!!above && above.px === 0 && !!below && below.px === 0, `and both bands of lettering are lettering: ${above?.px} px of green above the plate where TAROT is, ${below?.px} below it where BY PEPE is`);
     await page.screenshot({ path: `${OUT}/cover-${tag}.png` });
     // …and the board on its own at 3x, nearest-neighbour, so the plate can be looked at at the size
     // it was drawn rather than the size it is printed
     if (board) {
       const c = { x: Math.max(0, Math.round(board.x)), y: Math.max(0, Math.round(board.y)), width: Math.min(Math.round(board.w), w - Math.round(board.x)), height: Math.min(Math.round(board.h), h - Math.round(board.y)) };
       if (c.width > 2 && c.height > 2) {
-        await sharp(await page.screenshot({ clip: c })).resize({ width: c.width * 3, kernel: 'nearest' }).toFile(`${OUT}/cover-crop-${tag}.png`);
+        await sharp(await page.screenshot({ clip: c, timeout: SHOT_MS })).resize({ width: c.width * 3, kernel: 'nearest' }).toFile(`${OUT}/cover-crop-${tag}.png`);
       }
     }
     await load();

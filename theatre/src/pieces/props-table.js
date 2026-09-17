@@ -87,11 +87,28 @@ TABLE.cz = (TABLE.z0 + TABLE.z1) / 2;
 // …and the lids are NOT among them. pepe.js builds him with `lids.show(false)` and only brings them
 // down to blink, so a cover drawn with them is a cover of him with his eyes shut — which the first
 // cut of this was. Head, pupils, eyelines, mouth at rest: the face he wears at the table.
+//
+// The body is composited at the sheet's own proportions and not at the puppet's. pepe.js stretches
+// it (BODY_X, BODY_Y: "the drawing is a big head on a short wide body; the bible wants a small head
+// on a long thin one") because it has to stand him up in a room beside furniture. A plate on a
+// cover is a reproduction of the drawing, so it is the drawing that goes on it.
 // WHERE THE PLATE SITS ON THE BOARD, as fractions of the cover: left, top, right, bottom. The
 // drawing below and `plateBox()` at the foot of this file both read it, so what a proof measures is
 // where the plate actually is and not a number somebody typed twice.
-const PLATE = [0.2, 0.36, 0.8, 0.74];
-const PLATE_LAYERS = ['head', 'pupilL', 'pupilR', 'eyelines', 'mouthRest'];
+//
+// AND IT IS SQUARE NOW, BECAUSE A MAN SITTING CROSS-LEGGED IS. Composited, the whole of him measures
+// 1024 x 981 — an aspect of 1.044, near enough a square — where the head alone is 444 x 327 and lies
+// down. So the plate turns from a landscape window into a square one and takes nearly the whole
+// width of the board: 0.77 x 0.55 of 170 x 240 mm is 131 x 132 mm, against 102 x 91 for the head.
+// What that costs is the room the title and the imprint had, and they keep enough of it: TAROT sits
+// at 0.17 of the height with 9 mm between it and the blind rule above it and 8.6 mm between it and
+// the plate below, BY PEPE at 0.88 with 8.4 mm over it and 4.5 mm under it to the rule.
+const PLATE = [0.115, 0.265, 0.885, 0.815];
+// ALL OF HIM, IN THE PUPPET'S OWN STACKING: the hands first, because pepe.js hangs them half a
+// z-step BEHIND the body so the wrist seam hides under the cuff; then the body in its shirt; then
+// the head, which the puppet stands two z-steps in front of that; then the pupils, the eyelines and
+// the mouth at rest over the head.
+const PLATE_LAYERS = ['handL', 'handR', 'body', 'head', 'pupilL', 'pupilR', 'eyelines', 'mouthRest'];
 function drawPepePlate(g, box, sheets) {
   const L = MANIFEST.layers;
   let ux0 = Infinity, uy0 = Infinity, ux1 = -Infinity, uy1 = -Infinity;
@@ -105,9 +122,10 @@ function drawPepePlate(g, box, sheets) {
   }
   const uw = ux1 - ux0, uh = uy1 - uy0;
   if (!(uw > 0 && uh > 0)) return;
-  // he is half again as wide as he is tall, so a square-ish plate is bound by his WIDTH and the
-  // air is left over his crown and under his chin, which is where a printer would leave it
-  const k = Math.min(box.w / uw, box.h / uh) * 0.9;
+  // he is a hair wider than he is tall, so a square plate is bound by his WIDTH and what air there
+  // is falls over his crown and under him. 0.96 and not 0.9: the ruled frame IS the plate's margin,
+  // and a second margin inside it only makes him smaller.
+  const k = Math.min(box.w / uw, box.h / uh) * 0.96;
   const ox = box.x + (box.w - uw * k) / 2, oy = box.y + (box.h - uh * k) / 2;
   for (const n of PLATE_LAYERS) {
     const img = sheets?.[n], b = L[n]?.box;
@@ -129,9 +147,11 @@ function coverTexture(w, h, sheets = null, into = null) {
   // drawn object in this room is the one thing the pen never does.
   // (and it keeps off the plate and off the lettering: at 512 px across, 28 marks over the whole
   // board read as scratches through TAROT and across his face rather than as a weave. They are laid
-  // in the two bands the printing leaves empty — over the title and under the imprint — at 0.05.)
+  // now that the plate has taken the middle of the board, the only board left empty is the margin
+  // OUTSIDE the blind rule — which is where a bookbinder's cloth shows anyway, at the boards' own
+  // edges.)
   for (let i = 0; i < 28; i++) {
-    const y = (i % 2 ? 0.1 + nib() * 0.1 : 0.88 + nib() * 0.07) * h;
+    const y = (i % 2 ? 0.02 + nib() * 0.035 : 0.945 + nib() * 0.035) * h;
     const x = w * 0.16 + nib() * w * 0.5;
     inkLine(g, x, y, x + w * 0.1 + nib() * w * 0.12, y + (nib() - 0.5) * 2, { width: 1, wobble: 0.4, rng: nib, color: INK, alpha: 0.05 });
   }
@@ -158,9 +178,9 @@ function coverTexture(w, h, sheets = null, into = null) {
     inkLine(g, px0 + d, py1 - d, px0 + d, py0 + d, q);
   }
   const cap = Math.round(w * 0.17);
-  signCaps(g, signFold('TAROT'), w / 2, h * 0.235, { capH: cap, tracking: 0.22, pen: Math.max(2, cap * 0.13), seed: 61 });
+  signCaps(g, signFold('TAROT'), w / 2, h * 0.17, { capH: cap, tracking: 0.22, pen: Math.max(2, cap * 0.13), seed: 61 });
   const sub = Math.round(w * 0.085);
-  signCaps(g, signFold('BY PEPE'), w / 2, h * 0.845, { capH: sub, tracking: 0.2, pen: Math.max(1.6, sub * 0.14), seed: 62 });
+  signCaps(g, signFold('BY PEPE'), w / 2, h * 0.88, { capH: sub, tracking: 0.2, pen: Math.max(1.6, sub * 0.14), seed: 62 });
   void signWidth;
   return c;
 }
