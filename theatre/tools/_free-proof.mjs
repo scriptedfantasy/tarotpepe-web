@@ -972,17 +972,6 @@ if (doing('draw')) {
   const c2 = await live(p);
   console.log(`   from near the door: (${c2.pos[0].toFixed(3)}, ${c2.pos[2].toFixed(3)}) and he is turned ${c2.pepeYaw}°`);
   await shot(p, 'from-the-door-looking-back-1280x800');
-  // THE TALL CASE AT 0.80 m — outside the region, which is the point of the picture
-  await p.evaluate(() => {
-    const c = window.__theatre.camera;
-    c.position.set(-1.58, 1.55, -1.4);
-    c.up.set(0, 1, 0);
-    c.lookAt(-1.58, 1.35, -2.2);
-    c.updateMatrixWorld();
-    c.updateProjectionMatrix();
-  });
-  await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-  await shot(p, 'case-at-0m80-1280x800');
   // AND WHAT A TURN ROUND AT THE CHAIR SHOWS, which is this prototype's own confession
   await put(p, 0, 6.05, 180, 0);
   await frames(p, 8);
@@ -992,6 +981,32 @@ if (doing('draw')) {
     bad++;
   }
   await p.close();
+  // THE TALL CASE AT 0.80 m, and it is taken on a page with the FLAG OFF. The station is outside the
+  // region — the 35° rule keeps a visitor 4.02 m off that case — so `put` cannot reach it, and a
+  // camera set by hand on a free page is overwritten on the very next drawing by the free pose,
+  // which is how the first cut of this sheet filed the door's own frame under the case's name. With
+  // no free mode running, nothing re-applies a pose and the lens stays where it is put; the walking
+  // lens is set on it by hand so the picture is the one a visitor WOULD get if the region ever let
+  // them stand there.
+  {
+    const q = await open(...PLATE, '?shot=1');
+    const where = await q.evaluate(() => {
+      const T = window.__theatre, c = T.camera;
+      const A = T.size.w / T.size.h;
+      const fov = Math.min(50, Math.max(36, (2 * Math.atan(Math.tan((62 / 2) * (Math.PI / 180)) / A) * 180) / Math.PI));
+      c.position.set(-1.58, 1.55, -1.4);
+      c.up.set(0, 1, 0);
+      c.lookAt(-1.58, 1.35, -2.2);
+      c.fov = fov;
+      c.updateMatrixWorld();
+      c.updateProjectionMatrix();
+      return { fov: +fov.toFixed(2), d: +Math.abs(-1.4 - -2.2).toFixed(2) };
+    });
+    await q.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    await shot(q, 'case-at-0m80-1280x800');
+    console.log(`   the tall case from ${where.d} m off its face, on the walking lens (${where.fov}°) — a station the region refuses`);
+    await q.close();
+  }
 }
 
 // ---- 14. TEN SECONDS OF IT, AS A FILM -------------------------------------------------------------
