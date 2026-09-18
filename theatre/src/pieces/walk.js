@@ -98,12 +98,15 @@
 //   blocked         why a walk would be refused just now, as a word, or null
 //   setState(name)  `fireplace` · `doorway` · `case` are a still AT that place; anything else is
 //                   the chair. `?walk=<place>` does the same for a tool.
+//   marks           the drawn marks a phone gets: `shown`, `spots()`, `box(key)`, `why` — see
+//                   THE MARKS below and src/pieces/walk-marks.js
 import { buildBooks } from './walk-book.js';
+import { mountMarks, markSize, spotIn, watchPointer, KIND, KINDS } from './walk-marks.js';
 
 export const meta = {
   name: 'walk',
   judge: { shot: 'home', states: ['home', 'fireplace', 'doorway', 'case', 'piano', 'table'] },
-  files: ['src/pieces/walk.js', 'src/pieces/walk-book.js', 'src/pieces/walk-book-page.js', 'src/pieces/book-tarot.js', 'src/pieces/props-piano.js', 'src/pieces/piano-song.js', 'src/pieces/props-table.js'],
+  files: ['src/pieces/walk.js', 'src/pieces/walk-marks.js', 'src/pieces/walk-book.js', 'src/pieces/walk-book-page.js', 'src/pieces/book-tarot.js', 'src/pieces/props-piano.js', 'src/pieces/piano-song.js', 'src/pieces/props-table.js'],
 };
 
 // 1.5 s, which at twelve a second is eighteen drawings. The cross egg's own walk out through the
@@ -215,6 +218,7 @@ export async function build(ctx) {
   let at = null; // which place the visitor is standing at, or null for the chair
   let mine = null; // the shot THIS piece is holding the camera on, so busy() knows its own hold
   let pending = null; // ?walk=<place>, spent on the first update
+  let MARKS = null; // the drawn marks a window with no cursor gets (THE MARKS, at the foot)
 
   const fanOf = () => ctx.pieces?.reveal?._fan ?? null;
   const midReading = () => {
@@ -337,11 +341,32 @@ export async function build(ctx) {
   // What is never the way out at any place is the SWITCH standing on the thing — the grate, the
   // keys, the book — because the arbiter takes that click before this listener ever sees it.
   const ownsClick = (name) => PLACES[name]?.holds !== false;
-  function hitOf(name, px, py) {
+  // THE PLACE ITSELF, WITHOUT ITS MARK — the drawing, the thumb's margin round it while that is
+  // still a margin, and everything standing on it subtracted. This is what the mark is PLACED
+  // against (walk-marks.js, `spotIn`), so it cannot be the test that already includes the mark.
+  function hitBase(name, px, py) {
     if (!inside(box(name), px, py)) {
       const t = tapBox(name);
       if (!t || t.w * t.h > areaCap() || !inside(t, px, py)) return false;
     }
+    for (const b of boxesOn(name)) if (inside(b, px, py)) return false;
+    return true;
+  }
+  // …AND THE MARK IS PART OF THE TARGET. A visitor who can see a mark and puts a thumb on it has
+  // pointed at the place, whether or not the 32 px of paper happens to stand over the object's own
+  // pixels. It is carried as a SECOND box rather than folded into `tapBox`: the arbiter refuses a
+  // margin box bigger than a quarter of the window, the place's own box is already most of a phone
+  // frame at some of these shots, and a bounding box of the two would be bigger than either.
+  // 44 px, which is the same thumb every other switch in this room is given.
+  function markTap(name) {
+    const b = MARKS?.boxOf?.(name);
+    if (!b) return null;
+    const w = Math.max(b.w, MIN_TAP), h = Math.max(b.h, MIN_TAP);
+    return { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h };
+  }
+  function hitOf(name, px, py) {
+    if (hitBase(name, px, py)) return true;
+    if (!inside(markTap(name), px, py)) return false;
     for (const b of boxesOn(name)) if (inside(b, px, py)) return false;
     return true;
   }
@@ -445,6 +470,7 @@ export async function build(ctx) {
     },
     update() {
       api.books?.update?.();
+      drawMarks();
       // SELF-HEALING. If the camera left a place by a road that did not come through this piece —
       // a judging state, a tool putting the cross away, anything that cuts — then the visitor is
       // not standing there any more and this piece must stop saying they are. It cannot fire during
@@ -521,6 +547,144 @@ export async function build(ctx) {
   // and a click on the paper never reaches this piece at all (the sheet is a DOM layer over the
   // canvas, and the test at the head of the pointer handler is that the target IS the canvas).
   api.hang({ busy: bookUp });
+
+  // ---- THE MARKS: WHAT A WINDOW WITH NO CURSOR IS TOLD -------------------------------------------
+  // The user: "choosing the fireplace, piano and book section on mobile is quite hard to do … it's
+  // actually where to tap on the phone. I think a drawn mark would be good."
+  //
+  // The mark is drawn by src/pieces/walk-marks.js and that file argues the whole of what it looks
+  // like and which windows get one. What lives HERE is the only part this room's rules touch:
+  // WHICH things are marked, WHERE inside them, and WHEN the room takes the marks away again.
+  //
+  //   FROM THE CHAIR, OR FROM ANOTHER PLACE — every place whose object is in the frame and whose
+  //   hotspot would answer a tap just now. Not the places that are off it: at 390x844 square to the
+  //   back wall all five are, and the marks appear one at a time as the visitor pans, which is the
+  //   pan teaching itself.
+  //   AT A PLACE — the one thing there is to DO there, and only while doing it is possible:
+  //       fireplace  the GRATE, and the mark is honest that a tap on it lights the fire
+  //       piano      the KEYS
+  //       table      the BOOK, while it is shut
+  //       doorway    the LEAF, while the cross is quiet (once it is open, every click shuts it
+  //                  again and a mark would be pointing at a door that is not there)
+  //       case       NOTHING. The TAROT spine came off the case this round and is the book on the
+  //                  reading table; there is nothing left to open here beyond the walk itself.
+  //   NO EGG IS EVER MARKED — not the cat, the radio, the bottle, the lamp, the photograph, the
+  //   clock, the vase, the deck, the cross or the peep jar. An egg that announces itself is not an
+  //   egg, and the user's complaint was about the three PLACES and nothing else.
+  //
+  // AND THE ROOM TAKES THEM BACK whenever it is doing something rather than waiting. `blocked()` is
+  // most of that list already — a walk running, somebody else holding the camera, the deck out, the
+  // crossroads, the notice, a reading, a book standing open — and four more are added here: the pan
+  // still drifting (the mark is struck at the place's live box, so a moving box means a stale mark
+  // for the four or five drawings a flick takes to settle), the placard's field with the focus (his
+  // paper is in front of the room and a phone's keyboard is up over it), the fire alight and the
+  // lamp out. The last two are the room GIVEN OVER to something: a picture of a fire to watch, or a
+  // dark room to sit in. A tap puts either of them back and the marks come back with it.
+  //
+  // THE WORD `blocked()` GIVES IS THE FIRST TRUE ONE AND NOT THE MOST INTERESTING ONE, which is
+  // worth knowing before reading a proof's output: the book opening at the reading table reports
+  // `held` rather than `book`, because walk-book.js takes the camera on its way up and `blocked()`
+  // asks about the camera before it asks whether a book is standing open. Both answers hide the
+  // marks. Measured on the live page: at the table the mark is `book`, one tap on it gives
+  // `moving` for two drawings and `held` from the fourth on, and nothing is on the glass throughout.
+  const FIELD = () => {
+    const t = document.activeElement?.tagName;
+    return t === 'INPUT' || t === 'TEXTAREA';
+  };
+  function marksOff() {
+    const why = blocked();
+    if (why) return why;
+    if (C && C.pan !== C.panTarget) return 'panning';
+    if (FIELD()) return 'field';
+    const Pp = ctx.pieces?.props ?? null;
+    if (Pp?.fine?.burning) return 'fire';
+    if (Pp?.dark?.on) return 'dark';
+    return null;
+  }
+  // The one thing to act on at the place the visitor is standing at, as a box on the glass. Each of
+  // these is a switch that already exists and already has its own 44 px thumb box about its own
+  // centre; the mark is placed INSIDE that box, so no target anywhere else in the room had to move.
+  function actOn() {
+    const Pp = ctx.pieces?.props ?? null;
+    if (at === 'fireplace') return { key: 'grate', box: Pp?.fine?.hitBox?.() ?? null };
+    if (at === 'piano') return { key: 'keys', box: Pp?.piano?.keysBox?.() ?? null };
+    if (at === 'table') return BOOKS.showing ? null : { key: 'book', box: Pp?.table?.hitBox?.() ?? null };
+    if (at === 'doorway') return CROSS()?.phase === 'shut' ? { key: 'door', box: box('doorway') } : null;
+    return null;
+  }
+  const within = (b) => (x, y) => !!b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+  function spotsNow() {
+    const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
+    const d = markSize(H).d;
+    const out = [];
+    for (const name of NAMES) {
+      if (at === name) continue; // a place you are standing at is not a place to walk to
+      const s = spotIn(box(name), W, H, d, (x, y) => hitBase(name, x, y));
+      if (s) out.push({ key: name, x: s.x, y: s.y });
+    }
+    const o = actOn();
+    if (o?.box) {
+      const s = spotIn(o.box, W, H, d, within(o.box));
+      if (s) out.push({ key: o.key, x: s.x, y: s.y });
+    }
+    return out;
+  }
+  // `?marks=1` forces them on for a tool on any window; it overrides the POINTER test and nothing
+  // else, because a mark drawn over a reading would be a picture of a different room. `?marks=0`
+  // is the other way about and exists for one reason: every page tools/_walk-proof.mjs opens is
+  // opened WITH TOUCH, so that proof now walks a marked room, and a claim that comes out differently
+  // there than it did last round has to be askable which of the two it was. It is the room as a
+  // laptop sees it, on any window.
+  const asking = ctx.params?.get?.('marks');
+  const forced = asking === '1';
+  const refused = asking === '0';
+  const cursorless = watchPointer(() => {});
+  const askedKind = ctx.params?.get?.('mark');
+  MARKS = mountMarks(ctx, { kind: KINDS.includes(askedKind) ? askedKind : KIND });
+  ctx.on?.('resize', () => MARKS?.resize?.());
+  let markWhy = 'cursor';
+  let markAt = [];
+  function drawMarks() {
+    if (!MARKS) return;
+    const why = refused ? 'refused' : !forced && !cursorless() ? 'cursor' : marksOff();
+    markWhy = why;
+    if (why) {
+      if (!markAt.length) return;
+      markAt = [];
+      MARKS.update({ show: false, parity: 0, spots: [] });
+      return;
+    }
+    if (ctx.clock.stepped || !markAt.length) markAt = spotsNow();
+    MARKS.update({ show: true, parity: ctx.clock.frame % 2, spots: markAt });
+  }
+  api.marks = {
+    // whether they are in the picture, and the one word for why they are not
+    get shown() {
+      return markWhy == null;
+    },
+    get why() {
+      return markWhy;
+    },
+    get kind() {
+      return MARKS?.kind ?? null;
+    },
+    get size() {
+      return MARKS?.size ?? null;
+    },
+    // whether this window has no cursor in it, and whether ?marks=1 is overriding that
+    get cursorless() {
+      return cursorless();
+    },
+    get forced() {
+      return forced;
+    },
+    spots: () => markAt.map((s) => ({ ...s })),
+    box: (key) => MARKS?.boxOf?.(key) ?? null,
+    // the box a thumb is given for a place's mark — the mark grown to 44 px, on top of the place's
+    // own target rather than folded into it
+    tap: (name) => markTap(name),
+    keys: () => MARKS?.keys?.() ?? [],
+  };
 
   const asked = ctx.params?.get?.('walk');
   if (asked && PLACES[asked]) pending = asked;
