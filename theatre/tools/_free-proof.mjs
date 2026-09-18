@@ -686,6 +686,12 @@ if (doing('talk')) {
   await p.keyboard.down('KeyA');
   await frames(p, 30);
   await p.keyboard.up('KeyA');
+  // …and the reading is taken once he has STOPPED. A key-up is not a handbrake: the velocity closes
+  // 55 % of the gap to nought on each drawing, so he coasts for three more, and a reading taken on
+  // the drawing of the key-up is a reading of a man still walking. (This is how the first cut of
+  // this file convinced itself that typing a line moved him.)
+  await p.waitForFunction(() => !window.__theatre.pieces.camera.free.walking, null, { timeout: T_OUT, polling: 100 });
+  await frames(p, 2);
   const moved = await live(p);
   claim(Math.abs(moved.pos[0] - eaten.pos[0]) > 0.1, `and with the card folded away it walks them (x ${eaten.pos[0].toFixed(3)} → ${moved.pos[0].toFixed(3)})`);
   // …and then the card comes back and a line is typed, which needs the keyboard back in the field
@@ -720,6 +726,11 @@ if (doing('texels')) {
     ['the tall case', -1.58, -1.40, 0, 'x -2.10..-1.06, front face z -2.20'],
     ['the press', 2.29, -1.42, 0, 'x 2.02..2.56, front face z -2.22'],
     ['the switch plate on the door', 1.48, -1.74, 0, 'room:plate, x 1.33..1.63 at z -2.537'],
+    // …AND THE ONE SURFACE A VISITOR CAN ACTUALLY GET CLOSER TO THAN THAT. The region's only edge
+    // that is a real wall is the 0.35 m margin off the plaster, so a visitor standing hard against
+    // it is 0.35 m off the stage-right wall — nearer than the 0.80 m the brief asks about, and the
+    // only place in this prototype where the question is not hypothetical.
+    ['the stage-right wall, from the region’s own edge', 2.25, 4.0, -90, 'the plaster at x 2.60, 0.35 m away — a station a visitor can stand on'],
   ];
   const rows = [];
   for (const [name, x, z, yaw, where] of AT) {
@@ -777,6 +788,21 @@ if (doing('texels')) {
     return out;
   });
   for (const [n, v] of Object.entries(near)) console.log(`   the nearest station in the region to ${n} is (${v.x}, ${v.z}) — ${v.d} m off it, not 0.80`);
+  // …AND THE BOARDS UNDER THE VISITOR'S OWN FEET, which are 1.55 m away wherever they stand and are
+  // therefore the nearest drawn surface in the film at every moment of the walk.
+  const floor = await p.evaluate(() => {
+    const T = window.__theatre, c = T.camera;
+    const m = T.scene.getObjectByName('room:floor')?.material;
+    const tw = m?.map?.image?.width ?? 0;
+    if (!tw) return null;
+    const tile = m.userData?.tile ?? 1;
+    const pxPerM = T.size.h / (2 * 1.55 * Math.tan((c.fov * Math.PI) / 360));
+    return { tex: tw, tile, texelPx: +((tile / tw) * pxPerM).toFixed(3), perPx: +(1 / ((tile / tw) * pxPerM)).toFixed(2) };
+  });
+  if (floor) {
+    console.log(`   the floorboards under the visitor's feet: ${floor.tex} texels / ${floor.tile} m tile at 1.55 m → ${floor.texelPx} px a texel (${floor.perPx} texels a pixel)${floor.texelPx > PEN ? '   ← over a pen’s width' : ''}`);
+    claim(true, `the boards at the visitor's own feet measure ${floor.texelPx} px a texel`);
+  }
   await p.close();
 }
 
@@ -784,6 +810,24 @@ if (doing('texels')) {
 if (doing('perf')) {
   await fresh();
   console.log('\nPERF — 1600x900 at dpr 2, walking against standing still');
+  // WHAT FREE MODE ACTUALLY COSTS IS STRUCTURAL AND IT CAN BE COUNTED RATHER THAN TIMED. ink.js
+  // draws ONE scene pass when the camera is standing on the resting plate to the float, and TWO
+  // everywhere else — the visitor's frame, plus the photograph on the bookcase drawn from `home`.
+  // Free mode is never on that plate, so it is always the two. What matters is how big the second
+  // one is: at rest the plate carries the whole drawing buffer's height, and anywhere else it drops
+  // to the picture's own box on the glass rounded up to a power of two. That number is the cost, and
+  // it is the same cost the room already pays at every place and every cut of a reading.
+  {
+    const q = await room(...PLATE);
+    const walking = await q.evaluate(() => {
+      const C = window.__theatre.pieces.camera, D = window.__theatre.pieces.props.droste;
+      const b = D?.hitBox?.();
+      return { current: C.current, atRest: C.atRest, onPlate: C.current === C.restingShot, box: b ? { w: +b.w.toFixed(0), h: +b.h.toFixed(0) } : null };
+    });
+    console.log(`   in free mode the camera reports current '${walking.current}', atRest ${walking.atRest} — so ink.js draws two passes, and the photograph's plate is sized from its own box on the glass (${walking.box ? `${walking.box.w}x${walking.box.h} px` : 'off frame'})`);
+    claim(walking.atRest === false && walking.onPlate === false, 'the second pass is the small one, not a second full-size drawing of the room');
+    await q.close();
+  }
   const p = await room(...BIG, '', { dpr: 2 });
   const sample = (secs) =>
     p.evaluate(
@@ -818,8 +862,45 @@ if (doing('perf')) {
   console.log(`   walking   ${moving.med} ms median, ${moving.p90} ms at the ninetieth, ${moving.worst} ms worst  (${moving.n} frames)`);
   console.log(`   walking costs ${(moving.med - still.med).toFixed(2)} ms a frame, ${((moving.med / still.med - 1) * 100).toFixed(0)} %`);
   claim(moving.med < still.med * 1.6 + 4, `walking is not a different order of cost from standing (${moving.med} vs ${still.med} ms)`);
-  console.log('   (a software rasteriser on a shared machine: the RATIO is the measurement, not the milliseconds)');
+  console.log('   (a software rasteriser on a shared machine: the RATIO is the measurement, not the milliseconds — and at 3200x1800 it hands back so few frames that even the ratio is thin)');
   await p.close();
+  // …so the same pair again at 1280x800 dpr 1, where there are enough frames for a median to mean
+  // something. This is the honest one.
+  {
+    const q = await room(...PLATE);
+    const take = (secs) =>
+      q.evaluate(
+        (s) =>
+          new Promise((res) => {
+            const out = [];
+            let last = performance.now();
+            const end = last + s * 1000;
+            const go = () => {
+              const now = performance.now();
+              out.push(now - last);
+              last = now;
+              if (now < end) requestAnimationFrame(go);
+              else {
+                out.sort((a, b) => a - b);
+                res({ n: out.length, med: +out[Math.floor(out.length / 2)].toFixed(2), p90: +out[Math.floor(out.length * 0.9)].toFixed(2) });
+              }
+            };
+            requestAnimationFrame(go);
+          }),
+        secs
+      );
+    await frames(q, 12);
+    const s2 = await take(6);
+    await key(q, 'KeyW', true);
+    await key(q, 'KeyQ', true);
+    await frames(q, 6);
+    const m2 = await take(6);
+    await key(q, 'KeyW', false);
+    await key(q, 'KeyQ', false);
+    console.log(`   1280x800 dpr 1   at rest ${s2.med} ms median (${s2.n} frames) · walking ${m2.med} ms median (${m2.n} frames) · ${((m2.med / s2.med - 1) * 100).toFixed(0)} %`);
+    claim(m2.med < s2.med * 1.35, `walking costs under a third more than standing still at 1280x800 (${m2.med} vs ${s2.med} ms)`);
+    await q.close();
+  }
 }
 
 // ---- 13. THE DRAWINGS ----------------------------------------------------------------------------
@@ -835,16 +916,49 @@ if (doing('draw')) {
   const corner = R[5]; // the upstage-left vertex: the one that faces the fireplace and the case
   // EIGHT DRAWINGS OF THE WALK, from the chair to that corner, evenly through it
   const bearing = (Math.atan2(-(corner[0] - 0), -(corner[1] - 6.05)) * 180) / Math.PI;
+  // THE WALK IS WALKED FIRST AND PHOTOGRAPHED AFTERWARDS, and it has to be: a screenshot off a
+  // software rasteriser costs the better part of a second, the clock is pinned so that every
+  // rendered frame is a drawing, and a sheet shot as the walk runs spaces its cells by how long the
+  // MACHINE took — the first cut of this sheet put the arrival in cell four and then stood still for
+  // three more. So the whole walk is run inside the page with nothing interrupting it, every
+  // drawing's station is kept, and the eight cells are then struck at eight of those stations by
+  // name. Same walk, same clip, same slide along the wall; only the shutter has moved.
   await put(p, 0, 6.05, bearing, 0);
-  await frames(p, 4);
+  const path = await p.evaluate(
+    () =>
+      new Promise((res) => {
+        const T = window.__theatre, F = T.pieces.camera.freeApi();
+        const out = [];
+        let seen = F.drawings;
+        F.key('KeyW', true);
+        const go = () => {
+          if (F.drawings > seen) {
+            seen = F.drawings;
+            const s = F.pose;
+            out.push([s.x, s.z, s.yaw]);
+            if (out.length >= 64) {
+              F.key('KeyW', false);
+              return res(out);
+            }
+          }
+          requestAnimationFrame(go);
+        };
+        requestAnimationFrame(go);
+      })
+  );
+  // the drawing the walk stops travelling on, so the sheet ends where the walk does rather than
+  // spending its last cells on a man standing against a wall
+  let last = path.length - 1;
+  while (last > 1 && Math.hypot(path[last][0] - path[last - 1][0], path[last][1] - path[last - 1][1]) < 1e-4) last--;
   const cells = [];
-  await key(p, 'KeyW', true);
   for (let i = 0; i < 8; i++) {
-    const a = await live(p);
-    cells.push({ buf: await p.screenshot(), n: `${i * 7}  ${a.pos[0].toFixed(2)},${a.pos[2].toFixed(2)}` });
-    if (i < 7) await frames(p, 7);
+    const k = Math.round((i * last) / 7);
+    const [x, z, yaw] = path[k];
+    await put(p, x, z, yaw, 0);
+    await frames(p, 2);
+    cells.push({ buf: await p.screenshot(), n: `${k}  ${x.toFixed(2)},${z.toFixed(2)}` });
   }
-  await key(p, 'KeyW', false);
+  console.log(`   the walk ran ${last} drawings from the chair to (${path[last][0].toFixed(3)}, ${path[last][1].toFixed(3)}), sampled at eight of them`);
   await sheet(cells, `${OUT}/walk-to-the-left-corner-1280x800.png`, 4, 0.4);
   // THE ROOM FROM THAT CORNER
   await put(p, corner[0], corner[1], (Math.atan2(-(0 - corner[0]), -(-0.82 - corner[1])) * 180) / Math.PI, 0);
