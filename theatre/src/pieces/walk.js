@@ -98,10 +98,11 @@
 //   blocked         why a walk would be refused just now, as a word, or null
 //   setState(name)  `fireplace` · `doorway` · `case` are a still AT that place; anything else is
 //                   the chair. `?walk=<place>` does the same for a tool.
-//   marks           the drawn marks a phone gets: `shown`, `spots()`, `box(key)`, `why` — see
-//                   THE MARKS below and src/pieces/walk-marks.js
+//   marks           the rings a phone gets on the floor: `shown`, `why`, `keys()`, `box(name)`,
+//                   `ring(name)`, `tap(name)`, `stand(name)`, `radius` — see THE MARKS below and
+//                   src/pieces/walk-marks.js
 import { buildBooks } from './walk-book.js';
-import { mountMarks, markSize, spotIn, watchPointer, KIND, KINDS } from './walk-marks.js';
+import { mountMarks, markSize, floorRing, bboxOf, watchPointer, RING_R } from './walk-marks.js';
 
 export const meta = {
   name: 'walk',
@@ -352,12 +353,14 @@ export async function build(ctx) {
     for (const b of boxesOn(name)) if (inside(b, px, py)) return false;
     return true;
   }
-  // …AND THE MARK IS PART OF THE TARGET. A visitor who can see a mark and puts a thumb on it has
-  // pointed at the place, whether or not the 32 px of paper happens to stand over the object's own
-  // pixels. It is carried as a SECOND box rather than folded into `tapBox`: the arbiter refuses a
-  // margin box bigger than a quarter of the window, the place's own box is already most of a phone
-  // frame at some of these shots, and a bounding box of the two would be bigger than either.
-  // 44 px, which is the same thumb every other switch in this room is given.
+  // …AND THE RING ON THE FLOOR IS PART OF THE TARGET. A visitor who can see the ring at the
+  // fireplace and puts a thumb on it has asked to go and stand there — and the boards under that
+  // ring are not the chimney breast, so without this the tap would land on nothing and walk them
+  // HOME. It is carried as a SECOND box rather than folded into `tapBox`: the ring is on the floor
+  // and the place is on the wall, sometimes a third of a frame apart, and a bounding box drawn round
+  // the two of them would be most of the window — which the arbiter refuses as a margin anyway, and
+  // would swallow every egg standing between them. Grown to 44 px, the same thumb every other switch
+  // in this room is given, because a ring seen end-on can be nine pixels tall.
   function markTap(name) {
     const b = MARKS?.boxOf?.(name);
     if (!b) return null;
@@ -548,45 +551,77 @@ export async function build(ctx) {
   // canvas, and the test at the head of the pointer handler is that the target IS the canvas).
   api.hang({ busy: bookUp });
 
-  // ---- THE MARKS: WHAT A WINDOW WITH NO CURSOR IS TOLD -------------------------------------------
+  // ---- THE MARKS: A FLOOR PLAN, AND NOTHING ELSE -------------------------------------------------
   // The user: "choosing the fireplace, piano and book section on mobile is quite hard to do … it's
   // actually where to tap on the phone. I think a drawn mark would be good."
+  // The user, on the first cut of it: "Only use marks in the room to specify where users can go,
+  // preferably on the floor. The individual objects that can be clicked should not be marked because
+  // users should discover them by themselves."
   //
-  // The mark is drawn by src/pieces/walk-marks.js and that file argues the whole of what it looks
-  // like and which windows get one. What lives HERE is the only part this room's rules touch:
-  // WHICH things are marked, WHERE inside them, and WHEN the room takes the marks away again.
+  // The ring itself is drawn by src/pieces/walk-marks.js and that file argues what it looks like,
+  // why it is projected rather than a sheet in the scene, and which windows get one. What lives HERE
+  // is the only part this room's rules touch: WHERE the five rings lie, and WHEN they go away.
   //
-  //   FROM THE CHAIR, OR FROM ANOTHER PLACE — every place whose object is in the frame and whose
-  //   hotspot would answer a tap just now. Not the places that are off it: at 390x844 square to the
-  //   back wall all five are, and the marks appear one at a time as the visitor pans, which is the
-  //   pan teaching itself.
-  //   AT A PLACE — the one thing there is to DO there, and only while doing it is possible:
-  //       fireplace  the GRATE, and the mark is honest that a tap on it lights the fire
-  //       piano      the KEYS
-  //       table      the BOOK, while it is shut
-  //       doorway    the LEAF, while the cross is quiet (once it is open, every click shuts it
-  //                  again and a mark would be pointing at a door that is not there)
-  //       case       NOTHING. The TAROT spine came off the case this round and is the book on the
-  //                  reading table; there is nothing left to open here beyond the walk itself.
-  //   NO EGG IS EVER MARKED — not the cat, the radio, the bottle, the lamp, the photograph, the
-  //   clock, the vase, the deck, the cross or the peep jar. An egg that announces itself is not an
-  //   egg, and the user's complaint was about the three PLACES and nothing else.
+  //   FIVE RINGS, ONE PER PLACE, ON THE FLOOR — at the spot a visitor would stand to be at that
+  //   place, not on the thing itself. A ring in the frame is a place that can be walked to; a place
+  //   whose spot is off the frame has none, and on a phone square to the back wall that is all five
+  //   of them, so the rings come in one at a time as the visitor pans. That is the pan teaching
+  //   itself, which is the only teaching this room does.
+  //
+  //   AND NOTHING AT ALL IS MARKED ON AN OBJECT. Not the grate, the keys, the book or the door leaf;
+  //   not the cat, the radio, the bottle, the lamp, the photograph, the clock, the vase, the deck,
+  //   the cross or the peep jar. The first cut marked the thing to act on at each place and the user
+  //   took it off, rightly: what a visitor does when they get somewhere is theirs to find, exactly
+  //   as it is on a laptop, where the whole affordance is the cursor changing over the radio. The
+  //   walk back stays a tap on nothing, as it always was.
+  //
+  // WHERE A VISITOR STANDS, in world metres on the floor at y = 0, taken off each place's own box
+  // rather than off its camera — the shots are long lenses pulled 3.7 to 5.4 m back and the lens is
+  // nowhere near where a person's feet would be. Each is the open floor in FRONT of the thing:
+  //   fireplace  0.86 m out from the breast's face (x −2.36), on the firebox's own centre line
+  //   piano      0.67 m out past the stool (which itself stands 0.32 m out from x −1.994), at the
+  //              FRONT end of the keyboard's run rather than its middle — see below
+  //   case       0.58 m out from the front of the boards (z −2.20), at the RIGHT-HAND end of the
+  //              carcase rather than its middle — see below
+  //   table      0.35 m short of the chair that is pulled to the reading table (x 1.66)
+  //   doorway    inside the room from the leaf (z −2.4), on the opening's centre line
+  //
+  // TWO OF THEM ARE DELIBERATELY OFF THEIR OBJECT'S CENTRE LINE, and the first cut of this was
+  // wrong for want of it. The spinet runs along the stage-left wall and the tall case along the back
+  // wall, and the two of them MEET AT THAT CORNER: standing squarely in front of the middle of each
+  // puts the two spots 0.21 m apart, which at 390x844 is two rings drawn on top of one another and a
+  // visitor with no way to tell which of them they are about to tap. So the piano's spot is taken to
+  // the front end of its keyboard and the case's to the far end of its boards, which is still in
+  // front of each and is 0.68 m apart — the closest pair of the five, against a ring 0.34 m across,
+  // so there is a third of a metre of bare board between their edges. (Measured, all ten pairs: the
+  // next closest is the fireplace and the piano at 0.92 m.)
+  //
+  // None of them is under anything: the nearest of the five to the round table's axis is the reading
+  // table's at 1.34 m, against a rim of 0.62, which is what keeps a drawn ring — which has no depth
+  // test — from lying over furniture it should be behind. See walk-marks.js, THE ONE THING A SHEET
+  // WOULD HAVE DONE BETTER.
   //
   // AND THE ROOM TAKES THEM BACK whenever it is doing something rather than waiting. `blocked()` is
   // most of that list already — a walk running, somebody else holding the camera, the deck out, the
   // crossroads, the notice, a reading, a book standing open — and four more are added here: the pan
-  // still drifting (the mark is struck at the place's live box, so a moving box means a stale mark
-  // for the four or five drawings a flick takes to settle), the placard's field with the focus (his
+  // still drifting (the ring is struck at the live camera, so a moving camera means a stale ring for
+  // the four or five drawings a flick takes to settle), the placard's field with the focus (his
   // paper is in front of the room and a phone's keyboard is up over it), the fire alight and the
   // lamp out. The last two are the room GIVEN OVER to something: a picture of a fire to watch, or a
-  // dark room to sit in. A tap puts either of them back and the marks come back with it.
+  // dark room to sit in. A tap puts either of them back and the rings come back with it.
   //
   // THE WORD `blocked()` GIVES IS THE FIRST TRUE ONE AND NOT THE MOST INTERESTING ONE, which is
   // worth knowing before reading a proof's output: the book opening at the reading table reports
   // `held` rather than `book`, because walk-book.js takes the camera on its way up and `blocked()`
   // asks about the camera before it asks whether a book is standing open. Both answers hide the
-  // marks. Measured on the live page: at the table the mark is `book`, one tap on it gives
-  // `moving` for two drawings and `held` from the fourth on, and nothing is on the glass throughout.
+  // rings.
+  const STAND = {
+    fireplace: [-1.5, -0.05],
+    piano: [-1.32, -0.95],
+    case: [-1.2, -1.62],
+    table: [1.31, -0.3],
+    doorway: [1.5, -2.15],
+  };
   const FIELD = () => {
     const t = document.activeElement?.tagName;
     return t === 'INPUT' || t === 'TEXTAREA';
@@ -601,31 +636,29 @@ export async function build(ctx) {
     if (Pp?.dark?.on) return 'dark';
     return null;
   }
-  // The one thing to act on at the place the visitor is standing at, as a box on the glass. Each of
-  // these is a switch that already exists and already has its own 44 px thumb box about its own
-  // centre; the mark is placed INSIDE that box, so no target anywhere else in the room had to move.
-  function actOn() {
-    const Pp = ctx.pieces?.props ?? null;
-    if (at === 'fireplace') return { key: 'grate', box: Pp?.fine?.hitBox?.() ?? null };
-    if (at === 'piano') return { key: 'keys', box: Pp?.piano?.keysBox?.() ?? null };
-    if (at === 'table') return BOOKS.showing ? null : { key: 'book', box: Pp?.table?.hitBox?.() ?? null };
-    if (at === 'doorway') return CROSS()?.phase === 'shut' ? { key: 'door', box: box('doorway') } : null;
-    return null;
-  }
-  const within = (b) => (x, y) => !!b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
-  function spotsNow() {
+  // THE FIVE RINGS THIS DRAWING. A place the visitor is already standing at is not a place to walk
+  // to and keeps no ring. A ring whose spot is behind the lens, or off the frame, or so foreshortened
+  // that it is a smudge rather than a mark, is not drawn — the place keeps its own hotspot on the
+  // object either way, which is the affordance a laptop has always had.
+  function ringsNow() {
     const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
-    const d = markSize(H).d;
+    const { least } = markSize(H);
     const out = [];
     for (const name of NAMES) {
-      if (at === name) continue; // a place you are standing at is not a place to walk to
-      const s = spotIn(box(name), W, H, d, (x, y) => hitBase(name, x, y));
-      if (s) out.push({ key: name, x: s.x, y: s.y });
-    }
-    const o = actOn();
-    if (o?.box) {
-      const s = spotIn(o.box, W, H, d, within(o.box));
-      if (s) out.push({ key: o.key, x: s.x, y: s.y });
+      if (at === name) continue;
+      const s = STAND[name];
+      if (!s) continue;
+      const pts = floorRing(ctx, s[0], s[1], RING_R);
+      if (!pts) continue;
+      const b = bboxOf(pts);
+      if (!b || b.w < least || b.h < 2) continue;
+      // …and it has to be ON the frame. A ring half off the edge is still a ring; one wholly off it
+      // is a tap target nobody can see, and the arbiter would be answering for a thing that is not
+      // in the picture.
+      const onX = Math.min(b.x + b.w, W) - Math.max(b.x, 0);
+      const onY = Math.min(b.y + b.h, H) - Math.max(b.y, 0);
+      if (onX <= 0 || onY <= 0) continue;
+      out.push({ key: name, pts });
     }
     return out;
   }
@@ -639,8 +672,7 @@ export async function build(ctx) {
   const forced = asking === '1';
   const refused = asking === '0';
   const cursorless = watchPointer(() => {});
-  const askedKind = ctx.params?.get?.('mark');
-  MARKS = mountMarks(ctx, { kind: KINDS.includes(askedKind) ? askedKind : KIND });
+  MARKS = mountMarks(ctx);
   ctx.on?.('resize', () => MARKS?.resize?.());
   let markWhy = 'cursor';
   let markAt = [];
@@ -651,11 +683,13 @@ export async function build(ctx) {
     if (why) {
       if (!markAt.length) return;
       markAt = [];
-      MARKS.update({ show: false, parity: 0, spots: [] });
+      MARKS.update({ show: false, parity: 0, marks: [] });
       return;
     }
-    if (ctx.clock.stepped || !markAt.length) markAt = spotsNow();
-    MARKS.update({ show: true, parity: ctx.clock.frame % 2, spots: markAt });
+    // The rings are re-projected on every DRAWING and not on every frame: the camera does not move
+    // between drawings in this film, and the boil is the twelves' own.
+    if (ctx.clock.stepped || !markAt.length) markAt = ringsNow();
+    MARKS.update({ show: true, parity: ctx.clock.frame % 2, marks: markAt });
   }
   api.marks = {
     // whether they are in the picture, and the one word for why they are not
@@ -665,23 +699,25 @@ export async function build(ctx) {
     get why() {
       return markWhy;
     },
-    get kind() {
-      return MARKS?.kind ?? null;
-    },
-    get size() {
-      return MARKS?.size ?? null;
-    },
-    // whether this window has no cursor in it, and whether ?marks=1 is overriding that
+    // whether this window has no cursor in it, and whether ?marks= is overriding that either way
     get cursorless() {
       return cursorless();
     },
     get forced() {
       return forced;
     },
-    spots: () => markAt.map((s) => ({ ...s })),
+    get refused() {
+      return refused;
+    },
+    // the ring's radius on the boards, in metres, and where each of the five is laid
+    radius: RING_R,
+    stand: (name) => (STAND[name] ? [...STAND[name]] : null),
+    // the ring's own box on the glass, and the projected ring itself so a proof can measure its
+    // axes against the floor's own foreshortening rather than trust a box
     box: (key) => MARKS?.boxOf?.(key) ?? null,
-    // the box a thumb is given for a place's mark — the mark grown to 44 px, on top of the place's
-    // own target rather than folded into it
+    ring: (key) => MARKS?.ringOf?.(key) ?? null,
+    // the box a thumb is given for a place's ring — the ring's box grown to 44 px, carried on top
+    // of the place's own target rather than folded into it
     tap: (name) => markTap(name),
     keys: () => MARKS?.keys?.() ?? [],
   };

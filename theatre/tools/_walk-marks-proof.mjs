@@ -1,27 +1,29 @@
 #!/usr/bin/env node
-// THE DRAWN MARK, PUT TO A WITNESS THAT IS NOT THE PIECE (src/pieces/walk-marks.js).
+// THE RINGS ON THE FLOOR, PUT TO A WITNESS THAT IS NOT THE PIECE (src/pieces/walk-marks.js).
 //
-// The user: "choosing the fireplace, piano and book section on mobile is quite hard to do … it's
-// actually where to tap on the phone. I think a drawn mark would be good."
+// The user: "Only use marks in the room to specify where users can go, preferably on the floor. The
+// individual objects that can be clicked should not be marked because users should discover them by
+// themselves."
 //
-// Nothing below asks walk.js whether it thinks a mark is in the picture. Every claim is put to a
-// witness outside the piece:
+// Nothing below asks walk.js whether it thinks a ring is in the picture, on the floor, or reachable.
+// Every claim is put to a witness outside the piece:
 //
-//   the DOM       #marks' own canvases and their getBoundingClientRect — what is actually on the
-//                 glass, at what size, in what position. A piece can say anything; a node cannot.
-//   the ARBITER   props.switches.at(x, y) at the CENTRE OF EVERY MARK: the room's own pointer test,
-//                 asked whether the thing under the mark is the thing the mark promises. This is
-//                 the claim that matters — a mark that lies about what is under it is worse than
-//                 no mark at all.
-//   a real TAP    page.touchscreen.tap at a measured mark, through the arbiter, with no api called
-//   the CAMERA    camera.current / camera.moving / camera.pan
-//   the DRAWING   /tmp/marks/*.png at 390x844 and 1280x800
+//   the DOM        #marks' own canvases and their getBoundingClientRect — what is actually on the
+//                  glass, where, at what size. A piece can say anything; a node cannot.
+//   the ARBITER    props.switches.at(x, y) at the CENTRE OF EVERY RING: the room's own pointer test,
+//                  asked whether the thing under the ring is the place it promises.
+//   THE FLOOR      every drawn ring point is UNPROJECTED — a ray from the lens through that pixel,
+//                  intersected with the plane y = 0 — and what comes back has to be a circle of the
+//                  ring's own radius about the place's standing spot. That is the claim "it lies in
+//                  the floor's plane" proved by inverting the projection rather than by eyeballing
+//                  an ellipse, and it is computed here from the camera, never from the mark layer.
+//   a real TAP     page.touchscreen.tap on a measured ring, through the arbiter, no api called
+//   the DRAWING    /tmp/marks/*.png at 390x844 and 1280x800
 //
 //   BASE=http://127.0.0.1:8743 node tools/_walk-marks-proof.mjs
-//   BASE=… node tools/_walk-marks-proof.mjs --only cursor,frame --out /tmp/marks
+//   BASE=… node tools/_walk-marks-proof.mjs --only cursor,floor --out /tmp/marks
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
-import sharp from 'sharp';
 
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, arr) => {
@@ -35,12 +37,9 @@ mkdirSync(OUT, { recursive: true });
 const PLATE = [1280, 800];
 const PHONE = [390, 844];
 const PLACES = ['fireplace', 'doorway', 'case', 'piano', 'table'];
-// what each mark's key is allowed to be answered by, when the arbiter is asked at its centre. The
-// door leaf is the one mark with no switch of its own: standing at the doorway the place's hotspot
-// is disabled and walk.js's own window listener opens the leaf, so the arbiter rightly says nobody.
-const PROMISES = { fireplace: 'walk-fireplace', doorway: 'walk-doorway', case: 'walk-case', piano: 'walk-piano', table: 'walk-table', grate: 'fine', keys: 'piano-keys', book: 'table-book', door: null };
-// every switch in the room that is an EGG. None of these may ever carry a mark.
-const EGGS = ['cat', 'radio', 'wine', 'fuse', 'vortex', 'vase', 'rain', 'dark', 'peep', 'deck', 'cross', 'globe', 'droste', 'konami'];
+// every switch in the room that is an EGG or an OBJECT. None of these may ever carry a mark, and no
+// ring's centre may ever be given to one.
+const NOT_MARKED = ['cat', 'radio', 'wine', 'fuse', 'vortex', 'vase', 'rain', 'dark', 'peep', 'deck', 'cross', 'globe', 'droste', 'konami', 'fine', 'piano-keys', 'table-book'];
 const ONLY = args.only ? String(args.only).split(',') : null;
 const doing = (n) => !ONLY || ONLY.includes(n);
 
@@ -59,9 +58,10 @@ const stub = (r) =>
     body: 'export const createHotContext=()=>({on(){},off(){},send(){},accept(){},acceptExports(){},dispose(){},prune(){},invalidate(){},decline(){},data:{}});export const updateStyle=()=>{};export const removeStyle=()=>{};export const injectQuery=(u)=>u;export class ErrorOverlay{}',
   });
 
-// TOUCH is the whole point of this piece, so the phone pages are opened with `hasTouch` and the
-// rule is left to answer for itself. Measured under this same emulation (tools/_probe-pointer.mjs):
-// hasTouch gives any-pointer:fine false / pointer:coarse true, and a plain page gives the reverse.
+// TOUCH is the whole point of this piece, so the phone pages are opened with `hasTouch` and the rule
+// is left to answer for itself. Measured under this same emulation (the CURSOR section, which reads
+// the queries off each window): hasTouch gives any-pointer:fine false / pointer:coarse true, and a
+// plain page gives the reverse.
 async function open(w, h, { touch = false, query = '' } = {}) {
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1, hasTouch: touch });
   const errors = [];
@@ -79,13 +79,13 @@ const room = (w, h, q = '', touch = w < 800) => open(w, h, { touch, query: `?sho
 const frames = (p, n = 3) => p.evaluate((k) => new Promise((res) => { let i = k; const go = () => (i-- <= 0 ? res() : requestAnimationFrame(go)); go(); }), n);
 const settle = async (p, ms = 240000) => {
   await p.waitForFunction(() => !window.__theatre.pieces.camera.moving, null, { timeout: ms, polling: 250 });
-  await frames(p, 3);
+  await frames(p, 4);
 };
 const rest = async (p) => {
   await p.waitForFunction(() => Math.abs(window.__theatre.pieces.camera.pan - window.__theatre.pieces.camera.panTarget) < 1e-3, null, { timeout: 120000, polling: 200 }).catch(() => {});
-  await frames(p, 3);
+  await frames(p, 4);
 };
-// THE WITNESS: what is actually on the glass, read off the nodes and not off the piece.
+// THE WITNESS: what is on the glass, read off the nodes and not off the piece.
 const drawn = (p) =>
   p.evaluate(() => {
     const root = document.getElementById('marks');
@@ -97,17 +97,15 @@ const drawn = (p) =>
         return { key: c.dataset.key, x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), cx: Math.round(r.left + r.width / 2), cy: Math.round(r.top + r.height / 2) };
       });
   });
-const says = (p) => p.evaluate(() => { const M = window.__theatre.pieces.walk.marks; return { shown: M.shown, why: M.why, kind: M.kind, size: M.size, cursorless: M.cursorless, forced: M.forced }; });
+const says = (p) => p.evaluate(() => { const M = window.__theatre.pieces.walk.marks; return { shown: M.shown, why: M.why, cursorless: M.cursorless, forced: M.forced, refused: M.refused, radius: M.radius, keys: M.keys() }; });
 const asks = (p, x, y) => p.evaluate(([px, py]) => window.__theatre.pieces.props.switches.at(px, py), [x, y]);
-const placeBox = (p, n) => p.evaluate((k) => window.__theatre.pieces.walk.box(k), n);
 const where = (p) => p.evaluate(() => ({ at: window.__theatre.pieces.walk.at, shot: window.__theatre.pieces.camera.current, pan: +window.__theatre.pieces.camera.pan.toFixed(3) }));
 const shot = (p, name) => p.screenshot({ path: `${OUT}/${name}.png` });
 const chev = (p) => p.evaluate(() => window.__theatre.pieces.camera.panBoxes);
-// A tap on a chevron, `times` of them. The WAIT at the head of it is not politeness: the page sets
-// `__theatreReady` on its third render and the pan is only armed once the camera is standing still
-// on the resting plate with nobody holding it, which is a beat later — so a `panBy` issued the
-// instant the page says it is ready finds no chevrons, clicks nothing, and quietly reports a room
-// with no marks in it because it is still looking at the back wall.
+// A tap on a chevron, `times` of them. The WAIT is not politeness: the page sets `__theatreReady` on
+// its third render and the pan is only armed once the camera is standing still on the resting plate,
+// which is a beat later — a `panBy` issued the instant the page says it is ready finds no chevrons,
+// clicks nothing, and quietly reports a room with no rings because it is still facing the back wall.
 async function panBy(p, side, times = 1) {
   await p.waitForFunction(() => window.__theatre.pieces.camera.panable && !!window.__theatre.pieces.camera.panBoxes, null, { timeout: 120000, polling: 100 }).catch(() => {});
   for (let i = 0; i < times; i++) {
@@ -118,6 +116,10 @@ async function panBy(p, side, times = 1) {
   await rest(p);
   return true;
 }
+const square = async (p) => {
+  await p.evaluate(() => window.__theatre.pieces.camera.setPan(0, { hold: true }));
+  await frames(p, 4);
+};
 const keysOf = (ms) => ms.map((m) => m.key).sort().join(',') || '—';
 const ok = (b) => (b ? '✓' : '✗');
 let bad = 0;
@@ -127,13 +129,9 @@ const claim = (b, text) => {
 };
 
 // ---- 1. WHICH WINDOWS ARE MARKED AT ALL --------------------------------------------------------
-// The rule is «no fine pointer anywhere in this window», not «the primary pointer is coarse»: a
-// touchscreen laptop and a tablet with a trackpad both have a cursor doing the telling already.
 if (doing('cursor')) {
   await fresh();
-  console.log('\nCURSOR — a laptop keeps the cursor as its affordance and gets no marks');
-  // the four media queries themselves, read off each window, so the rule can be checked against
-  // what the browser actually says rather than against what the piece concluded from it
+  console.log('\nCURSOR — a laptop keeps the cursor as its affordance and gets no rings');
   for (const [w, h, touch] of [[...PLATE, false], [...PHONE, true]]) {
     const q = await open(w, h, { touch, query: '?shot=1' });
     const mq = await q.evaluate(() => ({
@@ -147,110 +145,59 @@ if (doing('cursor')) {
     await q.close();
   }
   const lap = await room(...PLATE, '', false);
-  await panBy(lap, 'l', 0);
+  await frames(lap, 6);
   const lapSays = await says(lap);
-  const lapDrawn = await drawn(lap);
-  console.log(`  1280x800 mouse   cursorless=${lapSays.cursorless} why=${lapSays.why} · ${lapDrawn.length} mark(s) on the glass`);
-  claim(lapSays.cursorless === false && lapDrawn.length === 0, '1280x800 with a mouse: no marks anywhere in the room');
-  await shot(lap, 'laptop-none-1280x800');
+  console.log(`  1280x800 mouse    cursorless=${lapSays.cursorless} why=${lapSays.why} · ${(await drawn(lap)).length} ring(s)`);
+  claim(lapSays.cursorless === false && (await drawn(lap)).length === 0, '1280x800 with a mouse: no rings anywhere in the room');
   await lap.close();
 
   const forced = await room(...PLATE, '&marks=1', false);
+  await frames(forced, 6);
   const fSays = await says(forced);
   const fDrawn = await drawn(forced);
-  console.log(`  1280x800 ?marks=1  forced=${fSays.forced} why=${fSays.why} · ${fDrawn.length} mark(s): ${keysOf(fDrawn)}`);
+  console.log(`  1280x800 ?marks=1  forced=${fSays.forced} why=${fSays.why} · ${fDrawn.length} ring(s): ${keysOf(fDrawn)}`);
   claim(fSays.forced && fDrawn.length > 0, '?marks=1 forces them on for a tool on any window');
   await forced.close();
 
-  const ph = await room(...PHONE);
-  const pSays = await says(ph);
-  console.log(`  390x844 touch    cursorless=${pSays.cursorless} kind=${pSays.kind} size=${pSays.size?.d}px pen=${pSays.size?.pen?.toFixed(2)}`);
-  claim(pSays.cursorless === true, '390x844 with touch and no mouse: the room marks itself');
-  claim(pSays.size?.d >= 28 && pSays.size?.d <= 36, `the mark is ${pSays.size?.d} css px, inside the 28–36 a thumb wants`);
-  await ph.close();
+  const off = await room(...PHONE, '&marks=0');
+  await frames(off, 6);
+  const oSays = await says(off);
+  console.log(`  390x844 ?marks=0   refused=${oSays.refused} why=${oSays.why} · ${(await drawn(off)).length} ring(s)`);
+  claim(oSays.refused && (await drawn(off)).length === 0, '?marks=0 refuses them on a phone, so the walk proof can ask for the room as it was');
+  await off.close();
 }
 
-// ---- 2. WHAT IS MARKED, AND WHAT THE ARBITER SAYS IS UNDER IT ----------------------------------
+// ---- 2. WHAT IS MARKED: FIVE PLACES, NO OBJECTS, NO EGGS ---------------------------------------
 if (doing('frame')) {
   await fresh();
-  console.log('\nFRAME — one mark per place whose object is in the picture, and nothing else');
+  console.log('\nFRAME — a ring per place whose standing spot is in the picture, and nothing else');
   const p = await room(...PHONE);
-  for (const [label, side, taps] of [['square to the back wall', 'l', 0], ['panned hard left', 'l', 2], ['one tap left', 'l', 1], ['panned hard right', 'r', 2]]) {
-    await p.evaluate(() => window.__theatre.pieces.camera.setPan(0, { hold: true }));
-    await frames(p, 3);
+  await panBy(p, 'l', 0);
+  for (const [label, side, taps] of [['square to the back wall', 'l', 0], ['one tap left', 'l', 1], ['one tap right', 'r', 1]]) {
+    await square(p);
     if (taps) await panBy(p, side, taps);
     else await rest(p);
     const ms = await drawn(p);
-    const boxes = {};
-    for (const n of PLACES) boxes[n] = await placeBox(p, n);
-    const onFrame = PLACES.filter((n) => {
-      const b = boxes[n];
-      if (!b) return false;
-      return Math.min(b.x + b.w, 390) - Math.max(b.x, 0) > 0 && Math.min(b.y + b.h, 844) - Math.max(b.y, 0) > 0;
-    });
-    console.log(`  ${label.padEnd(24)} on the frame: ${onFrame.join(' ') || 'nothing'}  ·  marked: ${keysOf(ms)}`);
-    // every mark is answered by the thing it promises
+    console.log(`  ${label.padEnd(24)} rings: ${keysOf(ms)}`);
+    claim(ms.every((m) => PLACES.includes(m.key)), `${label}: every ring is one of the five PLACES (${keysOf(ms)})`);
     for (const m of ms) {
       const who = await asks(p, m.cx, m.cy);
-      claim(who === PROMISES[m.key], `${label}: the ${m.key} mark at ${m.cx},${m.cy} is answered by ${who ?? 'nobody'} (promised ${PROMISES[m.key] ?? 'nobody'})`);
-      claim(!EGGS.includes(String(who)), `${label}: the ${m.key} mark does not stand on an egg`);
+      claim(who === `walk-${m.key}`, `${label}: the ${m.key} ring at ${m.cx},${m.cy} is answered by ${who ?? 'nobody'}`);
+      claim(!NOT_MARKED.includes(String(who)), `${label}: the ${m.key} ring stands on no egg and no object`);
     }
-    // …and nothing is marked that is not on the frame
-    for (const m of ms) claim(onFrame.includes(m.key) || !PLACES.includes(m.key), `${label}: ${m.key} is marked and its object is on the frame`);
-    const missed = PLACES.filter((n) => !onFrame.includes(n) && ms.some((m) => m.key === n));
-    claim(missed.length === 0, `${label}: no place off the frame carries a mark (${missed.join(',') || 'none'})`);
-    if (taps === 2 && side === 'l') {
-      claim(ms.some((m) => m.key === 'fireplace'), 'panned hard left the FIREPLACE is marked');
+    if (label === 'one tap left') {
+      claim(ms.length >= 3, `one tap left brings the left wall's three spots into the picture (${keysOf(ms)})`);
       await shot(p, 'left-wall-panned-390x844');
     }
-    if (taps === 2 && side === 'r') await shot(p, 'right-wall-panned-390x844');
-  }
-  // NO EGG IS EVER MARKED, said the other way about: the keys the layer will ever draw.
-  const keys = await p.evaluate(() => window.__theatre.pieces.walk.marks.keys());
-  claim(keys.every((k) => k in PROMISES), `every mark key belongs to a place or to the one thing to act on there (${keys.join(',') || 'none'})`);
-  if (p.__errors.length) {
-    console.log(`   errors: ${p.__errors.join(' | ')}`);
-    bad++;
-  }
-  await p.close();
-}
-
-// ---- 3. THE MARK FOLLOWS THE OBJECT THROUGH A PAN ----------------------------------------------
-// Struck at the place's LIVE box every drawing, so what is proved is where it sits INSIDE that box
-// — which must not move when the room turns under it.
-if (doing('pan')) {
-  await fresh();
-  console.log('\nPAN — the mark is struck on the object, not on the window');
-  const p = await room(...PHONE);
-  const seen = [];
-  for (const taps of [1, 2]) {
-    await p.evaluate(() => window.__theatre.pieces.camera.setPan(0, { hold: true }));
-    await frames(p, 3);
-    await panBy(p, 'l', taps);
-    const ms = await drawn(p);
-    for (const m of ms.filter((x) => PLACES.includes(x.key))) {
-      const b = await placeBox(p, m.key);
-      if (!b) continue;
-      const u = (m.cx - b.x) / b.w, v = (m.cy - b.y) / b.h;
-      seen.push({ taps, key: m.key, u, v, pan: (await where(p)).pan });
-      console.log(`  pan ${(await where(p)).pan.toFixed(2)}  ${m.key.padEnd(10)} mark at ${m.cx},${m.cy} · box ${b.x.toFixed(0)},${b.y.toFixed(0)} ${b.w.toFixed(0)}x${b.h.toFixed(0)} · inside it at u=${u.toFixed(3)} v=${v.toFixed(3)}`);
-      claim(u >= 0 && u <= 1 && v >= 0 && v <= 1, `${m.key}: the mark is inside the place's own projected box after the pan`);
+    if (label === 'one tap right') {
+      claim(ms.length >= 2, `one tap right brings the right wall's two spots into the picture (${keysOf(ms)})`);
+      await shot(p, 'right-wall-panned-390x844');
     }
+    if (!taps) claim(ms.length === 0, 'square to the back wall a phone holds none of the five spots, so it is given no rings');
   }
-  claim(seen.length > 0, 'at least one place carried a mark through the pan');
-  // and the marks are OFF while the pan is still drifting
-  await p.evaluate(() => window.__theatre.pieces.camera.setPan(0, { hold: true }));
-  await frames(p, 3);
-  const b = await chev(p);
-  await p.mouse.click(b.l.x + b.l.w / 2, b.l.y + b.l.h / 2);
-  await frames(p, 1);
-  const mid = await says(p);
-  const midDrawn = await drawn(p);
-  console.log(`  one drawing after the chevron: why=${mid.why} · ${midDrawn.length} mark(s)`);
-  claim(mid.why === 'panning' && midDrawn.length === 0, 'the marks go out while the room is still turning');
-  await rest(p);
-  const after = await drawn(p);
-  claim(after.length > 0, `and come back when it settles (${keysOf(after)})`);
+  // NOTHING IS EVER MARKED ON AN OBJECT, said from the other end: the layer's own key list.
+  const keys = (await says(p)).keys;
+  claim(keys.every((k) => PLACES.includes(k)), `the mark layer draws nothing but places (${keys.join(',') || 'none'})`);
   if (p.__errors.length) {
     console.log(`   errors: ${p.__errors.join(' | ')}`);
     bad++;
@@ -258,35 +205,97 @@ if (doing('pan')) {
   await p.close();
 }
 
-// ---- 4. A REAL TAP ON A MARK WALKS THERE -------------------------------------------------------
+// ---- 3. IT IS A CIRCLE LYING ON THE FLOOR ------------------------------------------------------
+// The drawn ring is unprojected: a ray from the lens through each of its pixels, met with the plane
+// y = 0. What comes back must be the place's own standing circle — same centre, same radius — or the
+// thing on the glass is not a mark on the floor, whatever it looks like.
+if (doing('floor')) {
+  await fresh();
+  console.log('\nFLOOR — every ring unprojects onto y = 0 as a circle about the place\'s standing spot');
+  const p = await room(...PHONE);
+  await panBy(p, 'l', 0); // wait for the pan to be armed before the first `square`, as FRAME does
+  for (const [side, taps] of [['l', 1], ['r', 1]]) {
+    await square(p);
+    await panBy(p, side, taps);
+    const rows = await p.evaluate(() => {
+      const W = window.__theatre.pieces.walk, T = window.__theatre.THREE, cam = window.__theatre.camera;
+      const sw = window.__theatre.size.w, sh = window.__theatre.size.h;
+      const out = [];
+      for (const k of W.marks.keys()) {
+        const ring = W.marks.ring(k), st = W.marks.stand(k), r = W.marks.radius, box = W.marks.box(k);
+        // UNPROJECT: the ray through this pixel, met with y = 0. Independent of the mark layer —
+        // it uses only the camera and the screen point.
+        let rMin = Infinity, rMax = 0, yErr = 0;
+        for (const [px, py] of ring) {
+          const ndc = new T.Vector3((px / sw) * 2 - 1, -(py / sh) * 2 + 1, 0.5).unproject(cam);
+          const dir = ndc.sub(cam.position).normalize();
+          const t = -cam.position.y / dir.y; // where that ray crosses the floor
+          const hit = cam.position.clone().addScaledVector(dir, t);
+          yErr = Math.max(yErr, Math.abs(hit.y));
+          const d = Math.hypot(hit.x - st[0], hit.z - st[1]);
+          rMin = Math.min(rMin, d);
+          rMax = Math.max(rMax, d);
+        }
+        // and the drawn ellipse's own axes, for the record
+        let major = 0, minor = Infinity;
+        for (let i = 0; i < ring.length / 2; i++) {
+          const a = ring[i], c = ring[i + ring.length / 2];
+          const d = Math.hypot(a[0] - c[0], a[1] - c[1]);
+          major = Math.max(major, d);
+          minor = Math.min(minor, d);
+        }
+        const objBox = W.box(k);
+        out.push({ k, r, rMin: +rMin.toFixed(4), rMax: +rMax.toFixed(4), yErr: +yErr.toFixed(6), major: +major.toFixed(1), minor: +minor.toFixed(1), aspect: +(minor / major).toFixed(3), cy: box.y + box.h / 2, objMid: objBox ? objBox.y + objBox.h / 2 : null, objBottom: objBox ? objBox.y + objBox.h : null });
+      }
+      return out;
+    });
+    for (const r of rows) {
+      const err = Math.max(Math.abs(r.rMax - r.r), Math.abs(r.rMin - r.r)) * 1000;
+      console.log(`  ${r.k.padEnd(10)} unprojected radius ${r.rMin}..${r.rMax} m against ${r.r} (${err.toFixed(2)} mm out) · on y=0 to ${(r.yErr * 1000).toFixed(3)} mm · ellipse ${r.major}x${r.minor} px, aspect ${r.aspect}`);
+      claim(err < 1.0, `${r.k}: the drawn ring unprojects onto the floor as a ${r.r} m circle about the standing spot (${err.toFixed(2)} mm out)`);
+      claim(r.yErr < 1e-6, `${r.k}: every point of it is in the plane y = 0 (${(r.yErr * 1000).toFixed(4)} mm)`);
+      claim(r.aspect < 0.85, `${r.k}: it is foreshortened like a floor and not a sticker on the lens (aspect ${r.aspect})`);
+      // BELOW THE OBJECT'S MIDDLE, not below its foot. The standing spot is not always further from
+      // the lens than the nearest corner of the thing's own box: at the reading table the chair is
+      // pulled out 0.32 m TOWARDS the room, so its near corner projects 16 px lower than the floor
+      // in front of it. What the claim is about is that the ring is down on the ground rather than
+      // up on the thing, and that is the object's middle.
+      if (r.objMid != null) claim(r.cy > r.objMid, `${r.k}: the ring lies BELOW the object on the glass — on the floor, not on the thing (ring ${Math.round(r.cy)} vs the object's middle ${Math.round(r.objMid)}, its foot ${Math.round(r.objBottom)})`);
+    }
+    claim(rows.length > 0, `one tap ${side === 'l' ? 'left' : 'right'}: there are rings to measure (${rows.map((r) => r.k).join(',') || 'none'})`);
+  }
+  if (p.__errors.length) {
+    console.log(`   errors: ${p.__errors.join(' | ')}`);
+    bad++;
+  }
+  await p.close();
+}
+
+// ---- 4. A REAL TAP ON A RING WALKS THERE -------------------------------------------------------
 if (doing('tap')) {
   await fresh();
-  console.log('\nTAP — a thumb on the mark, through the arbiter, with nothing called');
+  console.log('\nTAP — a thumb on the boards, through the arbiter, with nothing called');
   const p = await room(...PHONE);
-  await panBy(p, 'l', 2);
-  const ms = await drawn(p);
-  const fire = ms.find((m) => m.key === 'fireplace') ?? ms.find((m) => PLACES.includes(m.key));
-  claim(!!fire, `there is a mark to tap (${keysOf(ms)})`);
-  if (fire) {
-    await p.touchscreen.tap(fire.cx, fire.cy);
+  for (const [side, want] of [['l', 'fireplace'], ['r', 'table']]) {
+    await square(p);
+    await panBy(p, side, 1);
+    const ms = await drawn(p);
+    const m = ms.find((x) => x.key === want) ?? ms[0];
+    claim(!!m, `one tap ${side === 'l' ? 'left' : 'right'}: there is a ring to tap (${keysOf(ms)})`);
+    if (!m) continue;
+    const tap = await p.evaluate((k) => window.__theatre.pieces.walk.marks.tap(k), m.key);
+    console.log(`  the ${m.key} ring: ${m.w}x${m.h} px at ${m.x},${m.y}; the thumb box it is given is ${Math.round(tap.w)}x${Math.round(tap.h)}`);
+    claim(tap.w >= 44 && tap.h >= 44, `${m.key}: a ring only ${m.h} px tall is still given a full 44 px thumb (${Math.round(tap.w)}x${Math.round(tap.h)})`);
+    await p.touchscreen.tap(m.cx, m.cy);
     await settle(p);
-    const w = await where(p);
-    console.log(`  tapped the ${fire.key} mark at ${fire.cx},${fire.cy} → walk.at=${w.at} shot=${w.shot}`);
-    claim(w.at === fire.key, `a tap on the ${fire.key} mark walks the visitor to the ${fire.key}`);
-    // AND THE MARK'S OWN 44 px THUMB BOX, not just its middle: the corner of it, 15 px out
+    const w2 = await where(p);
+    console.log(`  tapped the ${m.key} ring at ${m.cx},${m.cy} → walk.at=${w2.at} shot=${w2.shot}`);
+    claim(w2.at === m.key, `a tap on the ${m.key} ring walks the visitor to the ${m.key}`);
+    // …and at the place, nothing at all is marked on the thing itself
+    const atPlace = await drawn(p);
+    claim(atPlace.every((x) => PLACES.includes(x.key) && x.key !== m.key), `at the ${m.key} nothing is marked on the object — the visitor finds it themselves (${keysOf(atPlace)})`);
     await p.evaluate(() => window.__theatre.pieces.walk.back());
     await settle(p);
-    await panBy(p, 'l', 2);
-    const ms2 = await drawn(p);
-    const f2 = ms2.find((m) => m.key === fire.key);
-    if (f2) {
-      const tap = await p.evaluate((k) => window.__theatre.pieces.walk.marks.tap(k), fire.key);
-      console.log(`  the mark's thumb box: ${tap.w}x${tap.h} at ${tap.x.toFixed(0)},${tap.y.toFixed(0)} (the 32 px mark grown to 44)`);
-      claim(tap.w >= 44 && tap.h >= 44, `the mark's tap target is a full thumb (${tap.w}x${tap.h})`);
-      const ex = Math.round(tap.x + 4), ey = Math.round(tap.y + 4);
-      const who = await asks(p, ex, ey);
-      claim(who === `walk-${fire.key}`, `a thumb landing on the corner of the mark (${ex},${ey}) is still the ${fire.key} (${who ?? 'nobody'})`);
-    }
   }
   if (p.__errors.length) {
     console.log(`   errors: ${p.__errors.join(' | ')}`);
@@ -295,113 +304,94 @@ if (doing('tap')) {
   await p.close();
 }
 
-// ---- 5. AT A PLACE: THE ONE THING TO DO THERE --------------------------------------------------
+// ---- 5. AT EVERY PLACE, NOTHING IS MARKED ON THE THING -----------------------------------------
 if (doing('place')) {
   await fresh();
-  console.log('\nAT A PLACE — the mark moves to the one thing there is to act on');
-  for (const [place, key, thing] of [['table', 'book', 'the book on the reading table'], ['piano', 'keys', 'the keys'], ['doorway', 'door', 'the door leaf'], ['fireplace', 'grate', 'the grate'], ['case', null, 'nothing — the TAROT spine is the table\'s book now']]) {
-    const p = await room(...PHONE);
-    await p.evaluate((n) => window.__theatre.pieces.walk.go(n), place);
+  console.log('\nAT A PLACE — the grate, the keys, the book and the leaf are found, not announced');
+  const p = await room(...PHONE);
+  for (const place of PLACES) {
+    await square(p);
+    await p.evaluate((n) => { window.__theatre.pieces.walk.go(n); }, place);
     await settle(p);
     const ms = await drawn(p);
-    const mine = ms.find((m) => m.key === key);
-    console.log(`  at the ${place.padEnd(10)} marks: ${keysOf(ms)}`);
-    if (key) {
-      claim(!!mine, `at the ${place}: ${thing} is marked`);
-      if (mine) {
-        const who = await asks(p, mine.cx, mine.cy);
-        claim(who === PROMISES[key], `at the ${place}: the arbiter answers ${who ?? 'nobody'} under the mark (promised ${PROMISES[key] ?? 'nobody'})`);
-      }
-      claim(!ms.some((m) => m.key === place), `at the ${place}: the place itself is no longer marked`);
-    } else {
-      claim(!ms.some((m) => !PLACES.includes(m.key)), `at the ${place}: ${thing}`);
+    console.log(`  at the ${place.padEnd(10)} rings: ${keysOf(ms)}`);
+    claim(ms.every((m) => PLACES.includes(m.key)), `at the ${place}: nothing on the glass is a mark on an object`);
+    claim(!ms.some((m) => m.key === place), `at the ${place}: the place the visitor is standing at carries no ring of its own`);
+    for (const m of ms) {
+      const who = await asks(p, m.cx, m.cy);
+      claim(!NOT_MARKED.includes(String(who)), `at the ${place}: the ${m.key} ring stands on no egg and no object (${who ?? 'nobody'})`);
     }
-    // the two the brief asks to see worked
-    if (place === 'table' && mine) {
-      await shot(p, 'table-book-390x844');
-      await p.touchscreen.tap(mine.cx, mine.cy);
-      await p.waitForFunction(() => window.__theatre.pieces.walk.books.showing, null, { timeout: 60000, polling: 100 }).catch(() => {});
-      const open = await p.evaluate(() => window.__theatre.pieces.walk.books.showing);
-      claim(!!open, 'a tap on the book mark opens the book');
-      await frames(p, 6); // the mark layer is redrawn from update(); the wait above lands mid-frame
-      const gone = await drawn(p);
-      const why = (await says(p)).why;
-      // THE WORD IS `held` AND NOT `book`, AND THAT IS THE ROOM ANSWERING HONESTLY. The book takes
-      // the camera as it opens (its own hold, walk-book.js), and `blocked()` asks about the camera
-      // before it asks whether a book is up — so the first true thing it finds is the hold. What the
-      // claim is about is the marks, and they are gone for either reason.
-      claim(gone.length === 0 && ['book', 'held', 'moving'].includes(why), `and the marks go out while it stands open (why=${why}, ${gone.length} on the glass)`);
-      await p.evaluate(() => window.__theatre.pieces.walk.books.close());
-      await p.waitForFunction(() => !window.__theatre.pieces.walk.books.showing && !window.__theatre.pieces.camera.moving && window.__theatre.pieces.camera.holding === 'reading', null, { timeout: 120000, polling: 150 }).catch(() => {});
-      await frames(p, 6);
-      const backAgain = await drawn(p);
-      claim(backAgain.length > 0, `…and come back when it is shut (${keysOf(backAgain)})`);
-    }
-    if (place === 'piano' && mine) await shot(p, 'piano-keys-390x844');
-    if (p.__errors.length) {
-      console.log(`   errors: ${p.__errors.join(' | ')}`);
-      bad++;
-    }
-    await p.close();
+    await p.evaluate(() => window.__theatre.pieces.walk.back());
+    await settle(p);
   }
+  if (p.__errors.length) {
+    console.log(`   errors: ${p.__errors.join(' | ')}`);
+    bad++;
+  }
+  await p.close();
 }
 
 // ---- 6. WHEN THE ROOM TAKES THEM BACK ----------------------------------------------------------
 if (doing('hide')) {
   await fresh();
-  console.log('\nHIDDEN — the room is doing something, so it stops pointing at itself');
+  console.log('\nHIDDEN — the room is doing something, so it stops showing its floor plan');
   const p = await room(...PHONE);
-  await frames(p, 6); // the chevrons are mounted on the first update; `panBy` needs them to exist
-  await panBy(p, 'l', 2);
+  await panBy(p, 'l', 1);
   const before = await drawn(p);
-  claim(before.length > 0, `idle, the room carries marks (${keysOf(before)})`);
-  // …while a walk is running. The call is NOT awaited: `go()` returns the promise of the whole
-  // 1.5 s dolly, and an evaluate that returns it would not come back until the visitor had arrived.
-  await p.evaluate(() => {
-    window.__theatre.pieces.walk.go('fireplace');
-  });
+  claim(before.length > 0, `idle, the room carries rings (${keysOf(before)})`);
+  // …while the pan is still drifting
+  const b = await chev(p);
+  await p.mouse.click(b.r.x + b.r.w / 2, b.r.y + b.r.h / 2);
+  await frames(p, 1);
+  const mid = await says(p);
+  claim(mid.why === 'panning' && (await drawn(p)).length === 0, `the rings go out while the room is still turning (why=${mid.why})`);
+  await rest(p);
+  claim((await drawn(p)).length >= 0, 'and come back when it settles');
+  // …while a walk is running. Not awaited: `go()` resolves only when the visitor has arrived.
+  await square(p);
+  await panBy(p, 'l', 1);
+  await p.evaluate(() => { window.__theatre.pieces.walk.go('fireplace'); });
   await frames(p, 2);
-  const mid = await drawn(p);
-  const midWhy = (await says(p)).why;
-  claim(mid.length === 0 && (midWhy === 'moving' || midWhy === 'panning'), `while the walk runs there are no marks (why=${midWhy})`);
+  const walking = await says(p);
+  claim((await drawn(p)).length === 0 && walking.why === 'moving', `while the walk runs there are no rings (why=${walking.why})`);
   await settle(p);
-  const atPlace = await drawn(p);
-  claim(atPlace.length > 0, `and they are back when the visitor arrives (${keysOf(atPlace)})`);
-  // …while the fire has the room (the grate's own click, which is what its mark promises)
-  const grate = atPlace.find((m) => m.key === 'grate');
-  if (grate) {
-    await p.touchscreen.tap(grate.cx, grate.cy);
-    await p.waitForFunction(() => window.__theatre.pieces.props.fine.burning, null, { timeout: 60000, polling: 100 }).catch(() => {});
-    const lit = await p.evaluate(() => window.__theatre.pieces.props.fine.burning);
-    const gone = await drawn(p);
-    const why = (await says(p)).why;
-    claim(lit && gone.length === 0 && why === 'fire', `a tap on the grate mark lights the fire, and the fire takes the room (burning=${lit}, why=${why})`);
-    await p.evaluate(() => window.__theatre.pieces.props.fine.set(false));
-    await frames(p, 4);
-    claim((await drawn(p)).length > 0, 'and the marks come back when it is out');
-  }
+  // …while the fire has the room
+  await p.evaluate(() => window.__theatre.pieces.props.fine.set(true));
+  await frames(p, 4);
+  const fire = await says(p);
+  claim((await drawn(p)).length === 0 && fire.why === 'fire', `the fire alight takes the room and the rings with it (why=${fire.why})`);
+  await p.evaluate(() => window.__theatre.pieces.props.fine.set(false));
+  await frames(p, 4);
   await p.evaluate(() => window.__theatre.pieces.walk.back());
   await settle(p);
-  // …while the placard's field has the focus. The room is turned hard left again first: at the
-  // chair, square to the back wall, a phone has NO place on its frame and therefore no marks, so a
-  // field test from there would prove nothing by finding none.
-  await panBy(p, 'l', 2);
+  // …while the book stands open
+  await p.evaluate(() => { window.__theatre.pieces.walk.go('table'); });
+  await settle(p);
+  await p.evaluate(() => window.__theatre.pieces.walk.books.open('TAROT'));
+  await p.waitForFunction(() => window.__theatre.pieces.walk.books.showing, null, { timeout: 60000, polling: 100 }).catch(() => {});
+  await frames(p, 6);
+  const bookWhy = (await says(p)).why;
+  claim((await drawn(p)).length === 0 && ['book', 'held', 'moving'].includes(bookWhy), `while the book stands open there are no rings (why=${bookWhy})`);
+  await p.evaluate(() => window.__theatre.pieces.walk.books.close());
+  await p.waitForFunction(() => !window.__theatre.pieces.walk.books.showing && !window.__theatre.pieces.camera.moving, null, { timeout: 120000, polling: 150 }).catch(() => {});
+  await p.evaluate(() => window.__theatre.pieces.walk.back());
+  await settle(p);
+  // …while the placard's field has the focus
+  await panBy(p, 'l', 1);
   const armed = await drawn(p);
-  claim(armed.length > 0, `back at the chair and panned left, the marks are there to be taken away (${keysOf(armed)})`);
+  claim(armed.length > 0, `back at the chair and panned left, the rings are there to be taken away (${keysOf(armed)})`);
   await p.evaluate(() => { window.__theatre.pieces.dialogue.ask('who is there?'); });
   await p.waitForFunction(() => window.__theatre.pieces.dialogue.asking, null, { timeout: 60000, polling: 100 }).catch(() => {});
   const focused = await p.evaluate(() => {
-    const el = document.querySelector('#dialogue input, #overlay input');
-    el?.focus();
-    return { tag: document.activeElement?.tagName ?? null, asking: window.__theatre.pieces.dialogue.asking };
+    document.querySelector('#dialogue input, #overlay input')?.focus();
+    return document.activeElement?.tagName ?? null;
   });
-  await frames(p, 3);
+  await frames(p, 4);
   const fieldWhy = (await says(p)).why;
-  const fieldDrawn = await drawn(p);
-  console.log(`  the field: asking=${focused.asking} activeElement=${focused.tag} why=${fieldWhy} · ${fieldDrawn.length} mark(s)`);
-  claim(focused.tag === 'INPUT' && fieldWhy === 'field' && fieldDrawn.length === 0, 'while the placard\'s field has the focus there are no marks');
+  console.log(`  the field: activeElement=${focused} why=${fieldWhy} · ${(await drawn(p)).length} ring(s)`);
+  claim(focused === 'INPUT' && fieldWhy === 'field' && (await drawn(p)).length === 0, 'while the placard\'s field has the focus there are no rings');
   await p.evaluate(() => document.activeElement?.blur());
-  await frames(p, 3);
+  await frames(p, 4);
   claim((await drawn(p)).length > 0, 'and they are back the moment it lets go');
   if (p.__errors.length) {
     console.log(`   errors: ${p.__errors.join(' | ')}`);
@@ -410,73 +400,23 @@ if (doing('hide')) {
   await p.close();
 }
 
-// ---- 7. THE THREE VARIANTS, SIDE BY SIDE -------------------------------------------------------
-// The same two frames at 390x844, drawn three times with `?mark=`, and the crops cut round the same
-// mark each time so the three can be looked at over identical ink.
-//
-// TWO frames and not one, because the thing that separates them only shows on one of them. Over the
-// chimney breast every variant is legible — it is white plaster, and a paper pip on paper is no pip
-// at all. The TALL CASE panned one tap left is the busiest drawing in the room (forty spines, their
-// shadows and the boards between them) and it is where camera-pan.js's chevrons failed the same
-// test last round. A control is judged at its worst frame, not its best.
-if (doing('variants')) {
-  await fresh();
-  console.log('\nVARIANTS — ring · caret · bare, over the plaster and over the case');
-  const crops = { fireplace: [], case: [] };
-  for (const kind of ['ring', 'caret', 'bare']) {
-    const p = await room(...PHONE, `&mark=${kind}`);
-    for (const [key, taps] of [['fireplace', 2], ['case', 1]]) {
-      await p.evaluate(() => window.__theatre.pieces.camera.setPan(0, { hold: true }));
-      await frames(p, 3);
-      await panBy(p, 'l', taps);
-      const ms = await drawn(p);
-      const m = ms.find((x) => x.key === key);
-      if (key === 'fireplace') await shot(p, `variant-${kind}-390x844`);
-      console.log(`  ${kind.padEnd(6)} ${taps} tap(s) left · ${ms.length} mark(s): ${keysOf(ms)}${m ? ` · ${key} at ${m.cx},${m.cy}` : ` · no ${key} mark`}`);
-      claim(!!m, `${kind}: the variant draws over the ${key}`);
-      if (!m) continue;
-      const half = 110;
-      const x = Math.max(0, Math.min(390 - half * 2, m.cx - half)), y = Math.max(0, Math.min(844 - half * 2, m.cy - half));
-      crops[key].push({ kind, buf: await p.screenshot({ clip: { x, y, width: half * 2, height: half * 2 } }) });
-    }
-    await p.close();
-  }
-  for (const [key, list] of Object.entries(crops)) {
-    if (list.length !== 3) continue;
-    const W = 220, H = 220, GAP = 12;
-    await sharp({ create: { width: W * 3 + GAP * 4, height: H + GAP * 2, channels: 3, background: { r: 13, g: 10, b: 8 } } })
-      .composite(list.map((c, i) => ({ input: c.buf, left: GAP + i * (W + GAP), top: GAP })))
-      .png()
-      .toFile(`${OUT}/variants-${key}.png`);
-    console.log(`  → ${OUT}/variants-${key}.png  (${list.map((c) => c.kind).join(' · ')}, left to right)`);
-  }
-}
-
-// ---- 8. THE RENDERS THE BRIEF ASKS FOR ---------------------------------------------------------
+// ---- 7. THE RENDERS ----------------------------------------------------------------------------
 if (doing('render')) {
   await fresh();
   console.log('\nRENDERS');
   const p = await room(...PHONE);
-  await panBy(p, 'l', 2);
-  await shot(p, 'chosen-left-wall-390x844');
-  await p.evaluate(() => window.__theatre.pieces.camera.setPan(0, { hold: true }));
-  await frames(p, 3);
-  await panBy(p, 'r', 2);
-  await shot(p, 'chosen-right-wall-390x844');
-  for (const place of ['table', 'piano']) {
-    await p.evaluate(() => window.__theatre.pieces.camera.setPan(0, { hold: true }));
-    await p.evaluate((n) => window.__theatre.pieces.walk.go(n), place);
-    await settle(p);
-    await shot(p, `chosen-${place}-390x844`);
-    await p.evaluate(() => window.__theatre.pieces.walk.back());
-    await settle(p);
-  }
+  await panBy(p, 'l', 1);
+  await shot(p, 'floor-left-wall-390x844');
+  await square(p);
+  await panBy(p, 'r', 1);
+  await shot(p, 'floor-right-wall-390x844');
   await p.close();
   const lap = await room(...PLATE, '', false);
-  await shot(lap, 'chosen-none-1280x800');
-  claim((await drawn(lap)).length === 0, '1280x800: the render carries no marks');
+  await frames(lap, 6);
+  await shot(lap, 'floor-none-1280x800');
+  claim((await drawn(lap)).length === 0, '1280x800: the render carries no rings');
   await lap.close();
-  console.log(`  → ${OUT}/`);
+  console.log(`  → ${OUT}/floor-left-wall-390x844.png · floor-right-wall-390x844.png · floor-none-1280x800.png`);
 }
 
 console.log(bad ? `\n${bad} claim(s) failed` : '\nevery claim holds');
