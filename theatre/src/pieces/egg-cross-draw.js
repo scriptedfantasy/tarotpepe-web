@@ -1,7 +1,14 @@
-// THE DRAWINGS THE CROSS EGG NEEDS, and nothing else lives in here: the little cross on the frieze,
-// the door leaf as a sheet (because the room's own leaf is merged into the wall and cannot swing),
-// the weather that stands in the opening once the leaf is off the jamb, and the crossroads — which
-// after round 2 is not in the doorway at all but a plate in the open air that the room cuts to.
+// THE DRAWINGS THE CROSS EGG NEEDS, and nothing else lives in here: the little cross on the frieze
+// with its two fixings, the door leaf as a sheet (because the room's own leaf is merged into the
+// wall and cannot swing), and the crossroads — which after round 2 is not in the doorway at all but
+// a plate in the open air that the room walks out to.
+//
+// ROUND 5 TOOK FOUR DRAWINGS OUT OF IT. The outside gone over in rain, egg-rain's own dashes in a
+// four-column atlas in front of that, the bank of cloud on the plate and the fork of lightning that
+// blanked it were all the storm's, and the cross does not bring a storm any more — it turns itself
+// upside down and opens the floor (egg-cross.js, round 5; src/pieces/egg-cellar.js). None of the
+// four had a second caller, so none of them is left standing unused. What is in the doorway now is
+// one sheet of bare paper that egg-cross.js makes for itself in three lines.
 //
 // ONE PEN FOR ALL OF THEM. Every drawing here is cut at a canvas scale of its own — the cross is
 // 0.2 m across and the crossroads is 6 m wide — so a nib measured in canvas pixels would be half a
@@ -120,7 +127,14 @@ export function ring(cx, cy, rx, ry, n = 14) {
 // The strokes are the room's nib at two and a half, which is what makes them read as a piece of
 // wood and not as a pen line: a mark that is only a contour wide is a scratch on the plaster.
 // =================================================================================================
-export function drawCross({ w, h, ppm, penM, seed = 4471 }) {
+// ROUND 5 GAVE IT A SECOND FIXING, and it is the one the whole egg turns about. A cross that hangs
+// on a nail alone turns every time the door under it bangs; anything that has been over a door for
+// forty years also has a panel pin through its foot. `pin` is where that pin is, as a fraction of
+// the height UP FROM THE FOOT — the cross swings on it when the head lets go — and it is drawn as a
+// smaller dot than the nail, because a nail carrying a cross shows its head and a pin driven flush
+// shows the ring the hammer left. Both marks are on THE WOOD and not on the plaster: what is in the
+// wall is a hole, and a hole three pixels across on plaster at this distance is nothing.
+export function drawCross({ w, h, ppm, penM, seed = 4471, pin = 0.09 }) {
   const c = makeCanvas(Math.round(w * ppm), Math.round(h * ppm));
   const g = c.getContext('2d');
   const W = c.width, H = c.height;
@@ -142,6 +156,20 @@ export function drawCross({ w, h, ppm, penM, seed = 4471 }) {
   g.beginPath();
   g.ellipse(x - pen * 0.1, ny, pen * 0.55, pen * 0.38, 0, 0, Math.PI * 2);
   g.fill();
+  // …and the pin through the foot, which is what the cross turns on. Driven flush, so it is the ring
+  // the hammer left and not a head standing off the wood: a dot two thirds of the nail's, with one
+  // short stroke of the dent round it.
+  // …and it is at 1 - pin of the SHEET and not of the drawn cross, because the sheet is what turns:
+  // the mesh's pivot is at exactly this v (egg-cross.js, CROSS_UP), so the dot is the pivot and a
+  // proof can measure the ink either side of it. At pin 0.09 that is 21 mm above the sheet's foot,
+  // which is 10 mm inside the wood — where a panel pin goes, clear of the end grain it would split.
+  const py = H * (1 - pin);
+  g.beginPath();
+  g.ellipse(x + pen * 0.18, py, pen * 0.36, pen * 0.3, 0, 0, Math.PI * 2);
+  g.fill();
+  inkLine(g, x + pen * 0.18 - pen * 0.62, py + pen * 0.34, x + pen * 0.18 + pen * 0.3, py + pen * 0.46, {
+    width: pen * 0.32, wobble: pen * 0.14, rng, alpha: 0.7, segments: 2,
+  });
   return c;
 }
 
@@ -308,65 +336,6 @@ export function drawLeaf({ w, h, ppm, penM, seed = 9137, back = false }) {
 //   THE FLASH is bare paper, cut to the same opening, on for ONE drawing with the rain taken off
 //     it: the whole doorway goes white while the room's own tone jumps. A flash that lasted two
 //     drawings would be a lamp.
-// =================================================================================================
-
-// egg-rain.js's own stroke, in egg-rain.js's own words: "one straight dash at 17 deg off the
-// vertical, a pen's width, a hand's wobble, no head, no splash, no ellipse."
-export const RAIN_SLANT = 0.3;
-const RAIN_LEN = [0.055, 0.115]; // metres: a dash, not a streak
-
-// The outside in the rain: paper, and one level of strokes leaning the way the weather does.
-export function drawOutside({ w, h, ppm, penM, seed = 5501 }) {
-  const c = makeCanvas(Math.round(w * ppm), Math.round(h * ppm));
-  const g = c.getContext('2d');
-  const W = c.width, H = c.height;
-  const rng = mulberry32(seed);
-  const pen = penM * ppm;
-  g.fillStyle = PAPER;
-  g.fillRect(0, 0, W, H);
-  // ONE level, and widely spaced. Two levels in an opening 147 px wide at the home plate is a black
-  // rectangle in the wall, which is a hole and not weather; one at this spacing is the tone an
-  // overcast doorway goes to, built out of marks the pen actually made.
-  hatchRect(g, 0, 0, W, H, { angle: Math.PI / 2, spacing: pen * 6.2, width: pen * 0.45, wobble: pen * 0.4, broken: 0.9, rng, jitter: pen * 2.2, alpha: 0.4 });
-  // …and the ground outside it, which is the one line that says a road is out there at all: a
-  // single stroke low across the opening, where a threshold gives onto it.
-  inkLine(g, 0, H * 0.9, W, H * 0.9 - pen * 0.6, { width: pen * 0.8, wobble: pen * 0.5, rng, segments: 4, alpha: 0.8 });
-  return c;
-}
-
-// The rain itself, four throws in one atlas. The deal is stratified for egg-rain's reason: a field
-// generated on a grid and handed out every fourth drop divides the OPENING and not the rain.
-export function drawRain({ w, h, ppm, penM, cols = 4, seed = 8123 }) {
-  const TW = Math.round(w * ppm), TH = Math.round(h * ppm);
-  const c = makeCanvas(TW * cols, TH);
-  const g = c.getContext('2d');
-  const pen = penM * ppm;
-  // cells about 75 mm across and 105 down, which is egg-rain's density on a pane of its casement
-  const gx = Math.max(3, Math.round(w / 0.115)), gy = Math.max(4, Math.round(h / 0.16));
-  const cw = TW / gx, ch = TH / (gy - 1);
-  for (let col = 0; col < cols; col++) {
-    const rng = mulberry32(seed + col * 7919);
-    g.save();
-    g.beginPath();
-    g.rect(col * TW, 0, TW, TH);
-    g.clip();
-    for (let j = 0; j < gy; j++)
-      for (let i = 0; i < gx; i++) {
-        // the first row starts ABOVE the sheet, so rain crosses the head of the opening instead of
-        // beginning at it: a doorway whose rain starts tidily at its head is a pattern, not weather
-        const x = col * TW + (i + 0.5) * cw + (rng() - 0.5) * cw * 0.9;
-        const y = (j - 1 + 0.5) * ch + (rng() - 0.5) * ch * 0.8;
-        const len = (RAIN_LEN[0] + rng() * (RAIN_LEN[1] - RAIN_LEN[0])) * ppm;
-        const a = RAIN_SLANT + (rng() - 0.5) * 0.09;
-        inkLine(g, x, y, x + Math.sin(a) * len, y + Math.cos(a) * len, {
-          width: pen * (0.82 + rng() * 0.36), wobble: pen * 0.16, rng, segments: 2,
-        });
-      }
-    g.restore();
-  }
-  return c;
-}
-
 // =================================================================================================
 // 4. THE CROSSROADS, ON A PLATE IN THE OPEN AIR — WHICH IS NOW ONLY THE UNDERSTUDY.
 //
@@ -794,172 +763,18 @@ function childInto(g, { X, Y, P, W, H, pen, fine, wob, rng, tone }) {
 }
 
 // =================================================================================================
-// 5. THE WEATHER ON THE PLATE, AND THE STRIKE THAT BLANKS IT.
+// 5. THE WEATHER ON THE PLATE, AND THE STRIKE THAT BLANKED IT — BOTH RETIRED (round 5).
 //
-// THE SKY IS ITS OWN SHEET and it stands BEHIND the landscape, which is why the landscape's sky is
-// a hole. Take the left-hand road and the storm has to clear while the visitor is still looking out
-// at the country; a bank of cloud drawn into the picture cannot lift off it. So the bank and the
-// bolt are drawn in THREE drawings on one atlas — the bank whole, the bank broken into three
-// masses, a last pair of wisps — and then the sheet is taken off and the sky is the paper the sun
-// is already standing in. Three drawings over three seconds is a cloud lifting the way this film
-// would draw one: cut, cut, cut, gone. Not a fade.
+// A bank of scalloped cloud in three drawings, standing behind the country and lifting off it when
+// the visitor took the bright road; and one drawing of bare paper with a great fork of light down
+// it, which is what a strike did to the whole frame. They were the storm's, and the cross does not
+// bring a storm any more — it turns itself upside down and opens the floor (egg-cross.js, round 5).
+// Neither drawing had another caller, so both are gone rather than left standing unused, and the
+// two sheets that hung them are out of egg-cross.js with them.
 //
-// The bank runs off the TOP of the sheet and its underside is SCALLOPED: a row of half-circles of
-// different depths, because that is how a pen draws cloud and nothing else does. A single long wave
-// comes out as a torn edge of paper with hatching behind it, which puts a second mountain in the
-// sky. And nothing here is drawn under full alpha: the sheet is a cut-out, so a stroke at half
-// strength is a stroke the alpha test throws away. Weight is spacing, not opacity.
+// Section 3's own two went the same way and for the same reason: the outside gone over in rain, and
+// egg-rain's dashes re-struck on the twelves in a four-column atlas in front of it. What is left in
+// the doorway is one sheet of bare paper, which egg-cross.js makes for itself in three lines,
+// because an open door onto a bright afternoon seen from inside a room IS a white rectangle and a
+// drawing of one would be a drawing of nothing.
 // =================================================================================================
-// ROUND 3 — `solid` and `skyV`, and both of them are the traced picture arriving. Behind the DRAWN
-// landscape (whose sky is a hole) this bank has to be filled with paper or the alpha test eats its
-// strokes on a phone; in FRONT of a TRACED one — which is opaque and has a sky of its own — that
-// same fill would paint a paper slab over the best corner of the meme. `solid: false` leaves the
-// bank as strokes on nothing: a storm laid OVER the picture rather than seen through it, and one
-// that lifts off it in the same three drawings. `skyV` is how far down the sheet reaches, which is
-// the traced original's own skyline when there is one (tools/trace-plate.mjs measures it).
-export function drawSky({ w, h, ppm, penM, cols = 3, seed = 3307, solid = true, skyV = LAND.skyV }) {
-  const TW = Math.round(w * ppm), TH = Math.round(h * ppm);
-  const c = makeCanvas(TW * cols, TH);
-  const g = c.getContext('2d');
-  const pen = penM * ppm;
-  const fine = pen * 0.62;
-  const wob = pen * 0.34;
-  const S = skyV; // the sheet covers the top S of the plate: a plate v is v/S of this canvas
-  const X = (u) => u * TW, Y = (v) => (v / S) * TH;
-  const P = (u, v) => [X(u), Y(v)];
-  const stages = [
-    { runs: [[0.4, 1.07]], depth: 1, spacing: 2.6, broken: 0.12, bolt: true },
-    { runs: [[0.45, 0.66], [0.73, 0.9], [0.97, 1.09]], depth: 0.66, spacing: 3.7, broken: 0.3, bolt: false },
-    { runs: [[0.55, 0.67], [0.83, 0.93]], depth: 0.36, spacing: 5.2, broken: 0.5, bolt: false },
-  ];
-  for (let col = 0; col < cols; col++) {
-    const st = stages[Math.min(col, stages.length - 1)];
-    const rng = mulberry32(seed + col * 613);
-    g.save();
-    g.translate(col * TW, 0);
-    g.beginPath();
-    g.rect(0, 0, TW, TH);
-    g.clip();
-    for (const [u0, u1] of st.runs) {
-      const bumps = Math.max(2, Math.round((u1 - u0) / 0.075));
-      const step = (u1 - u0) / bumps;
-      const v0 = 0.24;
-      const under = [];
-      for (let b = 0; b < bumps; b++) {
-        const cu = u0 + step * (b + 0.5);
-        const r = step * 0.56;
-        const dp = 0.062 * st.depth * (0.55 + 0.45 * Math.sin(b * 2.31 + 1.1));
-        for (let i = 0; i <= 7; i++) {
-          const a = Math.PI * (i / 7);
-          under.push(P(cu - r * Math.cos(a), v0 + b * 0.004 + dp * Math.sin(a)));
-        }
-      }
-      // it runs off the top of the sheet: two corners above the frame close it, so there is no
-      // upper contour to read as the edge of an object
-      const pts = [P(u0 - 0.03, -0.1), ...under, P(u1, -0.1)];
-      // AND THE BANK IS FILLED WITH PAPER BEFORE IT IS HATCHED, which is a fact about the alpha
-      // test rather than about the drawing. This sheet is a CUT-OUT — a pixel under half alpha is
-      // a pixel the test throws away — and a minified mipmap turns a thin stroke into a row of
-      // dots exactly there: on a 390-wide phone the whole bank came out as drizzle. Filled, the
-      // only cut edge in the cloud is its own silhouette and every stroke inside it lands on solid
-      // paper. (The paper is the same paper the sky behind it is, so nothing shows.)
-      if (solid) {
-        g.save();
-        g.fillStyle = PAPER;
-        g.beginPath();
-        g.moveTo(pts[0][0], pts[0][1]);
-        for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
-        g.closePath();
-        g.fill();
-        g.restore();
-      }
-      poly(g, under, { width: pen * 0.7, wobble: wob, rng });
-      hatchIn(g, pts, [X(u0 - 0.04), Y(-0.12), X(u1 - u0 + 0.08) - X(0), Y(0.44) - Y(-0.12)], {
-        angle: 1.2, spacing: pen * st.spacing, width: fine * 0.62, wobble: wob * 0.9, broken: st.broken, rng, alpha: 0.85,
-      });
-    }
-    // THE LIGHTNING, out of the cloud and down behind the crag's right shoulder, struck with the
-    // CARPENTER'S hand: a zig-zag smoothed through its midpoints is not a zig-zag, it is a ribbon.
-    if (st.bolt) {
-      frame(g, BOLT.map(([u, v]) => P(u, v)), { width: pen * 1.9, wobble: wob * 0.4, rng, close: false, segments: 1 });
-      frame(g, [P(0.686, 0.366), P(0.73, 0.402)], { width: pen * 1.1, wobble: wob * 0.4, rng, close: false, segments: 1 });
-    }
-    g.restore();
-  }
-  return c;
-}
-
-// THE STRIKE. One drawing, and the country is blown to bare paper: everything that was tone is
-// gone, everything that was contour stands, and a great fork of light comes down the middle of the
-// sky. It is the same thing the window in the parlour already does with its four panes — the room's
-// own flash is one drawing of white glass — and it is what the frame does when a strike lands while
-// the visitor is standing outside looking at the picture.
-//
-// It is cut at a coarser scale than the landscape on purpose. The nib is passed in METRES, so the
-// lines come out at the same width on the glass whatever the sheet's own resolution, and one
-// drawing at 12 fps has nobody measuring its rasterisation.
-export function drawStrike({ w, h, ppm, penM, seed = 6151 }) {
-  const c = makeCanvas(Math.round(w * ppm), Math.round(h * ppm));
-  const g = c.getContext('2d');
-  const W = c.width, H = c.height;
-  const rng = mulberry32(seed);
-  const pen = penM * ppm;
-  const fine = pen * 0.62;
-  const wob = pen * 0.34;
-  const X = (u) => u * W, Y = (v) => v * H;
-  const P = (u, v) => [X(u), Y(v)];
-  const L = (pts) => pts.map(([u, v]) => P(u, v));
-  const HZ = LAND.hz;
-  g.fillStyle = PAPER;
-  g.fillRect(0, 0, W, H);
-
-  // the great bolt: three forks out of the top of the sheet, the middle one down onto the crag. It
-  // is struck FIRST and the country is filled over it, so the far end of it goes behind the ridge —
-  // lightning that stopped tidily on a skyline would be a decal.
-  frame(g, [P(0.585, -0.06), P(0.64, 0.1), P(0.588, 0.14), P(0.66, 0.29), P(0.606, 0.32), P(0.672, 0.44)], { width: pen * 3.4, wobble: wob * 0.5, rng, close: false, segments: 1 });
-  frame(g, [P(0.66, 0.29), P(0.762, 0.386)], { width: pen * 2.1, wobble: wob * 0.5, rng, close: false, segments: 1 });
-  frame(g, [P(0.588, 0.14), P(0.496, 0.262), P(0.54, 0.3)], { width: pen * 1.8, wobble: wob * 0.5, rng, close: false, segments: 1 });
-
-  // the country, in contour and nothing else — and BACK TO FRONT, each ridge filled and then
-  // struck, so the horizon does not run through the hill and the roads do not run through both
-  const fill = (pts) => {
-    g.save();
-    g.fillStyle = PAPER;
-    g.beginPath();
-    g.moveTo(pts[0][0], pts[0][1]);
-    for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
-    g.closePath();
-    g.fill();
-    g.restore();
-  };
-  const hill = hillLine(16);
-  g.fillStyle = PAPER;
-  g.fillRect(0, Y(HZ - 0.002), W, H - Y(HZ - 0.002) + 2);
-  poly(g, [P(-0.03, HZ + 0.006), P(0.5, HZ - 0.001), P(1.03, HZ + 0.005)], { width: pen * 0.9, wobble: wob, rng });
-  fill(L([...hill, [0.55, HZ + 0.02], [-0.05, HZ + 0.02]]));
-  poly(g, L(hill), { width: pen * 0.95, wobble: wob, rng });
-  fill(L([...CRAG, [1.05, HZ + 0.02], [0.49, HZ + 0.02]]));
-  poly(g, L(CRAG), { width: pen * 0.95, wobble: wob, rng });
-  {
-    const foot = (u) => hillAt(u) + 0.003;
-    const blk = (a, b, ht) => {
-      const base = Math.min(foot(a), foot(b));
-      frame(g, [P(a, foot(a)), P(a, base - ht), P(b, base - ht), P(b, foot(b))], { width: pen * 0.85, wobble: wob, rng, fill: PAPER });
-      return base - ht;
-    };
-    const B = brightBlocks();
-    blk(...B.hall);
-    for (const t of [B.tower1, B.tower2]) {
-      const top = blk(...t);
-      frame(g, [P(t[0] - 0.008, top), P((t[0] + t[1]) / 2, top - 0.026), P(t[1] + 0.008, top)], { width: pen * 0.85, wobble: wob, rng, fill: PAPER });
-    }
-    const D = darkBlocks();
-    for (const k of ['keep', 'tower', 'spire']) frame(g, L(D[k]), { width: pen * 0.9, wobble: wob, rng, fill: PAPER });
-  }
-  for (const k of ['nearL', 'nearR']) poly(g, L(ROADS[k]), { width: pen * 0.95, wobble: wob, rng });
-  for (const k of ['leftOut', 'leftIn', 'rightIn', 'rightOut']) poly(g, L(ROADS[k]), { width: pen * 0.85, wobble: wob, rng });
-  for (const k of ['noseL', 'noseR']) poly(g, L(ROADS[k]), { width: fine, wobble: wob * 0.8, rng });
-  postInto(g, { X, Y, P, pen, wob, rng });
-  childInto(g, { X, Y, P, W, H, pen, fine, wob, rng, tone: false });
-  return c;
-}

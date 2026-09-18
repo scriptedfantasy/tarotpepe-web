@@ -116,6 +116,30 @@ export const LEVEL = {
   // …and the toad hitting the boards. Between the mains lever and a card landing: it is small and
   // it is a foot off the floor, so it is a knock and not a crash.
   thud: 0.096,
+
+  // ---- THE CROSS AND THE FLOOR UNDER IT (egg-cross.js, egg-cellar.js) --------------------------
+  // Four events and they are two pairs: something small letting go of a wall three metres away, and
+  // something big letting go of a floor two metres away. The two pairs are levelled against each
+  // other and not each against the room: the wall pair sits UNDER the toad's fall and the floor pair
+  // sits OVER it, because a trapdoor is the largest single object this film ever moves and a panel
+  // pin is the smallest.
+  //
+  // the head fixing giving up: a 40 mm nail coming out of forty-year-old plaster. It is barely a
+  // sound — under the toad's croak — and it is here at all because the cross starts moving on the
+  // same drawing and a thing that begins in silence has not begun.
+  nail: 0.024,
+  // …and the wood arriving under its own pin, rapping the plaster on the way. Between the croak and
+  // the toad's fall: a lath 230 mm long, swinging on one pin, striking a wall.
+  rap: 0.062,
+  // THE BOARDS COMING UP. The loudest sustained thing in the room after the thunder that used to be
+  // here — three boards, a ledge and 900 mm of hinge, all of it under the visitor's own feet — and
+  // still a whisker under the mains lever's clack at 0.138, because the lever is a thing the room
+  // does with its own hands and this is a thing the room does to itself.
+  hatch: 0.118,
+  // …and the lid landing flat on the boards beyond the hole. Over the clack, and the only cue in the
+  // film that is: 2 kg of board falling 900 mm onto a boarded floor is the loudest event in the
+  // parlour and there is no sense pretending otherwise.
+  lid: 0.152,
 };
 
 // A filter eats most of a noise burst, and how much depends on its Q, so LEVEL above is a wish and
@@ -183,6 +207,14 @@ export const TRIM = {
   // two square waves and nothing filters them, so its trim is very nearly 1 by construction.
   croak: 1.002,
   thud: 2.032,
+  // measured with tools/_egg-cross-proof.mjs --sound, which renders all four through the same
+  // OfflineAudioContext tools/_sound-probe.mjs uses and prints the trims back. The two grain banks
+  // are high-Q and lose nearly everything to their filters, which is why `hatch` reads like the
+  // creak's own 24 and the two struck cues read like the knock's 1.6.
+  nail: 1,
+  rap: 1,
+  hatch: 1,
+  lid: 1,
 };
 
 // how long each cue is allowed to be, in seconds; the probe asserts the rendered length against it
@@ -259,6 +291,19 @@ export const LENGTH = {
   // 0.12, and it is short on purpose: a hundred grams of moulded plastic on a boarded floor is two
   // contacts and no ring. Rendered, it is audible for 0.084 s (tools/_egg-peep-proof.mjs --sound).
   thud: 0.12,
+  // 0.14: a nail coming out is a rip and a tick, and it has to be over before the cross has moved
+  // its first drawing (1/12 s) or the sound is describing something that already happened.
+  nail: 0.14,
+  // 0.16, which is the latch's own length and for the latch's reason: two hard contacts, wood on
+  // plaster, and no ring at all — plaster does not ring.
+  rap: 0.16,
+  // 0.42, and the number is arithmetic. The boards go over in seventeen drawings at 12 fps, which
+  // is 1.42 s, and the creak is the FIRST third of that: the seal letting go and the hinge taking
+  // the weight. After that the lid is falling and a falling thing is silent until it lands.
+  hatch: 0.42,
+  // 0.34: a 2 kg board landing flat on a boarded floor, the floor answering under it, and a second
+  // contact at the rebound. Three times the toad's 0.12 because it is twenty times the toad.
+  lid: 0.34,
 };
 
 // ---- the two primitives --------------------------------------------------------------------------
@@ -1036,12 +1081,88 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.thud;
     }
 
+    // ---- THE CROSS'S TOP FIXING LETS GO (egg-cross.js) -----------------------------------------
+    // A nail coming out of plaster, and the whole of it is the GRIT: forty years of lime dust
+    // giving up its grip on a shank, which is a short rip of narrow-band noise sweeping DOWN as the
+    // hole opens, with a tick of steel on steel at the end of it where the head clears the wood.
+    // There is no thump: nothing has landed yet.
+    case 'nail': {
+      const rip = ac.createBiquadFilter();
+      rip.type = 'bandpass';
+      rip.Q.value = 3.2;
+      rip.frequency.setValueAtTime(2600, t);
+      rip.frequency.exponentialRampToValueAtTime(900, t + 0.075);
+      rip.connect(out(ac, dest, pan));
+      for (let i = 0; i < 5; i++)
+        burst(ac, rip, { t: t + i * 0.012, dur: 0.02 + rng() * 0.016, level: L('nail') * (0.5 + rng() * 0.5), freq: 2200 + rng() * 900, q: 5 + rng() * 4, seed: seed + i });
+      burst(ac, dest, { t: t + 0.07, dur: 0.006, level: L('nail') * 0.8, freq: 3900, q: 1.6, pan, seed: seed + 9 });
+      return LENGTH.nail;
+    }
+    // ---- …AND THE WOOD RAPS THE PLASTER (egg-cross.js) -----------------------------------------
+    // Two contacts and no ring. A lath swinging on one pin hits the wall with its edge and then flat
+    // 26 ms later, and what it hits is lime plaster on lath, which absorbs: a short lowpassed knock
+    // with a dry little top on it and nothing behind it. The `knock` cue's big thin panel ringing
+    // low would be a door; this is a wall.
+    case 'rap': {
+      burst(ac, dest, { t, dur: 0.005, level: L('rap') * 0.55, freq: 2400, q: 1.3, pan, seed });
+      burst(ac, dest, { t, dur: 0.045, level: L('rap'), freq: 330, q: 0.9, type: 'lowpass', pan, seed: seed + 1 });
+      struck(ac, dest, { t, dur: 0.06, level: L('rap') * 0.3, freq: 196 + rng() * 18, type: 'triangle', partials: [[2.9, 0.18, 0.3]], pan });
+      burst(ac, dest, { t: t + 0.026, dur: 0.035, level: L('rap') * 0.42, freq: 260, q: 0.9, type: 'lowpass', pan, seed: seed + 2 });
+      return LENGTH.rap;
+    }
+    // ---- THE BOARDS COME UP (egg-cellar.js) ----------------------------------------------------
+    // The hinge cue's shape at three times the size, and the difference is where the grains CROWD.
+    // A door's hinge is loudest at the start, when the leaf breaks away; a trapdoor is loudest in
+    // the MIDDLE, because the first thing that happens is forty years of paint parting all round
+    // three sides of it and the second is 900 mm of iron taking the whole weight at once. So the
+    // grains accelerate into the middle of the cue and thin out after it, their resonance climbing
+    // 210 to 760 Hz as the lid comes up, over one long bed of moved air — which the door's own cue
+    // has at 220 ms and this one has at 380, because this is a bigger board and a bigger hole.
+    case 'hatch': {
+      const dull = ac.createBiquadFilter();
+      dull.type = 'lowpass';
+      dull.frequency.value = 1150;
+      dull.Q.value = 0.7;
+      dull.connect(out(ac, dest, pan));
+      for (let i = 0; i < 17; i++) {
+        // the grains bunch where the work is: the spacing is squeezed by up to 38% across the
+        // middle of the run and let back out at both ends, so seventeen of them still fill 300 ms
+        const u = i / 16;
+        const at = 0.3 * (u - 0.19 * Math.sin(Math.PI * u) * (u - 0.5) * 2);
+        burst(ac, dull, {
+          t: t + at,
+          dur: 0.022 + rng() * 0.03,
+          level: L('hatch') * (0.3 + 0.7 * Math.sin(Math.PI * u)) * (0.6 + rng() * 0.5),
+          freq: 210 + u * 550 + rng() * 190,
+          q: 8 + rng() * 7,
+          seed: seed + i,
+        });
+      }
+      burst(ac, dest, { t, dur: 0.38, level: L('hatch') * 0.3, freq: 190, q: 0.6, type: 'lowpass', attack: 0.04, pan, seed: seed + 31 });
+      return LENGTH.hatch;
+    }
+    // ---- …AND THE LID LANDS ON THE BOARDS (egg-cellar.js) ---------------------------------------
+    // The toad's own two contacts at twenty times the mass, and one thing it has that the toad has
+    // not: the FLOOR answers. A board dropped flat on a boarded floor puts a low body into the
+    // joists that outlasts the impact itself, so under the slap there is a 58 Hz tone with a long
+    // tail on it — the only thing in this room below the thunder that used to be here. The second
+    // contact is the nine-and-a-half degree rebound coming back down, 165 ms later, which is
+    // egg-cellar.js's own pose table read as a sound.
+    case 'lid': {
+      burst(ac, dest, { t, dur: 0.008, level: L('lid') * 0.55, freq: 1650, q: 1.3, pan, seed });
+      burst(ac, dest, { t, dur: 0.09, level: L('lid'), freq: 210, q: 0.8, type: 'lowpass', pan, seed: seed + 1 });
+      struck(ac, dest, { t, dur: 0.3, level: L('lid') * 0.5, freq: 58 + rng() * 6, type: 'sine', partials: [[2.7, 0.2, 0.3], [4.4, 0.09, 0.18]], pan });
+      burst(ac, dest, { t: t + 0.165, dur: 0.06, level: L('lid') * 0.34, freq: 178, q: 0.85, type: 'lowpass', pan, seed: seed + 2 });
+      burst(ac, dest, { t: t + 0.165, dur: 0.006, level: L('lid') * 0.18, freq: 1400, q: 1.4, pan, seed: seed + 3 });
+      return LENGTH.lid;
+    }
+
     default:
       return 0;
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink', 'blip', 'croak', 'thud'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink', 'blip', 'croak', 'thud', 'nail', 'rap', 'hatch', 'lid'];
 // ---- THE WEATHER: a bed, not a cue (egg-rain.js) --------------------------------------------------
 // The room tone above is the only other thing in this piece that RUNS rather than happens, and this
 // is built the same way and for the same reason: rain does not have a beginning, a shape and an end

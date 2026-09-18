@@ -53,12 +53,13 @@ import { eggPeep } from './egg-peep.js';
 import { buildKonami } from './egg-konami.js';
 // THE DECK ITSELF, laid out face up on the cloth (src/pieces/egg-deck.js).
 import { eggDeck } from './egg-deck.js';
-// THE CROSS on the frieze over the door, and the storm behind it (src/pieces/egg-cross.js).
+// THE CROSS on the frieze over the door, and the cellar under the floor (src/pieces/egg-cross.js,
+// src/pieces/egg-cellar.js).
 import { eggCross } from './egg-cross.js';
 
 export const meta = {
   name: 'props',
-  judge: { shot: 'wide', states: ['default', 'cat-lit', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'dark', 'peep-fallen', 'konami-house', 'deck-out', 'cross-storm', 'cross-out', 'cross-dark'] },
+  judge: { shot: 'wide', states: ['default', 'cat-lit', 'fuse-out', 'vortex-mid', 'wine-drunk', 'globe-spinning', 'vase-empty', 'vase-leaf', 'rain', 'fine-burning', 'dark', 'peep-fallen', 'konami-house', 'deck-out', 'cross-open'] },
   files: ['src/pieces/props.js', 'src/pieces/props-textures.js', 'src/pieces/props-objects.js'],
 };
 
@@ -1423,9 +1424,14 @@ export async function build(ctx) {
   // with the room idle and the seventy-eight come off the pile face up into five bows; a tap on one
   // brings it to the lens; a tap anywhere else rakes them home. src/pieces/egg-deck.js.
   const DECK_OUT = eggDeck(ctx, { switches: SWITCHES, konami: KONAMI });
-  // ---- THE CROSS over the door, and the storm it lets in (src/pieces/egg-cross.js). ------------
-  // It is given the pendant (which it lifts into a pivot at the rose so that it can swing) and the
-  // room's own door rectangle; the rain, the light and the sound it asks for by their own apis.
+  // ---- THE CROSS over the door, and the floor it opens (src/pieces/egg-cross.js). --------------
+  // Click it and the top fixing lets go: the cross turns over and hangs upside down on the frieze,
+  // and a hatch in the boards in front of the visitor lifts on a red stair going down
+  // (src/pieces/egg-cellar.js, which that file builds for itself). It is given the pendant — which
+  // it lifts into a pivot at the rose so that it can swing when something comes off a wall — and the
+  // room's own door rectangle, because the DOOR is still its own: the visitor can walk over and open
+  // it by hand, and the crossroads is still what is behind it. The rain and the sound it asks for by
+  // their own apis. It used to be handed a storm as well and there is no storm any more.
   const CROSS = eggCross(ctx, { group: g, switches: SWITCHES, pendant, door: room.door, rain: RAIN });
   // ---- THE SPINET under the wide window (src/pieces/props-piano.js) -----------------------------
   // The user: "can we squeeze a piano between the fireplace and the wall under the window?" It is
@@ -1490,15 +1496,19 @@ export async function build(ctx) {
     // and the `deck-out` state hold a frame of it, and hitBox/tapBox are the squared deck's box on
     // the glass and the box a thumb is given.
     deck: DECK_OUT,
-    // THE CROSS on the frieze over the door. `phase` is shut / storm / open / closing / dark,
-    // `path` what the visitor chose at the fork (null until they do), `click()` works the cross as
-    // a pointer does — rain, lightning, thunder, the swing and all — `choose('light'|'dark')` takes
-    // a road as a click on it does, `set(phase)` puts it there for a still with no cue, and
-    // hitBox/tapBox are the cross's box on the glass and the box a thumb is given. Once the leaf is
-    // open the ROOM WALKS OUT THROUGH THE DOOR to the camera's `crossroads` shot, where a drawn
-    // sheet outside the wall fills the frame at every window shape: `out` says whether it is up,
+    // THE CROSS on the frieze over the door, and the cellar under the floor. `phase` is shut /
+    // falling / opening / open / closing (and day / day-closing for the door by hand), `open` says
+    // whether the hatch is open — which is the one fact flow.js and the note the server writes him
+    // read — `click()` works the cross as a pointer does and puts it all back on a second one,
+    // `set(phase)` holds a phase for a still with no cue, and hitBox/tapBox are the cross's box on
+    // the glass and the box a thumb is given. `cellar` is the hatch's own api: its rectangle, its
+    // well, the one red, the pose tables, and `bottom` for the room nobody has built down there yet.
+    // THE DOOR IS STILL ITS OWN and is reached only from the doorway place (walk.js): `openByDay` /
+    // `shutByDay` work it, the room then WALKS OUT to the camera's `crossroads` shot where a drawn
+    // sheet outside the wall fills the frame at every window shape, `out` says whether it is up,
     // `castleBox('light'|'dark')` is that castle's box on the glass — the two castles are the
-    // switches since round 4 — and `at(u, v)` is any point of the traced original, in pixels.
+    // switches — `choose('light'|'dark')` takes a road as a click on it does, `path` is what was
+    // chosen, and `at(u, v)` is any point of the traced original, in pixels.
     cross: CROSS,
     // THE TALL CASE, for the piece that opens its books. `unit` is the carcase, `books` the spines
     // standing on its boards (each mesh carries `userData.title`), `boards` their heights and
@@ -1622,9 +1632,10 @@ export async function build(ctx) {
       // `konami-house` is the house of cards standing on the cloth; every other name puts the deck
       // back exactly as it was
       KONAMI.setState(name);
-      // `cross-storm` is the door open on the weather, seen from the room; `cross-out` is the
-      // crossroads itself, the room having cut through the door and out to the plate; `cross-dark`
-      // the storm that stayed. Every other name is a cross on a wall nobody has touched.
+      // `cross-open` is the cross hanging upside down on the frieze with the floor open under a red
+      // stair and the room leaning in to look down it. Every other name is a cross on a wall nobody
+      // has touched and a floor with no hole in it. (`cross-storm`, `cross-out` and `cross-dark`
+      // were the storm's three and went out with it.)
       CROSS.setState(name);
       // `deck-out` is the whole deck laid face up on the cloth, seen from the plan view; every
       // other name puts the deck back exactly as it was standing. LAST of the eggs, because it is
