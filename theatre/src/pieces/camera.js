@@ -50,11 +50,12 @@ import * as THREE from 'three';
 import { buildShots } from './camera-shots.js';
 import { tanHalf } from './camera-frame.js';
 import { mountChevrons } from './camera-pan.js';
+import { mountFree } from './camera-free.js';
 
 export const meta = {
   name: 'camera',
   judge: { shot: 'home', states: ['home', 'wide', 'pepe', 'table', 'spread', 'fan', 'turn', 'riffle', 'card1', 'door', 'crossroads', 'fireplace', 'doorway', 'case', 'piano', 'reading', 'track', 'whip', 'zoom-half', 'zoom-deep', 'pan-left', 'pan-right'] },
-  files: ['src/pieces/camera.js', 'src/pieces/camera-shots.js', 'src/pieces/camera-frame.js', 'src/pieces/camera-plan.js', 'src/pieces/camera-pan.js'],
+  files: ['src/pieces/camera.js', 'src/pieces/camera-shots.js', 'src/pieces/camera-frame.js', 'src/pieces/camera-plan.js', 'src/pieces/camera-pan.js', 'src/pieces/camera-free.js'],
 };
 
 // Motor speeds of the rail: a lateral track, a push. Metres per second.
@@ -113,9 +114,41 @@ export async function build(ctx) {
     Object.assign(shots, next);
   };
 
+  // ---- THE FREE WALK, behind `?free=1` (prototype) ---------------------------------------------
+  // The visitor gets off the chair and walks. Everything about it — the region on the floor, the
+  // keys, the drag, the tap, the lens, the puppet's turn — is in src/pieces/camera-free.js; what
+  // this file does is take a STATION from it once a drawing and strike it as it strikes any other
+  // shot, under the name `free`.
+  //
+  // THE SUBSTITUTION, which is the whole of the wiring. `home` and `wide` are the two plates the
+  // evening is watched from (RESTING, below) and a visitor on their feet is watching it from
+  // neither. So while the flag is on, every cut, every rail move and every dolly that asks for one
+  // of those two gets `free` instead — the free pose, at the station the visitor is standing on.
+  // Nothing else in the film had to learn a word of it:
+  //   flow.js re-asserts its frame at the top of every turn (`if (C.current !== frame) cut(frame)`)
+  //     and gets a cut to `free`, which is where the camera already is: `jump` swallows it below.
+  //   walk.js dollies to a place from `null` (the live pose, which is the free one) and dollies
+  //     BACK to `home`, which is this substitution, so leaving a place walks to the station the
+  //     visitor left from and not to the chair. It never learns that the chair moved.
+  //   the pan, the dive and the zoom are modifiers on `api.current === resting` and `free` is not
+  //     one, so all three are refused at their own door. `modifiable()` says so again out loud.
+  //   ink.js hangs the picture on the back wall off `C.current === C.restingShot`, which is now
+  //     false, so the photograph goes on being drawn from the `home` plate on the twelves — which
+  //     is what it is a photograph OF.
+  const FREE_ON = ctx.params?.get?.('free') === '1';
+  let FREE = null; // mounted at the foot of this file; null until then, and null for ever without the flag
+  const freeOwns = () => !!(FREE_ON && FREE?.seeded && !move && held == null && api.current === 'free');
+  // `home` or `wide` asked for while the visitor is on their feet is the free station, seeded from
+  // that plate the first time (which is the brief's "free mode starts from wherever the camera is").
+  function freeSub(shot) {
+    if (!FREE_ON || !FREE || typeof shot !== 'string' || !RESTING.includes(shot)) return shot;
+    if (!FREE.seeded) FREE.seed(shots[shot] ?? shots.home);
+    return 'free';
+  }
+
   // ---- poses ----
   const _m = new THREE.Matrix4();
-  const resolve = (s) => (typeof s === 'string' ? shots[s] : s) ?? shots.home;
+  const resolve = (s) => (s === 'free' && FREE ? FREE.shot() : typeof s === 'string' ? shots[s] : s) ?? shots.home;
   function poseOf(shot) {
     const pos = new THREE.Vector3().fromArray(shot.pos);
     const look = new THREE.Vector3().fromArray(shot.look);
@@ -350,6 +383,11 @@ export async function build(ctx) {
   // nothing in the room has the pointer. The list grew by one this round — a BOOK standing open
   // over the room (src/pieces/walk-book.js) owns the pointer exactly as the notice does.
   function modifiable() {
+    // AND NOT WHILE THE VISITOR IS ON THEIR FEET. `api.current === 'free'` already refuses both —
+    // `free` is not a resting plate — but the rule is said out loud because it is a rule and not an
+    // accident of a name: a pan is a head turned on a fixed station and a dive is a walk up the
+    // photograph's own normal, and neither means anything to somebody who can simply walk.
+    if (FREE_ON) return false;
     if (held != null || move || api.current !== resting) return false;
     const P = ctx.pieces?.props;
     if (P?.deck?.out || P?.cross?.out) return false;
@@ -465,7 +503,10 @@ export async function build(ctx) {
   // window and the move finishes in the shape it started in.
   ctx.on?.('resize', () => {
     reframe();
-    if (!move && api.current && shots[api.current]) applyPose(poseOf(shots[api.current]));
+    // the free station is not in `shots` and its LENS is solved for the window like everything else
+    // here, so a window dragged to another shape re-frames the walk too
+    if (!move && api.current === 'free' && FREE) applyPose(poseOf(FREE.shot()));
+    else if (!move && api.current && shots[api.current]) applyPose(poseOf(shots[api.current]));
     else {
       applyShift(shift[0], shift[1]);
       cam.updateProjectionMatrix();
@@ -541,6 +582,8 @@ export async function build(ctx) {
   //   every line in it. Held to the last stride, the lens only opens once there is nothing in the
   //   frame but a flat sheet, where a wide lens shows nothing at all.
   function dolly(fromShot, toShot, seconds = 2, { via = [], ease = [0.25, 0.25], fovEase = [0.72, 1] } = {}) {
+    fromShot = fromShot == null ? null : freeSub(fromShot);
+    toShot = freeSub(toShot); // walk.js's way home is `home`, and the way home is where they stood
     finish();
     // A move away from home LEAVES FROM WHERE THE VISITOR SCROLLED TO — `currentPose()` is the live
     // camera and that is the zoomed one — and the number goes back to zero, so the way home is the
@@ -601,6 +644,13 @@ export async function build(ctx) {
 
   // internal: no token bookkeeping (sequences and loops own their token)
   function jump(shot) {
+    shot = freeSub(shot);
+    // A CUT TO WHERE WE ALREADY ARE IS NOT A CUT. flow.js asks for its frame back at the top of
+    // every turn of the conversation, and with the flag on that is a cut to `free` on a camera
+    // already standing on the free station — or, worse, one halfway through the dolly BACK to it
+    // from a place, which this would otherwise snap. The station is the station; there is nothing
+    // to strike.
+    if (shot === 'free' && api.current === 'free') return;
     finish();
     resetZoom(); // a cut is a cut: the room is at t = 0 wherever it lands, the resting plate included
     resetPan(); // …and square to the wall again, whatever the visitor had turned to look at
@@ -609,6 +659,7 @@ export async function build(ctx) {
     applyPose(poseOf(resolve(shot)));
   }
   function startMove(shot, kind, duration) {
+    shot = freeSub(shot);
     finish();
     resetZoom(); // …and the rail leaves from the zoomed pose; see dolly() above
     resetPan();
@@ -759,6 +810,16 @@ export async function build(ctx) {
       const p = poseOf(s);
       return cam.position.equals(p.pos) && cam.quaternion.equals(p.q) && cam.fov === p.fov && shift[0] === p.shift[0] && shift[1] === p.shift[1];
     },
+    // ---- THE FREE WALK, for the tools -----------------------------------------------------------
+    // `armed` is the flag; `on` is whether the visitor is actually on their feet at this instant
+    // (false at a place, mid-dolly, during a reading's cuts and while anything is holding the
+    // camera); the rest is the prototype's own surface — the station, the region, the limits, and
+    // the two doors a tool uses instead of a keyboard (`put`, `key`).
+    get free() {
+      if (!FREE_ON || !FREE) return { armed: false, on: false };
+      return { armed: true, on: freeOwns(), ...FREE.pose, walking: FREE.walking, goal: FREE.goal, puppetYaw: FREE.puppetYaw, region: FREE.region, limits: FREE.limits, current: api.current };
+    },
+    freeApi: () => FREE,
     // the name of the plate the picture on the bookcase is drawn from, and the one a dive walks into
     get restingShot() {
       return resting;
@@ -926,6 +987,18 @@ export async function build(ctx) {
           const to = poseOf(shots.fan), from = move ? move.to : currentPose();
           if (from.pos.distanceTo(to.pos) > 0.004 || Math.abs(from.fov - to.fov) > 0.08) startMove('fan', 'open', OPEN_S);
         }
+      }
+      // THE FREE WALK, one new station per DRAWING, and it is stepped first because it is the pose
+      // itself and everything below is a modifier on a pose. The puppet's turn is handed the same
+      // answer on every tick, owned or not, so that he squares up again the moment a place or a cut
+      // takes the camera off the floor.
+      if (FREE_ON && FREE) {
+        const on = freeOwns();
+        if (on && ctx.clock.stepped) {
+          FREE.step();
+          applyPose(poseOf(FREE.shot()));
+        }
+        if (ctx.clock.stepped) FREE.frame(on);
       }
       // THE PAN, one new position per DRAWING, and it is stepped BEFORE the dive because a pan that
       // is not at nought disarms the dive — the walk back to centre has to be able to reach nought
@@ -1133,6 +1206,26 @@ export async function build(ctx) {
     if (!panAllowed()) return;
     panTarget = Math.max(-1, Math.min(1, panTarget + dir * PAN_STEP));
   });
+
+  // ---- AND THE PROTOTYPE, IF THE PAGE ASKED FOR IT ---------------------------------------------
+  // Mounted last, for the reason the chevrons are: it takes `api` apart to answer two questions —
+  // does free mode own the pose just now, and is the room busy — and `api` is not built until here.
+  // `blocked` is the same list a walk to a place is refused on (walk.js keeps it, and it is the only
+  // piece that knows about books, the notice, the deck and the crossroads all at once), plus the
+  // reading's own beats, because a visitor with three cards on the cloth is in the middle of
+  // something and their W key is not a request to leave the table.
+  if (FREE_ON) {
+    FREE = mountFree(ctx, {
+      owns: freeOwns,
+      aspect,
+      blocked: () => !!(ctx.pieces?.walk?.blocked ?? null) || !!ctx.pieces?.walk?.at || !!ctx.pieces?.help?.showing,
+    });
+    // …and the page that asked for it is standing on `home` (main.js cuts there) or is about to
+    // land on `wide` (entrance.js). Either way the first cut through `jump` seeds the station, so
+    // nothing is done here; a page opened by a tool with ?shot=1 has already had its cut and is
+    // seeded on the spot.
+    if (RESTING.includes(api.current)) jump(api.current);
+  }
 
   return api;
 }
