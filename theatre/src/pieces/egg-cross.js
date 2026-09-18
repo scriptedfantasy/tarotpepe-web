@@ -40,7 +40,7 @@
 // cross's height up from its foot — so the inverted cross hangs 189 mm lower than it stood, which is
 // where a cross that has come off its nail goes.
 //
-// THE FALL IS TWELVE DRAWINGS AND ITS SHAPE IS THE PHYSICS'S. A rod pinned at one end and let go
+// THE FALL IS THIRTEEN DRAWINGS — NINE OF TURN AND FOUR OF SETTLE — AND ITS SHAPE IS THE PHYSICS'S. A rod pinned at one end and let go
 // from the upright obeys theta'' = 3g sin(theta) / 2L, and integrated at L = 0.209 m it is over in
 // 0.54 s — but it spends four of those six drawings between 5 and 18 degrees and then covers 140 in
 // two, which is a half turn nobody can read. So the CURVE is the physics's and the SPACING is not:
@@ -182,7 +182,7 @@ const PROUD = 0.135;
 // Counted in DRAWINGS and converted at the room's own fps, because everything hand-animated in this
 // film is a count of drawings on the twelve.
 //
-// THE CROSS GOES OVER IN TWELVE, one pose to a drawing and not on twos: a thing coming off a wall
+// THE CROSS GOES OVER IN THIRTEEN, one pose to a drawing and not on twos: a thing coming off a wall
 // is violent and a pose held for two drawings at thirty degrees apart would strobe. The curve is the
 // integrated one (see the head of this file); the spacing is not.
 const FALL = [6, 14, 28, 48, 74, 104, 134, 160, 180, 193, 174, 182, 180];

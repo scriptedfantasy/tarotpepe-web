@@ -53,6 +53,13 @@ const LAUNCH = {
 };
 const ONLY = args.only ? String(args.only).split(',') : null;
 const doing = (n) => !ONLY || ONLY.includes(n);
+// HOW LONG A PAGE IS GIVEN TO BE READY, and it is a machine fact and not a claim about this room.
+// tools/check-views.mjs carries the same knob and says why: this machine is shared with several
+// builders' headless browsers, and a page that takes three minutes to load under a load average of
+// two hundred has not thrown anything, it has been waiting for a CPU. The first run of this file
+// died exactly there — the phone page, at 240 s, with the room drawing perfectly on the laptop page
+// beside it. Ten minutes by default, and PROOF_TIMEOUT for a machine that wants more.
+const T_LOAD = +(process.env.PROOF_TIMEOUT ?? 600000);
 // one browser a section: software WebGL takes a chromium down somewhere around the sixth context,
 // and a section that dies then should cost only itself (egg-fine.js's proof paid for this)
 let browser = null;
@@ -74,8 +81,8 @@ async function open(w, h, query = '') {
     if (m.type() === 'error') errors.push(m.text().slice(0, 300));
   });
   await page.route('**/@vite/client', stub);
-  await page.goto(`${BASE}/?view=props&state=default${query}`, { waitUntil: 'load', timeout: 240000 });
-  await page.waitForFunction('window.__theatreReady === true', null, { timeout: 240000 });
+  await page.goto(`${BASE}/?view=props&state=default${query}`, { waitUntil: 'load', timeout: T_LOAD });
+  await page.waitForFunction('window.__theatreReady === true', null, { timeout: T_LOAD });
   // ?view=props boots on the WIDE plate; the cut to home needs a frame before anything is projected
   await page.evaluate(() => window.__theatre.pieces.camera.cut('home'));
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
@@ -103,8 +110,8 @@ async function evening(w, h, query = '') {
     }
   });
   await page.route('**/@vite/client', stub);
-  await page.goto(`${BASE}/?now=21:12${query}`, { waitUntil: 'load', timeout: 240000 });
-  await page.waitForFunction('window.__theatreReady === true', null, { timeout: 400000 });
+  await page.goto(`${BASE}/?now=21:12${query}`, { waitUntil: 'load', timeout: T_LOAD });
+  await page.waitForFunction('window.__theatreReady === true', null, { timeout: T_LOAD });
   page.__errors = errors;
   page.__posts = posts;
   return page;
@@ -380,21 +387,29 @@ if (doing('cross')) {
   console.log('  (this is a fact about the ROOM and not about the egg: at 390 px the home plate holds');
   console.log('   x -0.9944 to +0.9944 of the back wall, and the door runs 1.05 to 1.95, so the doorway');
   console.log('   is just outside it.)');
-  // …and the same cross upside down on a phone, seen from the chair rather than from the lean, which
-  // is the only frame in which the two can be compared at all
-  const inv2 = await p2.evaluate(async () => {
-    const T = window.__theatre, C = T.pieces.props.cross;
-    C.set('open');
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    T.pieces.camera.release?.(T.pieces.camera.holding);
-    T.pieces.camera.cut('home');
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    return { deg: C.cross.degrees, box: C.hitBox() };
-  });
+  // …AND THE SAME CROSS UPSIDE DOWN ON A PHONE, SEEN FROM THE CHAIR, which is the only frame the two
+  // can be compared in — and it is DRIVEN and not set, for a reason worth writing down. `set('open')`
+  // is a still, and a still in this piece re-asserts its own frame on every drawing (egg-cross.js:
+  // props.setState runs the eggs in order and a judging state that takes the lens can have it taken
+  // back by one further down the list), so cutting the camera home after it lasts exactly one drawing
+  // before the piece puts it on the cellar again. Released one drawing at a time instead, the cross
+  // is over by drawing nine and the lens has not moved yet: the lean does not start until the boards
+  // do, six drawings later.
+  await gate(p2);
+  await p2.evaluate(() => window.__theatre.pieces.props.cross.click());
+  const nInv = await until(p2, () => window.__theatre.pieces.props.cross.cross.inverted);
   await settle(p2);
+  const inv2 = await p2.evaluate(() => {
+    const C = window.__theatre.pieces.props.cross;
+    return { deg: C.cross.degrees, box: C.hitBox(), phase: C.phase, shot: window.__theatre.pieces.camera.current };
+  });
   await snap(p2, `${OUT}/cross-r5-inverted-390x844.png`);
-  console.log(`  ON A 390-WIDE PHONE   inverted at ${inv2.deg} deg, ${box1(inv2.box)} — ${inFrame(inv2.box, ...PHONE) ? 'in frame' : 'outside the frame'}`);
-  await p2.evaluate(() => window.__theatre.pieces.props.cross.set('shut'));
+  console.log(`  ON A 390-WIDE PHONE   inverted at ${inv2.deg} deg after ${nInv} drawings, ${box1(inv2.box)} — ${inFrame(inv2.box, ...PHONE) ? 'in frame' : 'outside the frame'}, camera still "${inv2.shot}"`);
+  ok(inv2.shot === 'home' && inv2.phase === 'falling', 'and the lens has not moved yet: the room does not lean in until the boards do');
+  await p2.evaluate(() => {
+    window.__ungate?.();
+    window.__theatre.pieces.props.cross.set('shut');
+  });
   ok((page.__errors ?? []).length === 0 && (p2.__errors ?? []).length === 0, `no page errors (${[...page.__errors, ...p2.__errors].slice(0, 2).join(' | ') || 'none'})`);
 }
 
