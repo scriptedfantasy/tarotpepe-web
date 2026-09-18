@@ -331,6 +331,32 @@ const redOutside = (img, keep) => {
     }
   return { n, at };
 };
+// HOW WIDE THE PEN IS, measured off the frame rather than off the file: every row of a box is walked
+// for runs of dark pixels and the MEDIAN run is returned. On a cross that is two strokes and two
+// dots, that median is the width of the upright — and it is the number that says whether the ink
+// pass has fattened the drawing where it lies over the picture rail's moulding, which is the one
+// thing a half turn onto a moulding could do to it.
+const strokeWidth = (img, b) => {
+  const runs = [];
+  const x0 = Math.max(0, Math.floor(b.x)), x1 = Math.min(img.w, Math.ceil(b.x + b.w));
+  const y0 = Math.max(0, Math.floor(b.y)), y1 = Math.min(img.h, Math.ceil(b.y + b.h));
+  for (let y = y0; y < y1; y++) {
+    let run = 0;
+    for (let x = x0; x < x1; x++) {
+      const i = (y * img.w + x) * img.ch;
+      const dark = img.data[i] * 0.3 + img.data[i + 1] * 0.59 + img.data[i + 2] * 0.11 < 160;
+      if (dark) run++;
+      else {
+        if (run > 0) runs.push(run);
+        run = 0;
+      }
+    }
+    if (run > 0) runs.push(run);
+  }
+  if (!runs.length) return { median: 0, n: 0 };
+  runs.sort((a, c) => a - c);
+  return { median: runs[Math.floor(runs.length / 2)], n: runs.length };
+};
 const placardText = (p) => p.evaluate(() => (document.querySelector('#dialogue')?.innerText ?? '').replace(/\s+/g, ' ').trim());
 
 const fails = [];
@@ -397,7 +423,10 @@ if (doing('cross')) {
   // do, six drawings later.
   await gate(p2);
   await p2.evaluate(() => window.__theatre.pieces.props.cross.click());
-  const nInv = await until(p2, () => window.__theatre.pieces.props.cross.cross.inverted);
+  // …and "inverted" here is the END of the fall and not the first drawing past the perpendicular:
+  // `cross.inverted` is |degrees| > 90 and the table passes 90 on drawing five, at 104, which is a
+  // cross halfway over. The fall's own last pose is what this wants, so it is counted in drawings.
+  const nInv = await until(p2, () => window.__theatre.pieces.props.cross.frame >= 8 && window.__theatre.pieces.props.cross.cross.inverted);
   await settle(p2);
   const inv2 = await p2.evaluate(() => {
     const C = window.__theatre.pieces.props.cross;
@@ -500,6 +529,13 @@ if (doing('fall')) {
   console.log(`      after    ${topAfter} in the top half, ${botAfter} in the bottom  (ratio ${(topAfter / Math.max(1, botAfter)).toFixed(2)})`);
   ok(topBefore > botBefore * 1.25, `the arm is in the top half before (${topBefore} against ${botBefore})`);
   ok(botAfter > topAfter * 1.25, `and in the bottom half after (${botAfter} against ${topAfter})`);
+  // AND IT IS STILL THE SAME PEN. The inverted cross lies across the picture rail's bead, and a
+  // contour pass handed a moulding under a drawing is exactly where a thin stroke could come back
+  // fat. Measured off both frames: the median run of dark pixels along a row of the cross's own box,
+  // which on two strokes and two dots is the width of the upright.
+  const wBefore = strokeWidth(beforeImg, b0.box), wAfter = strokeWidth(afterImg, b1.box);
+  console.log(`  THE PEN               ${wBefore.median} px before (${wBefore.n} runs), ${wAfter.median} px after (${wAfter.n} runs)`);
+  ok(Math.abs(wAfter.median - wBefore.median) <= 1, `the ink pass does not fatten it where it crosses the moulding (${wBefore.median} px then ${wAfter.median} px)`);
   console.log(`  →  ${OUT}/cross-r5-inverted-4x.png`);
 
   // THE ROOM'S OWN BEAT: no storm, and the pendant moved
@@ -632,16 +668,34 @@ if (doing('red')) {
   // AND NOWHERE ELSE, weighed the only way that means anything at this shot: the lens is leaning in
   // and the hatch and its lid fill most of the glass, so "outside the hatch's box" is measured
   // against the box that holds everything this egg DREW — the hole, the lid lying open beside it and
-  // the spill on the boards round both (`seenBox`). Every red pixel must be inside it.
+  // the light on the boards round both (`seenBox`). Every red pixel must be inside it. Since the
+  // user's second correction that light is HATCH and not a plate, and its footprint on the boards is
+  // the hatch plus ONE BOARD, 260 mm, which is what `seenBox` is cut to.
   const outside = redOutside(img, boxes.seen);
   console.log(`  everything it drew    ${box1(boxes.seen)}`);
   console.log(`  red outside that      ${outside.n} px${outside.at.length ? ` (first at ${outside.at.join(' ')})` : ''}`);
   ok(outside.n === 0, 'not one red pixel falls outside the hatch, its lid and the boards round them');
 
-  // …and the plainest statement of the same thing: the room from its own plate, with the floor open.
-  // The hatch is downstage of every frontal shot's bottom edge (the `wide` frame crosses the floor at
-  // z 1.9 and the hatch starts at 1.91), so a wide of a room with a hole in its floor has no red in
-  // it whatsoever — which is what "the red is down the cellar" means.
+  // …AND WHAT THE VISITOR SEES OF IT FROM THEIR OWN CHAIR, which is the claim this round had to
+  // measure rather than assume. The `wide` frame's bottom edge crosses the floor at z 1.9 and the
+  // hatch's own far seam is at 1.9128, so the hole itself is below the picture — but the spill on the
+  // boards reaches 85 mm upstage of that seam, and 3357 pixels of it sit on the very bottom edge of
+  // the frame. That is the right answer and not a leak: from where the visitor sits, a red rim on the
+  // boards at their feet is the whole of what the room shows them, and everything above it — the rug,
+  // the walls, the table, him — is untouched. So the claim is not "no red" but "no red ABOVE the line
+  // the spill reaches", and the line is projected rather than guessed.
+  //
+  // …AND IT HAS TO BE DRIVEN AND NOT SET, which cost this claim a run. A still in this piece
+  // RE-ASSERTS ITS OWN FRAME on every drawing (egg-cross.js: props.setState runs the eggs in order
+  // and a judging state that takes the lens can have it taken back by one further down the list), so
+  // a `set('open')` followed by a cut to `wide` is on `wide` for exactly one drawing and then back on
+  // `cellar` — and the first run of this measured 155034 red pixels in what it had been told was a
+  // wide of the parlour and was in fact the lean again. Clicked instead, `byHand` is false, nothing
+  // re-asserts, and releasing the hold lets the cut stand.
+  await page.evaluate(() => window.__theatre.pieces.props.cross.set('shut'));
+  await settle(page);
+  await page.evaluate(() => window.__theatre.pieces.props.cross.click());
+  await page.waitForFunction(() => window.__theatre.pieces.props.cross.open === true, null, { timeout: T_LOAD, polling: 200 }).catch(() => {});
   const wideRed = await page.evaluate(async () => {
     const T = window.__theatre;
     T.pieces.camera.release?.(T.pieces.camera.holding);
@@ -654,8 +708,25 @@ if (doing('red')) {
   await snap(page, `${OUT}/cellar-r5-red-wide-1280x800.png`);
   const wimg = await rawOf(wbuf);
   const wred = redIn(wimg);
+  // the spill's own furthest reach upstage, on the glass: everything red must be at or below it
+  const rim = await page.evaluate(() => {
+    const T = window.__theatre, C = T.pieces.props.cross.cellar;
+    T.camera.updateMatrixWorld(true);
+    const e = T.camera.projectionMatrix.clone().multiply(T.camera.matrixWorldInverse).elements;
+    // ONE BOARD past the seam, which is how far the light on the boards actually reaches since it
+    // became hatch (egg-cellar.js: the halo's furthest stroke is at 0.26 m). It was 0.085 here, the
+    // old solid band's reach, and the claim failed by thirteen pixels against a drawing that had
+    // moved and a line that had not.
+    const z = C.hatch.z0 - 0.26, x = 0, y = 0;
+    const cy = e[1] * x + e[5] * y + e[9] * z + e[13];
+    const cw = e[3] * x + e[7] * y + e[11] * z + e[15];
+    return { y: ((1 - cy / cw) / 2) * T.size.h, h: T.size.h };
+  });
   console.log(`  from the WIDE plate, with the hatch still open (${JSON.stringify(wideRed)}): ${wred.n} red px in the whole frame`);
-  ok(wred.n === 0, 'and from where the visitor sits, the room is a room: no red on the rug, the walls or him');
+  console.log(`  the spill's furthest reach on the glass is y ${rim.y.toFixed(0)} of ${rim.h}; the red's own box is ${box1(wred.box)}`);
+  ok(wideRed.shot === 'wide', `the lens is actually on the wide plate for this one ("${wideRed.shot}")`);
+  ok(wred.n >= 0 && wred.n < 20000, `what the visitor sees of it from their chair is a rim on the boards at their feet and no more (${wred.n} px, ${((100 * wred.n) / (W * H)).toFixed(2)}% of the frame)`);
+  ok(!!wred.box && wred.box.y >= rim.y - 6, `and NOTHING above the line the spill reaches: the topmost red pixel is at y ${wred.box?.y}, the line at ${rim.y.toFixed(0)} — no red on the rug, the walls, the table or him`);
   ok((page.__errors ?? []).length === 0, `no page errors (${(page.__errors ?? []).slice(0, 2).join(' | ') || 'none'})`);
 }
 
@@ -771,6 +842,11 @@ if (doing('back')) {
     const t = T.pieces.props.cross.cellar.tapBox();
     const o = { clientX: r.left + t.x + t.w / 2, clientY: r.top + t.y + t.h / 2, bubbles: true, pointerType: 'mouse', button: 0 };
     g.dispatchEvent(new PointerEvent('pointermove', o));
+    // …and the arbiter is asked on the NEXT DRAWING and not in the same statement: it resolves what
+    // is under a pointer on its own update (props.js, SWITCHES.update), so reading `hovered` in the
+    // line after the move is reading what was under the pointer before it moved. That cost this
+    // claim a run, which reported "null" on a hatch a click then went on to work perfectly.
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
     const named = T.pieces.props.switches.hovered;
     g.dispatchEvent(new PointerEvent('pointerdown', o));
     g.dispatchEvent(new PointerEvent('pointerup', o));

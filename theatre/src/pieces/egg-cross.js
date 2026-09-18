@@ -40,6 +40,24 @@
 // cross's height up from its foot — so the inverted cross hangs 189 mm lower than it stood, which is
 // where a cross that has come off its nail goes.
 //
+// AND IT TIPS FORWARD RATHER THAN SWINGING ROUND, which is the user's own correction to the first cut
+// of this and the one thing about it that was simply wrong. Turned about the axis NORMAL to the
+// plaster, a cross pivoting on its foot sweeps round in the plane of the wall like a clock hand: up
+// over the frieze, onto the cornice, and down the far side — which is what he was shown and what he
+// said "no bueno" to. Gravity is not in the plane of a wall. The axis is the HORIZONTAL LINE ALONG
+// THE WALL through the foot nail; the head comes OUT into the room and down, through 90 degrees where
+// the cross stands straight out of the plaster, and on to 180, flat against the frieze again and
+// hanging under its own pin. IT NEVER RISES.
+//
+// AND IT FITS, which is arithmetic and not hope. The pin is at 2.7107 and the sheet hangs 94.3 mm
+// each side of it, so inverted the cross occupies 2.5014 to 2.7314. Under it, the back-wall door's
+// architrave cap tops out at 2.261 — room.js's own joinery, the same as the side doors' — which
+// leaves 240 mm of bare plaster between the foot of the upside-down cross and the head of the door.
+// Nothing had to be moved and nothing shrunk. It does cross the picture rail's bead at 2.60 to
+// 2.625, and that is not a fault either: the bead stands 18 mm proud and the cross hangs at 22, so it
+// passes in front of it with 4 mm in hand, which is what a thing hanging on a wall does to a
+// moulding.
+//
 // THE FALL IS THIRTEEN DRAWINGS — NINE OF TURN AND FOUR OF SETTLE — AND ITS SHAPE IS THE PHYSICS'S. A rod pinned at one end and let go
 // from the upright obeys theta'' = 3g sin(theta) / 2L, and integrated at L = 0.209 m it is over in
 // 0.54 s — but it spends four of those six drawings between 5 and 18 degrees and then covers 140 in
@@ -306,7 +324,11 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   root.add(crossPin);
   const crossMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(CROSS.w, CROSS.h),
-    sheet(drawCross({ w: CROSS.w, h: CROSS.h, ppm: PPM_CROSS, penM: PEN_M, pin: CROSS.pin }), 'cross-sheet'),
+    // …AND THE SHEET IS DOUBLE-SIDED, which the axis made necessary: turned a half turn about x, a
+    // one-sided plane has its back to the room and the renderer throws it away. Seen from behind the
+    // drawing is flipped top to bottom — which is the whole point — and mirrored left to right, which
+    // on a cross whose upright leans a quarter of a nib is not a difference anybody can see.
+    sheet(drawCross({ w: CROSS.w, h: CROSS.h, ppm: PPM_CROSS, penM: PEN_M, pin: CROSS.pin }), 'cross-sheet', { side: THREE.DoubleSide }),
   );
   crossMesh.name = 'cross-wall';
   crossMesh.castShadow = crossMesh.receiveShadow = false;
@@ -673,8 +695,13 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     hinge.visible = theta != null;
     if (theta != null) hinge.rotation.y = theta;
   }
+  // IT FALLS OUT OF THE WALL AND DOWN, ABOUT THE HORIZONTAL AXIS ALONG THE WALL, and that is the
+  // user's own correction: the first cut turned it about `rotation.z`, the axis normal to the
+  // plaster, so the cross swung round IN THE PLANE OF THE WALL like a clock hand — up over the
+  // frieze, onto the cornice, and down the far side. He looked at it once: "no bueno". Gravity is not
+  // in the plane of a wall. About x, the head comes OUT into the room and down.
   const setCross = (deg) => {
-    crossPin.rotation.z = (deg * Math.PI) / 180;
+    crossPin.rotation.x = (deg * Math.PI) / 180;
   };
   // the pendant: a swing on the 12 fps clock, damped. Not a tween -- it is evaluated at the stepped
   // time, so it holds on a frozen frame like everything else in the room.
@@ -1038,7 +1065,10 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     // THE CROSS ITSELF: how far over it is and which way up. `inverted` is the whole of what the user
     // asked for, in one boolean.
     get cross() {
-      const deg = +((crossPin.rotation.z * 180) / Math.PI).toFixed(1);
+      // …read off the SAME AXIS it is turned about (x, the horizontal line along the wall). It was
+      // reading `.z` for a round, which is the axis the cross no longer moves on, so a cross hanging
+      // upside down reported 0 degrees and `cross-open` judged itself upright.
+      const deg = +((crossPin.rotation.x * 180) / Math.PI).toFixed(1);
       return {
         degrees: deg,
         inverted: Math.abs(deg) > 90,
