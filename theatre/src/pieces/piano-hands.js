@@ -42,6 +42,20 @@
 // 1600×900, and 90 px on a 390×844 phone, where the frame turns on its side and the board runs DOWN
 // the screen; the hand measures 0.93 of that at 1280×800 with the chord under it. The old plate was
 // 121 px across the same frame with two 0.128 m tubes over it.
+//
+// ---- AND THEN IT WAS GIVEN THE REAL PIECE TO PLAY --------------------------------------------
+// Nothing about the drawing changes below. What changed is that piano-song.js stopped holding an
+// invented Gymnopédie and started holding Satie's, and the real one asks two things of these hands
+// that the invented one never did — so two things in here had to learn about the keyboard's OTHER
+// dimension, the one that runs from the player into the instrument:
+//   THE FINGERING IS CHOSEN IN BOTH DIRECTIONS NOW. It was chosen along the board alone, which put
+//   the thumb — a digit whose tip lies 54 mm out from the wrist where the middle finger's lies 146 —
+//   on the F♯ at the top of Satie's own B–D–F♯, a BLACK key met 45 mm further in. It came out a
+//   whole white key short. See «AND THE FOURTH TERM», below.
+//   AND A KEY IS MET WHERE THE FINGER REACHES IT. A white key is 150 mm long and every millimetre
+//   of it sounds the same note; the hand used to meet all of them on one line 100 mm back. Bars
+//   24–31 are four-note chords a NINTH wide — 188 mm against the 180 this hand can reach — and a
+//   hand stretched like that plays nearer the player, which is most of how it covers them at all.
 import * as THREE from 'three';
 import { mulberry32 } from '../core/rng.js';
 import { INK, PAPER, makeCanvas, canvasTexture, inkLine, inkMaterial } from '../core/strokes.js';
@@ -378,10 +392,28 @@ function offsets(side, yaw) {
   return REST.map(([lx, ly]) => ({ z: ly * sin + s * lx * cos, x: -(-ly * cos + s * lx * sin) }));
 }
 
+// AND THE FOURTH TERM, WHICH IS HOW DEEP A KEY IS AND NOT WHERE IT IS ALONG THE BOARD. The three
+// above choose a fingering by the keyboard's length alone, and for sixteen months of this file's
+// life that was enough, because the chord it was tuned against — the invented B–D–F♯–A — happened
+// to put a LONG finger on its black key and the thumb on a white one. Satie's own chord is B–D–F♯,
+// three notes, and the left hand takes its top note with the thumb: a short digit, whose tip lies
+// 54 mm out from the wrist where the middle finger's lies 146, sent to a key that is met 45 mm
+// FURTHER INTO the instrument than the white one the middle finger is on. Nothing in the drawing can
+// do that — a finger bends, and bending brings the tip nearer, not further — and the thumb came out
+// a whole white key short of the F♯ it was sounding (22 mm, measured; the claim is half a key).
+//   So the cost now also asks WHERE EACH DIGIT WOULD PUT THE WRIST, into the keyboard, and pays for
+// the disagreement between them. A finger's curl and its stretch together make up about 45 mm of it;
+// past that the chord has to be fingered another way, and it is: B–D–F♯ comes out little–ring–index
+// with the thumb kept off the black key altogether, which is where a hand with this thumb has to
+// put it.
+//
 // `zs` are the notes' own z on the keyboard, ASCENDING IN PITCH (so descending in z: the treble is
-// upstage). `zw` is where the wrist stands now, `off` what `offsets` worked out for this hand.
-// Returns the digits, in the same order as the notes, and where the wrist has to stand for them.
-function fingering(side, zs, zw, off) {
+// upstage) and `xs` their own x, which is 45 mm deeper for a black key than a white one. `zw` is
+// where the wrist stands now, `off` what `offsets` worked out for this hand. Returns the digits, in
+// the same order as the notes, and where the wrist has to stand for them.
+const DEPTH_GIVE = 0.045; // what a finger's curl and stretch make up, into the keyboard
+const DEPTH_COST = 8;
+function fingering(side, zs, zw, off, xs = null) {
   const n = Math.min(5, zs.length);
   const combos = COMBOS[side][n - 1];
   const pick = n === 1 ? PICK[side] : null;
@@ -390,8 +422,16 @@ function fingering(side, zs, zw, off) {
     // the wrist position each digit would want if it alone were playing, and the span of those
     const want = S.map((d, i) => zs[i] - off[d].z);
     const lo = Math.min(...want), hi = Math.max(...want);
+    // …and the same question asked into the keyboard, where the answer is not a hand position but
+    // whether these digits can be on these keys at all
+    let deep = 0;
+    if (xs && n > 1) {
+      const wx = S.map((d, i) => xs[i] + off[d].x);
+      const over = Math.max(0, Math.max(...wx) - Math.min(...wx) - DEPTH_GIVE);
+      deep = DEPTH_COST * over * over;
+    }
     for (let z = lo - 0.03; z <= hi + 0.0301; z += 0.001) {
-      let cost = MOVE_COST[side] * (z - zw) * (z - zw) + (pick ? pick[S[0]] : 0);
+      let cost = MOVE_COST[side] * (z - zw) * (z - zw) + (pick ? pick[S[0]] : 0) + deep;
       for (let i = 0; i < n; i++) {
         const dev = want[i] - z; // how far this digit has to reach for its own note
         const over = Math.max(0, Math.abs(dev) - COMFORT);
@@ -508,7 +548,7 @@ export function buildPianoHands(ctx, { parent, keyY, keyZ, isBlack, front, home,
     if (playing) {
       const sorted = ms.slice().sort((a, b) => a - b);
       const ap = sorted.map((m) => apparent(m, h));
-      const fing = fingering(H.side, ap.map((p) => p.z), H.z ?? ap[0].z, H.off);
+      const fing = fingering(H.side, ap.map((p) => p.z), H.z ?? ap[0].z, H.off, ap.map((p) => p.x));
       H.z = fing.z;
       // HOW FAR OUT OVER THE KEYS THE WRIST STANDS. Each playing digit would like the wrist at its
       // own key plus its own length; a chord of three whites and a black wants two places 45 mm
@@ -551,11 +591,29 @@ export function buildPianoHands(ctx, { parent, keyY, keyZ, isBlack, front, home,
     const on = [];
     H.down = 0;
     for (const t of targets ?? []) {
-      const a = t.p.x - H.group.position.x, c = t.p.z - H.group.position.z;
-      const lx = H.s * (a * sin + c * cos), ly = -(a * cos - c * sin);
+      const D = DIGITS[t.d];
+      // A KEY IS MET WHERE THE FINGER REACHES IT, ALONG THE KEY'S OWN LENGTH. `touchX` says where a
+      // key is met when nothing is asking anything of the hand: 100 mm back along a white, 55 along
+      // a black. But a white key is 150 mm long and the whole of it sounds the same note, so a
+      // finger stretched to the edge of what it can do meets its key NEARER THE PLAYER — which is
+      // what a hand spread to a ninth does, and the reason it can play one at all. The slide is the
+      // smallest that brings the key inside the digit's reach, and it stops at the key's own front
+      // edge (48 mm of white, 28 of black, off props-piano.js's own key boxes: a white key is 150 mm
+      // long and is met at 100, a black is 89 and is met at 55).
+      const local = (px) => {
+        const a = px - H.group.position.x, c = t.p.z - H.group.position.z;
+        return [H.s * (a * sin + c * cos), -(a * cos - c * sin)];
+      };
+      const slack = isBlack(t.m) ? 0.028 : 0.048;
+      let px = t.p.x;
+      for (let s = 0; s <= slack + 1e-9; s += 0.006) {
+        px = t.p.x + Math.min(s, slack);
+        const [qx, qy] = local(px);
+        if (Math.hypot(qx - D.base[0], qy - D.base[1]) <= D.len + STRETCH) break;
+      }
+      const [lx, ly] = local(px);
       // …and the key is met by a DIGIT, which can only bend and swing so far (CURLED / STRETCH /
       // SWING, at the head of the file). What the joint cannot give, it does not give.
-      const D = DIGITS[t.d];
       const ax = lx - D.base[0], ay = ly - D.base[1];
       const rest = rad(D.ang);
       let th = Math.atan2(ax, ay) - rest; // the swing off where this digit lies, toward the thumb

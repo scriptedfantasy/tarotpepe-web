@@ -118,20 +118,44 @@ function pluck(ac, dest, { t, freq, dur, level, partials, type = 'sine', click =
 // THE PIANO, and it is the pluck above with a piano's own partials on it. A struck string is not a
 // sine: the fundamental carries maybe half the energy and the rest is in the first six partials,
 // each dying quicker than the one below it, with a hammer knock across the front of all of them.
-// Three things make it a piano rather than the music box's tine:
-//   THE PARTIALS ARE HARMONIC and there are six of them. The tine's are bent sharp on purpose
-//   (`inharm`); a string's are not, and the ear hears the difference as wood against metal.
-//   THE DECAY IS LONG AND IT IS THE FUNDAMENTAL'S. A bass note rings for four seconds and its
-//   partials are gone in one, which is why the low notes of this piece turn into a hum under the
-//   melody rather than a row of separate events.
+// Four things make it a piano rather than the music box's tine:
+//   THE STRING DECIDES HOW LONG IT RINGS, AND IT DECIDES BY ITS OWN PITCH. This is the one that was
+//   wrong. The ring used to be worked out from how long the note was HELD, which is a plucked
+//   string's rule and not a struck one: a chord struck on the second beat of a bar came out 37 dB
+//   down by the end of that bar, i.e. gone, and the Gymnopédie's whole sound is the chord still
+//   there under the melody when the next bar arrives. A real string decays at a rate set by its own
+//   mass and length — seconds at the bottom of the keyboard, a second or two at the top — so the
+//   ring here is a curve through the keyboard and nothing else: 8 s at the bottom of it (the cap),
+//   7.1 s at this piece's own bass G, 5.1 under the accompaniment's chord, 3.2 at the top of the
+//   melody. Measured through it, in tools/_piano-render.mjs, that is −20 dB at 1.6 s for the bass
+//   and 3.8 s to −40; 1.1 s and 2.7 s for the chord; 0.85 s and 1.9 s for a melody note, which is
+//   just under a beat and just over two. And the number the piece is actually about: the end of a
+//   bar now sits 16 to 21 dB under the chord that was struck on its second beat, where it sat 30 to
+//   33 dB under — the difference between a chord that is still there and one that is gone.
+//   AND THE PEDAL IS DOWN, which is why `dur` no longer shortens it. Satie's accompaniment cannot
+//   be played without the sustaining pedal — no hand holds a bass note AND the chord an octave and
+//   a half above it (see piano-song.js) — so a key let go is a key whose damper is off the string.
+//   `pedal: false` puts the damper back and cuts the ring at the note's own length, for whatever
+//   asks for a piano and does not mean this piece.
+//   THE PARTIALS ARE ALMOST HARMONIC. The tine's are bent sharp on purpose (`inharm`); a string's
+//   are bent sharp by ITS OWN STIFFNESS, which is a smaller thing but a real one and is a good part
+//   of why a piano sounds like wire under tension — partial n lands at n·f·√(1+Bn²), and B here is
+//   0.0005, which puts the sixth partial eighteen cents sharp. A spinet, short strings in a small
+//   box, has more of it than a concert grand, not less.
 //   AND THERE IS A KNOCK. 4 ms of banded noise at the onset — the hammer on the string and the key
 //   on its bed — at a tenth of the note's own level. Without it every note begins out of nothing,
 //   which is an organ.
-// `dur` is how long the note is HELD; the string rings a little past it, as a damper does.
-export function pianoNote(ac, dest, { t, freq, dur, level = 0.5 }) {
-  const ring = Math.min(5.5, Math.max(0.55, dur * 1.35 + 220 / Math.max(60, freq)));
+// `dur` is how long the note is HELD, and with the pedal down that is a fact about the hands and
+// not about the sound.
+const B_STIFF = 0.0005;
+const PARTIAL = (n) => n * Math.sqrt(1 + B_STIFF * n * n);
+export function pianoNote(ac, dest, { t, freq, dur, level = 0.5, pedal = true }) {
+  const f = Math.max(27.5, freq);
+  let ring = 7.1 * Math.pow(98 / f, 0.36);
+  ring = Math.max(1.1, Math.min(8, ring));
+  if (!pedal) ring = Math.min(ring, Math.max(0.2, dur) + 0.12);
   // brighter at the bottom of the keyboard, where a real string has more of its energy up high
-  const bright = Math.min(1, 220 / Math.max(80, freq) + 0.42);
+  const bright = Math.min(1, 220 / Math.max(80, f) + 0.42);
   return pluck(ac, dest, {
     t,
     freq,
@@ -140,13 +164,16 @@ export function pianoNote(ac, dest, { t, freq, dur, level = 0.5 }) {
     type: 'triangle',
     click: 0.11,
     seed: Math.round(freq),
+    // …and the partials go before the fundamental does, in the order they were struck: the sixth is
+    // gone in a tenth of the note, the second is still there at a third of it. That ordering is
+    // what turns a struck note into a hum rather than a chord that stays bright to the end.
     partials: [
       [1, 0.62, 1],
-      [2, 0.26 * bright, 0.42],
-      [3, 0.15 * bright, 0.3],
-      [4, 0.09 * bright, 0.22],
-      [5, 0.055 * bright, 0.16],
-      [6, 0.035 * bright, 0.12],
+      [PARTIAL(2), 0.26 * bright, 0.34],
+      [PARTIAL(3), 0.15 * bright, 0.24],
+      [PARTIAL(4), 0.09 * bright, 0.17],
+      [PARTIAL(5), 0.055 * bright, 0.12],
+      [PARTIAL(6), 0.035 * bright, 0.09],
     ],
   });
 }

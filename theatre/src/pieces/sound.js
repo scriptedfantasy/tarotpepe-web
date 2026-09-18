@@ -507,12 +507,20 @@ export async function build(ctx) {
     // ducks it with the tune when he speaks.
     //
     // `m` is a MIDI number (69 = A4 = 440). `at` is seconds ahead on the audio clock; `dur` is how
-    // long the key is held, and the string rings past it.
+    // long the key is held, and the string rings past it — under the pedal, a good deal past it.
+    //
+    // AND IT IS TRIMMED AGAINST THE RECORD ON THE RADIO, which is the loudest thing this bus ever
+    // carries and the one the piano is meant to sit beside. Rendered offline through this very
+    // call (tools/_piano-render.mjs), the sixteen bars measure 0.028 while they are playing against
+    // the record's 0.059 and 0.31 peak against its 0.35: a little under it on both counts, which is
+    // what «where the record sits, not louder» comes to. Matching the record's RMS outright would
+    // take the piano's peak past 0.6 — a struck piano has 25 dB of crest and a radio has 15 — and
+    // that is three doors slamming at once.
     key(m, { at = 0, dur = 0.8, level = 0.6 } = {}) {
       if (silent || muted || !running || !ac || !tuneBus) return 0;
       try {
         const when = ac.currentTime + 0.01 + Math.max(0, at || 0);
-        const len = pianoNote(ac, tuneBus, { t: when, freq: 440 * Math.pow(2, (m - 69) / 12), dur, level: TUNE_LEVEL * level * 1.6 });
+        const len = pianoNote(ac, tuneBus, { t: when, freq: 440 * Math.pow(2, (m - 69) / 12), dur, level: TUNE_LEVEL * level * 3.2 });
         api.stats.played++;
         timeline.push({ name: 'piano', at: +when.toFixed(4), wall: +(performance.now() / 1000).toFixed(4), m });
         if (timeline.length > 128) timeline.shift();

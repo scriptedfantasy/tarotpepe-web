@@ -26,15 +26,22 @@
 //                       keys with the hands; white that GROWS over a keyboard is that tube.
 //                   …and the fingering: which digit takes which note, held at every note of the
 //                   melody, and where the melody hand stands while it does
-//   the SOUND       sound.timeline, filtered to the piano's own notes
+//   the SCORE       the note data against Satie's own edition, bars 1–16 typed out here by hand —
+//                   and the piece's 78 bars, its volta, its ending and the one thing in it that is
+//                   not on the page (the pedal). This one opens no browser at all.
+//   the SOUND       sound.timeline, filtered to the piano's own notes, in a room opened WITHOUT
+//                   ?shot=1, because a room in shot mode is silent on purpose; and a WAV of the
+//                   first sixteen bars, rendered by tools/_piano-render.mjs
 //   the ROOM        the fireplace's box and the window's sill, before and after, unmoved
 //   the DRAWING     /tmp/piano/*.png
 //
 //   BASE=http://127.0.0.1:8742 node tools/_piano-proof.mjs
+//   SIZES=1280x800 …          one window instead of three (the score and the sound still run)
+//   SIZES=sound …             the sound alone
 import { chromium } from 'playwright';
 import sharp from 'sharp';
-import { mkdirSync } from 'node:fs';
-import { NOTES, BEAT, METRE } from '../src/pieces/piano-song.js';
+import { mkdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { NOTES, BEAT, METRE, BARS, TEMPO, LOOP, soundingAt } from '../src/pieces/piano-song.js';
 
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, arr) => {
@@ -46,7 +53,7 @@ const BASE = process.env.BASE ?? 'http://127.0.0.1:5173';
 const OUT = args.out ?? '/tmp/piano';
 mkdirSync(OUT, { recursive: true });
 const PLATE = [1280, 800], WIDE = [1600, 900], PHONE = [390, 844];
-const LAUNCH = { headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', '--disable-gpu-sandbox'] };
+const LAUNCH = { headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', '--disable-gpu-sandbox', '--autoplay-policy=no-user-gesture-required'] };
 const stub = (r) => r.fulfill({ contentType: 'application/javascript', body: 'export const createHotContext=()=>({on(){},off(){},send(){},accept(){},acceptExports(){},dispose(){},prune(){},invalidate(){},decline(){},data:{}});export const updateStyle=()=>{};export const removeStyle=()=>{};export const injectQuery=(u)=>u;export class ErrorOverlay{}' });
 let bad = 0;
 const claim = (b, t) => {
@@ -54,6 +61,15 @@ const claim = (b, t) => {
   console.log(`   ${b ? '✓' : '✗'} ${t}`);
 };
 const frames = (p, n = 2) => p.evaluate((k) => new Promise((res) => { let i = k; const go = () => (i-- <= 0 ? res() : requestAnimationFrame(go)); go(); }), n);
+// HOLD THE SONG ON ONE BEAT AND WAIT FOR THE DRAWING. `hold()` pins the beat and asks the piece for
+// a pose, but the piece only poses on a drawing — `if (!c.clock.stepped) return` — so a hold read
+// back inside the same call can be the pose from before it. Every hold below goes through here, and
+// what comes back is the state of a frame that was actually rendered at that beat.
+const holdAt = async (p, b) => {
+  await p.evaluate((x) => window.__theatre.pieces.props.piano.hold(x), b);
+  await frames(p, 1);
+  return p.evaluate(() => ({ hands: window.__theatre.pieces.props.piano.hands, beat: window.__theatre.pieces.props.piano.beat, down: window.__theatre.pieces.props.piano.down }));
+};
 const settle = async (p) => {
   await p.waitForFunction(() => !window.__theatre.pieces.camera.moving, null, { timeout: 300000, polling: 250 });
   await frames(p, 2);
@@ -97,6 +113,99 @@ function corr(a, b) {
   }
   return num / (Math.sqrt(da * db) || 1e-9);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// THE SCORE, BEFORE ANY BROWSER IS OPENED.
+// The complaint this round answers is not about the drawing: "he's not really playing Gymnopédie —
+// it's a very broken-down version that is unrecognisable." So the first witness is the note data,
+// and the pitches below are TYPED OUT HERE rather than derived from it. They are bars 1–16 as
+// Satie's own edition has them — Gallica/BnF, ark:/12148/btv1b520000770, "1ère Gymnopédie", Paris
+// 1895, read off the plate by eye — so if piano-song.js ever stops agreeing with them, this fails.
+// (The other half of the check is tools/_piano-score.mjs, which re-parses the Mutopia engraving of
+// the piece and diffs the whole 78 bars against the file.)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+console.log('=== the score');
+const atBeat = (b) => NOTES.filter((n) => Math.abs(n.at - b) < 1e-6);
+const hand = (h, b0, b1) => NOTES.filter((n) => n.hand === h && n.at >= b0 - 1e-6 && n.at < b1 - 1e-6)
+  .map((n) => `${n.at}:${n.m}:${n.len}`).sort();
+const sameAs = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+claim(BARS === 78 && METRE === 3, `the piece is ${BARS} bars of ${METRE} — the body of 31 twice, with a first ending and a second`);
+claim(TEMPO >= 60 && TEMPO <= 76, `at ♩ = ${TEMPO}, inside the range "lent et douloureux" is played at (${Math.floor(LOOP / 60)} min ${(LOOP % 60).toFixed(0)} s for the whole of it)`);
+claim(Math.min(...NOTES.map((n) => n.len)) === 1, `and nothing in it is quicker than a quarter: ${(BEAT * 12).toFixed(1)} drawings at twelve a second, in either hand`);
+
+// THE MELODY OF BARS 1–16, note for note. Bar b begins on beat (b−1)×3.
+const MELODY_1_16 = [
+  //              bar 5, off the SECOND beat, which is where the piece actually starts singing
+  [13, 78, 1], [14, 81, 1],                      // F♯5 A5
+  [15, 79, 1], [16, 78, 1], [17, 73, 1],         // bar 6: G5 F♯5 C♯5
+  [18, 71, 1], [19, 73, 1], [20, 74, 1],         // bar 7: B4 C♯5 D5
+  [21, 69, 3],                                   // bar 8: A4
+  [24, 66, 12],                                  // bars 9–12: ONE F♯4, tied across four bars
+  [37, 78, 1], [38, 81, 1],                      // bar 13: the phrase again, from the octave above
+  [39, 79, 1], [40, 78, 1], [41, 73, 1],         // bar 14
+  [42, 71, 1], [43, 73, 1], [44, 74, 1],         // bar 15
+  [45, 69, 3],                                   // bar 16: A4
+];
+claim(sameAs(hand('R', 0, 48), MELODY_1_16.map(([b, m, l]) => `${b}:${m}:${l}`).sort()),
+  `the melody of bars 1–16 is Satie's, note for note: ${MELODY_1_16.length} notes, nothing before the second beat of bar 5, and the tied F♯4 across bars 9–12`);
+
+// THE ACCOMPANIMENT OF BARS 1–16: a dotted-half bass on the first beat and a half-note seventh
+// chord on the second, G ↔ D. The four F♯4s missing from it are the ones the melody is already
+// holding — one key, one finger (piano-song.js).
+const ACC_1_16 = [];
+for (let b = 0; b < 16; b++) {
+  ACC_1_16.push(`${b * 3}:${b % 2 ? 38 : 43}:3`);
+  for (const m of b % 2 ? [57, 61, 66] : [59, 62, 66]) {
+    if (b >= 8 && b <= 11 && m === 66) continue;
+    ACC_1_16.push(`${b * 3 + 1}:${m}:2`);
+  }
+}
+claim(sameAs(hand('L', 0, 48), ACC_1_16.sort()),
+  `the left hand under it is G2/D2 on the beat and B–D–F♯ / A–C♯–F♯ after it, sixteen bars of Gmaj7 ↔ Dmaj7 (${ACC_1_16.length} notes, the four doubled F♯s left to the melody)`);
+
+// …AND IT DOES NOT STAY THERE, which is the other half of what was wrong before.
+claim(atBeat(48)[0]?.m === 42 && atBeat(51)[0]?.m === 35 && atBeat(63)[0]?.m === 33,
+  `the harmony MOVES after bar 16: F♯2 under bar 17, B1 under 18, A1 under 22 (not G–D for the whole piece)`);
+const lastBar = atBeat((BARS - 1) * METRE).map((n) => n.m).sort((a, b) => a - b);
+claim(sameAs(lastBar.map(String), [38, 45, 50, 62, 65, 69, 74].map(String)),
+  `and the last bar is D–A–D under D–F–A–D: the F is NATURAL, so the piece ends in D minor (${lastBar.join(' ')})`);
+claim(sameAs(atBeat(114).map((n) => n.m).sort((a, b) => a - b).map(String), [38, 45, 50, 62, 66, 69, 74].map(String)),
+  `where the FIRST ending, bar 39, closes on the same chord with an F♯ in it — D major — and turns back for the repeat`);
+
+// THE REPEAT ITSELF: bars 40–70 are bars 1–31 again, beat for beat.
+const shift = (ns, d) => ns.map((n) => `${+(n.at - d).toFixed(3)}:${n.m}:${n.len}:${n.hand}`).sort();
+claim(sameAs(shift(NOTES.filter((n) => n.at < 93 - 1e-6), 0), shift(NOTES.filter((n) => n.at >= 117 - 1e-6 && n.at < 210 - 1e-6), 117)),
+  `the volta is played out: bars 40–70 are bars 1–31 again, note for note`);
+const endsAt = Math.max(...NOTES.map((n) => n.at + n.len));
+claim(Math.abs(endsAt - BARS * METRE) < 1e-6 && Math.abs(LOOP - BARS * METRE * BEAT) < 1e-9,
+  `the piece runs to the end of its last bar and no further — ${endsAt} beats, ${LOOP.toFixed(1)} s, and then it begins again`);
+console.log(`   ${NOTES.length} notes; the left hand has ${NOTES.filter((n) => n.hand === 'L').length} of them and the right ${NOTES.filter((n) => n.hand === 'R').length}`);
+
+// THE PEDAL, which is the one thing here that is not on the page: a bass key is let go after a beat
+// because the hand has to be at the chord, and the string goes on sounding.
+const bass = NOTES.find((n) => n.at === 0 && n.hand === 'L');
+claim(bass.len === 3 && bass.hold === 1,
+  `the bass is written for the bar and HELD for a beat (len ${bass.len}, hold ${bass.hold}): no hand holds G2 and a chord an octave and a half over it, which is what the sustaining pedal is for`);
+const both = soundingAt(1.5);
+claim(both.L.length === 3 && !both.L.includes(43),
+  `so on the second beat of bar 1 the left hand is on the chord alone (${both.L.join(' ')}) while the G2 rings on`);
+
+// A WAV OF THE FIRST SIXTEEN BARS EXISTS, rendered through the room's own voice by
+// tools/_piano-render.mjs, because a piano nobody can hear is a claim nobody has checked.
+const WAV = process.env.WAV ?? '/tmp/piano/gymnopedie-1-16.wav';
+let wav = null;
+try {
+  const st = statSync(WAV);
+  const fd = openSync(WAV, 'r');
+  const head = Buffer.alloc(44);
+  readSync(fd, head, 0, 44, 0);
+  closeSync(fd);
+  const rate = head.readUInt32LE(24), bytes = head.readUInt32LE(40);
+  wav = { size: st.size, riff: head.toString('latin1', 0, 4), wave: head.toString('latin1', 8, 12), rate, seconds: bytes / (rate * head.readUInt16LE(32)) };
+} catch (e) { wav = { error: String(e.message ?? e) }; }
+claim(wav.riff === 'RIFF' && wav.wave === 'WAVE' && wav.seconds > 40,
+  `and sixteen bars of it are rendered at ${WAV}: ${wav.seconds ? `${wav.seconds.toFixed(1)}s at ${wav.rate} Hz, ${(wav.size / 1e6).toFixed(1)} MB` : wav.error} (16 bars at ♩=${TEMPO} is ${(48 * BEAT).toFixed(1)}s)`);
 
 // …and which of the three windows to open. All of them by default; SIZES=1600x900 re-runs one after
 // a claim has been changed, which on a machine that draws a frame a second is the difference
@@ -213,7 +322,10 @@ for (const [w, h] of [PLATE, WIDE, PHONE].filter(([a, b]) => !ONLY.length || ONL
   }
   const wrong = [];
   for (const s of seen) {
-    const want = NOTES.filter((n) => s.beat >= n.at - 1e-6 && s.beat < n.at + n.len - 0.02).map((n) => n.m).sort((a, b) => a - b);
+    // …and what is DOWN is `hold`, not `len`: the bass is written for the bar and the finger leaves
+    // it after a beat for the chord, which is the pedal (piano-song.js). A key that is down while
+    // nothing is holding it would be a key the drawing cannot account for.
+    const want = NOTES.filter((n) => s.beat >= n.at - 1e-6 && s.beat < n.at + n.hold - 0.02).map((n) => n.m).sort((a, b) => a - b);
     const got = s.down.slice().sort((a, b) => a - b);
     if (want.join(',') !== got.join(',')) wrong.push({ beat: +s.beat.toFixed(2), want, got });
   }
@@ -361,20 +473,24 @@ for (const [w, h] of [PLATE, WIDE, PHONE].filter(([a, b]) => !ONLY.length || ONL
   }
 
   // ---- THE FINGERING, held at every note of the melody --------------------------------------------
-  // The song is 72 seconds long and this page draws about one frame a second, so the sixteen bars of
-  // the tune are not watched: they are HELD, one note at a time, and what the hands did with each is
-  // read off. It is the same code path the film runs — hold() is one drawing of the piece — and it
-  // is the only way to see the whole melody without waiting out the whole piece three times over.
+  // The piece is three and a half minutes long and this page draws about one frame a second, so the
+  // melody is not watched: it is HELD, one note at a time, and what the hands did with each is read
+  // off. It is the same code path the film runs — hold() is one drawing of the piece — and it is the
+  // only way to see all seventy-eight bars without waiting out the whole piece three times over.
+  // (The notes taken are the ones the right hand has ALONE: at the close of either ending it is
+  // holding a four-note chord, and «which finger is on the melody» is not a question there.)
   if (w === PLATE[0]) {
-    const melody = NOTES.filter((n) => n.hand === 'R');
+    const alone = new Set();
+    for (const n of NOTES) {
+      if (n.hand !== 'R') continue;
+      const s = soundingAt(n.at + Math.min(n.hold, 1) / 2);
+      if (s.R.length === 1) alone.add(n);
+    }
+    const melody = [...alone];
     const played = [];
     for (const n of melody) {
-      const s = await page.evaluate((b) => {
-        const P = window.__theatre.pieces.props.piano;
-        P.hold(b);
-        return P.hands;
-      }, n.at + n.len / 2);
-      const f = (s.R.on ?? [])[0];
+      const { hands: s } = await holdAt(page, n.at + Math.min(n.hold, 1) / 2);
+      const f = (s.R.on ?? []).find((x) => x.m === n.m);
       played.push({ m: n.m, d: f?.d ?? null, z: s.R.z, L: s.L });
     }
     const fingers = [...new Set(played.map((p) => p.d))];
@@ -389,11 +505,18 @@ for (const [w, h] of [PLATE, WIDE, PHONE].filter(([a, b]) => !ONLY.length || ONL
     // two claims are the two halves of one behaviour — the hand walks the line, the fingers take
     // what falls near them.)
     claim(r < -0.75, `the hand FOLLOWS the melody up the keyboard: r = ${r.toFixed(3)} against the pitch (the treble is −z, so it has to be negative)`);
-    claim(travel > 0.06 && travel < 0.30, `and it slides rather than jumps: ${(travel * 1000).toFixed(0)} mm of travel over an octave of melody`);
-    // the left hand's chord: four digits, spread to the chord's own width
+    // The real melody is a fifteenth wide — F♯4 under the tie to A5 at the top of bar 28 — where
+    // the invented one it replaces was an octave, so this is the number that grows with the piece.
+    claim(travel > 0.06 && travel < 0.42, `and it slides rather than jumps: ${(travel * 1000).toFixed(0)} mm of travel over ${((Math.max(...played.map((p) => p.m)) - Math.min(...played.map((p) => p.m))) / 12).toFixed(1)} octaves of melody`);
+
+    // ---- THE LEFT HAND'S CHORD, at the WIDEST it is asked for anywhere in the piece --------------
+    // Bar 25 (beat 73): C3 E3 A3 D4, a ninth, which is 188 mm of keyboard against a drawing that
+    // reaches 180. A hand that cannot span it has to be seen to have tried — the fingertips spread
+    // to the chord's own width and the tips land on the keys' own faces — and the ninth is Satie's,
+    // not something this file chose.
+    await holdAt(page, 73.5);
     const chord = await page.evaluate(() => {
       const P = window.__theatre.pieces.props.piano;
-      P.hold(13.5); // bar 5, beat 2: B3 D4 F♯4 A4
       const s = P.hands.L;
       return { on: s.on, z: s.z, keys: (s.on ?? []).map((f) => P.keyZ(f.m)) };
     });
@@ -401,21 +524,76 @@ for (const [w, h] of [PLATE, WIDE, PHONE].filter(([a, b]) => !ONLY.length || ONL
     const wide = chord.keys.length ? Math.max(...chord.keys) - Math.min(...chord.keys) : 0;
     const tips = (chord.on ?? []).map((f) => f.tip[2]);
     const spread = tips.length ? Math.max(...tips) - Math.min(...tips) : 0;
-    console.log(`   the chord: ${(chord.on ?? []).map((f) => `${f.m}:${f.d}`).join(' ')} — its keys are ${(wide * 1000).toFixed(0)} mm apart and the hand is spread ${(spread * 1000).toFixed(0)} mm`);
-    claim(ds.length === 4, `the four notes of the chord are taken by four different digits (${ds.join(', ')})`);
+    console.log(`   the widest chord: ${(chord.on ?? []).map((f) => `${f.m}:${f.d}`).join(' ')} — its keys are ${(wide * 1000).toFixed(0)} mm apart and the hand is spread ${(spread * 1000).toFixed(0)} mm`);
+    claim(ds.length === 4, `the four notes of the widest chord are taken by four different digits (${ds.join(', ')})`);
     claim(spread > wide * 0.8, `and the hand is spread to the chord's own width: ${(spread * 1000).toFixed(0)} mm against ${(wide * 1000).toFixed(0)}`);
+
+    // ---- AND EVERY LEAP IN THE PIECE, one drawing at a time ---------------------------------------
+    // The tips test above watches whatever drawings this machine managed to render at the top of the
+    // song. These are the moments the fingering can actually be got wrong, taken by hand:
+    //   the LEFT HAND'S JUMP, which happens twice a bar all the way through — G2 on the beat and a
+    //   chord an octave and a half above it on the next one;
+    //   the MELODY'S OCTAVE, bar 12's F♯4 to bar 13's F♯5, the widest step in the tune;
+    //   the WIDEST CHORD, bar 25 again, and the four-note close of the second ending;
+    //   the WALKING BAR, 37, where the left hand is on quarters of its own and the chords have gone
+    //   over to the right hand on top of a held F♯.
+    const LEAPS = [
+      [0.5, 'bar 1, beat 1: the bass alone'],
+      [1.5, 'bar 1, beat 2: the chord, an octave and a half up from it'],
+      [34.5, 'bar 12: the melody holding F♯4 over the rocking chord'],
+      [37.5, 'bar 13: the melody an octave above it, on F♯5'],
+      [82.5, 'bar 28: A5, the top of the piece'],
+      [73.5, 'bar 25: the ninth'],
+      [109.5, 'bar 37: the bass walking, the chords in the right hand'],
+      [110.5, 'bar 37, beat 3: four notes in the right hand over the walk'],
+      [232.5, 'bar 78: the last chord, D minor, in both hands'],
+    ];
+    const leapGaps = [];
+    for (const [b, what] of LEAPS) {
+      const { hands: hs } = await holdAt(page, b);
+      const got = [];
+      for (const side of ['L', 'R']) for (const f of hs[side].on ?? []) got.push({ side, ...f });
+      const want = soundingAt(b);
+      const wanted = [...want.L, ...want.R].sort((p, q) => p - q);
+      const fingered = got.map((f) => f.m).sort((p, q) => p - q);
+      const px = await page.evaluate(([list, W, H]) => {
+        const T = window.__theatre.THREE, P = window.__theatre.pieces.props.piano, cam = window.__theatre.camera;
+        const v = new T.Vector3();
+        const pr = (x, y, z) => {
+          v.set(x, y, z).project(cam);
+          return [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H];
+        };
+        return list.map((f) => {
+          const a = pr(f.tip[0], f.tip[1], f.tip[2]);
+          const b2 = pr(-2.046, P.keyboard.y, P.keyZ(f.m));
+          const c = pr(-2.09, P.keyboard.y, P.keyZ(f.m));
+          const ax = [c[0] - b2[0], c[1] - b2[1]];
+          const L = Math.hypot(ax[0], ax[1]) || 1;
+          const t = ((a[0] - b2[0]) * ax[0] + (a[1] - b2[1]) * ax[1]) / (L * L);
+          return { d: f.d, m: f.m, gap: Math.hypot(a[0] - b2[0] - ax[0] * t, a[1] - b2[1] - ax[1] * t) };
+        });
+      }, [got, w, h]);
+      const worstHere = px.length ? Math.max(...px.map((p) => p.gap)) : 0;
+      leapGaps.push({ b, what, ok: sameAs(fingered.map(String), wanted.map(String)), worst: worstHere, n: wanted.length });
+      console.log(`   ${what}: ${wanted.length} key(s) ${wanted.join(' ')} — ${px.map((p) => `${p.m}:${p.d}@${p.gap.toFixed(1)}px`).join(' ')}`);
+    }
+    const key2 = OCT / 7;
+    const missed = leapGaps.filter((g) => !g.ok);
+    const worstLeap = leapGaps.reduce((a, b2) => (b2.worst > a.worst ? b2 : a));
+    claim(missed.length === 0, `every note of every leap in the piece has a fingertip on it (${leapGaps.reduce((s, g) => s + g.n, 0)} keys over ${LEAPS.length} drawings${missed.length ? `; missed at ${missed.map((g) => g.b).join(', ')}` : ''})`);
+    claim(worstLeap.worst < key2 * 0.5, `and the worst of them is ${worstLeap.worst.toFixed(1)} px off its key's centre (${(worstLeap.worst / key2).toFixed(2)} of a white key), at «${worstLeap.what}»`);
+
+    // ---- AND IT COMES BACK ROUND: the piece is a round, not a one-shot ---------------------------
+    const round = {
+      a: (await holdAt(page, 1.5)).down.slice().sort((p, q) => p - q),
+      b: (await holdAt(page, 1.5 + BARS * METRE)).down.slice().sort((p, q) => p - q),
+      c: (await holdAt(page, BARS * METRE - 0.5)).down.slice().sort((p, q) => p - q),
+    };
+    claim(sameAs(round.a.map(String), round.b.map(String)) && round.a.length > 0 && round.c.length > 0,
+      `the last bar is followed by the first: beat ${BARS * METRE} is beat 0 again (${round.a.join(' ')}), and the bar before it is still playing (${round.c.join(' ')})`);
     await page.evaluate(() => window.__theatre.pieces.props.piano.hold(14.5));
     await frames(page, 2);
   }
-
-  // ---- the piano voice is on the bus -------------------------------------------------------------
-  const audio = await page.evaluate(() => {
-    const S = window.__theatre.pieces.sound;
-    const t = S?.timeline ?? [];
-    return { running: S?.running ?? null, notes: t.filter((c) => c.name === 'piano').length, pitches: [...new Set(t.filter((c) => c.name === 'piano').map((c) => c.m))].sort((a, b) => a - b) };
-  });
-  console.log(`   the tune bus took ${audio.notes} piano notes (sound running ${audio.running})${audio.notes ? `, pitches ${audio.pitches.join(' ')}` : ''}`);
-  if (audio.running) claim(audio.notes > 0, `the piano voice is scheduled on the tune bus (${audio.notes} notes)`);
 
   // ---- a second click stops it, and so does walking away -----------------------------------------
   await page.evaluate(() => window.__theatre.pieces.props.piano.stop());
@@ -445,6 +623,72 @@ for (const [w, h] of [PLATE, WIDE, PHONE].filter(([a, b]) => !ONLY.length || ONL
   if (errors.length) bad++;
   await page.close();
 }
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// THE SOUND, IN A ROOM THAT IS NOT A SCREENSHOT.
+// Every window above is opened with ?shot=1, and a room in shot mode is SILENT on purpose —
+// sound.js's first line about it is `const silent = !!ctx.shotMode`, because a tool that takes a
+// hundred screenshots should not also play a hundred pianos. So nothing up there can say a word
+// about the audio. This opens the room once more the way a visitor opens it, walks to the piano,
+// clicks the keys and reads what the tune bus was actually given.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+if (!ONLY.length || ONLY.includes('sound')) {
+  console.log('\n=== the sound');
+  const page = await browser.newPage({ viewport: { width: PLATE[0], height: PLATE[1] }, deviceScaleFactor: 1 });
+  const errs = [];
+  page.on('pageerror', (e) => errs.push(String(e).slice(0, 200)));
+  await page.route('**/@vite/client', stub);
+  await page.goto(BASE, { waitUntil: 'load', timeout: 300000 });
+  await page.waitForFunction('window.__theatreReady === true', null, { timeout: 300000 });
+  // the gesture the browser wants before any audio at all, and then the walk and the keys
+  await page.mouse.click(PLATE[0] / 2, PLATE[1] - 8).catch(() => {});
+  await settle(page);
+  await page.evaluate(() => window.__theatre.pieces.walk.go('piano'));
+  await settle(page);
+  const kb2 = await page.evaluate(() => window.__theatre.pieces.props.piano.tapBox());
+  await page.mouse.click(kb2.x + kb2.w / 2, kb2.y + kb2.h / 2);
+  await frames(page, 8);
+  // ---- the piano voice is on the bus -------------------------------------------------------------
+  const audio = await page.evaluate(() => {
+    const S = window.__theatre.pieces.sound;
+    const t = S?.timeline ?? [];
+    const p = t.filter((c) => c.name === 'piano');
+    return { running: S?.running ?? null, notes: p.length, pitches: [...new Set(p.map((c) => c.m))].sort((a, b) => a - b), cues: p.map((c) => ({ at: c.at, wall: c.wall, m: c.m })) };
+  });
+  console.log(`   the tune bus took ${audio.notes} piano notes (sound running ${audio.running})${audio.notes ? `, pitches ${audio.pitches.join(' ')}` : ''}`);
+  if (audio.running) claim(audio.notes > 0, `the piano voice is scheduled on the tune bus (${audio.notes} notes)`);
+  // …AND AT THE SCORE'S OWN TIMES. The notes of one bar are laid on the audio clock in ONE drawing,
+  // a bar ahead (props-piano.js), so the entries that share a `wall` share an `ac.currentTime` and
+  // the differences between their `at`s are the score's own beats and nothing else — which is the
+  // part of the timing a machine drawing one frame a second cannot smear. Each batch is looked up
+  // in the score: is there a beat in the piece where exactly these pitches fall at exactly these
+  // spacings? (A batch of one says nothing, so those are not counted.)
+  if (audio.running && audio.notes > 0) {
+    const batches = new Map();
+    for (const c of audio.cues) {
+      const k = c.wall.toFixed(2);
+      if (!batches.has(k)) batches.set(k, []);
+      batches.get(k).push(c);
+    }
+    const onsets = [...new Set(NOTES.map((n) => n.at))].sort((a, b) => a - b);
+    const checked = [], strayed = [];
+    for (const [, cues] of batches) {
+      if (cues.length < 2) continue;
+      const t0 = Math.min(...cues.map((c) => c.at));
+      const want = cues.map((c) => ({ m: c.m, d: (c.at - t0) / BEAT }));
+      if (!want.some((x) => x.d > 0.02)) continue; // all at one instant: a chord, no spacing to test
+      const fits = onsets.some((b0) =>
+        want.every((x) => NOTES.some((n) => n.m === x.m && Math.abs(n.at - (b0 + x.d)) < 0.05)));
+      (fits ? checked : strayed).push(want.map((x) => `${x.d.toFixed(2)}:${x.m}`).join(' '));
+    }
+    console.log(`   ${checked.length + strayed.length} batches of notes laid on the audio clock together; ${checked.length} fall at the score's own spacings`);
+    claim(strayed.length === 0 && checked.length > 0,
+      `every batch of notes on the timeline sits at the score's times, to a twentieth of a beat (${checked.length} checked${strayed.length ? `, off: ${strayed.slice(0, 2).join(' | ')}` : ''})`);
+  }
+
+  claim(errs.length === 0, `and the room said nothing about it${errs.length ? `: ${errs.join(' | ')}` : ''}`);
+  await page.close();
+}
+
 console.log(`\nthe song: ${NOTES.length} notes, ${(NOTES[NOTES.length - 1].at + NOTES[NOTES.length - 1].len).toFixed(0)} beats at ${BEAT}s — ${((NOTES[NOTES.length - 1].at + NOTES[NOTES.length - 1].len) / METRE).toFixed(0)} bars of 3`);
 console.log(bad ? `\n${bad} claim(s) failed` : '\nevery claim holds');
 await browser.close();
