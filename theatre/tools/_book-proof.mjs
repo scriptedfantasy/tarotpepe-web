@@ -136,6 +136,41 @@ async function inkRows(page, box, w, h) {
   return { top, bot, rows: bot - top + 1, ink, w: info.width, h: info.height };
 }
 
+// TWO PNGs OF THE SAME BOX, AND WHAT MOVED BETWEEN THEM. A pose table is a piece's word for what it
+// meant to draw; this is the only way to ask the GLASS whether anything happened. Two clips of the
+// same rectangle, compared channel by channel with a threshold that is well past the boil — the two
+// facing pages are re-struck with a fresh nib every other drawing and that wobbles a stroke by a
+// pixel, so anything under a two-fifths change on a single channel is the pen breathing and not the
+// book moving. Returns how much of the box changed and the box the change itself sits in.
+function moved(a, b, cut = 40) {
+  const W = Math.min(a.info.width, b.info.width), H = Math.min(a.info.height, b.info.height);
+  let n = 0, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const p = (y * a.info.width + x) * a.info.channels, q = (y * b.info.width + x) * b.info.channels;
+      if (Math.abs(a.data[p] - b.data[q]) < cut && Math.abs(a.data[p + 1] - b.data[q + 1]) < cut && Math.abs(a.data[p + 2] - b.data[q + 2]) < cut) continue;
+      n++;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  return { px: n, pct: +((100 * n) / (W * H)).toFixed(1), w: n ? x1 - x0 + 1 : 0, h: n ? y1 - y0 + 1 : 0, box: [x0, y0, x1, y1] };
+}
+// …and a box is only a clip if it is ON THE GLASS. A projected box belongs to the frame it was
+// projected in and a phone's frame holds ONE leaf of this book: the leaf a turn lands on is off the
+// side of it, so the fore-edge the piece reports is at a negative x and a screenshot asked for that
+// rectangle throws. Null means «not in the picture», and the caller says so instead of dying.
+const clipOf = (box, w, h) => {
+  if (!box) return null;
+  const x = Math.max(0, Math.round(box.x)), y = Math.max(0, Math.round(box.y));
+  const width = Math.min(Math.round(box.x + box.w) - x, w - x), height = Math.min(Math.round(box.y + box.h) - y, h - y);
+  if (width < 2 || height < 2 || x >= w || y >= h) return null;
+  return { x, y, width, height };
+};
+const raw = async (page, clip) => (clip ? sharp(await page.screenshot({ clip, timeout: SHOT_MS })).raw().toBuffer({ resolveWithObject: true }) : null);
+
 // HIS GREEN IN A BOX. The one colour in this room outside the card faces is Pepe's skin (pepe.js
 // SKIN #69b964, hsl(116 38% 56%)), so "is he on the cover" is a question a proof can answer by
 // counting: a pixel is his if its green channel leads both the others by 14 and is not a dark line.
@@ -274,7 +309,7 @@ for (const [w, h] of [PLATE, PHONE]) {
   // angles it actually put on the glass (`drew`) and they are read back when it has stopped.
   await rest(page);
   const swing = await page.evaluate(() => window.__theatre.pieces.walk.books.drew);
-  claim(swing?.kind === 'swing' && swing.drawings === 8, `the front board goes over in ${swing?.drawings} drawings on the twelves, at ${swing?.angles.join(', ')} degrees about the joint`);
+  claim(swing?.kind === 'swing' && swing.drawings === 12, `the front board goes over in ${swing?.drawings} drawings on the twelves, at ${swing?.angles.join(', ')} degrees about the joint`);
   await frames(page, 3);
   const open = await state(page);
   claim(open.showing && open.title === 'TAROT', `…and what is lying open on the table is TAROT BY PEPE (${open.title}), at the ${open.shot} shot`);
@@ -306,10 +341,52 @@ for (const [w, h] of [PLATE, PHONE]) {
       shown = await page.evaluate(() => window.__theatre.pieces.walk.books.swinging);
     }
     await page.screenshot({ path: `${OUT}/swing-${tag}.png` });
+    claim(!!shown, `…and the board is caught in the air on drawing ${shown?.drawing} of ${shown?.drawings}, at ${shown?.angle} degrees`);
+
+    // ---- AND IT LANDS WITH A BOUNCE, measured in the PNGs and not read off the table ------------
+    // The board meets the table on drawing 8 and rebounds nine and a half degrees on drawing 9, and
+    // from a plan view that rebound is worth almost nothing on its own: the fore-edge foreshortens
+    // 2.3 mm toward the joint and perspective carries it 3.1 mm the other way, so the two very
+    // nearly cancel and an honest bounce is under three pixels. What carries the landing at this
+    // shot is the BLOCK — it runs six millimetres past its own squaring-up on the drawing the board
+    // lands and comes back over the two after it. So the claim is measured on both: the pixels that
+    // change inside the board's own box (the board is doing something) and the width of the change
+    // across the whole book (the block is settling under it).
+    let landed = null, bounced = null, wide2 = null, bookBox = null;
+    // …and the loop is given more turns than there are drawings, because a HELD loop stalls: a
+    // step that takes less than a twelfth of a second does not advance the clock and the same
+    // drawing comes back twice. Drawings never skip, so the count is only ever a question of
+    // patience.
+    for (let k = 0; k < 30; k++) {
+      await step(page, 1);
+      const m = await page.evaluate(() => window.__theatre.pieces.walk.books.moving);
+      if (!m) break;
+      if (m.drawing === 8) {
+        bookBox = m.block && m.board ? {
+          x: Math.min(m.block.x, m.board.x) - 6, y: Math.min(m.block.y, m.board.y) - 6,
+          w: Math.max(m.block.x + m.block.w, m.board.x + m.board.w) - Math.min(m.block.x, m.board.x) + 12,
+          h: Math.max(m.block.y + m.block.h, m.board.y + m.board.h) - Math.min(m.block.y, m.board.y) + 12,
+        } : null;
+        landed = { m, board: await raw(page, clipOf(m.board, w, h)), all: bookBox ? await raw(page, clipOf(bookBox, w, h)) : null };
+        const c0 = clipOf(bookBox ?? m.board, w, h);
+        if (c0) await page.screenshot({ path: `${OUT}/land-${tag}.png`, clip: c0 });
+      } else if (m.drawing === 9 && landed) {
+        bounced = { m, board: await raw(page, clipOf(landed.m.board, w, h)), all: bookBox ? await raw(page, clipOf(bookBox, w, h)) : null };
+        const c1 = clipOf(bookBox ?? m.board, w, h);
+        if (c1) await page.screenshot({ path: `${OUT}/bounce-${tag}.png`, clip: c1 });
+        break;
+      }
+    }
+    if (landed && bounced && landed.board && bounced.board) {
+      const onBoard = moved(landed.board, bounced.board);
+      const onAll = landed.all && bounced.all ? moved(landed.all, bounced.all) : null;
+      const slid = Math.round(Math.abs(bounced.m.block.x - landed.m.block.x) + Math.abs(bounced.m.block.y - landed.m.block.y));
+      claim(onBoard.px > 300, `…and it LANDS WITH A BOUNCE: ${onBoard.px} px of the board's own ${Math.round(landed.m.board.w)}x${Math.round(landed.m.board.h)} px box change between the drawing it meets the table (${landed.m.angle}°) and the drawing after it (${bounced.m.angle}°) — ${onBoard.pct} % of it`);
+      claim(!!onAll && onAll.w > 40, `…and the block settles under it: the change across the whole book runs ${onAll?.w} px wide, the block's own box moving ${slid} px as the 6 mm overshoot comes back`);
+    } else claim(false, 'the board could not be caught on its landing and its bounce');
     await letGo(page);
     await rest(page);
     await frames(page, 2);
-    claim(!!shown, `…and the board is caught in the air on drawing ${shown?.drawing} of ${shown?.drawings}, at ${shown?.angle} degrees`);
   }
 
   // ---- THE CAP, measured in ink on the glass -----------------------------------------------------
@@ -334,11 +411,27 @@ for (const [w, h] of [PLATE, PHONE]) {
   await hold(page);
   await step(page, 1);
   await page.mouse.click(box.x + box.w * (open.spread ? 0.5 : 0.78), box.y + box.h * 0.55);
-  let caught = null;
-  for (let k = 0; k <= 2; k++) {
+  let caught = null, bowAt = null, bowRaw = null, band = null;
+  for (let k = 0; k < 26; k++) {
     await step(page, 1);
     const t = await page.evaluate(() => window.__theatre.pieces.walk.books.turning);
     if (t && !t.lens) caught = t;
+    // AND THE DRAWING THE BOW IS WORTH MOST, caught as it goes past. The leaf is a curve and not a
+    // plate, and the whole of what that is worth on the glass is the gap between where its fore-edge
+    // IS and where a flat plate at the same angle would have put it: the piece projects both through
+    // this very frame (`moving`), and the widest of them is the drawing to measure.
+    const m = await page.evaluate(() => window.__theatre.pieces.walk.books.moving);
+    if (m?.kind === 'turn' && m.px > (bowAt?.px ?? 0) && m.leafBox) {
+      const lo = Math.min(m.bowed[0], m.flat[0]), hi = Math.max(m.bowed[0], m.flat[0]);
+      const b = { x: lo + (hi - lo) * 0.3, y: m.leafBox.y + m.leafBox.h * 0.3, w: (hi - lo) * 0.6, h: m.leafBox.h * 0.4 };
+      const c = b.w >= 12 && b.h >= 12 ? clipOf(b, w, h) : null;
+      if (c && c.width >= 12 && c.height >= 12) {
+        bowAt = m;
+        band = c;
+        bowRaw = await raw(page, c);
+      }
+    }
+    if (!t) break;
   }
   await page.screenshot({ path: `${OUT}/turn-${tag}.png` });
   await letGo(page);
@@ -346,7 +439,7 @@ for (const [w, h] of [PLATE, PHONE]) {
   await frames(page, 3);
   const drewTurn = await page.evaluate(() => window.__theatre.pieces.walk.books.drew);
   claim(!!caught, `a click on the right page turns a leaf over the gutter — caught in the air on drawing ${caught?.drawing}${caught ? `, ${before.leaf + 1} → ${caught.to + 1}` : ''}`);
-  claim(drewTurn?.kind === 'turn' && drewTurn.drawings === 6, `and the leaf goes over in ${drewTurn?.drawings} drawings, at ${drewTurn?.angles.join(', ')} degrees about the gutter`);
+  claim(drewTurn?.kind === 'turn' && drewTurn.drawings === 10, `and the leaf goes over in ${drewTurn?.drawings} drawings, at ${drewTurn?.angles.join(', ')} degrees about the gutter`);
   const after = await seeing(page);
   claim(after.leaf > before.leaf, `…and it lands on the next opening (${before.leaf + 1} → ${after.leaf + 1}: «${after.kind}»)`);
   // (`open` inside an evaluate is the browser's own window.open, not this proof's variable, so the
@@ -358,6 +451,18 @@ for (const [w, h] of [PLATE, PHONE]) {
   await frames(page, 3);
   const backOne = await seeing(page);
   claim(backOne.leaf < after.leaf, `a click on the left page turns it back (${after.leaf + 1} → ${backOne.leaf + 1})`);
+
+  // ---- AND THE LEAF BOWS MID-TURN, measured in the PNG ------------------------------------------
+  // The book is back on the opening it started from, so the band measured above now holds whatever
+  // lies there when nothing is moving — which is the page the turning leaf was seen ON TOP OF. The
+  // band was cut between where a FLAT plate's fore-edge would have reached at that drawing and where
+  // the leaf's actually did, so a plate at that angle cannot put a single pixel in it: if the
+  // picture there changed, what changed it was the bow and nothing else.
+  if (bowAt && bowRaw && band) {
+    const now = await raw(page, band);
+    const d = moved(now, bowRaw);
+    claim(d.pct > 12, `the leaf BOWS mid-turn: on drawing ${bowAt.drawing} at ${bowAt.angle}° its fore-edge stands ${bowAt.px} px past where a flat plate at that angle puts it (curl ${bowAt.curl} across the leaf, lead ${bowAt.lead}°), and ${d.pct} % of the ${band.width}x${band.height} px band between the two is paper a plane could not reach`);
+  } else claim(false, 'the leaf could not be caught at the drawing its bow is worth most');
 
   // ---- THE RIBBON, animated once, then the three pages it has to come back from ------------------
   const rib = await page.evaluate(() => window.__theatre.pieces.walk.books.ribbonBox());
