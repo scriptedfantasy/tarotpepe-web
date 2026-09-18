@@ -55,12 +55,12 @@ export const PROMPTS = {
   // asked to see cards that were never dealt
   recallNone: 'Nothing has been drawn. The deck is face down where it has been all evening; say the word and it will not be.',
   farewellNone: 'Good night. The step by the door is lower than it looks.',
-  // The cross on the frieze has been clicked, the storm is in, and the door has come open on the
-  // crossroads (egg-cross.js, `props:cross` at phase `open`). Exactly these words, and no others:
-  // they are the user's own for this egg. Scripted rather than written by the mind for the reason
-  // `fine` is — a model asked to remark on a picture in a doorway describes the picture, and the
-  // whole joke is that he does not look at it.
-  cross: 'Choose your path, anon.',
+  // The cross on the frieze has been clicked, it has turned itself upside down, and a hatch in the
+  // floor has opened on a red stair going down (egg-cross.js round 5, egg-cellar.js; `props:cross`
+  // with `open`). It is the ROOM WITH NO VOICE that says this: with a key the `cross` beat goes out
+  // on the wire and the line is his own (server/pepe.mjs). `Choose your path, anon.` stood here for
+  // four rounds and went out with the storm and the two roads it belonged to.
+  cross: 'The boards do that sometimes. Mind the stair, anon.',
 };
 
 // The visitor's sample answer for the judging stills (the same one the mind's transcript uses).

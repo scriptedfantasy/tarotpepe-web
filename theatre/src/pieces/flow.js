@@ -254,30 +254,39 @@ export async function build(ctx) {
     cutField();
   });
 
-  // ---- THE DOOR HAS COME OPEN ON THE CROSSROADS, AND HE HAS ONE LINE -----------------------------
-  // The third object in the evening that starts a turn with nobody having said anything, and it is
-  // taken exactly where the fire's remark is taken: the open field is cut short, the line is played
-  // with `keepLast` so it stands ON the placard with the field open under it, and the conversation
-  // carries on. The line is `PROMPTS.cross` and it is fixed — `Choose your path, anon.` — for the
-  // reason `This is fine.` is fixed: a model asked about a picture in a doorway describes the
-  // picture, and he is not looking at it.
+  // ---- THE FLOOR HAS OPENED, AND HE SAYS WHAT IS DOWN THERE ------------------------------------
+  // The cross over the door has turned itself upside down and three boards in front of the visitor
+  // have come up on a red stair (egg-cross.js round 5, egg-cellar.js). It is the fourth object in
+  // the evening that starts a turn with nobody having said anything, and it is taken exactly where
+  // the deck's remark is taken: the open field is cut short, and with a live voice it is HIS line,
+  // from the `cross` beat's note (server/pepe.mjs) — which tells him what has happened in the room
+  // and leaves what to make of it to him. Keyless it is the written `PROMPTS.cross`.
+  //
+  // IT IS A NOTE AND NO LONGER A FIXED LINE, and that is the round's own change. `Choose your path,
+  // anon.` was fixed for the reason `This is fine.` is fixed — a model asked about a picture in a
+  // doorway describes the picture, and he was not looking at it. There is no picture now: there is a
+  // hole in his own floor with a light coming up it, which is a fact about HIS room, and he is the
+  // only one who should be saying anything about it.
   //
   // NEVER OVER A READING, the fire's rule and for the fire's reason: while the visitor is choosing
-  // three cards the field IS open, and a remark about the weather there would cut the placard they
-  // are answering. Through all of it the storm plays, the door opens and he says nothing.
-  let atTheDoor = false; // the door is open and the field was free: one line owed
-  ctx.on?.('props:cross', ({ phase } = {}) => {
-    if (phase !== 'open') {
-      // The door is shut again, chosen or not, and the next storm is owed a line of its own. It is
-      // cleared on `shut`/`dark` and NOT on `closing`: closing arrives the instant a path is taken,
-      // which can be the same frame the line was cut into, and clearing it there would swallow the
-      // one line for a visitor who chose quickly.
-      if (phase === 'shut' || phase === 'dark') atTheDoor = false;
+  // three cards the field IS open, and a remark about the floor there would cut the placard they are
+  // answering. Through all of it the cross falls, the boards come up, and he says nothing.
+  let atTheDoor = false; // the hatch is open and the field was free: one line owed
+  ctx.on?.('props:cross', ({ open } = {}) => {
+    if (!open) {
+      // It is all back the way it was, and the next time is owed a line of its own. Cleared on
+      // anything that is not the hatch standing open, which is now a single flag and needs no list
+      // of phase names: `closing` arrives the instant the second click lands, and by then the line
+      // has either gone up or the visitor was never going to hear it.
+      atTheDoor = false;
       return;
     }
     if (atTheDoor) return;
     if (!D?.asking || picking || READING.has(api.beat)) return;
     atTheDoor = true;
+    if (M?.available && M?.reply) {
+      if (!roomSays) roomSays = { beat: 'cross' };
+    }
     cutField();
   });
 
@@ -925,11 +934,14 @@ export async function build(ctx) {
         prompt = d2.held ?? PROMPTS.deck;
         continue;
       }
-      // The door came open on the crossroads while the field was open. Same shape as the fire's
-      // remark, and the same subtractions: no react(), because he does not turn round; no cut,
-      // because the camera has not noticed the weather either; no mind, because the line is fixed.
-      // The quiet counter does not move — it is a digression, not a silence — and `!said` because
-      // the visitor's own words always win the tie.
+      // The floor came open while the field was open and there is no live voice to say anything
+      // about it: the written line, once. With a voice this never fires — the hook above sets
+      // `roomSays` instead and the `cross` beat goes out on the wire — and the two cannot both
+      // happen, because `atTheDoor` is raised in the same statement that sets `roomSays`. Same
+      // shape as the fire's remark and the same subtractions: no react(), because he does not turn
+      // round; no cut, because the camera is already going there by itself. The quiet counter does
+      // not move — it is a digression, not a silence — and `!said` because the visitor's own words
+      // always win the tie.
       if (atTheDoor && !said) {
         atTheDoor = false;
         const x = await render([PROMPTS.cross], { hold: 1.3, keepLast: true });

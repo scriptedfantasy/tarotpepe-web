@@ -356,12 +356,19 @@ export async function build(ctx) {
         // what he said the reading was for when he pulled deal_cards, spent on the shuffle line
         about: beat === 'shuffle' && talk.about ? talk.about : undefined,
         // WHICH PATH THEY TOOK AT THE DOOR (src/pieces/egg-cross.js). null until the visitor has
-        // clicked the cross over the door, watched the storm come in and chosen one of the two roads
-        // in the doorway; 'light' or 'dark' from then on, for the rest of the evening. It rides on
-        // EVERY turn and not on a beat of its own, because it is not an event — it is a thing that
-        // is now true about this visitor, like the cards on the cloth, and the server turns it into
-        // one sentence of the room's note (server/pepe.mjs, pathLine).
+        // walked to the doorway, opened the door onto the crossroads and taken one of the two roads;
+        // 'light' or 'dark' from then on, for the rest of the evening. It rides on EVERY turn and
+        // not on a beat of its own, because it is not an event — it is a thing that is now true
+        // about this visitor, like the cards on the cloth, and the server turns it into one sentence
+        // of the room's note (server/pepe.mjs, pathLine).
         path: ctx.pieces.props?.cross?.path ?? null,
+        // …AND WHETHER THE FLOOR IS STILL OPEN (src/pieces/egg-cellar.js). It rides the same way and
+        // for the same reason, with one difference that matters: `path` is a thing that HAPPENED and
+        // stays true, and this is a thing that is true only while it is true — the hatch shuts again
+        // on a second click and the room goes back to being a room. So it is sent on every turn
+        // rather than remembered, and the server says nothing about it once it is false. The `cross`
+        // BEAT is the moment it opens, and this is the rest of the evening it is open for.
+        cellar: !!ctx.pieces.props?.cross?.open,
       };
       if (beat === 'shuffle') talk.about = null;
       // counted once, whether the answer comes from the model or from the script

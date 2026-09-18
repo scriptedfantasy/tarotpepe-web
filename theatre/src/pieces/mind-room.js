@@ -383,6 +383,13 @@ const PLAIN = [
   [/\bplate\b|\bnapkin\b|\bolives?\b|\bstones?\b|\bcrumbs?\b|\bsupper\b|\bknife\b/, ['My supper. It was a small one and it was some time ago.']],
   [/\bespresso\b|\bcup\b|\bsaucer\b|\bcoffee\b|\bspoon\b|\bsugar\b/, ['Coffee. It has been cold since about six.']],
   [/\blight switch(?:es)?\b|\bswitch\b/, ['A light switch. There is another by the door and it does nothing at all.']],
+  // THE CROSS ON THE FRIEZE (src/pieces/egg-cross.js), and it goes BEFORE the transom because the
+  // transom's own pattern catches "over the door" and would answer a question about the cross with a
+  // sentence about a pane of glass. It is not his and it has no story: it was over that door when he
+  // took the lease and he has never had a reason to take it down. Nothing here says what it does
+  // when it is clicked — nothing announces an egg — and nothing here says anything about a cellar
+  // either, for the same reason.
+  [/\bcross\b|\bcrucifix\b|\bcrucifixion\b/, ['The cross over the door. It came with the room and I have left it where the last tenant had it.']],
   [/\btransom\b|\bfanlight\b|\bover the door\b/, ['The light over the door. It is the only clear pane in the room.']],
   [/\bcupboard\b|\bpress door\b|\bother door\b|\bside door\b/, ['The cable press. It has not been opened since before my lease and I have not tried.']],
   [/\bjars?\b|\bsucre\b|\banis\b|\bmiel\b/, ['Jars. Sugar and anis, both older than the tenancy.']],

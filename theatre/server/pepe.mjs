@@ -596,6 +596,15 @@ function situation(b, names = []) {
     // visitor is looking at them. It is where they learn the cards (a card picked up is a lesson).
     case 'deck':
       return 'The visitor has just laid the whole deck out face up on the table, to look at it. This is where they learn the cards: say so in one line, in your own way — they pick one up and you teach it.';
+    // THE CROSS HAS TURNED ITSELF OVER AND THE FLOOR HAS OPENED (src/pieces/egg-cross.js,
+    // src/pieces/egg-cellar.js). The fourth turn in the evening the ROOM starts: nothing was said, a
+    // thing on the wall came loose, and there is now a hole in the floor between him and the
+    // visitor. What goes out is WHAT HAPPENED and nothing about what to make of it — the cellar is
+    // his, he has lived over it for years, and whether that is a joke, a grievance or a warning is
+    // the one thing this note must not decide. It used to be four fixed words, `Choose your path,
+    // anon.`, and they went out with the storm and the two roads they belonged to.
+    case 'cross':
+      return 'The little wooden cross over the door has just dropped off its top nail, swung round on the pin through its foot, and is hanging upside down on the frieze. At the same moment three floorboards in front of the visitor lifted on a hinge, and under them is a stone stair going down into your cellar with a red light coming up it. You have lived over this cellar for years and it has never done that by itself before. Say what is down there, in one or two lines, in your own way.';
     case 'globe': {
       const c = clip(b.country, 60) || 'somewhere';
       return `The globe on the cabinet has just stopped turning, under the visitor's finger, on ${c}. You once had an affair there, on a holiday, years ago. Tell it in three sentences: where, what it was like, how it ended. Do not name the person.`;
@@ -688,6 +697,18 @@ function pathLine(b) {
   return '';
 }
 
+// AND WHETHER THE FLOOR IS STILL OPEN (src/pieces/egg-cellar.js). The same shape as pathLine and one
+// difference that decides everything about it: a road taken is a thing that HAPPENED and stays true
+// all evening, and a hatch is true only while it is open — a second click on the cross or on the
+// boards shuts it and the room goes back to being a room. So this says nothing at all once it is
+// false, and there is no sentence anywhere telling him a floor was open earlier. It is one plain
+// statement with no instruction in it: he is told what is in the room and left to decide whether it
+// is worth a word. Most turns it is worth nothing, and that is the correct outcome for an egg.
+function cellarLine(b) {
+  if (!b?.cellar) return '';
+  return ' The hatch in the floor is still standing open between you and them, with the red light coming up the stair.';
+}
+
 // The messages array: history as alternating turns (first is always the visitor), then the last
 // user turn = what the visitor just said (if anything) + the room's note for this turn — a stage
 // direction in the beats build, a statement of what is true in the room build.
@@ -704,7 +725,7 @@ function buildMessages(b, names = [], style = DEFAULT_STYLE) {
   if (!hist.length || hist[0].role !== 'visitor') push('user', '[The door opens. The visitor comes in and stands across the table.]');
   for (const h of hist) push(h?.role === 'pepe' ? 'assistant' : 'user', h?.text);
   const said = String(b.user ?? b.question ?? '').trim();
-  const note = situation(b, names) + pathLine(b);
+  const note = situation(b, names) + pathLine(b) + cellarLine(b);
   push('user', `${said ? said + '\n\n' : ''}[${note}]`);
   return msgs;
 }
@@ -977,6 +998,12 @@ const FAKES = {
   'flip-ask': () => [...said('So. What does it say, anon.'), chunk({}, 'stop')],
   'flip-hear': () => [...said('That lands, more or less. I doubt the half where it is my own doing. Go on.'), chunk({}, 'stop')],
   deck: () => [...said('so you want to learn the cards, anon. pick one up.'), chunk({}, 'stop')],
+  // the floor has opened. Two sentences, because the beat asks for one or two and a stub that
+  // answers with one proves nothing about the placard taking a second.
+  cross: () => [
+    ...said('Ah. That is the cellar, and the light is mine, before you ask. Keep your feet on this side of it, anon — the fourth step is not there.'),
+    chunk({}, 'stop'),
+  ],
   'flip-close': () => [
     ...said('You read better than most of the people who pay me for it. I will keep the middle one. Say what you like now, anon.'),
     chunk({}, 'stop'),
@@ -1000,6 +1027,7 @@ function fakeScript(cfg, body) {
   // without the numeral, which is not part of the printed name the gate is holding him to
   if (/Teach them the card/.test(note))
     return FAKES.lesson((note.match(/has picked up (.+?)(?: \([^)]*\))? to look at/)?.[1] ?? 'the card').trim());
+  if (/hanging upside down on the frieze/.test(note)) return FAKES.cross();
   if (/Ask them what it says/.test(note)) return FAKES['flip-ask']();
   if (/Answer as the one whose card it is/.test(note)) return FAKES['flip-hear']();
   if (/hand the evening back to them/.test(note)) return FAKES['flip-close']();
