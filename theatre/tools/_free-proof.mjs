@@ -475,13 +475,13 @@ if (doing('eggs')) {
   await p.close();
 }
 
-// ---- 6b. THE DRAG GRABS THE WORLD, AND IT MAY BEGIN ON A SWITCH ---------------------------------
+// ---- 6b. THE LOOK, AND A DRAG THAT MAY BEGIN ON A SWITCH ----------------------------------------
 // The three corrections the user asked for after driving it on a desk, and the first of them is put
 // to the only witness that cannot be read two ways: WHERE A FIXED POINT OF THE ROOM WENT ON THE
-// GLASS. A sign is an argument about a convention; a point on the back wall moving right is not.
+// GLASS. A sign is an argument about a convention; a point on the back wall moving left is not.
 if (doing('grab')) {
   await fresh();
-  console.log('\nGRAB — the drag carries the room with the hand, starts anywhere, and says so with the cursor');
+  console.log('\nLOOK — the drag is a first-person look in both axes, starts anywhere, and the cursor says which is which');
   const p = await room(...PLATE);
   const MARK = [0, 1.6, -2.5]; // the plaster dead centre of the back wall
   const mark = () =>
@@ -509,22 +509,26 @@ if (doing('grab')) {
     await frames(p, 4);
     return mid;
   };
-  // A DRAG TO THE RIGHT carries the room to the right, which turns the lens LEFT.
+  // A DRAG TO THE RIGHT TURNS THE VIEW RIGHT, so the room travels LEFT under the hand: this is a
+  // head being turned, not a map being pushed. Both axes say the same thing now, which is the whole
+  // of what "the drag is inverted" turned out to mean — see camera-free.js, THE DRAG IS A
+  // FIRST-PERSON LOOK.
   await put(p, 0, 5.0, 0, 0);
   const a = await mark();
   await dragBy(640, 400, 160, 0);
   const r = await mark();
   console.log(`   a 160 px drag right: the back wall's mark goes x ${a.x} → ${r.x}, yaw ${a.yaw}° → ${r.yaw}°`);
-  claim(r.x > a.x + 50, `the room went RIGHT with the hand (${(r.x - a.x).toFixed(1)} px)`);
-  claim(r.yaw > a.yaw, `which is the lens turning left (yaw ${a.yaw}° → ${r.yaw}°)`);
-  // A DRAG DOWNWARD carries the room down, which tips the lens UP. This is the one that was inverted.
+  claim(r.x < a.x - 50, `the room went LEFT against the hand (${(r.x - a.x).toFixed(1)} px)`);
+  claim(r.yaw < a.yaw, `which is the lens turning right (yaw ${a.yaw}° → ${r.yaw}°)`);
+  // A DRAG DOWNWARD LOOKS DOWN, so the room travels UP.
   await put(p, 0, 5.0, 0, 0);
   const b2 = await mark();
   await dragBy(640, 300, 0, 160);
   const d2 = await mark();
   console.log(`   a 160 px drag down:  the back wall's mark goes y ${b2.y} → ${d2.y}, pitch ${b2.pitch}° → ${d2.pitch}°`);
-  claim(d2.y > b2.y + 30, `the room went DOWN with the hand (${(d2.y - b2.y).toFixed(1)} px)`);
-  claim(d2.pitch > b2.pitch, `which is the lens looking up (pitch ${b2.pitch}° → ${d2.pitch}°)`);
+  claim(d2.y < b2.y - 30, `the room went UP against the hand (${(d2.y - b2.y).toFixed(1)} px)`);
+  claim(d2.pitch < b2.pitch, `which is the lens looking down (pitch ${b2.pitch}° → ${d2.pitch}°)`);
+  claim(r.x < a.x && d2.y < b2.y, 'and the two axes agree with each other, which is the fault that was reported');
   // A DRAG THAT BEGINS ON THE PIANO'S HOTSPOT turns the view and does not walk anybody anywhere.
   await put(p, -0.6, 3.6, -14, 0);
   await frames(p, 4);

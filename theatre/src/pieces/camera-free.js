@@ -362,17 +362,23 @@ export function mountFree(ctx, { owns, aspect, blocked }) {
 
   // A MOUSE DRAG ON THE GLASS TURNS, and a plain click stays a click.
   //
-  // THE DRAG GRABS THE WORLD, which is what every map and every street view has taught every hand:
-  // the room moves WITH the fingers, so a drag to the right carries the room to the right and the
-  // lens therefore turns LEFT, and a drag downward carries the room down and the lens looks UP.
-  // Only one of those two had to change. Measured on the live page against a fixed point on the
-  // back wall, before anything was touched: a 160 px drag to the right moved that point from x 640
-  // to x 1150.7 — with the hand, already right — and a 160 px drag downward moved it from y 392.9
-  // to y 238.8, which is the room going UP while the hand goes down. So the yaw is as it was and
-  // the PITCH is the inverted one; the sign below is a plus where it was a minus, and the proof
-  // asserts where the room WENT rather than which way a number moved, because a sign can be read
-  // two ways and a point on the glass cannot.
-  //   A phone's sideways drag is the same rule and the same sign.
+  // THE DRAG IS A FIRST-PERSON LOOK: a drag to the right turns the view RIGHT and a drag downward
+  // looks DOWN, so the room travels the OPPOSITE way to the hand — the hand is turning a head, not
+  // pushing a map about.
+  //
+  // WHAT WAS ACTUALLY WRONG WAS THAT THE TWO AXES DISAGREED, and it took a measurement to see it.
+  // The user said "the drag is inverted", so a fixed point on the back wall was dragged and watched
+  // rather than argued about: 160 px to the right carried it from x 640 to x 1150.7 — the room
+  // going WITH the hand, which is a map — while 160 px downward carried it from y 392.9 to y 238.8
+  // — the room going AGAINST the hand, which is a head. One gesture was behaving as two, and a hand
+  // that gets a map in one axis and a head in the other will call whichever it meets second
+  // inverted. Both are the head now: the yaw's plus is a minus and the pitch is back to the minus
+  // it started with. The proof asserts WHERE THE MARK WENT under each drag rather than which way a
+  // number moved, because a sign can be read two ways and a point on the glass cannot.
+  //   A phone's sideways drag is the same rule and carries the same sign.
+  //   THE CURSOR STAYS THE GRAB HAND. It is not a claim about which way the room will go; it is the
+  //   only thing on the glass that says "this is somewhere you can look around", against a pointer
+  //   that says "this does something" — see AND WHAT THE CURSOR SAYS below.
   const TURN_WRAP = 520; // px of drag for 90 degrees of yaw — a comfortable wrist
   const PITCH_WRAP = 900; // px for the whole 50 degrees of pitch
   //
@@ -418,8 +424,8 @@ export function mountFree(ctx, { owns, aspect, blocked }) {
         return;
       }
       goal = null;
-      st.yaw = drag.yaw0 + ((ev.clientX - drag.x0) / TURN_WRAP) * 90 * DEG;
-      st.pitch = clamp(drag.pitch0 + ((ev.clientY - drag.y0) / PITCH_WRAP) * 2 * PITCH_MAX * DEG, -PITCH_MAX * DEG, PITCH_MAX * DEG);
+      st.yaw = drag.yaw0 - ((ev.clientX - drag.x0) / TURN_WRAP) * 90 * DEG;
+      st.pitch = clamp(drag.pitch0 - ((ev.clientY - drag.y0) / PITCH_WRAP) * 2 * PITCH_MAX * DEG, -PITCH_MAX * DEG, PITCH_MAX * DEG);
     });
     const dropDrag = () => (drag = null);
     window.addEventListener('pointerup', dropDrag);
@@ -479,8 +485,8 @@ export function mountFree(ctx, { owns, aspect, blocked }) {
 
   // THE PHONE'S TWO GESTURES, and they are the pan's split, spelled out again because the pan
   // itself is off: a sideways one-finger drag turns, an up-and-down one does nothing, and a touch
-  // that never travelled 12 px is a TAP. The sideways drag grabs the world exactly as the mouse's
-  // does and needed no change of sign, because that axis was never the inverted one.
+  // that never travelled 12 px is a TAP. The sideways drag is the mouse's first-person look, to the
+  // same sign: a thumb dragged right turns the view right and the room travels left under it.
   //   A THUMB MAY ALSO SET OFF FROM A SWITCH, on the same terms the mouse does: the arbiter parks
   //   the press, twelve pixels turn it into a turn and cancel it, and a thumb that stays put lets
   //   it go off on the lift. What a thumb that began on a switch may NOT do is walk — the tap
@@ -527,7 +533,7 @@ export function mountFree(ctx, { owns, aspect, blocked }) {
           return;
         }
         goal = null;
-        st.yaw = touch.yaw0 + ((t.clientX - touch.x0) / TURN_WRAP) * 90 * DEG;
+        st.yaw = touch.yaw0 - ((t.clientX - touch.x0) / TURN_WRAP) * 90 * DEG;
       },
       { passive: true }
     );
