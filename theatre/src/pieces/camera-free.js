@@ -360,27 +360,46 @@ export function mountFree(ctx, { owns, aspect, blocked }) {
     window.addEventListener('blur', () => keys.clear());
   }
 
-  // A MOUSE DRAG ON THE GLASS TURNS, and a plain click stays a click. The three conditions are the
-  // pan's own: the left button, more than 12 px travelled, and the pointer did not go down on a
-  // switch — the room's own arbiter is asked, so a drag that began on the cat is the cat's and this
-  // file never sees it. Nothing is stopped and nothing is prevented: the arbiter resolved its own
-  // pointerdown before this listener ran, and a press that never travels 12 px is a click that
-  // reaches everything it always reached.
-  //   THE HORIZONTAL TURNS AND THE VERTICAL PITCHES. The brief gives the drag to the yaw and limits
-  //   the pitch to 25 degrees without saying what moves it; on a desk there is nothing else it could
-  //   be, and a visitor who wants to look at the ceiling rose has to be able to. A phone's drag is
-  //   the pan's split exactly: sideways turns, up and down does nothing at all.
+  // A MOUSE DRAG ON THE GLASS TURNS, and a plain click stays a click.
+  //
+  // THE DRAG GRABS THE WORLD, which is what every map and every street view has taught every hand:
+  // the room moves WITH the fingers, so a drag to the right carries the room to the right and the
+  // lens therefore turns LEFT, and a drag downward carries the room down and the lens looks UP.
+  // Only one of those two had to change. Measured on the live page against a fixed point on the
+  // back wall, before anything was touched: a 160 px drag to the right moved that point from x 640
+  // to x 1150.7 — with the hand, already right — and a 160 px drag downward moved it from y 392.9
+  // to y 238.8, which is the room going UP while the hand goes down. So the yaw is as it was and
+  // the PITCH is the inverted one; the sign below is a plus where it was a minus, and the proof
+  // asserts where the room WENT rather than which way a number moved, because a sign can be read
+  // two ways and a point on the glass cannot.
+  //   A phone's sideways drag is the same rule and the same sign.
   const TURN_WRAP = 520; // px of drag for 90 degrees of yaw — a comfortable wrist
   const PITCH_WRAP = 900; // px for the whole 50 degrees of pitch
-  const onNothing = (x, y, target) => {
+  //
+  // AND A DRAG MAY BEGIN ON A SWITCH. The user: "it's confusing when the drag hits on the book table
+  // or the piano" — a hand that set off over the reading table to look round the room arrived at the
+  // reading table instead, because a switch in this room fires on the way DOWN. It cannot simply
+  // fire later for everybody: a click that waits for the release is a click that feels late, and
+  // eleven eggs are tuned to the press. So the arbiter holds a press only while this piece asks it
+  // to (props.js, A PRESS THAT MIGHT TURN OUT TO BE A DRAG) — nothing fires on the way down, the
+  // press is parked, and it goes off on the way up unless these twelve pixels have been travelled
+  // first, at which point the drag cancels it and the switch never hears about the press at all.
+  // The globe is the exception the arbiter itself makes: it has its own drag and keeps its pointer,
+  // so `pending` is false for it and this file leaves that press alone.
+  const SW = () => ctx.pieces?.props?.switches ?? null;
+  const mayDrag = (x, y, target) => {
     if (!glass || target !== glass) return false;
     if (ctx.pieces?.reveal?._fan?.armed) return false;
-    return !ctx.pieces?.props?.switches?.at?.(x, y);
+    if (!SW()?.at?.(x, y)) return true; // bare room: nobody else wants this press
+    return !!SW()?.pending; // a switch: only if the arbiter parked it for us
   };
   if (armed && glass) {
+    // the arbiter asks this on every press that landed on a switch. It holds the press whenever the
+    // visitor is on their feet — which is the whole time free mode owns the pose and no longer.
+    SW()?.defer?.(() => owns() && !blocked());
     glass.addEventListener('pointerdown', (ev) => {
       if (ev.pointerType === 'touch' || ev.button !== 0) return;
-      if (!owns() || blocked() || !onNothing(ev.clientX, ev.clientY, ev.target)) return;
+      if (!owns() || blocked() || !mayDrag(ev.clientX, ev.clientY, ev.target)) return;
       drag = { x0: ev.clientX, y0: ev.clientY, yaw0: st.yaw, pitch0: st.pitch, live: false };
     });
     window.addEventListener('pointermove', (ev) => {
@@ -389,6 +408,7 @@ export function mountFree(ctx, { owns, aspect, blocked }) {
       if (!drag.live) {
         if (Math.hypot(dx, dy) < SLOP) return;
         drag.live = true;
+        SW()?.cancelPending?.(); // whatever this press was going to be, it is a drag now
         drag.x0 += Math.sign(dx) * Math.min(Math.abs(dx), SLOP); // the slop is spent, not banked
         drag.y0 += Math.sign(dy) * Math.min(Math.abs(dy), SLOP);
         return;
@@ -399,11 +419,29 @@ export function mountFree(ctx, { owns, aspect, blocked }) {
       }
       goal = null;
       st.yaw = drag.yaw0 + ((ev.clientX - drag.x0) / TURN_WRAP) * 90 * DEG;
-      st.pitch = clamp(drag.pitch0 - ((ev.clientY - drag.y0) / PITCH_WRAP) * 2 * PITCH_MAX * DEG, -PITCH_MAX * DEG, PITCH_MAX * DEG);
+      st.pitch = clamp(drag.pitch0 + ((ev.clientY - drag.y0) / PITCH_WRAP) * 2 * PITCH_MAX * DEG, -PITCH_MAX * DEG, PITCH_MAX * DEG);
     });
     const dropDrag = () => (drag = null);
     window.addEventListener('pointerup', dropDrag);
     window.addEventListener('pointercancel', dropDrag);
+
+    // ---- AND WHAT THE CURSOR SAYS --------------------------------------------------------------
+    // The user: "users need to understand where one can click and where there is free movement."
+    // Nothing is drawn for it and nothing is labelled: the cursor is the whole affordance, which is
+    // this room's own rule — a pointer over the cat is all the cat has ever said about itself.
+    // So over the room it is the GRAB HAND, which every hand already reads as "take hold of this and
+    // move it", and over a switch it stays the POINTER, so the two are told apart by the one thing
+    // already under the visitor's hand. While a drag is actually live it is `grabbing`, and that
+    // outranks a switch, because a hand that has taken hold of the room has not let go of it on
+    // passing over the cat.
+    // It is handed to the ARBITER rather than written here, so there is one writer on the glass and
+    // the room's own careful rule about putting back only what it put there still holds; and both
+    // functions answer null the moment free mode is not driving, which hands the cursor back to a
+    // reading, to a place and to the notice exactly as they had it.
+    SW()?.cursors?.({
+      force: () => (drag?.live && owns() && !blocked() ? 'grabbing' : null),
+      idle: () => (owns() && !blocked() ? 'grab' : null),
+    });
   }
 
   // A TAP ON THE FLOOR WALKS THERE, which is the phone's whole vocabulary for moving and is the one
@@ -441,8 +479,13 @@ export function mountFree(ctx, { owns, aspect, blocked }) {
 
   // THE PHONE'S TWO GESTURES, and they are the pan's split, spelled out again because the pan
   // itself is off: a sideways one-finger drag turns, an up-and-down one does nothing, and a touch
-  // that never travelled 12 px is a TAP and walks. The arbiter has already taken any touch that
-  // landed on a switch — it resolves its own pointerdown — so what reaches here began on nothing.
+  // that never travelled 12 px is a TAP. The sideways drag grabs the world exactly as the mouse's
+  // does and needed no change of sign, because that axis was never the inverted one.
+  //   A THUMB MAY ALSO SET OFF FROM A SWITCH, on the same terms the mouse does: the arbiter parks
+  //   the press, twelve pixels turn it into a turn and cancel it, and a thumb that stays put lets
+  //   it go off on the lift. What a thumb that began on a switch may NOT do is walk — the tap
+  //   belongs to the thing it landed on — so the walk is only offered to a touch that began on the
+  //   bare room, or the cat would light AND the visitor would set off across the floor.
   if (armed && glass) {
     let touch = null;
     glass.addEventListener(
@@ -453,11 +496,11 @@ export function mountFree(ctx, { owns, aspect, blocked }) {
           return;
         }
         const t = ev.touches[0];
-        if (!owns() || blocked() || !onNothing(t.clientX, t.clientY, t.target)) {
+        if (!owns() || blocked() || !mayDrag(t.clientX, t.clientY, t.target)) {
           touch = null;
           return;
         }
-        touch = { x0: t.clientX, y0: t.clientY, yaw0: st.yaw, live: false, dead: false };
+        touch = { x0: t.clientX, y0: t.clientY, yaw0: st.yaw, live: false, dead: false, onSwitch: !!SW()?.at?.(t.clientX, t.clientY) };
       },
       { passive: true }
     );
@@ -475,6 +518,7 @@ export function mountFree(ctx, { owns, aspect, blocked }) {
             return;
           }
           touch.live = true;
+          SW()?.cancelPending?.(); // whatever this touch was going to be, it is a turn now
           touch.x0 += Math.sign(dx) * SLOP;
           return;
         }
@@ -488,7 +532,7 @@ export function mountFree(ctx, { owns, aspect, blocked }) {
       { passive: true }
     );
     const endTouch = (ev) => {
-      if (touch && !touch.live && !touch.dead && ev.changedTouches?.length) {
+      if (touch && !touch.live && !touch.dead && !touch.onSwitch && ev.changedTouches?.length) {
         const t = ev.changedTouches[0];
         const r = glass.getBoundingClientRect();
         walkTo(t.clientX - r.left, t.clientY - r.top);

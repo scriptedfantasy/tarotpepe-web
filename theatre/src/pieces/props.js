@@ -961,20 +961,46 @@ export async function build(ctx) {
       return best;
     }
 
-    function setHover(c) {
-      if (hovered === c) return;
-      hovered?.onHover?.(false);
-      hovered = c;
-      hovered?.onHover?.(true);
+    // ---- WHAT THE CURSOR SAYS ---------------------------------------------------------------
+    // Three tiers, and the top two are empty unless something has asked for them. A piece that owns
+    // the whole glass — the free walk, and nothing else today — may say what the cursor is while it
+    // is DOING something (`force`, which outranks a switch, because a hand that has grabbed the room
+    // has not stopped grabbing it because it passed over the cat) and what it is over NOTHING
+    // (`idle`, which a switch outranks, because the pointer is the one thing in this room that says
+    // "this does something"). Both are functions and both may answer null, which is how they stand
+    // down for a reading, for a place and for a page that never asked for them: with neither
+    // installed this is exactly the two-line rule it has always been.
+    let forceCursor = null, idleCursor = null;
+    function applyCursor() {
       if (!glass) return;
-      if (c) {
-        glass.style.cursor = c.cursor ?? 'pointer';
+      const forced = forceCursor?.() ?? null;
+      if (forced) {
+        if (glass.style.cursor !== forced) glass.style.cursor = forced;
+        cursorMine = true;
+        return;
+      }
+      if (hovered) {
+        const want = hovered.cursor ?? 'pointer';
+        if (glass.style.cursor !== want) glass.style.cursor = want;
+        cursorMine = true;
+        return;
+      }
+      const want = idleCursor?.() ?? null;
+      if (want) {
+        if (glass.style.cursor !== want) glass.style.cursor = want;
         cursorMine = true;
       } else if (cursorMine) {
         // only ever put back what this piece put there: reveal-fan.js and help.js share the cursor
         glass.style.cursor = '';
         cursorMine = false;
       }
+    }
+    function setHover(c) {
+      if (hovered === c) return;
+      hovered?.onHover?.(false);
+      hovered = c;
+      hovered?.onHover?.(true);
+      applyCursor();
     }
 
     glass?.addEventListener('pointermove', (ev) => {
@@ -993,6 +1019,20 @@ export async function build(ctx) {
       const r = glass?.getBoundingClientRect();
       return r ? [ev.clientX - r.left, ev.clientY - r.top] : [0, 0];
     };
+    // ---- A PRESS THAT MIGHT TURN OUT TO BE A DRAG ---------------------------------------------
+    // A switch fires on the POINTERDOWN, which is right for a room you click and wrong for a room
+    // you can also drag to look around: the user, on the free walk — "it's confusing when the drag
+    // hits on the book table or the piano", which is a drag that began over a hotspot and walked
+    // them there instead of turning the view. So a piece that owns the glass may ask for a press to
+    // be HELD: nothing fires on the way down, the press is parked, and it fires on the way up. If
+    // that piece then decides the press was a drag after all it calls `cancelPending()` and the
+    // parked press is dropped — the switch never hears about it.
+    //   A SWITCH WITH ITS OWN DRAG IS NEVER HELD. The globe is grabbed and turned; it IS the drag,
+    //   and a piece that took its pointer away would be taking the one gesture the object is for.
+    //   Nothing else in the room has `down`, so nothing else is exempt.
+    //   WITH NOBODY ASKING, `deferrer` is null and every press fires on the way down exactly as it
+    //   always has — which is every page that has not passed `?free=1`.
+    let deferrer = null, parked = null;
     glass?.addEventListener('pointerdown', (ev) => {
       const c = pick(ev);
       if (!c) return;
@@ -1001,6 +1041,10 @@ export async function build(ctx) {
       // sound's own "first gesture" unlock, which lives on that same window, is called by hand.
       ctx.pieces.sound?.start?.();
       ev.stopPropagation();
+      if (!c.down && deferrer?.(c, ev)) {
+        parked = { c, ev };
+        return;
+      }
       c.onDown?.(ev);
       if (c.down) {
         held = c;
@@ -1012,6 +1056,14 @@ export async function build(ctx) {
         }
       }
     });
+    // …and the parked press goes off on the way up, wherever the pointer has got to, because a click
+    // is a press and a release and the release is allowed to land anywhere.
+    window.addEventListener('pointerup', (ev) => {
+      const p = parked;
+      parked = null;
+      p?.c?.onDown?.(p.ev);
+    });
+    window.addEventListener('pointercancel', () => (parked = null));
     window.addEventListener('pointermove', (ev) => {
       if (!held?.move) return;
       const [px, py] = local(ev);
@@ -1044,11 +1096,38 @@ export async function build(ctx) {
       at(clientX, clientY) {
         return pick({ clientX, clientY })?.name ?? null;
       },
+      // ---- for the one piece that owns the whole glass (src/pieces/camera-free.js) -------------
+      // `defer` installs the test that decides whether a press is held back; `pending` says whether
+      // one is being held just now, so the free drag knows the arbiter let it have this press and
+      // it is not stealing the globe's; `cancelPending` drops it, which is what a drag passing its
+      // twelve pixels does. `cursors` installs the two cursor functions described at applyCursor.
+      defer(fn) {
+        deferrer = typeof fn === 'function' ? fn : null;
+      },
+      get pending() {
+        return !!parked;
+      },
+      cancelPending() {
+        const had = !!parked;
+        parked = null;
+        return had;
+      },
+      cursors({ force = null, idle = null } = {}) {
+        forceCursor = force;
+        idleCursor = idle;
+      },
       update() {
-        if (!pending) return;
-        const ev = pending;
-        pending = null;
-        setHover(pick(ev));
+        if (pending) {
+          const ev = pending;
+          pending = null;
+          setHover(pick(ev));
+        }
+        // the cursor is re-asked every drawing, not only when the hover changes: a hand that is
+        // grabbing and lets go has not moved the pointer, and the cursor has to answer for it.
+        // ONLY when somebody has installed one of the two functions, which is `?free=1` and nothing
+        // else: on every other page the cursor is written when the hover changes and at no other
+        // time, exactly as it has always been, and reveal-fan and help keep the glass between hovers.
+        if (forceCursor || idleCursor) applyCursor();
       },
     };
   })();

@@ -475,6 +475,129 @@ if (doing('eggs')) {
   await p.close();
 }
 
+// ---- 6b. THE DRAG GRABS THE WORLD, AND IT MAY BEGIN ON A SWITCH ---------------------------------
+// The three corrections the user asked for after driving it on a desk, and the first of them is put
+// to the only witness that cannot be read two ways: WHERE A FIXED POINT OF THE ROOM WENT ON THE
+// GLASS. A sign is an argument about a convention; a point on the back wall moving right is not.
+if (doing('grab')) {
+  await fresh();
+  console.log('\nGRAB — the drag carries the room with the hand, starts anywhere, and says so with the cursor');
+  const p = await room(...PLATE);
+  const MARK = [0, 1.6, -2.5]; // the plaster dead centre of the back wall
+  const mark = () =>
+    p.evaluate((m) => {
+      const T = window.__theatre, THREE = T.THREE, c = T.camera;
+      c.updateMatrixWorld();
+      const v = new THREE.Vector3(...m).project(c);
+      const d = new THREE.Vector3();
+      c.getWorldDirection(d);
+      return {
+        x: +(((v.x + 1) / 2) * T.size.w).toFixed(1),
+        y: +(((1 - v.y) / 2) * T.size.h).toFixed(1),
+        yaw: +((Math.atan2(-d.x, -d.z) * 180) / Math.PI).toFixed(2),
+        pitch: +((Math.asin(Math.max(-1, Math.min(1, d.y))) * 180) / Math.PI).toFixed(2),
+      };
+    }, MARK);
+  const dragBy = async (x0, y0, dx, dy) => {
+    await p.mouse.move(x0, y0);
+    await p.mouse.down();
+    await p.mouse.move(x0 + dx / 2, y0 + dy / 2, { steps: 4 });
+    await p.mouse.move(x0 + dx, y0 + dy, { steps: 4 });
+    await frames(p, 4);
+    const mid = await p.evaluate(() => window.__theatre.renderer.domElement.style.cursor);
+    await p.mouse.up();
+    await frames(p, 4);
+    return mid;
+  };
+  // A DRAG TO THE RIGHT carries the room to the right, which turns the lens LEFT.
+  await put(p, 0, 5.0, 0, 0);
+  const a = await mark();
+  await dragBy(640, 400, 160, 0);
+  const r = await mark();
+  console.log(`   a 160 px drag right: the back wall's mark goes x ${a.x} → ${r.x}, yaw ${a.yaw}° → ${r.yaw}°`);
+  claim(r.x > a.x + 50, `the room went RIGHT with the hand (${(r.x - a.x).toFixed(1)} px)`);
+  claim(r.yaw > a.yaw, `which is the lens turning left (yaw ${a.yaw}° → ${r.yaw}°)`);
+  // A DRAG DOWNWARD carries the room down, which tips the lens UP. This is the one that was inverted.
+  await put(p, 0, 5.0, 0, 0);
+  const b2 = await mark();
+  await dragBy(640, 300, 0, 160);
+  const d2 = await mark();
+  console.log(`   a 160 px drag down:  the back wall's mark goes y ${b2.y} → ${d2.y}, pitch ${b2.pitch}° → ${d2.pitch}°`);
+  claim(d2.y > b2.y + 30, `the room went DOWN with the hand (${(d2.y - b2.y).toFixed(1)} px)`);
+  claim(d2.pitch > b2.pitch, `which is the lens looking up (pitch ${b2.pitch}° → ${d2.pitch}°)`);
+  // A DRAG THAT BEGINS ON THE PIANO'S HOTSPOT turns the view and does not walk anybody anywhere.
+  await put(p, -0.6, 3.6, -14, 0);
+  await frames(p, 4);
+  const onPiano = await p.evaluate(() => {
+    const S = window.__theatre.pieces.props.switches;
+    for (let y = 8; y < 800; y += 6) for (let x = 8; x < 1280; x += 6) if (S.at(x, y) === 'walk-piano') return [x, y];
+    return null;
+  });
+  claim(!!onPiano, `the piano's hotspot is on the frame at ${onPiano ? onPiano.join(',') : 'nowhere'}`);
+  if (onPiano) {
+    const before = await live(p);
+    const mid = await dragBy(onPiano[0], onPiano[1], 170, 0);
+    await frames(p, 8);
+    const after = await live(p);
+    console.log(`   a drag begun ON the piano: yaw ${before.yaw}° → ${after.yaw}°, station (${after.pos[0].toFixed(3)}, ${after.pos[2].toFixed(3)}), walk.at ${after.at}`);
+    claim(Math.abs(after.yaw - before.yaw) > 10, `it turned the view (${(after.yaw - before.yaw).toFixed(2)}°)`);
+    claim(after.at === null && after.current === 'free', `and did NOT walk them to the piano (walk.at ${after.at}, camera '${after.current}')`);
+    claim(Math.abs(after.pos[0] - before.pos[0]) < 1e-6 && Math.abs(after.pos[2] - before.pos[2]) < 1e-6, 'and left the station exactly where it was');
+    claim(mid === 'grabbing', `and the cursor said 'grabbing' while it was held (${mid})`);
+    // …AND A PRESS AND RELEASE THAT NEVER TRAVELS STILL WALKS THEM THERE. The station is put back
+    // first and the hotspot found AGAIN, because the drag above turned the lens 27° and the piano is
+    // no longer under the pixel it was under: clicking the old one is clicking the plaster beside
+    // it, which is how the first run of this section convinced itself the click had stopped working.
+    await put(p, -0.6, 3.6, -14, 0);
+    await frames(p, 6);
+    const again = await p.evaluate(() => {
+      const S = window.__theatre.pieces.props.switches;
+      for (let y = 8; y < 800; y += 6) for (let x = 8; x < 1280; x += 6) if (S.at(x, y) === 'walk-piano') return [x, y];
+      return null;
+    });
+    await p.mouse.move(again[0], again[1]);
+    await p.mouse.down();
+    await p.mouse.up();
+    await settle(p);
+    const walked = await live(p);
+    console.log(`   a press and release on the hotspot at ${again.join(',')}: walk.at ${walked.at}, camera '${walked.current}'`);
+    claim(walked.at === 'piano', `the click still walks them to the piano, on the release (${walked.at})`);
+    await p.evaluate(() => window.__theatre.pieces.walk.back());
+    await settle(p);
+  }
+  // THE CURSOR SAYS WHICH IS WHICH, and nothing is drawn for it.
+  await put(p, -0.9, 3.4, (Math.atan2(-(-1.58 + 0.9), -(-2.33 - 3.4)) * 180) / Math.PI, 0);
+  await frames(p, 6);
+  const spots = await p.evaluate(() => {
+    const S = window.__theatre.pieces.props.switches, out = {};
+    for (let y = 8; y < 800; y += 6) for (let x = 8; x < 1280; x += 6) {
+      const n = S.at(x, y);
+      if (n === 'cat' && !out.cat) out.cat = [x, y];
+      if (!n && !out.bare) out.bare = [x, y];
+    }
+    return out;
+  });
+  const cursorAt = async (xy) => {
+    await p.mouse.move(xy[0], xy[1]);
+    await frames(p, 4);
+    return p.evaluate(() => window.__theatre.renderer.domElement.style.cursor);
+  };
+  const overBare = spots.bare ? await cursorAt(spots.bare) : null;
+  const overCat = spots.cat ? await cursorAt(spots.cat) : null;
+  console.log(`   over the bare room at ${spots.bare?.join(',')}: '${overBare}'   ·   over the cat at ${spots.cat?.join(',')}: '${overCat}'`);
+  claim(overBare === 'grab', `the hand says "look around" over anything that is not a switch ('${overBare}')`);
+  claim(overCat === 'pointer', `and the pointer says "this does something" over the cat ('${overCat}')`);
+  // …and with the flag off the room's cursor is what it always was
+  await p.close();
+  const q = await open(...PLATE, '?shot=1');
+  await put(q, 0, 0).catch(() => {});
+  await q.mouse.move(40, 40);
+  await frames(q, 4);
+  const shipped = await q.evaluate(() => window.__theatre.renderer.domElement.style.cursor);
+  claim(shipped === '', `the shipped room has no cursor of its own over bare plaster ('${shipped}')`);
+  await q.close();
+}
+
 // ---- 7. A PLACE, FROM A FREE STATION AND BACK TO IT ---------------------------------------------
 if (doing('place')) {
   await fresh();
