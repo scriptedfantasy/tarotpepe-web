@@ -470,7 +470,8 @@ export function buildPhone(ctx, deps) {
   const CARD_BEATS = ['shuffle', 'fan', 'dealt', 'reading', 'recall', 'lesson'];
   function cardFlow() {
     const P = ctx.pieces;
-    if ((P.reveal?.picks?.length ?? 0) > 0) return true; // cards in the row, read or being read
+    // cards in the row, read or being read — while the visitor is at his table to see them
+    if ((P.reveal?.picks?.length ?? 0) > 0 && !P.walk?.at) return true;
     return picking() || !!P.help?.cards?.showing || !!P.props?.deck?.out || CARD_BEATS.includes(P.flow?.beat);
   }
   // the top of the reply row on the glass (it stands on the keyboard and the safe area); a row not

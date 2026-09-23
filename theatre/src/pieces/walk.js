@@ -231,7 +231,12 @@ export async function build(ctx) {
   const midReading = () => {
     const F = fanOf();
     if (F?.armed || F?.picking) return true;
-    if ((ctx.pieces?.reveal?.picks?.length ?? 0) > 0) return true;
+    // a pick HALF MADE is still the reading; three taken and read are not. The three stay lying in the
+    // row after he has read them, and counting them kept every place refused for the rest of the
+    // evening (the owner, 2026-09-23: "after a drawing clicking on the fire place, piano or book
+    // doesnt work anymore"); the reading's own beats below cover it while it is actually being read.
+    const n = ctx.pieces?.reveal?.picks?.length ?? 0;
+    if (n > 0 && n < 3) return true;
     return READING.has(ctx.pieces?.flow?.beat ?? '');
   };
   // Why a walk would be refused just now, as one word — so a proof can say WHICH rule answered
