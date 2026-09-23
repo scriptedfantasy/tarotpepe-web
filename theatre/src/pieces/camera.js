@@ -299,9 +299,12 @@ export async function build(ctx) {
   // room travels left under it — the direction the owner settled on the free walk), coasts a little
   // on the lift and stops at the walls; and, optionally, by TILTING the phone (THE TILT, below). A
   // laptop and a tablet are untouched by all of it. DRAG_SIGN is the one number that says which way
-  // a drag turns the head: +1 is the head, −1 would be a map.
+  // a drag turns the head: +1 is the head, −1 is a map. IT IS THE MAP (the owner, 2026-09-23, on a
+  // real phone: "tilt and swipe both go in the wrong direction, please invert") — the room follows
+  // the thumb, and TILT_SIGN turns the tilt round with it.
   const PHONE = phoneMode() && !FREE_ON;
-  const DRAG_SIGN = 1;
+  const DRAG_SIGN = -1;
+  const TILT_SIGN = -1;
   const COAST_MS = 180; // how far a flick carries: the lift's velocity times this, in ms
   const TILT_DEG = 30; // gamma is clamped to ±30°, and ±30° is the whole swing either side of the centre
   // `panBase` is the centre the tilt swings about: the pan when tilt was switched on, moved by any
@@ -1192,7 +1195,7 @@ export async function build(ctx) {
     return PHONE && !!SW()?.pending;
   };
   const clampPan = (v) => Math.max(-1, Math.min(1, v));
-  const tiltOff = () => (TILT.on && TILT.zero != null ? TILT.gamma / TILT_DEG : 0);
+  const tiltOff = () => (TILT.on && TILT.zero != null ? (TILT_SIGN * TILT.gamma) / TILT_DEG : 0);
   // the one way a phone moves the pan: a new centre, and the tilt (if it is on) laid over it
   function aimPan(base) {
     panBase = clampPan(base);
@@ -1325,7 +1328,7 @@ export async function build(ctx) {
       panBase = panTarget; // the view as it stands is the centre the tilt swings about
     }
     TILT.gamma = Math.max(-TILT_DEG, Math.min(TILT_DEG, ev.gamma - TILT.zero));
-    if (panAllowed() && !drag?.live) panTarget = Math.max(-1, Math.min(1, panBase + TILT.gamma / TILT_DEG));
+    if (panAllowed() && !drag?.live) panTarget = Math.max(-1, Math.min(1, panBase + (TILT_SIGN * TILT.gamma) / TILT_DEG));
     tell();
   };
   api.tilt = {
