@@ -51,6 +51,7 @@ import { buildShots } from './camera-shots.js';
 import { tanHalf } from './camera-frame.js';
 import { mountChevrons } from './camera-pan.js';
 import { mountFree } from './camera-free.js';
+import { phoneMode } from '../core/phone.js';
 
 export const meta = {
   name: 'camera',
@@ -105,11 +106,34 @@ export async function build(ctx) {
     for (const e of R?._fan?.entries ?? []) if (e?.removed) taken++;
     return Math.min(slots, Math.max(picks, drawn, taken));
   };
+  // THE PHONE'S FOOT: on a phone held upright the chat's bottom row (50 px of buttons and a reply
+  // field, 22 px off the bottom edge, over the safe area) is never off the glass, so the pick is
+  // framed clear of it (camera-shots.js, liftOff). FOOT_PX is that row plus a breath above it.
+  const FOOT_PX = 110;
+  const PHONE_FOOT = phoneMode() && ctx.params?.get?.('free') !== '1';
+  let safeProbe = null;
+  const safeBottom = () => {
+    try {
+      if (!safeProbe) {
+        safeProbe = document.createElement('div');
+        safeProbe.style.cssText = 'position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none';
+        document.body.appendChild(safeProbe);
+      }
+      return safeProbe.offsetHeight || 0;
+    } catch {
+      return 0;
+    }
+  };
+  const foot = () => {
+    if (!PHONE_FOOT) return 0;
+    const h = ctx.size?.h || window.innerHeight || 0;
+    return h > 0 ? (FOOT_PX + safeBottom()) / h : 0;
+  };
   let laid = laidCount();
-  const shots = buildShots(L, aspect(), revealPiece(), { laid, props: ctx.pieces?.props ?? null });
+  const shots = buildShots(L, aspect(), revealPiece(), { laid, props: ctx.pieces?.props ?? null, foot: foot() });
   const reframe = () => {
     laid = laidCount();
-    const next = buildShots(L, aspect(), revealPiece(), { laid, props: ctx.pieces?.props ?? null });
+    const next = buildShots(L, aspect(), revealPiece(), { laid, props: ctx.pieces?.props ?? null, foot: foot() });
     for (const k of Object.keys(shots)) delete shots[k];
     Object.assign(shots, next);
   };
@@ -269,6 +293,21 @@ export async function build(ctx) {
   const PAN_WHEEL = 1400; // px of a horizontal wheel (a trackpad's two-finger swipe) for the whole range
   let panTarget = 0, panShown = 0;
   let pendingPan = null; // ?pan=<-1..1>, spent on the first update
+  // ---- THE PHONE'S WAY OF LOOKING ROUND (the owner, 2026-09-23, from the mockups) ---------------
+  // A phone held upright gets NO CHEVRONS: the room is looked round by a one-finger sideways drag,
+  // which is the free walk's first-person look (a thumb dragged right turns the head right and the
+  // room travels left under it — the direction the owner settled on the free walk), coasts a little
+  // on the lift and stops at the walls; and, optionally, by TILTING the phone (THE TILT, below). A
+  // laptop and a tablet are untouched by all of it. DRAG_SIGN is the one number that says which way
+  // a drag turns the head: +1 is the head, −1 would be a map.
+  const PHONE = phoneMode() && !FREE_ON;
+  const DRAG_SIGN = 1;
+  const COAST_MS = 180; // how far a flick carries: the lift's velocity times this, in ms
+  const TILT_DEG = 30; // gamma is clamped to ±30°, and ±30° is the whole swing either side of the centre
+  // `panBase` is the centre the tilt swings about: the pan when tilt was switched on, moved by any
+  // drag made while it is on. With tilt off it is simply the pan.
+  let panBase = 0;
+  const TILT = { on: false, zero: null, gamma: 0, subs: new Set(), listening: false };
   // IS THE WINDOW NARROWER THAN THE ROOM NEEDS. The one test, and it is the one the user's sentence
   // makes: does the resting frame hold the back wall from corner to corner. The frame's horizontal
   // half-width at the wall is t·aspect·d; the room's half-width is 2.60. Measured:
@@ -440,6 +479,10 @@ export async function build(ctx) {
   function resetPan() {
     panTarget = 0;
     panShown = 0;
+    // the tilt's centre goes back square with it, and the phone's present angle becomes the new
+    // zero on its next reading, or a visitor walking home would be swung to wherever they hold it
+    panBase = 0;
+    TILT.zero = null;
   }
   function holdPan(p) {
     panTarget = panShown = Math.max(-1, Math.min(1, p));
@@ -1138,20 +1181,43 @@ export async function build(ctx) {
   //   A drag that goes VERTICAL instead is given up: it used to be the scroll and it is now a thumb
   //   moving on the glass, which is not a gesture this room has.
   let drag = null;
+  const SW = () => ctx.pieces?.props?.switches ?? null;
   const onNothing = (touch) => {
     if (!glass || touch.target !== glass) return false;
     if (ctx.pieces?.reveal?._fan?.armed) return false;
-    return !ctx.pieces?.props?.switches?.at?.(touch.clientX, touch.clientY);
+    if (!SW()?.at?.(touch.clientX, touch.clientY)) return true;
+    // ON A PHONE A DRAG MAY SET OFF FROM A SWITCH: the arbiter has parked the press (see THE
+    // PHONE'S PRESS, below), so nothing has fired yet and the drag takes it over. The globe keeps
+    // its own drag and is never parked, so `pending` is false for it and the globe keeps the thumb.
+    return PHONE && !!SW()?.pending;
   };
+  const clampPan = (v) => Math.max(-1, Math.min(1, v));
+  const tiltOff = () => (TILT.on && TILT.zero != null ? TILT.gamma / TILT_DEG : 0);
+  // the one way a phone moves the pan: a new centre, and the tilt (if it is on) laid over it
+  function aimPan(base) {
+    panBase = clampPan(base);
+    panTarget = clampPan(panBase + tiltOff());
+  }
+  // THE PHONE'S PRESS. Every press on a switch is HELD on a phone (props.js, A PRESS THAT MIGHT
+  // TURN OUT TO BE A DRAG — the free walk's own rule): nothing fires on the way down, it goes off on
+  // the lift, and a thumb that travels twelve pixels first — in ANY direction — cancels it, so a
+  // drag that began on the piano turns the head and does not walk, and a drag never ends by firing
+  // a switch. A laptop's presses fire on the way down exactly as they always have.
+  if (PHONE) SW()?.defer?.(() => true);
+  let press = null;
   glass?.addEventListener(
     'touchstart',
     (ev) => {
       const t = ev.touches;
+      press = PHONE && t.length === 1 && SW()?.pending ? { x0: t[0].clientX, y0: t[0].clientY } : null;
       if (t.length !== 1) {
         drag = null;
+        SW()?.cancelPending?.();
         return;
       }
-      if (panAllowed() && onNothing(t[0])) drag = { x0: t[0].clientX, y0: t[0].clientY, p0: panTarget, live: false, axis: null };
+      if (panAllowed() && onNothing(t[0])) {
+        drag = { x0: t[0].clientX, y0: t[0].clientY, p0: panTarget, b0: TILT.on ? panBase : panTarget, live: false, axis: null, v: 0, lx: t[0].clientX, lt: ev.timeStamp };
+      }
     },
     { passive: true }
   );
@@ -1159,6 +1225,10 @@ export async function build(ctx) {
     'touchmove',
     (ev) => {
       const t = ev.touches;
+      if (press && t.length === 1 && Math.hypot(t[0].clientX - press.x0, t[0].clientY - press.y0) >= DRAG_SLOP) {
+        SW()?.cancelPending?.(); // it was a drag, not a tap: the switch never hears about it
+        press = null;
+      }
       if (!drag || t.length !== 1) return;
       const dy = drag.y0 - t[0].clientY;
       const dx = t[0].clientX - drag.x0;
@@ -1172,17 +1242,38 @@ export async function build(ctx) {
         drag.axis = 'x';
         drag.live = true;
         drag.x0 += Math.sign(dx) * DRAG_SLOP;
+        drag.lx = t[0].clientX;
+        drag.lt = ev.timeStamp;
       }
       if (!panAllowed()) {
         drag = null;
         return;
       }
-      panTarget = Math.max(-1, Math.min(1, drag.p0 - (t[0].clientX - drag.x0) / PAN_WRAP));
+      if (!PHONE) {
+        panTarget = Math.max(-1, Math.min(1, drag.p0 - (t[0].clientX - drag.x0) / PAN_WRAP));
+        return;
+      }
+      // the phone: the head, from the centre the drag started on (with tilt on, that centre moves)
+      aimPan(drag.b0 + (DRAG_SIGN * (t[0].clientX - drag.x0)) / PAN_WRAP);
+      // …and how fast the thumb is going, smoothed, for the coast on the lift
+      const now = ev.timeStamp, dt = Math.max(1, now - drag.lt);
+      const v = (DRAG_SIGN * (t[0].clientX - drag.lx)) / PAN_WRAP / dt;
+      drag.v = drag.v * 0.5 + v * 0.5;
+      drag.lx = t[0].clientX;
+      drag.lt = now;
     },
     { passive: true }
   );
   const endTouch = (ev) => {
-    if (ev.touches.length === 0) drag = null;
+    if (ev.touches.length === 0) {
+      // THE COAST: a thumb that lets go while still moving carries the head on a little way, and
+      // the walls stop it (the shown pan then eases to the target on the twelves, which is the glide)
+      // (a thumb that stopped before it lifted has nothing to carry: the carry fades over 160 ms)
+      const still = drag?.live ? ev.timeStamp - drag.lt : Infinity;
+      if (PHONE && still < 160 && panAllowed()) aimPan(panBase + drag.v * COAST_MS * (1 - still / 160));
+      drag = null;
+      press = null;
+    }
   };
   glass?.addEventListener('touchend', endTouch, { passive: true });
   glass?.addEventListener('touchcancel', endTouch, { passive: true });
@@ -1202,10 +1293,101 @@ export async function build(ctx) {
   // A tap on a chevron is worth half the range, so two taps take the room from square to hard over
   // and the walk between them is the same eased one a drag gets. It moves the TARGET and nothing
   // else; the pose is stepped in update(), on the twelves.
-  CHEV = mountChevrons(ctx, (dir) => {
-    if (!panAllowed()) return;
-    panTarget = Math.max(-1, Math.min(1, panTarget + dir * PAN_STEP));
-  });
+  // A PHONE HAS NO CHEVRONS (the owner, 2026-09-23): the drag and the tilt are the whole control.
+  if (!PHONE) {
+    CHEV = mountChevrons(ctx, (dir) => {
+      if (!panAllowed()) return;
+      panTarget = Math.max(-1, Math.min(1, panTarget + dir * PAN_STEP));
+    });
+  }
+
+  // ---- THE TILT --------------------------------------------------------------------------------
+  // Optional, behind the phone's bottom-right button (dialogue-phone.js draws it as a spirit level).
+  // On: the angle the phone is held at when it is switched on is the zero, and turning it (gamma,
+  // clamped ±30°) swings the pan about a centre; a drag while it is on moves that centre. Off: drag
+  // only, and the room stays where it was looked to. `gamma` is the clamped angle from the zero, for
+  // the level's bubble. `onChange(fn)` is told `{ on, gamma }` on every switch and every reading, and
+  // returns the function that stops telling it.
+  const hasOrientation = typeof window !== 'undefined' && typeof window.DeviceOrientationEvent !== 'undefined';
+  const tell = () => {
+    for (const fn of TILT.subs) {
+      try {
+        fn({ on: TILT.on, gamma: TILT.gamma });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+  const onOrient = (ev) => {
+    if (!TILT.on || ev.gamma == null || !Number.isFinite(ev.gamma)) return;
+    if (TILT.zero == null) {
+      TILT.zero = ev.gamma;
+      panBase = panTarget; // the view as it stands is the centre the tilt swings about
+    }
+    TILT.gamma = Math.max(-TILT_DEG, Math.min(TILT_DEG, ev.gamma - TILT.zero));
+    if (panAllowed() && !drag?.live) panTarget = Math.max(-1, Math.min(1, panBase + TILT.gamma / TILT_DEG));
+    tell();
+  };
+  api.tilt = {
+    available: hasOrientation,
+    get on() {
+      return TILT.on;
+    },
+    get gamma() {
+      return TILT.gamma;
+    },
+    // SAFE INSIDE A TAP HANDLER: iOS only grants motion from inside a user gesture, so the permission
+    // is asked for before anything else happens, synchronously. Resolves to whether tilt is on.
+    enable() {
+      if (!hasOrientation) return Promise.resolve(false);
+      let asked = null;
+      try {
+        if (typeof window.DeviceOrientationEvent.requestPermission === 'function') asked = window.DeviceOrientationEvent.requestPermission();
+      } catch {
+        asked = Promise.resolve('denied');
+      }
+      TILT.on = true;
+      TILT.zero = null;
+      TILT.gamma = 0;
+      panBase = panTarget;
+      if (!TILT.listening) {
+        window.addEventListener('deviceorientation', onOrient);
+        TILT.listening = true;
+      }
+      tell();
+      return Promise.resolve(asked).then(
+        (r) => {
+          if (r != null && r !== 'granted') api.tilt.disable();
+          return TILT.on;
+        },
+        () => {
+          api.tilt.disable();
+          return false;
+        }
+      );
+    },
+    disable() {
+      const was = TILT.on;
+      TILT.on = false;
+      TILT.zero = null;
+      TILT.gamma = 0;
+      panBase = panTarget; // the room stays where it was looked to; the drag carries on from there
+      if (TILT.listening) {
+        window.removeEventListener('deviceorientation', onOrient);
+        TILT.listening = false;
+      }
+      if (was) tell();
+    },
+    onChange(fn) {
+      if (typeof fn !== 'function') return () => {};
+      TILT.subs.add(fn);
+      return () => TILT.subs.delete(fn);
+    },
+  };
+  api.phonePan = PHONE; // whether this page looks round by drag and tilt rather than chevrons
+  // the height in CSS px of the band at the foot a phone's chat row always stands in (0 elsewhere),
+  // for a piece that lays things out in the frame itself (egg-deck.js)
+  Object.defineProperty(api, 'footPx', { get: () => (PHONE_FOOT ? FOOT_PX + safeBottom() : 0), enumerable: true });
 
   // ---- AND THE PROTOTYPE, IF THE PAGE ASKED FOR IT ---------------------------------------------
   // Mounted last, for the reason the chevrons are: it takes `api` apart to answer two questions —

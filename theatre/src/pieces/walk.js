@@ -102,11 +102,12 @@
 //                   `ring(name)`, `tap(name)`, `stand(name)`, `radius` — see THE MARKS below and
 //                   src/pieces/walk-marks.js
 import { buildBooks } from './walk-book.js';
+import { phoneMode } from '../core/phone.js';
 import { mountMarks, markSize, floorRing, bboxOf, watchPointer, RING_R } from './walk-marks.js';
 
 export const meta = {
   name: 'walk',
-  judge: { shot: 'home', states: ['home', 'fireplace', 'doorway', 'case', 'piano', 'table'] },
+  judge: { shot: 'home', states: ['home', 'fireplace', 'case', 'piano', 'table'] },
   files: ['src/pieces/walk.js', 'src/pieces/walk-marks.js', 'src/pieces/walk-book.js', 'src/pieces/walk-book-page.js', 'src/pieces/book-tarot.js', 'src/pieces/props-piano.js', 'src/pieces/piano-song.js', 'src/pieces/props-table.js'],
 };
 
@@ -133,9 +134,14 @@ const MIN_TAP = 44; // px: what a thumb needs, whatever the thing measures on th
 //              are subtracted from this one (`boxesOn`).
 const PLACES = {
   fireplace: { shot: 'fireplace', x: [-2.6, -2.36], y: [0, 1.26], z: [-0.66, 0.56] },
-  doorway: { shot: 'doorway', x: [1.05, 1.95], y: [0, 2.45], z: [-2.5, -2.4] },
-  case: { shot: 'case', x: [-2.1, -1.06], y: [0, 2.45], z: [-2.46, -2.2] },
-  piano: { shot: 'piano', x: [-2.564, -1.994], y: [0, 0.98], z: [-2.1, -0.72] },
+  // THE DOORWAY IS NOT A PLACE ANY MORE (the owner, 2026-09-23: "remove the functionality at the
+  // door, i dont want the door to the outside to open anymore"). It was the one place with nothing
+  // to do but open the door onto the crossroads; with that gone there is nothing to walk to, so its
+  // hotspot, its ring on the floor and the door-by-day hand-over below went with it. The door leaf,
+  // the crossroads plate and egg-cross.js's `openByDay`/`shutByDay` are untouched and simply have
+  // no caller; the camera's `doorway` shot stays for the tools.
+  case: { shot: 'case', phoneHolds: false, x: [-2.1, -1.06], y: [0, 2.45], z: [-2.46, -2.2] },
+  piano: { shot: 'piano', holds: false, x: [-2.564, -1.994], y: [0, 0.98], z: [-2.1, -0.72] },
   //   table      the reading table stage right, where the palm stood: the top x 1.98 .. 2.52 at
   //              z −0.62 .. 0.02, and the CHAIR pulled to it (x 1.66) taken into the same box, so a
   //              visitor who points at either walks to both. The BOOK on it is a switch of its own
@@ -156,7 +162,7 @@ const NAMES = Object.keys(PLACES);
 // floor plan the nearest any of the three chords passes to the table's axis is the fireplace's,
 // at x 1.29 as it crosses z 0, which is 0.67 m outside a rim of 0.62. The cross egg's walk needs
 // its waypoint because it goes THROUGH a 0.90 m opening; none of these leaves the room.
-const VIA = { fireplace: [], doorway: [], case: [], piano: [], table: [] };
+const VIA = { fireplace: [], case: [], piano: [], table: [] };
 
 // the beats of a reading. A visitor may talk to him from the fireplace; they may not wander off in
 // the middle of having their cards read. (flow.js keeps the same set for the fire's one remark.)
@@ -297,10 +303,9 @@ export async function build(ctx) {
   const boxesOn = (name) => {
     const Pp = ctx.pieces?.props ?? null;
     if (name === 'fireplace') return [Pp?.fine?.tapBox?.()];
-    if (name === 'doorway') return [Pp?.cross?.tapBox?.()];
     if (name === 'piano') return [Pp?.piano?.tapBox?.()];
     if (name === 'table') return [Pp?.table?.tapBox?.()];
-    return [Pp?.cat?.tapBox?.(), Pp?.wine?.tapBox?.(), Pp?.radio?.tapBox?.(), ...(api.books?.spineBoxes?.() ?? [])];
+    return [Pp?.cat?.tapBox?.(), Pp?.wine?.tapBox?.(), Pp?.radio?.tapBox?.(), ...(api.books?.openBoxes?.() ?? [])];
   };
   // A PLACE ANSWERS AS A DRAWING, AND THE THINGS ON IT ARE SUBTRACTED FROM IT.
   //
@@ -339,9 +344,23 @@ export async function build(ctx) {
   // own click this round. Those are the same rooms they were yesterday. What the table needs is an
   // answer for the table.
   //
+  // …AND THE PIANO TURNED OUT TO NEED THE SAME ANSWER, by the same measurement: at 844x390
+  // landscape its carcase is 100 % of the frame, the rest being the keys and the next place's
+  // hotspot, and a phone has no Escape — a touch visitor at the piano could not leave at all.
+  // Clicking the carcase does nothing (the keys are their own switch), so `piano` carries
+  // `holds: false` too: a tap that is not the keys, and not another place, walks them back.
+  //
   // What is never the way out at any place is the SWITCH standing on the thing — the grate, the
   // keys, the book — because the arbiter takes that click before this listener ever sees it.
-  const ownsClick = (name) => PLACES[name]?.holds !== false;
+  //
+  // …AND ON A PHONE HELD UPRIGHT THE TALL CASE NEEDS IT AS WELL (2026-09-23, measured at 390x844 and
+  // 375x667): its shot is taller than the frame is wide, so the carcase is every pixel of the glass
+  // that is not a switch standing on it (the radio, the wine, the cat) — 190 of 216 cells, and no
+  // cell at all that walks the visitor back, with no Escape key to do it instead. Nothing on the
+  // case's own boards answers a tap (the TAROT spine is a book on a shelf, see walk-book.js), so on
+  // a phone `phoneHolds: false` lets a tap on the boards walk them back. A laptop keeps its hold.
+  const PHONE = phoneMode();
+  const ownsClick = (name) => PLACES[name]?.holds !== false && !(PHONE && PLACES[name]?.phoneHolds === false);
   // THE PLACE ITSELF, WITHOUT ITS MARK — the drawing, the thumb's margin round it while that is
   // still a margin, and everything standing on it subtracted. This is what the mark is PLACED
   // against (walk-marks.js, `spotIn`), so it cannot be the test that already includes the mark.
@@ -492,7 +511,9 @@ export async function build(ctx) {
     },
   };
 
-  // ---- STEP 3: THE DOOR, OPENED ----------------------------------------------------------------
+  // ---- STEP 3: THE DOOR, OPENED — RETIRED 2026-09-23 --------------------------------------------
+  // The doorway is no longer a place (see PLACES), so nothing below is reached from the door now;
+  // what follows is the table's own-object rule, which shared the hand-over.
   // The leaf, the plate outside it and the two castles all belong to the cross egg, and this piece
   // does not own one line of any of them: what it owns is WHERE THE VISITOR IS STANDING, which is
   // the only thing the egg could not know. So the two answers a door needs are handed over the
@@ -505,7 +526,6 @@ export async function build(ctx) {
   //     at all and the test cannot be "was it on the door" — while the afternoon is up, every
   //     click the arbiter did not give to a castle is the visitor saying they have seen enough;
   //   Escape, the same.
-  const CROSS = () => ctx.pieces?.props?.cross ?? null;
   api.hang({
     onOwn: (place, px, py) => {
       // AT THE TABLE, THE FIRST CLICK OFF THE BOOK SHUTS IT. The book is an object on the table now
@@ -514,30 +534,15 @@ export async function build(ctx) {
       // means «I have finished reading», not «I have finished at this table». The second one, or
       // Escape again, walks them back, which is the user's own sentence for this place.
       if (place === 'table') return BOOKS.showing ? BOOKS.close() : false;
-      if (place !== 'doorway') return false;
-      const X = CROSS();
-      if (!X) return false;
-      if (X.daylight) return X.shutByDay();
-      if (X.phase === 'shut' && inside(box('doorway'), px, py)) return X.openByDay();
       return false;
     },
-    onEscape: (place) => {
-      const X = CROSS();
-      if (place !== 'doorway' || !X?.daylight) return false;
-      return X.shutByDay();
-    },
+    onEscape: () => false,
   });
   // AND THE VISITOR IS NO LONGER AT THE DOOR THE MOMENT IT STARTS SHUTTING. The egg walks the
   // camera home itself (its own hold, its own dolly, its own release), so this piece lets go of
   // both at `day-closing` rather than calling `back()` over the top of it — two walks home at once
   // is the one thing the hold exists to prevent.
-  ctx.on?.('props:cross', ({ phase } = {}) => {
-    if (at !== 'doorway') return;
-    if (phase === 'day-closing' || phase === 'shut') {
-      at = null;
-      mine = null;
-    }
-  });
+
 
   // ---- STEP 4: THE BOOKS ------------------------------------------------------------------------
   // Four of the spines on the tall case come off it and open over the room (src/pieces/walk-book.js
@@ -620,7 +625,6 @@ export async function build(ctx) {
     piano: [-1.32, -0.95],
     case: [-1.2, -1.62],
     table: [1.31, -0.3],
-    doorway: [1.5, -2.15],
   };
   const FIELD = () => {
     const t = document.activeElement?.tagName;

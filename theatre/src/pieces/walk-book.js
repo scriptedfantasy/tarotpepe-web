@@ -1699,9 +1699,32 @@ export function buildBooks(ctx, { switches, place }) {
     // than a quarter of the window and an open spread is nine tenths of one, which is the right
     // answer — a thumb that missed the book landed on the table, and the table shuts it.
     tapBox: () => (showing ? boxOf(pileR) : null),
-    enabled: () => !!showing && !motion,
-    onDown: (ev) => onPaper(ev),
+    // ON while a leaf is in the air too (onPaper and swipe ignore it then): disabled, a tap on a
+    // turning page fell through to walk.js and shut the book.
+    enabled: () => !!showing && motion?.kind !== 'shut',
+    // A SWIPE (the owner: "pages in the book should be swipable on mobile"). Having its own
+    // down/move/up, the arbiter never parks this press (props.js), so camera.js's pan never takes a
+    // drag that starts on the paper. A mouse still turns on the way down, as it always has; a touch
+    // is decided on the lift — 30 px, more across than down, is a turn (left = on, right = back),
+    // under 12 px is the old tap, anything between is nothing.
+    down: (px, py, ev) => {
+      swipe = ev.pointerType === 'mouse' ? null : { x0: px, y0: py, x: px, y: py, ev };
+      if (!swipe) onPaper(ev);
+    },
+    move: (px, py) => {
+      if (swipe) (swipe.x = px), (swipe.y = py);
+    },
+    up: () => {
+      const s = swipe;
+      swipe = null;
+      if (!s) return;
+      const dx = s.x - s.x0, dy = s.y - s.y0;
+      if (Math.abs(dx) >= 30 && Math.abs(dx) > Math.abs(dy)) {
+        if (showing && !motion) turn(dx < 0 ? 1 : -1);
+      } else if (Math.hypot(dx, dy) < 12) onPaper(s.ev);
+    },
   });
+  let swipe = null;
   switches?.add?.({
     name: 'book-ribbon',
     object: () => ribbon.mesh,
@@ -2051,6 +2074,9 @@ export function buildBooks(ctx, { switches, place }) {
     },
     tapBox: (key) => tapBoxOf(found.find((f) => f.key === key)?.mesh),
     spineBoxes: () => found.map((f) => tapBoxOf(f.mesh)).filter(Boolean),
+    // …and only the spines that OPEN, which is what walk.js subtracts from the case: a spine that is
+    // a book on a shelf is part of the case, and subtracting it left a 44 x 61 px dead hole in it.
+    openBoxes: () => found.filter((f) => f.switch).map((f) => tapBoxOf(f.mesh)).filter(Boolean),
     text: () => {
       const b = cut;
       if (!showing || !b) return null;

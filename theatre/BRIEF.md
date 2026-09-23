@@ -62,6 +62,27 @@ and say which is the better-crafted frame. We keep going until ours wins or ties
   portrait it hangs from the top for as long as the rows are out, and drops back the moment the deck
   is squared. A laptop's frame is wide enough that the caption clears the bows and nothing about its
   dock changes there. Two beats, both the user's; the caption is at the bottom everywhere else.
+- **ON A PHONE THERE IS NO PLACARD (the owner's decision, 2026-09-23 — phones only; laptop and tablet
+  keep the placard exactly as above).** Picked from the phone mockups ("G"): the conversation is a run
+  of drawn bubbles laid straight over the room, with NO wash or veil. His lines on the left, paper
+  bubbles with a wobbly ink rule, his words green in the sign hand, his small round portrait at each
+  bubble's foot, still typed as he says them; the visitor's on the right, in ink. They stack in the
+  empty wall above his head (newest just over him, older ones fading out upward, scrollable) and hold
+  to the top through the pick and the lay-out, so he, the table and the cards stay clear. At the foot:
+  the chat button bottom-left hides and shows the conversation and it NEVER opens by itself — while
+  hidden, a green dot when he says something, a mustard dot and a small stop-motion shake when he is
+  asking; the reply field beside it with the round send button INSIDE the field at its right end
+  (Return sends too); and the tilt button (a spirit level) bottom-right, shown ONLY while the
+  conversation is hidden — opening the conversation turns tilt off. `src/pieces/dialogue-phone.js`;
+  `phoneMode()` in `src/core/phone.js` decides.
+- **ON A PHONE THE ROOM IS LOOKED ROUND BY A DRAG, AND OPTIONALLY BY TILTING — NO CHEVRONS (the
+  owner's decision, 2026-09-23 — phones only; a laptop and a tablet keep the wheel and the chevrons).**
+  A one-finger sideways drag is the head, the free walk's sign (thumb right, view turns right); it
+  coasts a little on the lift and stops at the pan limits. Under 12 px a touch is a tap, and a press on
+  a hotspot is held until the lift, so a drag that starts on the piano turns the head and never walks
+  there. Tilt is off until the spirit-level button turns it on: the angle at that moment is the zero,
+  ±30° of gamma swings the pan, a drag moves the centre. While the visitor chooses, the pick and the
+  whole-deck lay-out are framed clear of the chat's bottom row. `camera.js` (THE TILT, `api.tilt`).
 - **The card viewer shows THE CARD AND NOTHING ELSE (the user's decision, 2026-09-10).** A tap on a
   card in the drawing puts that plate on the ? card's paper (help-cards.js). It used to letter the
   card's name under it and carry «‹ BACK ›» at the foot, which walked the whole deck — and a step

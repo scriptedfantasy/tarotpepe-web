@@ -316,11 +316,13 @@ import { bySlug } from '../core/deck.js';
 import { INK } from '../core/strokes.js';
 import { SVGNS, drawCaret, drawDots, drawArrow, drawPlacard, drawName, drawBlock, drawTab, PLACARD_BLEED } from './dialogue-ink.js';
 import { signFold, signWidth } from './titles-sign.js';
+import { phoneMode } from '../core/phone.js';
+import { buildPhone } from './dialogue-phone.js';
 
 export const meta = {
   name: 'dialogue',
   judge: { shot: 'pepe', states: ['greeting', 'question', 'reading', 'thinking', 'farewell'], dom: true },
-  files: ['src/pieces/dialogue.js', 'src/pieces/dialogue-ink.js', 'src/pieces/script.js'],
+  files: ['src/pieces/dialogue.js', 'src/pieces/dialogue-ink.js', 'src/pieces/dialogue-phone.js', 'src/pieces/script.js'],
 };
 
 const CPS = 28; // characters per second; words appear whole, on the 12fps clock
@@ -858,6 +860,10 @@ function fillTo(words, i, maxLines, M, reserve = 0) {
 const ORDINAL = ['The first card', 'The second card', 'The third card'];
 
 export async function build(ctx) {
+  // A PHONE HAS NO PLACARD (the owner, 2026-09-23; BRIEF.md): its conversation is a run of drawn
+  // bubbles over the room, with the reply field and the chat and tilt buttons in a row at the foot.
+  // Same api, same promises — dialogue-phone.js. Everything below is the laptop's and the tablet's.
+  if (phoneMode()) return buildPhone(ctx, { SCRIPT, lineFor, linesFor, scriptReply, POSITIONS, interLines });
   const root = ctx.dom.dialogue;
   document.head.appendChild(buildStyle());
   setAnchors(ctx.size?.w || window.innerWidth || 1600);

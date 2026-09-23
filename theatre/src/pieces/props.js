@@ -952,6 +952,11 @@ export async function build(ctx) {
         if (!o) continue;
         const area = b.w * b.h;
         const d = o.getWorldPosition(at).distanceTo(ctx.camera.position);
+        // …and a thing BEHIND the lens has no margin at all, however small its box came out: out at
+        // the crossroads the vase and the fuse box projected to small, finite, wrong boxes across the
+        // country and took taps meant to shut the door (measured at 844x390, seven of 128 points).
+        ctx.camera.updateMatrixWorld();
+        if (at.applyMatrix4(ctx.camera.matrixWorldInverse).z > -ctx.camera.near) continue;
         if (area < bestArea - 0.5 || (area <= bestArea + 0.5 && d < bestD)) {
           best = c;
           bestArea = area;
@@ -1576,7 +1581,7 @@ export async function build(ctx) {
     // the glass and the box a thumb is given.
     deck: DECK_OUT,
     // THE CROSS on the frieze over the door, and the cellar under the floor. `phase` is shut /
-    // falling / opening / open / closing (and day / day-closing for the door by hand), `open` says
+    // turning / opening / open / closing (and day / day-closing for the door by hand), `open` says
     // whether the hatch is open — which is the one fact flow.js and the note the server writes him
     // read — `click()` works the cross as a pointer does and puts it all back on a second one,
     // `set(phase)` holds a phase for a still with no cue, and hitBox/tapBox are the cross's box on

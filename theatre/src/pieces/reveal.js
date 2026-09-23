@@ -271,15 +271,20 @@ export async function build(ctx) {
   function dealFrames(meshes) {
     const n = meshes.length;
     const HOLD = 0.006; // the underside of the packet, above the cloth
-    const d = deckPos();
     // one pose per drawing: his fingertips, the packet under them, and how many cards it still has
     const poses = [];
-    const P = (x, z, yaw, held, py) =>
-      poses.push({ x, z, yaw, held, py, floor: py + Math.max(0, held) * T, y: 0.003, px: x - 0.045 * Math.sin(yaw), pz: z - 0.045 * Math.cos(yaw) });
+    // `over` raises the HAND alone (the packet keeps `py`): see the lay, below
+    const P = (x, z, yaw, held, py, over = 0) =>
+      poses.push({ x, z, yaw, held, py, floor: py + Math.max(0, held) * T + over, y: 0.003, px: x - 0.045 * Math.sin(yaw), pz: z - 0.045 * Math.cos(yaw) });
     const lay = []; // the drawing on which each card leaves his hand
-    // in from the top of the frame, from the deck's side of the table
-    P(d[0] - 0.10, d[2] + 0.16, -0.16, n, HOLD + 0.075);
-    P(d[0] - 0.16, d[2] + 0.30, -0.20, n, HOLD + 0.055);
+    // IN FROM THE TOP OF THE FRAME, which is his side of the table. These two drawings used to be
+    // placed off the DECK (d[2] + 0.16 and + 0.30), and the deck lies on the visitor's side: the
+    // packet came in over the bottom edge, from beyond the deck, on an arm stretched 1.36–1.51 m from
+    // his wrist diagonally across the whole cloth (tools/_shuffle-hands.mjs, 2026-09-23). The
+    // three are his already when the take begins; they arrive from where he is.
+    const s0 = slots[0], sN = slots[Math.min(n, slots.length) - 1];
+    P(s0[0] + 0.085, s0[2] - 0.30, -0.22, n, HOLD + 0.075);
+    P(s0[0] + 0.085, s0[2] - 0.16, -0.22, n, HOLD + 0.055);
     for (let i = 0; i < n; i++) {
       const s = slots[Math.min(i, slots.length - 1)];
       // He carries each card level with its slot, never upstage of it: the frame's top edge falls
@@ -288,12 +293,17 @@ export async function build(ctx) {
       P(over.x, over.z, yaw, n - i, HOLD + 0.042); // carried over the slot
       P(over.x, over.z, yaw, n - i, HOLD + 0.012); // and down onto it
       lay.push(poses.length); // the card slides out from under his hand on this drawing
-      P(s[0] + 0.052, s[2] + 0.045, yaw, n - i - 1, HOLD);
-      P(s[0] + 0.052, s[2] + 0.045, yaw, n - i - 1, HOLD); // pressed flat, held
+      // …and it slides out from UNDER it. The card leaving arcs down from the packet's height over
+      // four drawings (up to 17 mm off the cloth on the first), and the hand was already pressed
+      // flat at 6: measured, 29–95 % of the drawn hand lay under the card it was laying, fingers
+      // and all. So the hand stays on top of the card until the card is down.
+      P(s[0] + 0.052, s[2] + 0.045, yaw, n - i - 1, HOLD, 0.014);
+      P(s[0] + 0.052, s[2] + 0.045, yaw, n - i - 1, HOLD, 0.006); // pressed flat, held
       P(s[0] + 0.052, s[2] - 0.010, yaw, n - i - 1, HOLD + 0.028); // lifted off it
     }
-    P(d[0] - 0.16, d[2] + 0.30, -0.20, 0, HOLD + 0.06);
-    P(d[0] - 0.10, d[2] + 0.14, -0.16, 0, HOLD + 0.10);
+    // …and back out the way he came, up the frame
+    P(sN[0] + 0.052, sN[2] - 0.16, -0.22, 0, HOLD + 0.06);
+    P(sN[0] + 0.052, sN[2] - 0.30, -0.22, 0, HOLD + 0.10);
 
     const laidBy = (k) => lay.reduce((c, L) => c + (L <= k ? 1 : 0), 0);
     const tracks = [

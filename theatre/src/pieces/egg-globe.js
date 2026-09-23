@@ -378,9 +378,17 @@ export function eggGlobe(ctx, { object = null, switches = null } = {}) {
     const W = ctx.size?.w || window.innerWidth, H = ctx.size?.h || window.innerHeight;
     const xs = [], ys = [];
     const v = new THREE.Vector3();
+    // A BOX WITH THE LENS INSIDE IT IS NOT A BOX (props.js, walk.js `box`): out at the crossroads the
+    // globe is BEHIND the camera, and a corner behind the lens divides by a negative w and lands across
+    // the frame — measured at 390x844 with the door open, the globe answered 216 of 216 points of the
+    // country, so every tap meant to shut the door spun a globe nobody could see. So no box at all.
+    ctx.camera.updateMatrixWorld();
     for (const dx of [-SPHERE_R, SPHERE_R]) for (const dy of [-SPHERE_R, SPHERE_R]) for (const dz of [-SPHERE_R, SPHERE_R]) {
       v.set(dx, dy, dz);
-      sphere.localToWorld(v).project(ctx.camera);
+      sphere.localToWorld(v);
+      const vz = v.clone().applyMatrix4(ctx.camera.matrixWorldInverse).z;
+      if (vz > -ctx.camera.near) return null;
+      v.project(ctx.camera);
       xs.push(((v.x + 1) / 2) * W);
       ys.push(((1 - v.y) / 2) * H);
     }

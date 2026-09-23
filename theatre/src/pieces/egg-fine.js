@@ -746,7 +746,14 @@ export function buildFine(ctx, { group, switches, grate, opening, face }) {
     const xs = [], ys = [];
     const v = new THREE.Vector3();
     const x0 = face ?? -2.36;
+    // A BOX WITH THE LENS INSIDE IT IS NOT A BOX (props.js, walk.js `box`): out at the crossroads
+    // the grate is BEHIND the camera, and a corner behind the lens divides by a negative w and lands
+    // across the frame — measured at 844x390, the grate then answered 124 of 128 points of the
+    // country and every tap meant to shut the door lit the fire instead. So no box at all.
+    ctx.camera.updateMatrixWorld();
     for (const x of [x0 - 0.24, x0]) for (const y of [opening.y0, opening.y1]) for (const z of [opening.z0, opening.z1]) {
+      v.set(x, y, z).applyMatrix4(ctx.camera.matrixWorldInverse);
+      if (v.z > -ctx.camera.near) return null;
       v.set(x, y, z).project(ctx.camera);
       xs.push(((v.x + 1) / 2) * W);
       ys.push(((1 - v.y) / 2) * H);

@@ -560,17 +560,39 @@ export function buildPick(ctx, cards, player, hand = null, slots = ctx.layout.sp
     // palm left on the cloth would be drawn underneath it (the user: "the hands are under the cards,
     // they should be over the cards of course").
     const pileH = units(N) * T;
+    // THE HANDS OVER THE CARDS IN FLIGHT, TOO (2026-09-23). A raked card hops 20 mm as it travels
+    // (`set` above) and the palms rode the wash's 16 mm: measured, 22–57 % of each drawn hand lay
+    // under the cards it was raking on the first seven drawings. So each palm is lifted over the
+    // highest card whose middle is within reach of it in that drawing — the same sums the cards
+    // are drawn by, done once here. And the palms close to 172 mm apart, not 124: nearer than that
+    // the two drawn thumbs lie through each other (reveal-shuffle.js → PALMS).
+    const PALMS = 0.086;
+    const cardAt = (e, r, k) => {
+      const f = clamp01((k - start.get(e)) / RUN2), a = rests.get(e) ?? restPose(e, {}), o = onDeck(far.length - 1 - r);
+      return { x: lerp(a.x, o.x, f), y: lerp(a.y, o.y, f) + 0.02 * Math.sin(PI * f), z: lerp(a.z, o.z, f) };
+    };
+    const over = (x, z, k) => {
+      let top = 0;
+      far.forEach((e, r) => {
+        const c = cardAt(e, r, k);
+        if (Math.hypot(c.x - x, c.z - z) < 0.17) top = Math.max(top, c.y - Y + T);
+      });
+      return top;
+    };
     specs.push([HL(-b.x * 0.8, cz - 0.20, 0.080), HR(b.x * 0.8, cz - 0.20, 0.080)]);
     for (let k = 0; k < SWEEP; k++) {
       const u = k / (SWEEP - 1);
-      const x = lerp(b.x * 0.86, 0.062, u), z = lerp(cz, dk.z, u);
+      const x = lerp(b.x * 0.86, PALMS, u), z = lerp(cz, dk.z, u);
       const on = Math.max(DEEP * (1 - u), pileH * u);
-      specs.push([HL(-x, z, 0.004, on), HR(x, z, 0.004, on)]);
+      specs.push([HL(-x, z, 0.004, Math.max(on, over(-x, z, k + 1))), HR(x, z, 0.004, Math.max(on, over(x, z, k + 1)))]);
     }
-    specs.push([HL(-0.058, dk.z + 0.004, 0.006, pileH), HR(0.058, dk.z + 0.004, 0.006, pileH)]);
-    // the press: the two hands turned to face each other across the pile, over it
+    specs.push([HL(-PALMS, dk.z + 0.004, 0.006, pileH), HR(PALMS, dk.z + 0.004, 0.006, pileH)]);
+    // the press: the two hands turned to face each other across the pile, over it. `yaw` is given
+    // as if for the right hand and the left MIRRORS it (reveal-hand.js → at), so it is the same
+    // number on both: the left had +1.12, which mirrored to the right hand's own heading, and its
+    // fingertips on the left of the pile hung the whole hand out over the RIGHT one, lying on it.
     const press = (dx) => [
-      { x: -(0.045 + dx), y: 0.006, z: dk.z + 0.004, yaw: 1.12, pose: 'splay', side: 'L', floor: pileH },
+      { x: -(0.045 + dx), y: 0.006, z: dk.z + 0.004, yaw: -1.12, pose: 'splay', side: 'L', floor: pileH },
       { x: 0.045 + dx, y: 0.006, z: dk.z + 0.004, yaw: -1.12, pose: 'splay', side: 'R', floor: pileH },
     ];
     specs.push(press(0.018), press(0), press(0.014), press(0));

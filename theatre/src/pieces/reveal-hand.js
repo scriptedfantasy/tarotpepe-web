@@ -109,6 +109,14 @@ const ARM = {
   // 0.315 puts the middle of the arm 28 mm clear of it. The same number on the other side keeps the
   // left arm inside a portrait frame, whose side edge falls at about 0.40 at that depth.
   past: 0.06, // how far the far end runs beyond his body's plane, so nothing ends in the picture
+  // THE WRIST (2026-09-23, the user on the shuffle: "they go into quite impossible positions").
+  // The quadratic that makes the elbow leaves the wrist aimed at its own control point, which sits
+  // twice the bow off the straight line: measured, the forearm met the hand at 37–45° on every
+  // drawing of the smoosh, the cuff sawn across the back of the hand like a broken wrist, and the
+  // side the elbow went flipped between drawings. So the forearm now leaves the cuff IN LINE WITH
+  // THE HAND, within `wrist` of it (a wrist laid flat on a table deviates about 20° either way), and
+  // the bow is taken up further along the arm, where the elbow is.
+  wrist: (18 * Math.PI) / 180,
 };
 // ── THE ARM'S PEN (round 12), in MILLIMETRES of sleeve ─────────────────────────────────────────
 // The user, seeing the wash and the pick: "the lines on the arms are too fat". They were, and the
@@ -739,15 +747,17 @@ export function buildHand(ctx, { onShown = null, name = 'reveal-hand', lockSide 
   const _p = new THREE.Vector3();
   const _q = new THREE.Vector3();
   const _inv = new THREE.Matrix4(); // the group's inverse, taken once a drawing and not 58 times
-  function buildArm(A, wx, wy, wz) {
+  // `hx, hz` is the hand's own heading in plan, wrist → fingertips (a unit vector).
+  function buildArm(A, wx, wy, wz, hx = 0, hz = 1) {
     group.updateMatrixWorld(true);
     _inv.copy(group.matrixWorld).invert();
     // the far end runs PAST his body's plane, so it ends behind his own cut-out or off the top edge
     const chord = Math.hypot(A.x - wx, A.z - wz) || 1e-4;
     const ext = 1 + ARM.past / chord;
     const Fx = wx + (A.x - wx) * ext, Fz = wz + (A.z - wz) * ext, Fy = A.y;
-    // the head of the ribbon sits INSIDE the hand, so the cuff covers its cut wrist
-    const Hx = wx - ((A.x - wx) / chord) * ARM.head, Hz = wz - ((A.z - wz) / chord) * ARM.head;
+    // the head of the ribbon sits INSIDE the hand, along the hand's own axis, so the cuff covers
+    // its cut wrist whichever way the hand is turned
+    const Hx = wx + hx * ARM.head, Hz = wz + hz * ARM.head;
     const dx = Fx - Hx, dz = Fz - Hz;
     const len = Math.hypot(dx, dz) || 1e-4;
     const t = Math.min(0.5, Math.max(0.26, ARM.elbowAt / len));
@@ -758,30 +768,69 @@ export function buildHand(ctx, { onShown = null, name = 'reveal-hand', lockSide 
       px = -px;
       pz = -pz;
     }
+    // THE ROUTE, for a bow `b`: the quadratic whose midpoint is the elbow, B(½) = ¼H + ½C + ¼F,
+    // raised to a cubic (P1 = H + ⅔(C − H), P2 = F + ⅔(C − F)) so that its first handle can be
+    // turned. The quadratic leaves the wrist aimed at C, which is twice the bow off the straight
+    // line; the handle is turned back to within ARM.wrist of the hand's own axis, so the forearm
+    // comes out of the cuff in line with the hand and the bend is taken where the elbow is.
+    const bx = -hx, bz = -hz; // back up the hand's axis, the way a forearm leaves a flat hand
+    const route = (b, o) => {
+      const Ex = Hx + dx * t + px * b, Ez = Hz + dz * t + pz * b;
+      const Cx = 2 * Ex - 0.5 * (Hx + Fx), Cz = 2 * Ez - 0.5 * (Hz + Fz);
+      const cl = Math.hypot(Cx - Hx, Cz - Hz) || 1e-4;
+      const nx = (Cx - Hx) / cl, nz = (Cz - Hz) / cl;
+      const ang = Math.atan2(bx * nz - bz * nx, bx * nx + bz * nz);
+      const a = Math.max(-ARM.wrist, Math.min(ARM.wrist, ang)), ca = Math.cos(a), sa = Math.sin(a);
+      const fx = bx * ca - bz * sa, fz = bx * sa + bz * ca;
+      // …and the handle is long enough that the forearm is STRAIGHT for a forearm's length: a
+      // short one (C close to the wrist, which is every hand working near his own side of the
+      // table) let the curve swing round within a few centimetres of the cuff, and the wrist read
+      // 25–45° bent all over again one station up the arm
+      const hl = Math.max(cl * (2 / 3), Math.min(0.26, 0.4 * len));
+      o.p1x = Hx + fx * hl;
+      o.p1z = Hz + fz * hl;
+      o.p2x = Fx + (Cx - Fx) * (2 / 3);
+      o.p2z = Fz + (Cz - Fz) * (2 / 3);
+      return o;
+    };
+    const cub = (u, a, b, c, d) => {
+      const v = 1 - u;
+      return v * v * v * a + 3 * v * v * u * b + 3 * v * u * u * c + u * u * u * d;
+    };
     // THE LANE — how far off the room's axis the curve may swing. Bowed outboard from either of
     // the two outer cards the arm leaves the table: on his right it goes through the candle in the
     // wine bottle, which stands 35 cm high at (0.44, −0.34) with the glass just past it (measured
     // 36 mm inside it, tools/_rv9-clear.mjs), and on his left it goes clean out of the side of a
     // portrait frame and leaves the hand on the cloth with no arm at all. So the bow is TRIED
-    // outboard and taken inboard when it would cross the lane — an elbow tucked in at his side,
-    // which a reaching arm does as readily as the other, and which the drawing follows (uIn).
-    const b0 = ARM.bow * Math.min(1, len / 0.72);
-    const cxOf = (b) => 2 * (Hx + dx * t + px * b) - 0.5 * (Hx + Fx);
+    // outboard and eased inboard, as far as the lane needs and no further, when it would cross it —
+    // an elbow tucked in at his side, which a reaching arm does as readily as the other, and which
+    // the drawing follows (uIn). EASED, not flipped: taking the whole bow the other way the moment
+    // the lane was crossed threw the elbow from one side of the arm to the other between two
+    // drawings of the smoosh, as the palm went round its circle.
+    const R0 = {};
     const swing = (b) => {
-      const C = cxOf(b);
+      route(b, R0);
       let mx = 0;
-      for (let i = 0; i <= 8; i++) {
-        const u = i / 8, a = (1 - u) * (1 - u), c = 2 * (1 - u) * u, e = u * u;
-        mx = Math.max(mx, Math.abs(a * Hx + c * C + e * Fx));
-      }
+      for (let i = 0; i <= 8; i++) mx = Math.max(mx, Math.abs(cub(i / 8, Hx, R0.p1x, R0.p2x, Fx)));
       return mx;
     };
-    const b = swing(b0) > ARM.lane && swing(-b0) < swing(b0) ? -b0 : b0;
+    const b0 = ARM.bow * Math.min(1, len / 0.72);
+    let b = b0;
+    if (swing(b0) > ARM.lane) {
+      if (swing(-b0) >= ARM.lane) b = swing(-b0) < swing(b0) ? -b0 : b0;
+      else {
+        let lo = -b0, hi = b0; // swing(lo) inside the lane, swing(hi) outside it
+        for (let i = 0; i < 14; i++) {
+          const mid = (lo + hi) / 2;
+          if (swing(mid) > ARM.lane) hi = mid;
+          else lo = mid;
+        }
+        b = lo;
+      }
+    }
     const uIn = b < 0 ? 1 : 0; // which edge of the canvas is the inside of the bend
-    const Ex = Hx + dx * t + px * b, Ez = Hz + dz * t + pz * b;
     const Ey = wy + Math.max(0.03, ARM.elbowY - (wy - Y - HAND.y));
-    // the quadratic whose midpoint IS that elbow: B(½) = ¼H + ½C + ¼F
-    const Cx = cxOf(b), Cz = 2 * Ez - 0.5 * (Hz + Fz);
+    const Rt = route(b, {});
     // …but the HEIGHT is its own curve, and it is not symmetric. The arm has to be up over the
     // still life within the first hand's breadth — the newspaper and its saucer stand 55 mm proud
     // of the cloth ten centimetres from where the left hand works — and then it is simply carried
@@ -790,8 +839,7 @@ export function buildHand(ctx, { onShown = null, name = 'reveal-hand', lockSide 
     const y0 = wy + 0.0012;
     const yAt = (u) => (u <= ARM.rise ? y0 + (Ey - y0) * Math.pow(u / ARM.rise, 0.62) : Ey + (Fy - Ey) * Math.pow((u - ARM.rise) / (1 - ARM.rise), 1.25));
     const at = (u, o) => {
-      const a = (1 - u) * (1 - u), c = 2 * (1 - u) * u, e = u * u;
-      o.set(a * Hx + c * Cx + e * Fx, yAt(u), a * Hz + c * Cz + e * Fz).applyMatrix4(_inv);
+      o.set(cub(u, Hx, Rt.p1x, Rt.p2x, Fx), yAt(u), cub(u, Hz, Rt.p1z, Rt.p2z, Fz)).applyMatrix4(_inv);
     };
     const half = ARM.w / 2;
     let s = 0, pnx = 1, pnz = 0;
@@ -889,7 +937,7 @@ export function buildHand(ctx, { onShown = null, name = 'reveal-hand', lockSide 
     wrist.rotation.set(-pitch, 0, 0);
     // the arm, rebuilt along its curve: it starts inside the hand, bends at an elbow bowed out of
     // the straight line, and runs to that wrist of his and past it
-    buildArm(ANCH[m < 0 ? 'L' : 'R'], wx, Y + HAND.y + floatY, wz);
+    buildArm(ANCH[m < 0 ? 'L' : 'R'], wx, Y + HAND.y + floatY, wz, Math.sin(Yaw), Math.cos(Yaw));
   }
 
   const api = {

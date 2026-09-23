@@ -227,7 +227,11 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
     const cam = ctx.camera;
     cam.updateMatrixWorld(true);
     let x = 0, z0 = Infinity, z1 = -Infinity;
-    for (const [u, v] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    // ON A PHONE THE FOOT OF THE FRAME IS THE CHAT'S (the owner, 2026-09-23): its bottom row stands
+    // there for the whole evening, so the bows are laid in the frame above it and no card lies under it
+    const H = ctx.size?.h || window.innerHeight || 1;
+    const vb = -1 + (2 * Math.min(H * 0.4, ctx.pieces.camera?.footPx ?? 0)) / H;
+    for (const [u, v] of [[-1, vb], [1, vb], [-1, 1], [1, 1]]) {
       _p.set(u, v, 0.5).unproject(cam);
       _v.copy(_p).sub(cam.position).normalize();
       if (Math.abs(_v.y) < 1e-6) return null;

@@ -192,6 +192,10 @@ const RUN = 3; // how long one card takes to travel, in drawings, in the wash
 const DRAG = 0.92, SPIN = 0.85;
 // where each arm is anchored, for pointing a hand away from its own shoulder (reveal-hand.js HAND)
 const SHOULDER = [0.291, -0.82];
+// the least distance of a drawn palm from the frame's axis: the splay plate's thumb reaches 78 mm
+// inboard of its palm contact (reveal-hand.js → PLATES), so two palms 172 mm apart leave 16 mm of
+// cloth between the thumbs, which the hands' inward turn takes most of
+const PALMS = 0.086;
 
 // THE WHOLE SHUFFLE — the smoosh. Forty-two drawings and a two-frame hold: 3.67 s at 12 fps.
 // See the head of this file for what is in them. Both of his hands are on the cloth for every one
@@ -336,8 +340,20 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
   // raft with only the fingers in it — "both hands are IN it" is the fifth thing on the list.
   const yawR = (x, z) => Math.atan2(x - SHOULDER[0], z - SHOULDER[1]);
   const yawL = (x, z) => -Math.atan2(x + SHOULDER[0], z - SHOULDER[1]);
-  const HR = (x, z, y, floor = 0, pose = 'splay') => ({ x, y, z, yaw: yawR(x, z), pose, side: 'R', floor, by: 'palm' });
-  const HL = (x, z, y, floor = 0, pose = 'splay') => ({ x, y, z, yaw: yawL(x, z), pose, side: 'L', floor, by: 'palm' });
+  // …and NEVER ON EACH OTHER (2026-09-23, the user: "they go into quite impossible positions").
+  // Two flat cut-outs on one plane cannot pass through each other, and the circles below bring the
+  // palms to 134 mm apart on the wide raft and 58 mm on the tall one, with the drawn thumb reaching
+  // 78 mm inboard of the palm on each: the two hands lay one on top of the other, thumb through
+  // thumb, on a third of the drawings (on a phone, nearly all of them). So every drawn palm is moved
+  // out by the one distance that keeps the innermost point of its circle PALMS from the axis — the
+  // circle keeps its shape, the pair keeps its symmetry, and the cards are carried exactly as they
+  // were (`carry` still works about the unshifted circle: a palm 145 mm across covers the 15 mm).
+  // Nothing is moved further out than the outermost point of the moved circle, either: on the tall
+  // raft the way in and the way off (hx + 30 / 40 mm) would otherwise put a hand over the side of
+  // a portrait frame.
+  const apart = (x) => Math.min(PALMS + 2 * R.rx, Math.max(PALMS, x + Math.max(0, PALMS - (R.hx - R.rx))));
+  const HR = (x, z, y, floor = 0, pose = 'splay') => ((x = apart(x)), { x, y, z, yaw: yawR(x, z), pose, side: 'R', floor, by: 'palm' });
+  const HL = (x, z, y, floor = 0, pose = 'splay') => ((x = -apart(-x)), { x, y, z, yaw: yawL(x, z), pose, side: 'L', floor, by: 'palm' });
   const ALL = () => true;
   const NONE = () => false;
 
@@ -388,7 +404,12 @@ export function buildShuffle(ctx, deck, T, { cues = {}, hand = null, aspect = 1.
     const u = k / SPLAY;
     const hxk = 0.052 + (R.hx + R.rx * 0.5 - 0.052) * u, hzk = DZ - 0.012 + (CZ + R.rz * 0.4 - DZ + 0.012) * u;
     const vis = (i) => k > leaveAt[i];
-    snap(left, vis, HL(-hxk, hzk, 0.003, DEEP), HR(hxk, hzk, 0.003, DEEP), k === 1 ? cues.wash : null);
+    // …and ON the pile while they are still over it: the squared deck is 38 mm of cards and the
+    // palms were laid at the raft's 16, so the first drawings of the wash put both hands THROUGH
+    // the deck, fingers under its top card. They ride it down as it thins.
+    const onPile = apart(hxk) - PALMS < card.w / 2 + Math.abs(DX);
+    const fl = onPile ? Math.max(DEEP, (left / N) * deckH + 0.002) : DEEP;
+    snap(left, vis, HL(-hxk, hzk, 0.003, fl), HR(hxk, hzk, 0.003, fl), k === 1 ? cues.wash : null);
   }
   const washed = snaps.length - 1; // the drawing the raft is complete on (the mixing probe's mark)
 

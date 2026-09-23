@@ -915,5 +915,43 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
       pad: 0.10,
     }, aspect);
   });
+  // A PHONE'S FOOT IS TAKEN (the owner, 2026-09-23). On a phone held upright the chat's bottom row —
+  // a round button and the reply field, 50 px tall and 22 px off the bottom edge — stands over the
+  // foot of the frame for the whole evening, so while the visitor is choosing the plate is RAISED
+  // off it: a fall of the lens (a view offset, the same rise every plate here is hung by — no tilt,
+  // the table stays a plan) just large enough that no card of the spread comes into `opts.foot`,
+  // the band's height as a fraction of the frame. It is the same plate otherwise; a laptop, a tablet
+  // and every other shot pass no foot and are untouched.
+  if (opts.foot > 0 && shots.fan) shots.fan = liftOff(shots.fan, SUB.spread.pts, spreadY, opts.foot);
   return shots;
+}
+
+// Where the lowest of `pts` (on the cloth at height y) falls on the glass under `shot`, and the shot
+// with its lens dropped just enough to put that point `foot` (a fraction of the frame's height) clear
+// of the bottom edge, plus a hair. shift[1] is the view offset in frame heights: +y shows more below,
+// and moves everything in the picture UP by that fraction.
+function liftOff(shot, pts, y, foot) {
+  if (!shot || !Array.isArray(pts) || !pts.length) return shot;
+  const [px, py, pz] = shot.pos, [lx, ly, lz] = shot.look, [ux, uy, uz] = shot.up ?? [0, 1, 0];
+  let fx = lx - px, fy = ly - py, fz = lz - pz;
+  const fl = Math.hypot(fx, fy, fz) || 1;
+  fx /= fl; fy /= fl; fz /= fl;
+  // right = f × up, then the true up = right × f
+  let rx = fy * uz - fz * uy, ry = fz * ux - fx * uz, rz = fx * uy - fy * ux;
+  const rl = Math.hypot(rx, ry, rz) || 1;
+  rx /= rl; ry /= rl; rz /= rl;
+  const vx = ry * fz - rz * fy, vy = rz * fx - rx * fz, vz = rx * fy - ry * fx;
+  const t = Math.tan(((shot.fov ?? 30) * Math.PI) / 360);
+  const sy0 = shot.shift?.[1] ?? 0;
+  let low = -Infinity; // the lowest point, as a fraction of the frame's height from the top
+  for (const p of pts) {
+    const dx = p[0] - px, dy = y - py, dz = p[1] - pz;
+    const depth = dx * fx + dy * fy + dz * fz;
+    if (!(depth > 1e-4)) continue;
+    const v = (dx * vx + dy * vy + dz * vz) / (depth * t);
+    low = Math.max(low, (1 - v) / 2 - sy0);
+  }
+  const need = low - (1 - foot - 0.01);
+  if (!(need > 0)) return shot;
+  return { ...shot, shift: [shot.shift?.[0] ?? 0, sy0 + need] };
 }
