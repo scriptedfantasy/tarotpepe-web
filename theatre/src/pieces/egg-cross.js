@@ -7,10 +7,10 @@
 // around, and switches into a Satanist's cross, and a floorboard opens and you see this kind of red
 // stairway down into a basement."
 //
-// So a click on the cross now does two things and neither of them is weather. THE TOP FIXING LETS
-// GO: the cross drops at the head, swings a half turn about the pin through its foot, and hangs
-// INVERTED on the frieze — the same cross, upside down, the arm a third of the way UP it instead of
-// a third of the way down. A BEAT LATER THE FLOOR OPENS: three boards in front of the visitor come
+// So a click on the cross now does two things and neither of them is weather. IT TURNS OVER WHERE
+// IT HANGS: a half turn about the one nail through its middle, in the plane of the wall, and it
+// ends INVERTED on the frieze exactly where it was — the same cross, upside down, the arm a third of
+// the way UP it instead of a third of the way down. A BEAT LATER THE FLOOR OPENS: three boards in front of the visitor come
 // up on a hinge and there is a stair going down into a red light (src/pieces/egg-cellar.js, which
 // owns the hatch, the well, the flight, the one red and the hole in the floor's own mesh). He says
 // what is down there. A second click on either the cross or the hatch puts it all back.
@@ -31,51 +31,52 @@
 // does when it is clicked.
 //
 // ------------------------------------------------------------------------------------------------
-// THE CROSS'S TWO FIXINGS, which is a drawing decision and a physical one at the same time. A small
-// wooden cross over a door hangs on a nail through a hole in its head; anything that has been there
-// forty years also has a pin through its foot, because a nail on its own turns every time the door
-// bangs. Both marks are on the cross's own sheet (egg-cross-draw.js, drawCross) and not on the
-// plaster, because what is in the WALL is a hole, and a hole three pixels across on plaster at this
-// distance is nothing. The head lets go, the foot pin does not, and the pin is at 0.09 of the
-// cross's height up from its foot — so the inverted cross hangs 189 mm lower than it stood, which is
-// where a cross that has come off its nail goes.
+// THE OWNER, 2026-09-23, AND IT RETIRES THE FALL: "the cross over the door: rather than falling
+// down it should turn 180 degrees in place". Rounds before this one let the head go and dropped the
+// cross a half turn about a pin through its foot — first round in the plane of the wall (a clock
+// hand pivoting on its FOOT, which swept the head up over the cornice: "no bueno"), then tipping
+// forward out of the plaster about the line along the wall. Both are gone. What stays is the end:
+// the same cross, upside down, and everything that follows it.
 //
-// AND IT TIPS FORWARD RATHER THAN SWINGING ROUND, which is the user's own correction to the first cut
-// of this and the one thing about it that was simply wrong. Turned about the axis NORMAL to the
-// plaster, a cross pivoting on its foot sweeps round in the plane of the wall like a clock hand: up
-// over the frieze, onto the cornice, and down the far side — which is what he was shown and what he
-// said "no bueno" to. Gravity is not in the plane of a wall. The axis is the HORIZONTAL LINE ALONG
-// THE WALL through the foot nail; the head comes OUT into the room and down, through 90 degrees where
-// the cross stands straight out of the plaster, and on to 180, flat against the frieze again and
-// hanging under its own pin. IT NEVER RISES.
+// ONE FIXING, THROUGH ITS MIDDLE, which is a drawing decision and a physical one at the same time.
+// A cross that turns where it hangs turns on the nail it hangs from, so that nail is at the centre
+// of the drawn cross and not over its head: halfway down the upright, under the arm (`nail` below is
+// 0.4425 of the sheet's height up from its foot, which is the middle of the ink and not of the
+// paper — the drawing sits 13 mm high on its sheet). It is not drawn: it is under the lath, which
+// is solid ink, and a head struck in paper on it read as the upright snapped in two
+// (egg-cross-draw.js, drawCross). The head nail and the foot pin of the fall are both gone.
 //
-// AND IT FITS, which is arithmetic and not hope. The pin is at 2.7107 and the sheet hangs 94.3 mm
-// each side of it, so inverted the cross occupies 2.5014 to 2.7314. Under it, the back-wall door's
-// architrave cap tops out at 2.261 — room.js's own joinery, the same as the side doors' — which
-// leaves 240 mm of bare plaster between the foot of the upside-down cross and the head of the door.
-// Nothing had to be moved and nothing shrunk. It does cross the picture rail's bead at 2.60 to
-// 2.625, and that is not a fault either: the bead stands 18 mm proud and the cross hangs at 22, so it
-// passes in front of it with 4 mm in hand, which is what a thing hanging on a wall does to a
-// moulding.
+// AND IT TURNS IN THE PLANE OF THE WALL, like a clock hand going half way round, clockwise as the
+// room sees it: about the axis NORMAL to the plaster, through that nail. The first cut's clock hand
+// was wrong because it pivoted on the FOOT and the head went up over the frieze; pivoted on its own
+// middle the cross never leaves the box it hangs in, and at 180 it is inverted exactly where it was.
 //
-// THE FALL IS THIRTEEN DRAWINGS — NINE OF TURN AND FOUR OF SETTLE — AND ITS SHAPE IS THE PHYSICS'S. A rod pinned at one end and let go
-// from the upright obeys theta'' = 3g sin(theta) / 2L, and integrated at L = 0.209 m it is over in
-// 0.54 s — but it spends four of those six drawings between 5 and 18 degrees and then covers 140 in
-// two, which is a half turn nobody can read. So the CURVE is the physics's and the SPACING is not:
-// slow off the nail, thirty degrees a drawing through the middle, and then the pendulum it has
-// become — 193, 174, 182, 180, a thirteen-degree overshoot damped by 0.45 a swing, which is a lath
-// on a painted-over pin. A cue for the fixing (`nail`), and one for the wood rapping the plaster as
-// it arrives (`rap`), with a fifth of one as it settles: walk-book.js's own arrangement for a leaf.
+// AND IT FITS AT EVERY ANGLE, which is arithmetic and not hope, and the angle to check is 90 — a
+// cross on its side is wider than it is tall. The nail is at 2.7918 and 22 mm off the plaster. The
+// ink reaches 102 mm from it at most (the upright's two ends, caps included; the arm's tips are 78),
+// so however it is turned the drawing stays between 2.690 and 2.894; at 90 it is 203 wide by 142
+// tall, 2.721 to 2.863. The frieze is 2.64 to 2.98. Even the SHEET's transparent corners, which
+// reach 149 mm from the nail, stay between 2.643 and 2.940: 18 mm clear of the picture rail's bead
+// (which tops out at 2.625) and 40 clear of the cornice's underside, and the cornice is the one
+// moulding that stands out further than the cross does. Nothing moved, nothing shrunk, nothing brought
+// off the wall. (`cross.extent` in the api reports the sheet's reach at whatever pose it is in.)
 //
-// AND RIGHTING IT IS NOT THAT LIST READ BACKWARDS, which is this file's own lesson twice over (the
-// door's CLOSE, and the book's). Backwards, the first drawing of the righting is the overshoot — a
-// cross swinging further DOWN on its way back up. Nothing in this room is falling upward: it is
-// being put back, so it goes fast at the bottom where gravity is helping and slow at the top where
-// it is not, and it arrives on its nail with no bounce at all.
+// THE TURN IS TWENTY-FOUR DRAWINGS, ON TWOS: two of hold, seven poses of turn, four of settle. The
+// click is answered by the nail (`nail`) and then NOTHING for a sixth of a second — the cross
+// sits there — and then it goes round: 8, 26, 54, 88, 122, 150, 170, slow away and slow in, each
+// pose held two drawings, the film's own twos. It then carries past itself to 184, comes back to
+// 177, 181 and 180: a lath on a nail that has been painted over forty times does not stop dead. The
+// wood raps the plaster on the overshoot (`rap`) and a fifth of that as it settles, walk-book.js's
+// own arrangement for a leaf.
+//
+// AND PUTTING IT BACK IS THE SAME TURN THE OTHER WAY — unwound, anticlockwise, 180 back to 0, with
+// the same hold in front and the same settle at the end (a four-degree overshoot past upright). It is
+// not the list read backwards: backwards, the first drawing of the putting-back would be the settle.
+// It goes last in the closing, after the lid is down, as it always did.
 //
 // THE ROOM'S OWN BEAT. No storm, no lamp, and no state pushed into lighting.js: the pendant over the
-// table swings, 2.4 degrees damped out over six seconds, on the drawing the fixing gives. Something
-// heavy came off the wall and the room felt it, and that is the whole of what the light does.
+// table swings, 2.4 degrees damped out over six seconds, from the click. Something on the wall moved
+// that should not have, and the room felt it; that is the whole of what the light does.
 //
 // ------------------------------------------------------------------------------------------------
 // WHY THE DOOR IS A DRAWING AND NOT THE DOOR. room.js builds the back-wall door as real joinery and
@@ -107,7 +108,7 @@
 // them; it takes 2.4 off a cross coming away from a wall, and six.
 //
 // api (published as props.cross):
-//   phase        shut · falling (the cross going over) · opening (the hatch lifting) · open (the
+//   phase        shut · turning (the cross going round) · opening (the hatch lifting) · open (the
 //                hatch open and the room looking down it) · closing · day · day-closing
 //   open         is the hatch open — what flow.js's hook and the note the server writes him read
 //   path         null · 'light' · 'dark' — the road taken at the doorway, by day, and nowhere else
@@ -175,14 +176,12 @@ const MIN_TAP = 44; // px: what a thumb needs, whatever the cross measures on th
 // keeps the rest where the rest matters. 0.15 by 0.23 m: 22 by 35 px at the home plate, which is a
 // cross and not a crucifix. It stands 22 mm off the plaster, on its nail.
 //
-// `pin` is where the LOWER fixing is, as a fraction of the height up from the foot, and it is the
-// number the whole of round 5 turns about: the cross swings on it and hangs under it. At 0.09 the
-// pin is 21 mm above the foot — where a panel pin actually goes, clear of the end grain it would
-// split — and the inverted cross therefore hangs with its centre 189 mm lower than it stood, at
-// 2.616 m, so it crosses the picture rail's bead at 2.60. That is not an accident to be designed
-// out: a cross that has come off its nail and turned over IS lower than it was, and one that ended
-// up neatly back inside the frieze would be a cross somebody had re-hung.
-const CROSS = { w: 0.15, h: 0.23, cy: 2.805, off: 0.022, pin: 0.09 };
+// `nail` is where its one fixing is, as a fraction of the SHEET's height up from its foot, and it is
+// the number the turn is about (2026-09-23; it was `pin`, 0.09, the foot pin the cross used to fall
+// about). 0.4425 is the middle of the drawn upright — drawCross puts the wood from 0.16 to 0.955 of
+// the sheet down from its top — so the cross turns about its own centre and not the paper's, and
+// upside down it covers the same box it covered standing. The nail stands at 2.7918.
+const CROSS = { w: 0.15, h: 0.23, cy: 2.805, off: 0.022, nail: 0.4425 };
 
 // ---- room.js's own numbers for the back-wall door -------------------------------------------------
 // READ, never written. If that joinery ever changes these change with it and nothing else here does.
@@ -196,19 +195,25 @@ const SLAB = { in: 0.012, thick: 0.045 }; // the leaf sits 12 mm in front of the
 // the left-hand field, which is exactly what it is. 135 mm clears the lot with the warp on top.
 const PROUD = 0.135;
 
-// ---- THE FALL, AND WHAT FOLLOWS IT, IN DRAWINGS -----------------------------------------------
+// ---- THE TURN, AND WHAT FOLLOWS IT, IN DRAWINGS -----------------------------------------------
 // Counted in DRAWINGS and converted at the room's own fps, because everything hand-animated in this
 // film is a count of drawings on the twelve.
 //
-// THE CROSS GOES OVER IN THIRTEEN, one pose to a drawing and not on twos: a thing coming off a wall
-// is violent and a pose held for two drawings at thirty degrees apart would strobe. The curve is the
-// integrated one (see the head of this file); the spacing is not.
-const FALL = [6, 14, 28, 48, 74, 104, 134, 160, 180, 193, 174, 182, 180];
-const FALL_HIT = 8; // the drawing it arrives under the pin: the rap on the plaster
-const FALL_SET = 11; // …and the drawing it settles on, which gets a fifth of the same cue
-// …and being put back, which is the same twelve drawings run the other way round and NOT the same
-// list reversed: fast at the bottom, slow at the top, and no overshoot at either end.
-const RIGHT = [172, 156, 134, 110, 86, 62, 42, 26, 14, 6, 2, 0];
+// THE CROSS GOES ROUND IN TWENTY-FOUR, ON TWOS (see the head of this file): a hold of two drawings,
+// then eleven poses each held for two. The fall was on ones because a thing coming off a wall is
+// violent; a thing turning where it hangs is not, and the widest step here is 34 degrees, which a
+// held pose carries without strobing. Each table is one entry per drawing, built from its poses, so
+// a tool reads the pose on any drawing straight off it.
+const TWOS = 2;
+const HOLD = 2; // drawings the cross sits still after the click (and before the putting-back)
+const onTwos = (poses, from) => [...Array(HOLD).fill(from), ...poses.flatMap((p) => Array(TWOS).fill(p))];
+const TURN_POSES = [8, 26, 54, 88, 122, 150, 170, 184, 177, 181, 180];
+const TURN = onTwos(TURN_POSES, 0);
+const TURN_HIT = HOLD + TURN_POSES.indexOf(184) * TWOS; // the drawing it carries past itself: the rap on the plaster
+const TURN_SET = HOLD + (TURN_POSES.length - 1) * TWOS; // …and the drawing it settles on, a fifth of the same cue
+// …and being put back: the same turn unwound, anticlockwise, with its own settle past upright. NOT
+// the list above reversed, which would start with the settle.
+const RIGHT = onTwos([172, 154, 126, 92, 58, 30, 10, -4, 3, -1, 0], 180);
 const HATCH_AT = 6; // drawings after the cross settles before the boards start to lift: half a second
 const LEAN_AT = 2; // …and after THAT before the room leans in, so the lid is moving as the lens does
 const LEAN_S = 1.4; // the lean itself, and the way back
@@ -312,23 +317,21 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     return m;
   };
 
-  // ---- 1. THE CROSS, ON ITS LOWER FIXING -------------------------------------------------------
-  // The sheet hangs from a GROUP at the foot pin, so `rotation.z` is the half turn and the drawing
-  // never moves relative to the wood. The pin is at 0.09 of the height up from the foot, so the
-  // sheet's own centre stands (0.5 - 0.09) x h = 94.3 mm above it — and after a half turn it stands
-  // the same 94.3 mm BELOW it, which is the whole gag, in one offset.
-  const CROSS_UP = CROSS.h * (0.5 - CROSS.pin);
+  // ---- 1. THE CROSS, ON ITS ONE NAIL -----------------------------------------------------------
+  // The sheet hangs from a GROUP at the nail, so `rotation.z` is the half turn and the drawing never
+  // moves relative to the wood. The nail is at 0.4425 of the sheet's height up from its foot, so the
+  // sheet's own centre stands (0.5 - 0.4425) x h = 13.2 mm above it — the paper is not centred on
+  // the wood — and after a half turn the paper stands 13.2 mm below it while the wood is where it was.
+  const CROSS_UP = CROSS.h * (0.5 - CROSS.nail);
   const crossPin = new THREE.Group();
-  crossPin.name = 'cross-pin';
+  crossPin.name = 'cross-nail';
   crossPin.position.set((d.x0 + d.x1) / 2, CROSS.cy - CROSS_UP, zb + CROSS.off);
   root.add(crossPin);
   const crossMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(CROSS.w, CROSS.h),
-    // …AND THE SHEET IS DOUBLE-SIDED, which the axis made necessary: turned a half turn about x, a
-    // one-sided plane has its back to the room and the renderer throws it away. Seen from behind the
-    // drawing is flipped top to bottom — which is the whole point — and mirrored left to right, which
-    // on a cross whose upright leans a quarter of a nib is not a difference anybody can see.
-    sheet(drawCross({ w: CROSS.w, h: CROSS.h, ppm: PPM_CROSS, penM: PEN_M, pin: CROSS.pin }), 'cross-sheet', { side: THREE.DoubleSide }),
+    // One-sided again: turned about the axis normal to the wall, the sheet keeps its face to the
+    // room the whole way round (the fall tipped it over about x and needed a back).
+    sheet(drawCross({ w: CROSS.w, h: CROSS.h, ppm: PPM_CROSS, penM: PEN_M, nail: CROSS.nail }), 'cross-sheet'),
   );
   crossMesh.name = 'cross-wall';
   crossMesh.castShadow = crossMesh.receiveShadow = false;
@@ -650,8 +653,8 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   // time this piece is asked to draw cannot skip a pose, and it is also what lets a proof release
   // the whole thing one drawing at a time.
   //
-  //          +---- click the CROSS ---> falling --13 dr--> opening --17 dr--> open
-  //          |      (the frieze)        (it goes over)     (the boards)        |
+  //          +---- click the CROSS ---> turning --24 dr--> opening --17 dr--> open
+  //          |      (the frieze)        (it goes round)    (the boards)        |
   //   shut --+                                                     click the cross or the hatch
   //     ^    |                                                                 v
   //     |    +-- click the DOOR, standing at the doorway --> day             closing
@@ -662,14 +665,14 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   // unless the phase is `shut`, so whichever is taken first owns the room until it hands it back.
   //   - `start()` (the cross) refuses unless shut -- it always did.
   //   - `openByDay()` refuses unless shut, and the cross's own switch is `enabled` only while shut
-  //     or open AND while the visitor is not standing at a place, so a hand cannot drop the cross
+  //     or open AND while the visitor is not standing at a place, so a hand cannot turn the cross over
   //     from the doorway and take the floor out from under a walk that is holding the camera.
   //   - `choose()` answers in `day` alone now. The roads are the afternoon's, and the afternoon is
   //     the only thing that reaches the plate.
   //   - `set()` / `setState()` reach `shut` from ANY phase, so a judging state always lands
   //     somewhere legal whatever the room was doing.
   //
-  // WHAT IS DIFFERENT ABOUT THE DAY, and it is all subtraction. No cross falling, no hatch, no
+  // WHAT IS DIFFERENT ABOUT THE DAY, and it is all subtraction. No cross turning, no hatch, no
   // pendant swinging, and no line from him -- `props:cross` carries `day` with `open` false, and
   // flow.js only ever acts on the hatch being open, so he says nothing about a door the visitor
   // opened themselves. What is the SAME is the leaf (the same six poses on the same twos), the plate
@@ -695,13 +698,11 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     hinge.visible = theta != null;
     if (theta != null) hinge.rotation.y = theta;
   }
-  // IT FALLS OUT OF THE WALL AND DOWN, ABOUT THE HORIZONTAL AXIS ALONG THE WALL, and that is the
-  // user's own correction: the first cut turned it about `rotation.z`, the axis normal to the
-  // plaster, so the cross swung round IN THE PLANE OF THE WALL like a clock hand — up over the
-  // frieze, onto the cornice, and down the far side. He looked at it once: "no bueno". Gravity is not
-  // in the plane of a wall. About x, the head comes OUT into the room and down.
+  // IT TURNS IN THE PLANE OF THE WALL, about its own nail (the owner, 2026-09-23: "turn 180 degrees
+  // in place"). `deg` is how far round it has gone, and it goes CLOCKWISE as the room sees it, which
+  // in three's right-handed axes, z towards the room, is a negative `rotation.z`.
   const setCross = (deg) => {
-    crossPin.rotation.x = (deg * Math.PI) / 180;
+    crossPin.rotation.set(0, 0, (-deg * Math.PI) / 180);
   };
   // the pendant: a swing on the 12 fps clock, damped. Not a tween -- it is evaluated at the stepped
   // time, so it holds on a frozen frame like everything else in the room.
@@ -856,10 +857,10 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
   function start() {
     if (phase !== 'shut') return false;
     byHand = false;
-    swayFrom = drawn; // something heavy came off the wall and the room felt it
-    setCross(FALL[0]);
+    swayFrom = drawn; // something on the wall moved that should not have, and the room felt it
+    setCross(TURN[0]);
     cue('nail');
-    go('falling');
+    go('turning');
     return true;
   }
   // ...and the second click, from the cross or from the hatch, which puts the whole thing back.
@@ -995,7 +996,7 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     // the one colour the picture is allowed, for a proof that wants to name what it is looking at
     colours: { sun: '#f2b829', ink: INK, paper: PAPER },
     schedule: {
-      fall: [...FALL], hit: FALL_HIT, settle: FALL_SET, right: [...RIGHT],
+      turn: [...TURN], poses: [...TURN_POSES], hold: HOLD, twos: TWOS, hit: TURN_HIT, settle: TURN_SET, right: [...RIGHT],
       hatchAt: HATCH_AT, leanAt: LEAN_AT, lean: LEAN_S, sit: SIT_S, shutLag: SHUT_LAG,
       shut: SHUT_F, cut: OUT_CUT, out: DAY_OUT_S, back: BACK_S, shutAt: SHUT_AT, via: [...VIA_OUT],
     },
@@ -1062,18 +1063,29 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
     get leaf() {
       return { shown: hinge.visible, degrees: +((hinge.rotation.y * 180) / Math.PI).toFixed(1) };
     },
-    // THE CROSS ITSELF: how far over it is and which way up. `inverted` is the whole of what the user
-    // asked for, in one boolean.
+    // THE CROSS ITSELF: how far round it is and which way up. `inverted` is the whole of what the
+    // user asked for, in one boolean.
     get cross() {
-      // …read off the SAME AXIS it is turned about (x, the horizontal line along the wall). It was
-      // reading `.z` for a round, which is the axis the cross no longer moves on, so a cross hanging
-      // upside down reported 0 degrees and `cross-open` judged itself upright.
-      const deg = +((crossPin.rotation.x * 180) / Math.PI).toFixed(1);
+      // …read off the SAME AXIS it is turned about (z, normal to the wall), clockwise positive, and
+      // the axes it does not turn about are reported too so a proof can see they stay at nothing.
+      const deg = +((-crossPin.rotation.z * 180) / Math.PI).toFixed(1);
+      // THE SHEET'S REACH, in world y, at the pose it is in: its four corners, which bound the ink.
+      // What the head of this file says fits, measured rather than asserted.
+      crossMesh.updateMatrixWorld(true);
+      let y0 = 1e9, y1 = -1e9, x0 = 1e9, x1 = -1e9;
+      for (const sx of [-1, 1])
+        for (const sy of [-1, 1]) {
+          v.set((sx * CROSS.w) / 2, (sy * CROSS.h) / 2, 0);
+          crossMesh.localToWorld(v);
+          y0 = Math.min(y0, v.y), y1 = Math.max(y1, v.y), x0 = Math.min(x0, v.x), x1 = Math.max(x1, v.x);
+        }
       return {
         degrees: deg,
         inverted: Math.abs(deg) > 90,
-        pin: crossPin.position.toArray().map((v) => +v.toFixed(4)),
-        box: { w: CROSS.w, h: CROSS.h, at: CROSS.pin },
+        tilt: [+crossPin.rotation.x.toFixed(4), +crossPin.rotation.y.toFixed(4)],
+        pin: crossPin.position.toArray().map((q) => +q.toFixed(4)),
+        extent: { y: [+y0.toFixed(4), +y1.toFixed(4)], x: [+x0.toFixed(4), +x1.toFixed(4)], z: +crossPin.position.z.toFixed(4) },
+        box: { w: CROSS.w, h: CROSS.h, at: CROSS.nail },
       };
     },
     get pendant() {
@@ -1120,7 +1132,7 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
       // A NAME NOBODY RECOGNISES IS `shut`, and it is worth the four lines: `setState` funnels every
       // unknown name to shut already, but `?cross=` hands this whatever is in the query string, and
       // a typo that opened the floor would be an egg answering to a word nobody meant.
-      if (next !== 'open' && next !== 'falling' && next !== 'opening') {
+      if (next !== 'open' && next !== 'turning' && next !== 'falling' && next !== 'opening') {
         byHand = false;
         phase = 'shut';
         path = null;
@@ -1132,7 +1144,7 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
       from = drawn;
       showLeaf(null);
       weather.visible = false;
-      setCross(FALL[FALL.length - 1]);
+      setCross(TURN[TURN.length - 1]);
       CELLAR.show(true);
       CELLAR.setLid(CELLAR.poses.open[CELLAR.poses.open.length - 1]);
       CELLAR.boil(0);
@@ -1154,7 +1166,7 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
       );
     },
 
-    // Called from props.update, which only calls anything on a stepped frame -- so the fall, the
+    // Called from props.update, which only calls anything on a stepped frame -- so the turn, the
     // lid, the pendant and the cues are all on the same 12 fps grid as the boil.
     update(ctx2) {
       if (pending) goOut({ at: pending === 'at' });
@@ -1215,13 +1227,13 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
         return;
       }
 
-      // ---- THE CROSS GOES OVER ------------------------------------------------------------------
-      if (phase === 'falling') {
-        setCross(FALL[Math.min(FALL.length - 1, f)]);
-        if (f === FALL_HIT) cue('rap'); // the wood arriving under the pin, on the plaster
-        if (f === FALL_SET) cue('rap', 0.2); // ...and a fifth of the same as it settles
-        if (f >= FALL.length - 1 + HATCH_AT) {
-          setCross(FALL[FALL.length - 1]);
+      // ---- THE CROSS GOES ROUND ------------------------------------------------------------------
+      if (phase === 'turning') {
+        setCross(TURN[Math.min(TURN.length - 1, f)]);
+        if (f === TURN_HIT) cue('rap'); // the wood carrying past itself, on the plaster
+        if (f === TURN_SET) cue('rap', 0.2); // ...and a fifth of the same as it settles
+        if (f >= TURN.length - 1 + HATCH_AT) {
+          setCross(TURN[TURN.length - 1]);
           CELLAR.show(true);
           CELLAR.setLid(CELLAR.poses.open[0]);
           cue('hatch');
@@ -1243,7 +1255,7 @@ export function eggCross(ctx, { group, switches, pendant = null, door = null, ra
       } else if (phase === 'closing') {
         // THE WAY BACK, in the order a room would do it: the lens sits up first, the lid follows it
         // down three drawings later (the same quarter-second the door is given as the camera clears
-        // the opening), and the cross rights itself last, because the thing furthest from the
+        // the opening), and the cross turns itself back last, because the thing furthest from the
         // visitor is the thing they notice going.
         if (f === 0) {
           lean(false);

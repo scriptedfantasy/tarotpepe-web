@@ -121,20 +121,19 @@ export function ring(cx, cy, rx, ry, n = 14) {
 // =================================================================================================
 // 1. THE CROSS ON THE WALL. Two strokes and a nail, and the user's own brief for it is that
 // sentence. It is a plain wooden cross of the sort that hangs over a door in a rented room: an
-// upright, an arm across it a third of the way down, and the nail it hangs from showing above the
-// upright's head, because whoever put it there did not sink it.
+// upright, an arm across it a third of the way down, and the nail it hangs from (see below).
 //
 // The strokes are the room's nib at two and a half, which is what makes them read as a piece of
 // wood and not as a pen line: a mark that is only a contour wide is a scratch on the plaster.
 // =================================================================================================
-// ROUND 5 GAVE IT A SECOND FIXING, and it is the one the whole egg turns about. A cross that hangs
-// on a nail alone turns every time the door under it bangs; anything that has been over a door for
-// forty years also has a panel pin through its foot. `pin` is where that pin is, as a fraction of
-// the height UP FROM THE FOOT — the cross swings on it when the head lets go — and it is drawn as a
-// smaller dot than the nail, because a nail carrying a cross shows its head and a pin driven flush
-// shows the ring the hammer left. Both marks are on THE WOOD and not on the plaster: what is in the
-// wall is a hole, and a hole three pixels across on plaster at this distance is nothing.
-export function drawCross({ w, h, ppm, penM, seed = 4471, pin = 0.09 }) {
+// ROUND 5 GAVE IT A SECOND FIXING, a pin through its foot that it fell about; the owner retired
+// the fall on 2026-09-23 ("rather than falling down it should turn 180 degrees in place"), and the
+// two fixings went with it. It now has ONE nail, through the middle of the upright under the arm:
+// `nail` is where, as a fraction of the sheet's height UP FROM ITS FOOT, and it is the middle of the
+// drawn wood (0.16 to 0.955 of the sheet down from its top), so the cross turns about its own
+// centre and upside down covers the box it covered standing. Nothing marks it: see the foot of the
+// function.
+export function drawCross({ w, h, ppm, penM, seed = 4471, nail = 0.4425 }) {
   const c = makeCanvas(Math.round(w * ppm), Math.round(h * ppm));
   const g = c.getContext('2d');
   const W = c.width, H = c.height;
@@ -149,27 +148,13 @@ export function drawCross({ w, h, ppm, penM, seed = 4471, pin = 0.09 }) {
   const armY = top + (foot - top) * 0.32;
   inkLine(g, x, top, x + pen * 0.25, foot, { width: bar, wobble: pen * 0.3, rng, segments: 4 });
   inkLine(g, W * 0.09, armY, W * 0.91, armY - pen * 0.2, { width: bar * 0.9, wobble: pen * 0.28, rng, segments: 3 });
-  // …and the nail it hangs from, which is above the wood and not in it
-  const ny = top - pen * 1.9;
-  inkLine(g, x - pen * 0.1, ny + pen * 0.3, x, top - pen * 0.15, { width: pen * 0.7, wobble: pen * 0.12, rng, segments: 2 });
-  g.fillStyle = INK;
-  g.beginPath();
-  g.ellipse(x - pen * 0.1, ny, pen * 0.55, pen * 0.38, 0, 0, Math.PI * 2);
-  g.fill();
-  // …and the pin through the foot, which is what the cross turns on. Driven flush, so it is the ring
-  // the hammer left and not a head standing off the wood: a dot two thirds of the nail's, with one
-  // short stroke of the dent round it.
-  // …and it is at 1 - pin of the SHEET and not of the drawn cross, because the sheet is what turns:
-  // the mesh's pivot is at exactly this v (egg-cross.js, CROSS_UP), so the dot is the pivot and a
-  // proof can measure the ink either side of it. At pin 0.09 that is 21 mm above the sheet's foot,
-  // which is 10 mm inside the wood — where a panel pin goes, clear of the end grain it would split.
-  const py = H * (1 - pin);
-  g.beginPath();
-  g.ellipse(x + pen * 0.18, py, pen * 0.36, pen * 0.3, 0, 0, Math.PI * 2);
-  g.fill();
-  inkLine(g, x + pen * 0.18 - pen * 0.62, py + pen * 0.34, x + pen * 0.18 + pen * 0.3, py + pen * 0.46, {
-    width: pen * 0.32, wobble: pen * 0.14, rng, alpha: 0.7, segments: 2,
-  });
+  // …and the ONE NAIL it hangs and turns on is NOT DRAWN (the owner, 2026-09-23: the cross turns
+  // 180 degrees in place, so it turns on the nail it hangs from, at its centre; the head nail and
+  // the foot pin of the fall are gone). It is at 1 - nail of the SHEET — the mesh's pivot is at
+  // exactly this v (egg-cross.js, CROSS_UP) — and it is under the wood, which is solid ink. A head
+  // struck in paper on the lath was tried: at 25 px of cross on the glass it read as the upright
+  // snapped in two, and a broken cross is a different joke.
+  void nail;
   return c;
 }
 

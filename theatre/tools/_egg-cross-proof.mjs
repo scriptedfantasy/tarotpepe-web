@@ -10,12 +10,16 @@
 //
 //   THE CROSS       its box at the home plate and on a 390-wide phone, the ink inside it, and the
 //                   arbiter answering a pointer on it.
-//   THE FALL        a real click, and then the whole thing released ONE DRAWING AT A TIME through a
-//                   gate on props.update — the piece's own update on the piece's own clock, with
-//                   only the renderer skipped. The cross is measured on the GLASS, twice: its ink
-//                   above and below the pin it swings on, and the ink in the top half of its own box
-//                   against the bottom half, which is the arm moving from a third of the way down to
-//                   a third of the way up. One says it fell; the other says it turned.
+//   THE TURN        (the owner, 2026-09-23: "rather than falling down it should turn 180 degrees in
+//                   place") a real click, and then the whole thing released ONE DRAWING AT A TIME
+//                   through a gate on props.update — the piece's own update on the piece's own
+//                   clock, with only the renderer skipped. The pose is read on every drawing against
+//                   the table (a hold, eleven poses on twos, 180 at the end); the nail never moves;
+//                   it never tips out of the wall; the sheet stays clear of the rail and the cornice.
+//                   The GLASS is asked the rest: the ink's box the same box upright and inverted, a
+//                   cross on its side at 88, the arm from the top half to the bottom, the same pen.
+//                   Then the floor opens, and the second click turns it back the same way.
+//                   A contact sheet of it at 1280x800 and at 390x844 ?phone=1 (--sheets DIR).
 //   THE HATCH       the hole open with the stair in it (the ink inside the mouth), the floor mesh
 //                   with a real hole in its index, and a 3x crop of the flight.
 //   THE RED         found by a test that keeps both of this egg's tones and throws away the fire's
@@ -28,8 +32,8 @@
 //   THE DAY         the doorway place still opens the door by hand onto the crossroads.
 //   THE CUES        the four new voices rendered offline through the code the room plays them with.
 //
-//   BASE=http://127.0.0.1:8745 node tools/_egg-cross-proof.mjs [--out DIR] [--only fall,red]
-//   sections: cross · fall · hatch · red · line · back · day · sound
+//   BASE=http://127.0.0.1:8745 node tools/_egg-cross-proof.mjs [--out DIR] [--only turn,red] [--sheets DIR]
+//   sections: cross · turn (or fall) · hatch · red · line · back · day · sound
 import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { mkdirSync } from 'node:fs';
@@ -44,6 +48,9 @@ const args = Object.fromEntries(
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5173';
 const OUT = resolve(args.out ?? '/tmp/cellar');
 mkdirSync(OUT, { recursive: true });
+// …and where the turn's contact sheets go (turn-<size>.png), which is OUT unless told otherwise
+const SHEETS = resolve(args.sheets ?? OUT);
+mkdirSync(SHEETS, { recursive: true });
 
 const PLATE = [1280, 800];
 const PHONE = [390, 844];
@@ -117,8 +124,8 @@ async function evening(w, h, query = '') {
   return page;
 }
 
-// THE GATE. Software WebGL renders this room at rather less than a frame a second, so a fall that
-// runs four seconds of film is four seconds of nothing followed by everything at once. props.update
+// THE GATE. Software WebGL renders this room at rather less than a frame a second, so a turn that
+// runs two seconds of film is two seconds of nothing followed by everything at once. props.update
 // is put behind a gate and released a counted number of drawings at a time inside ONE rendered
 // frame: it is the piece's own update, called by main's own loop, and the drawings that are skipped
 // are skipped by the RENDERER and not by the cross. It works because the cross counts drawings it
@@ -139,12 +146,22 @@ const gate = (page) =>
       k.update = realK;
     };
     k.update = () => {}; // main.js's own call to it becomes a no-op: the gate drives it
+    // …and every drawing released is WRITTEN DOWN: the phase and the drawing it was on going in,
+    // and the pose the cross is in coming out, so a turn released twenty drawings at a time can
+    // still be read one drawing at a time
+    window.__trace = [];
+    const C = p.cross;
     p.update = (c) => {
       if (window.__go > 0 && c.clock.stepped) {
         while (window.__go > 0) {
           window.__go--;
+          const phase = C?.phase, f = C?.frame;
           realP(c);
           realK(c);
+          if (C) {
+            const x = C.cross;
+            window.__trace.push({ phase, f, deg: x.degrees, pin: x.pin, tilt: x.tilt, extent: x.extent });
+          }
         }
       }
     };
@@ -157,7 +174,7 @@ const release = async (page, n) => {
 };
 const settle = (p) => p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 // release until the piece says it has arrived somewhere, and count the drawings it took. The number
-// of drawings between the click and the hatch standing open is the fall plus a beat plus the lid,
+// of drawings between the click and the hatch standing open is the turn plus a beat plus the lid,
 // which is three numbers this file has no business hard-coding. The piece is asked.
 async function until(page, test, cap = 160) {
   let n = 0;
@@ -225,21 +242,22 @@ async function crop(buf, box, out, { pad = 16, scale = 2 } = {}) {
   await sharp(buf).extract({ left, top, width, height }).resize({ width: width * scale, height: height * scale, kernel: 'nearest' }).png().toFile(out);
   return { left, top, width, height };
 }
-// A STRIP OF A MOVE, which is the only way to look at one: every drawing labelled with where in the
-// fall it was taken, laid out four to a row at a quarter size so the whole thing reads left to right
-// as a strip of drawings.
-async function sheet(frames, file, cols, W, H) {
-  const tw = Math.round(W / 4), th = Math.round(H / 4), gap = 6, lab = 15;
+// A CONTACT SHEET OF A MOVE, which is the only way to look at one: the same crop of every frame,
+// enlarged, labelled with the drawing and the pose, `cols` to a row, read left to right
+async function cropSheet(frames, box, file, cols) {
+  const meta = await sharp(frames[0].buf).metadata();
+  const left = Math.max(0, Math.round(box.x)), top = Math.max(0, Math.round(box.y));
+  const width = Math.max(8, Math.min(meta.width - left, Math.round(box.w)));
+  const height = Math.max(8, Math.min(meta.height - top, Math.round(box.h)));
+  const scale = Math.max(1, Math.round(200 / width));
+  const tw = width * scale, th = height * scale, gap = 6, lab = 16;
   const rows = Math.ceil(frames.length / cols);
   const comps = [];
   for (let i = 0; i < frames.length; i++) {
-    comps.push({
-      input: await sharp(frames[i].buf).resize(tw, th).png().toBuffer(),
-      left: (i % cols) * (tw + gap) + gap,
-      top: Math.floor(i / cols) * (th + gap + lab) + gap,
-    });
-    const txt = `<svg width="${tw}" height="${lab}"><text x="2" y="${lab - 4}" font-family="monospace" font-size="11" fill="#f8f9f4">${frames[i].at}</text></svg>`;
-    comps.push({ input: Buffer.from(txt), left: (i % cols) * (tw + gap) + gap, top: Math.floor(i / cols) * (th + gap + lab) + gap + th });
+    const L = (i % cols) * (tw + gap) + gap, T = Math.floor(i / cols) * (th + gap + lab) + gap;
+    comps.push({ input: await sharp(frames[i].buf).extract({ left, top, width, height }).resize({ width: tw, height: th, kernel: 'nearest' }).png().toBuffer(), left: L, top: T });
+    const txt = `<svg width="${tw}" height="${lab}"><text x="2" y="${lab - 4}" font-family="monospace" font-size="12" fill="#f8f9f4">${frames[i].at}</text></svg>`;
+    comps.push({ input: Buffer.from(txt), left: L, top: T + th });
   }
   await sharp({ create: { width: cols * (tw + gap) + gap, height: rows * (th + gap + lab) + gap, channels: 3, background: '#2b2b2b' } })
     .composite(comps)
@@ -267,6 +285,35 @@ const diff = (a, b, thresh = 10) => {
       }
     }
   return { n, box: x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 } };
+};
+// THE NAIL ON THE GLASS, projected BY HAND off the camera's own two matrices — it is the one point
+// in the room the cross turns about, and the arithmetic is four lines rather than a reach into THREE
+const PIN_ON_GLASS = `(() => {
+  const T = window.__theatre, C = T.pieces.props.cross;
+  T.camera.updateMatrixWorld(true);
+  const e = T.camera.projectionMatrix.clone().multiply(T.camera.matrixWorldInverse).elements;
+  const [x, y, z] = C.cross.pin;
+  const cx = e[0]*x + e[4]*y + e[8]*z + e[12];
+  const cy = e[1]*x + e[5]*y + e[9]*z + e[13];
+  const cw = e[3]*x + e[7]*y + e[11]*z + e[15];
+  return { box: C.hitBox(), pin: { x: ((cx/cw + 1) / 2) * T.size.w, y: ((1 - cy/cw) / 2) * T.size.h } };
+})()`;
+// the box the INK takes up inside a region, and how many px of it there are
+const inkBox = (img, b) => {
+  let px = 0, x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+  const X0 = Math.max(0, Math.floor(b.x)), X1 = Math.min(img.w, Math.ceil(b.x + b.w));
+  const Y0 = Math.max(0, Math.floor(b.y)), Y1 = Math.min(img.h, Math.ceil(b.y + b.h));
+  for (let y = Y0; y < Y1; y++)
+    for (let x = X0; x < X1; x++) {
+      const i = (y * img.w + x) * img.ch;
+      if (img.data[i] * 0.3 + img.data[i + 1] * 0.59 + img.data[i + 2] * 0.11 >= 160) continue;
+      px++;
+      if (x < x0) x0 = x;
+      if (y < y0) y0 = y;
+      if (x > x1) x1 = x;
+      if (y > y1) y1 = y;
+    }
+  return { px, box: x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 } };
 };
 // how much of a box is ink: the film's paper is #f8f9f4, so anything under 160 is a mark
 const inkIn = (img, b) => {
@@ -392,7 +439,7 @@ if (doing('cross')) {
   const img = await rawOf(buf);
   const ink = inkIn(img, b.hit);
   console.log(`  ink inside its box    ${ink.pct}%   →  ${OUT}/cross-r5-cross-4x.png`);
-  ok(ink.pct > 4 && ink.pct < 40, `it is two strokes, a nail and a pin, and not a blot (${ink.pct}% of its box is ink)`);
+  ok(ink.pct > 4 && ink.pct < 40, `it is two strokes and not a blot (${ink.pct}% of its box is ink)`);
   // …and it answers a pointer where it is drawn, which is what makes it a switch and not a picture
   const hovered = await page.evaluate(async (t) => {
     const g = window.__theatre.renderer.domElement, r = g.getBoundingClientRect();
@@ -419,14 +466,17 @@ if (doing('cross')) {
   // props.setState runs the eggs in order and a judging state that takes the lens can have it taken
   // back by one further down the list), so cutting the camera home after it lasts exactly one drawing
   // before the piece puts it on the cellar again. Released one drawing at a time instead, the cross
-  // is over by drawing nine and the lens has not moved yet: the lean does not start until the boards
-  // do, six drawings later.
+  // is round by the last drawing of its table and the lens has not moved yet: the lean does not
+  // start until the boards do, six drawings later.
   await gate(p2);
   await p2.evaluate(() => window.__theatre.pieces.props.cross.click());
-  // …and "inverted" here is the END of the fall and not the first drawing past the perpendicular:
-  // `cross.inverted` is |degrees| > 90 and the table passes 90 on drawing five, at 104, which is a
-  // cross halfway over. The fall's own last pose is what this wants, so it is counted in drawings.
-  const nInv = await until(p2, () => window.__theatre.pieces.props.cross.frame >= 8 && window.__theatre.pieces.props.cross.cross.inverted);
+  // …and "inverted" here is the END of the turn and not the first drawing past the perpendicular:
+  // `cross.inverted` is |degrees| > 90 and the table passes 90 halfway round. The turn's own last
+  // pose is what this wants, so it is counted in drawings off the piece's own table.
+  const nInv = await until(p2, () => {
+    const C = window.__theatre.pieces.props.cross;
+    return C.frame >= C.schedule.turn.length && C.cross.inverted;
+  });
   await settle(p2);
   const inv2 = await p2.evaluate(() => {
     const C = window.__theatre.pieces.props.cross;
@@ -434,7 +484,7 @@ if (doing('cross')) {
   });
   await snap(p2, `${OUT}/cross-r5-inverted-390x844.png`);
   console.log(`  ON A 390-WIDE PHONE   inverted at ${inv2.deg} deg after ${nInv} drawings, ${box1(inv2.box)} — ${inFrame(inv2.box, ...PHONE) ? 'in frame' : 'outside the frame'}, camera still "${inv2.shot}"`);
-  ok(inv2.shot === 'home' && inv2.phase === 'falling', 'and the lens has not moved yet: the room does not lean in until the boards do');
+  ok(inv2.shot === 'home' && inv2.phase === 'turning' && inv2.deg === 180, `and the lens has not moved yet: the room does not lean in until the boards do (${inv2.deg} deg, phase "${inv2.phase}")`);
   await p2.evaluate(() => {
     window.__ungate?.();
     window.__theatre.pieces.props.cross.set('shut');
@@ -443,106 +493,177 @@ if (doing('cross')) {
 }
 
 // =================================================================================================
-// 2. THE FALL: A REAL CLICK, AND THE CROSS ENDS UP UPSIDE DOWN
+// 2. THE TURN: A REAL CLICK, AND THE CROSS GOES HALF WAY ROUND WHERE IT HANGS
 // =================================================================================================
-if (doing('fall')) {
-  console.log('\nTHE FALL  (a real pointer on the cross, then one drawing at a time)');
-  await fresh();
-  const [W, H] = PLATE;
-  const page = await open(W, H);
-  await gate(page);
-  const tap = await page.evaluate(() => window.__theatre.pieces.props.cross.tapBox());
+// The owner, 2026-09-23: "the cross over the door: rather than falling down it should turn 180
+// degrees in place". So what is claimed is a turn about the cross's own nail, in the plane of the
+// wall, on twos, with a hold in front and a settle at the end — and then the same turn unwound by
+// the second click. Every drawing is released one at a time through the gate and the pose the piece
+// is in is read on each; the GLASS is asked the rest (in place, sideways at 90, upside down at 180,
+// the same pen). A contact sheet of the turn is cropped round the cross at both window shapes.
+if (doing('turn') || doing('fall')) {
+  console.log('\nTHE TURN  (a real pointer on the cross, then one drawing at a time)');
+  const sched0 = { turn: null };
+  for (const [[W, H], query, tag] of [[PLATE, '', `${PLATE[0]}x${PLATE[1]}`], [PHONE, '&phone=1', `${PHONE[0]}x${PHONE[1]}-phone`]]) {
+    await fresh();
+    const laptop = W === PLATE[0];
+    console.log(`  --- ${tag} ---`);
+    const page = await open(W, H, query);
+    // A PHONE HELD UPRIGHT DOES NOT SEE THE FRIEZE FROM THE CHAIR (section 1 says why), so the sheet
+    // is taken from the first shot that holds the whole cross: home, home turned towards the door,
+    // then the room's own `wide` and `door` plates. The shot is a place to stand, not a claim.
+    const where = await page.evaluate(async () => {
+      const T = window.__theatre, K = T.pieces.camera, C = T.pieces.props.cross;
+      const tick = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const inside = (b) => !!b && b.x >= 0 && b.y >= 0 && b.x + b.w <= T.size.w && b.y + b.h <= T.size.h;
+      const pans = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6];
+      const tries = [...pans.map((p) => ['home', p]), ...pans.map((p) => ['wide', p]), ['door', 0], ['doorway', 0]];
+      for (const [s, p] of tries) {
+        if (!K.shots?.[s]) continue;
+        K.cut(s);
+        K.setPan?.(p, { hold: true });
+        await tick();
+        T.camera.updateMatrixWorld(true);
+        if (inside(C.hitBox())) return { shot: s, pan: p };
+      }
+      K.cut('home');
+      K.setPan?.(0, { hold: true });
+      await tick();
+      return { shot: 'home', pan: 0, outside: true };
+    });
+    console.log(`  seen from             "${where.shot}"${where.pan ? `, turned ${where.pan} of the way towards the door` : ''}${where.outside ? '  (NOT wholly in frame at any shot tried)' : ''}`);
+    await gate(page);
+    const sched = await page.evaluate(() => window.__theatre.pieces.props.cross.schedule);
+    sched0.turn = sched.turn;
+    const PIN = await page.evaluate(PIN_ON_GLASS);
+    // the region the cross can reach on the glass: the nail, and 125 mm of wall each way — the ink
+    // reaches 102 mm from the nail at most, and the picture rail's bead is 167 mm under it
+    const ppx = PIN.box.h / 0.23;
+    const R = { x: PIN.pin.x - 0.125 * ppx, y: PIN.pin.y - 0.125 * ppx, w: 0.25 * ppx, h: 0.25 * ppx };
+    const tileBox = { x: PIN.pin.x - 0.21 * ppx, y: PIN.pin.y - 0.22 * ppx, w: 0.42 * ppx, h: 0.44 * ppx };
 
-  // BEFORE. The cross's box, and the pin it will swing on, both on the glass.
-  const before = await shot(page);
-  const beforeImg = await rawOf(before);
-  // the pin, projected BY HAND off the camera's own two matrices — it is the one point in the room
-  // this whole egg turns about, and the arithmetic is four lines rather than a reach into THREE
-  const PIN_ON_GLASS = `(() => {
-    const T = window.__theatre, C = T.pieces.props.cross;
-    T.camera.updateMatrixWorld(true);
-    const e = T.camera.projectionMatrix.clone().multiply(T.camera.matrixWorldInverse).elements;
-    const [x, y, z] = C.cross.pin;
-    const cx = e[0]*x + e[4]*y + e[8]*z + e[12];
-    const cy = e[1]*x + e[5]*y + e[9]*z + e[13];
-    const cw = e[3]*x + e[7]*y + e[11]*z + e[15];
-    return { box: C.hitBox(), pin: { x: ((cx/cw + 1) / 2) * T.size.w, y: ((1 - cy/cw) / 2) * T.size.h } };
-  })()`;
-  const b0 = await page.evaluate(PIN_ON_GLASS);
-  const half = (box, pinY, top) => (top ? { x: box.x, y: box.y, w: box.w, h: Math.max(1, pinY - box.y) } : { x: box.x, y: pinY, w: box.w, h: Math.max(1, box.y + box.h - pinY) });
-  const midOf = (box, top) => (top ? { ...box, h: box.h / 2 } : { ...box, y: box.y + box.h / 2, h: box.h / 2 });
-  const upBefore = inkIn(beforeImg, half(b0.box, b0.pin.y, true)).px;
-  const downBefore = inkIn(beforeImg, half(b0.box, b0.pin.y, false)).px;
-  const topBefore = inkIn(beforeImg, midOf(b0.box, true)).px;
-  const botBefore = inkIn(beforeImg, midOf(b0.box, false)).px;
+    const before = await shot(page);
+    const beforeImg = await rawOf(before);
+    const inkBefore = inkBox(beforeImg, R);
+    const tiles = [{ at: `dr - · 0 deg`, buf: before }];
 
-  // a real pointer, on the cross's own box
-  const started = await page.evaluate(async (t) => {
-    const g = window.__theatre.renderer.domElement, r = g.getBoundingClientRect();
-    const o = { clientX: r.left + t.x + t.w / 2, clientY: r.top + t.y + t.h / 2, bubbles: true, pointerType: 'mouse', button: 0 };
-    g.dispatchEvent(new PointerEvent('pointermove', o));
-    g.dispatchEvent(new PointerEvent('pointerdown', o));
-    g.dispatchEvent(new PointerEvent('pointerup', o));
-    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
-    return window.__theatre.pieces.props.cross.phase;
-  }, tap);
-  ok(started === 'falling', `a real click on the drawing starts it (phase "${started}")`);
+    // a real pointer on the cross where the glass has it; the piece's own click where it has not
+    const tap = await page.evaluate(() => window.__theatre.pieces.props.cross.tapBox());
+    const started = await page.evaluate(async ({ t, pointer }) => {
+      const T = window.__theatre, g = T.renderer.domElement, r = g.getBoundingClientRect();
+      if (pointer) {
+        const o = { clientX: r.left + t.x + t.w / 2, clientY: r.top + t.y + t.h / 2, bubbles: true, pointerType: 'mouse', button: 0 };
+        g.dispatchEvent(new PointerEvent('pointermove', o));
+        g.dispatchEvent(new PointerEvent('pointerdown', o));
+        g.dispatchEvent(new PointerEvent('pointerup', o));
+      } else T.pieces.props.cross.click();
+      await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+      return T.pieces.props.cross.phase;
+    }, { t: tap, pointer: wholly(tap, W, H) });
+    ok(started === 'turning', `a ${wholly(tap, W, H) ? 'real click on the drawing' : 'click'} starts it (phase "${started}")`);
+    await page.evaluate(() => (window.__trace = []));
 
-  // the strip: every second drawing of the fall, labelled with the angle the piece says it is at
-  const strip = [];
-  const table = await page.evaluate(() => window.__theatre.pieces.props.cross.schedule.fall);
-  console.log(`  the pose table        ${table.join(', ')}  (${table.length} drawings, one pose each)`);
-  for (let i = 0; i <= 12; i += 2) {
-    const w = await world(page);
-    strip.push({ at: `dr ${i} — ${w.cross.degrees} deg`, buf: await shot(page) });
-    if (i === 4) await snap(page, `${OUT}/cross-r5-mid-swing-1280x800.png`);
-    await release(page, 2);
+    // ONE DRAWING AT A TIME: a frame of every pose (the hold, and each of the eleven held two), and
+    // the last drawing of all
+    const N = sched.turn.length;
+    let side = null;
+    for (let i = 0; i < N; i++) {
+      await release(page, 1);
+      if (i % 2 === 0 || i === N - 1) {
+        const buf = await shot(page);
+        const deg = (await page.evaluate(() => window.__theatre.pieces.props.cross.cross.degrees));
+        tiles.push({ at: `dr ${i} · ${deg} deg`, buf });
+        // the drawing nearest a quarter turn: the cross on its side
+        if (sched.turn[i] === 88 && !side) side = { i, deg, img: await rawOf(buf) };
+      }
+    }
+    await settle(page);
+    const trace = await page.evaluate(() => window.__trace);
+    const turning = trace.filter((e) => e.phase === 'turning');
+    const posesSeen = turning.map((e) => e.deg);
+    const want = sched.turn.slice(0, posesSeen.length);
+    const mism = turning.filter((e) => e.deg !== sched.turn[e.f]);
+    if (laptop) {
+      console.log(`  the pose table        ${sched.turn.join(', ')}`);
+      console.log(`                        (${N} drawings: a hold of ${sched.hold}, then ${sched.poses.length} poses on ${sched.twos}s; the rap on ${sched.hit}, a fifth of it on ${sched.settle})`);
+      ok(N === sched.hold + sched.poses.length * sched.twos, `it is ${N} drawings, a hold of ${sched.hold} and ${sched.poses.length} poses held ${sched.twos} each`);
+      ok(sched.turn.slice(0, sched.hold).every((d) => d === 0), 'it holds still after the click before it moves');
+      const pairs = sched.turn.slice(sched.hold);
+      ok(pairs.every((d, k) => k % 2 === 1 || pairs[k + 1] === d), 'every pose after the hold is held for two drawings: on twos');
+      ok(sched.turn[N - 1] === 180 && Math.max(...sched.turn) > 180 && sched.turn.slice(-6).some((d) => d < 180), `it ends at 180, after a settle past it (${sched.turn.slice(-8).join(', ')})`);
+    }
+    console.log(`  read on each drawing  ${posesSeen.join(', ')}`);
+    ok(turning.length === N && mism.length === 0, `on every one of ${turning.length} drawings the cross is at the table's pose (${mism.length} off${mism.length ? `: ${mism.slice(0, 3).map((e) => `dr ${e.f} ${e.deg} want ${sched.turn[e.f]}`).join('; ')}` : ''})`);
+    ok(posesSeen.length === want.length, 'and no drawing is skipped');
+    const nail0 = turning[0]?.pin.join(',');
+    ok(turning.every((e) => e.pin.join(',') === nail0), `IN PLACE: the nail it turns on never moves (${turning[0]?.pin.join(', ')})`);
+    ok(turning.every((e) => e.tilt[0] === 0 && e.tilt[1] === 0), 'IN THE PLANE OF THE WALL: it never tips out of the plaster or turns edge-on (x and y rotations 0 on every drawing)');
+    const lo = Math.min(...turning.map((e) => e.extent.y[0])), hi = Math.max(...turning.map((e) => e.extent.y[1]));
+    console.log(`  the SHEET's reach     y ${lo.toFixed(4)} to ${hi.toFixed(4)} over the whole turn, ${turning[0]?.extent.z} off z (frieze 2.64-2.98; rail bead tops out at 2.625, cornice underside 2.98)`);
+    ok(lo > 2.625 && hi < 2.98, `NOTHING PASSES THROUGH ANYTHING: even the sheet's transparent corners stay clear of the rail bead and the cornice at every drawing (${(1000 * (lo - 2.625)).toFixed(0)} mm and ${(1000 * (2.98 - hi)).toFixed(0)} mm in hand)`);
+
+    const after = await shot(page);
+    const afterImg = await rawOf(after);
+    await snap(page, `${SHEETS}/turn-${tag}-inverted-frame.png`);
+    const inkAfter = inkBox(afterImg, R);
+    const w1 = await world(page);
+    console.log(`  the ink on the glass  upright ${box1(inkBefore.box)} (${inkBefore.px} px)  →  inverted ${box1(inkAfter.box)} (${inkAfter.px} px)`);
+    if (inkBefore.box && inkAfter.box) {
+      const c0 = [inkBefore.box.x + inkBefore.box.w / 2, inkBefore.box.y + inkBefore.box.h / 2];
+      const c1 = [inkAfter.box.x + inkAfter.box.w / 2, inkAfter.box.y + inkAfter.box.h / 2];
+      const moved = Math.hypot(c1[0] - c0[0], c1[1] - c0[1]);
+      ok(moved <= 2.5 && Math.abs(inkAfter.box.w - inkBefore.box.w) <= 3 && Math.abs(inkAfter.box.h - inkBefore.box.h) <= 3,
+        `it ends upside down EXACTLY WHERE IT WAS: the ink's box moved ${moved.toFixed(1)} px and changed ${Math.abs(inkAfter.box.w - inkBefore.box.w)} x ${Math.abs(inkAfter.box.h - inkBefore.box.h)} px`);
+      const topB = inkIn(beforeImg, { ...inkBefore.box, h: inkBefore.box.h / 2 }).px, botB = inkIn(beforeImg, { ...inkBefore.box, y: inkBefore.box.y + inkBefore.box.h / 2, h: inkBefore.box.h / 2 }).px;
+      const topA = inkIn(afterImg, { ...inkAfter.box, h: inkAfter.box.h / 2 }).px, botA = inkIn(afterImg, { ...inkAfter.box, y: inkAfter.box.y + inkAfter.box.h / 2, h: inkAfter.box.h / 2 }).px;
+      console.log(`  the arm               before ${topB} ink px in the top half / ${botB} bottom;  after ${topA} / ${botA}`);
+      ok(topB > botB * 1.2 && botA > topA * 1.2, 'and it is INVERTED: the arm is in the top half before and in the bottom half after');
+      const pw0 = strokeWidth(beforeImg, inkBefore.box), pw1 = strokeWidth(afterImg, inkAfter.box);
+      console.log(`  THE PEN               ${pw0.median} px before (${pw0.n} runs), ${pw1.median} px after (${pw1.n} runs)`);
+      ok(Math.abs(pw1.median - pw0.median) <= 1, `the pen is the same pen upside down (${pw0.median} px then ${pw1.median} px)`);
+    } else ok(false, 'the cross is on the glass before and after');
+    if (side) {
+      const s = inkBox(side.img, R);
+      console.log(`  ON ITS SIDE (dr ${side.i}, ${side.deg} deg)  ${box1(s.box)}, ${s.px} ink px`);
+      ok(!!s.box && s.box.w > s.box.h && s.px > inkBefore.px * 0.6, `a quarter of the way round it is a cross ON ITS SIDE, wider than tall and all there — turned in the wall, not tipped edge-on (${s.box ? `${s.box.w} x ${s.box.h}` : 'no ink'}, ${s.px} of ${inkBefore.px} px)`);
+    }
+    ok(w1.phase === 'turning' && w1.cross.degrees === 180 && w1.cross.inverted, `at the end of the table it is at ${w1.cross.degrees} deg, inverted, and the boards have not started (phase "${w1.phase}")`);
+    if (laptop) {
+      ok(w1.light.state !== 'cross-storm' && w1.light.state !== 'cross-flash', `no storm state is ever set (the lighting says "${w1.light.state}")`);
+      ok(w1.rain === false || w1.rain === null, `and no rain (${w1.rain})`);
+      ok(Math.abs(w1.pendant ?? 0) > 0.0004, `the pendant is swinging: ${w1.pendant} rad off plumb`);
+    }
+
+    // THE CONTACT SHEET: a crop round the nail on every pose, the frieze's two mouldings in the crop
+    await cropSheet(tiles, tileBox, `${SHEETS}/turn-${tag}.png`, 7);
+    console.log(`  the turn, pose by pose  →  ${SHEETS}/turn-${tag}.png`);
+
+    // THE HOOKS STILL FIRE, and the second click turns it back
+    if (laptop) {
+      let k = 0;
+      while (!(await page.evaluate(() => window.__theatre.pieces.props.cross.open)) && k++ < 12) await release(page, 8);
+      const o = await world(page);
+      ok(o.phase === 'open' && o.hatchOpen && o.holed, `the floor still opens after it: phase "${o.phase}", lid ${o.lid} deg, hole in the mesh ${o.holed}`);
+      await page.evaluate(() => {
+        window.__trace = [];
+        window.__theatre.pieces.props.cross.click();
+      });
+      k = 0;
+      while ((await page.evaluate(() => window.__theatre.pieces.props.cross.phase)) !== 'shut' && k++ < 20) await release(page, 8);
+      const back = (await page.evaluate(() => window.__trace)).filter((e) => e.phase === 'closing');
+      // the cross's poses from the drawing it is handed back, which is the drawing the lid is down
+      const firstMove = back.findIndex((e, j) => j > 0 && e.deg !== 180);
+      const unwind = back.slice(Math.max(0, firstMove - sched.hold)).map((e) => e.deg);
+      const r = sched.right;
+      console.log(`  the second click      ${unwind.join(', ')}`);
+      ok(JSON.stringify(unwind) === JSON.stringify(r.slice(0, unwind.length)) && unwind.length >= r.length - 1,
+        `and the second click turns it back the same way: a hold at 180, the same turn unwound on twos, a settle past upright (${r.length} drawings)`);
+      ok(back.every((e) => e.tilt[0] === 0 && e.tilt[1] === 0 && e.pin.join(',') === nail0 && e.extent.y[0] > 2.625 && e.extent.y[1] < 2.98), 'in place and clear of both mouldings on the way back too');
+      const z = await world(page);
+      ok(z.phase === 'shut' && z.cross.degrees === 0 && !z.holed, `it is upright and the floor is whole (phase "${z.phase}", ${z.cross.degrees} deg, hole ${z.holed})`);
+    }
+    ok((page.__errors ?? []).length === 0, `no page errors (${(page.__errors ?? []).slice(0, 2).join(' | ') || 'none'})`);
   }
-  await sheet(strip, `${OUT}/cross-r5-fall-sheet.png`, 4, W, H);
-  console.log(`  every second drawing of it  →  ${OUT}/cross-r5-fall-sheet.png`);
-
-  // let it settle where the cross is over and the boards have not started
-  const n = await until(page, () => window.__theatre.pieces.props.cross.cross.inverted && window.__theatre.pieces.props.cross.phase === 'falling');
-  await settle(page);
-  const w1 = await world(page);
-  const after = await shot(page);
-  await snap(page, `${OUT}/cross-r5-inverted-1280x800.png`);
-  const afterImg = await rawOf(after);
-  const b1 = await page.evaluate(PIN_ON_GLASS);
-  await crop(after, b1.box, `${OUT}/cross-r5-inverted-4x.png`, { pad: 22, scale: 4 });
-  const upAfter = inkIn(afterImg, half(b1.box, b1.pin.y, true)).px;
-  const downAfter = inkIn(afterImg, half(b1.box, b1.pin.y, false)).px;
-  const topAfter = inkIn(afterImg, midOf(b1.box, true)).px;
-  const botAfter = inkIn(afterImg, midOf(b1.box, false)).px;
-
-  console.log(`  it is at ${w1.cross.degrees} deg after ${n} drawings of release`);
-  console.log(`  ITS BOX MOVED         ${box1(b0.box)}  →  ${box1(b1.box)}`);
-  console.log(`  ABOUT THE PIN, in ink px above / below the fixing on the glass (pin at y ${b0.pin.y.toFixed(1)} → ${b1.pin.y.toFixed(1)}):`);
-  console.log(`      before   ${upBefore} above, ${downBefore} below`);
-  console.log(`      after    ${upAfter} above, ${downAfter} below`);
-  ok(upBefore > downBefore * 4, `before, the cross hangs ABOVE its lower fixing (${upBefore} against ${downBefore})`);
-  ok(downAfter > upAfter * 4, `after, it hangs BELOW it (${downAfter} against ${upAfter})`);
-  console.log('  AND THE SHAPE IS INVERTED, which is the other half of it and the half that is about the');
-  console.log('  drawing rather than the drop: the arm is a third of the way DOWN the cross, so the top');
-  console.log('  half of its own box carries the arm and the head, and the bottom half carries a stick.');
-  console.log(`      before   ${topBefore} in the top half, ${botBefore} in the bottom  (ratio ${(topBefore / Math.max(1, botBefore)).toFixed(2)})`);
-  console.log(`      after    ${topAfter} in the top half, ${botAfter} in the bottom  (ratio ${(topAfter / Math.max(1, botAfter)).toFixed(2)})`);
-  ok(topBefore > botBefore * 1.25, `the arm is in the top half before (${topBefore} against ${botBefore})`);
-  ok(botAfter > topAfter * 1.25, `and in the bottom half after (${botAfter} against ${topAfter})`);
-  // AND IT IS STILL THE SAME PEN. The inverted cross lies across the picture rail's bead, and a
-  // contour pass handed a moulding under a drawing is exactly where a thin stroke could come back
-  // fat. Measured off both frames: the median run of dark pixels along a row of the cross's own box,
-  // which on two strokes and two dots is the width of the upright.
-  const wBefore = strokeWidth(beforeImg, b0.box), wAfter = strokeWidth(afterImg, b1.box);
-  console.log(`  THE PEN               ${wBefore.median} px before (${wBefore.n} runs), ${wAfter.median} px after (${wAfter.n} runs)`);
-  ok(Math.abs(wAfter.median - wBefore.median) <= 1, `the ink pass does not fatten it where it crosses the moulding (${wBefore.median} px then ${wAfter.median} px)`);
-  console.log(`  →  ${OUT}/cross-r5-inverted-4x.png`);
-
-  // THE ROOM'S OWN BEAT: no storm, and the pendant moved
-  ok(w1.light.state !== 'cross-storm' && w1.light.state !== 'cross-flash', `no storm state is ever set (the lighting says "${w1.light.state}")`);
-  ok(w1.rain === false || w1.rain === null, `and no rain (${w1.rain})`);
-  ok(Math.abs(w1.pendant ?? 0) > 0.0004, `the pendant is swinging: ${w1.pendant} rad off plumb`);
-  ok((page.__errors ?? []).length === 0, `no page errors (${(page.__errors ?? []).slice(0, 2).join(' | ') || 'none'})`);
 }
 
 // =================================================================================================
@@ -811,7 +932,7 @@ if (doing('back')) {
   // of that hand. `?now=` pins it, and props.js reads that parameter for precisely this reason.
   //
   // A frozen clock still reports `stepped` on every tick (clock.js: a still has to keep being drawn),
-  // so the fall and the lid run on at the renderer's pace — and so does the LEAN, which counts
+  // so the turn and the lid run on at the renderer's pace — and so does the LEAN, which counts
   // drawings it has been given rather than seconds off the wall, for exactly this reason.
   const page = await open(W, H, '&t=6&now=21:12');
   await settle(page);
