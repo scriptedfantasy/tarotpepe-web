@@ -139,6 +139,99 @@ export const CELLAR_R = '#b4241d';
 // flames do (egg-fine.js: a contour, two plates, and paper). Weight is spacing, not opacity.
 const RED_MID = '#c14f48'; // CELLAR_R at 0.80 over the paper: saturation 0.63, hue 3.3 degrees
 
+// ---- …AND THE HEAT UNDER IT: THE ONE RED WITH A HOT END AND A COLD END ---------------------------
+// The owner, looking down the open hatch: "If anything we should rework the red glow here. I think
+// this could be more beautiful and more menacing. After all, we're insinuating that the devil lives
+// down there." What was there was a diagram of a light: one flat mid red, evenly spaced strokes, a
+// round halo, and nothing moving. A fire below is not one red. It is HOT where it comes out — a
+// vermilion at the lip and down the well — and it goes to BLOOD where it gives out on the boards,
+// and in the deepest part of the well it is blood crossed with the pen, which is the nearest this
+// drawing comes to black that is still red.
+//
+//   HOT     #d92a17   hue 6 degrees, 47%: the source. Still a red and not the fire's orange (17 deg).
+//   CELLAR_R#b4241d   the one red, now the middle of the ramp.
+//   BLOOD   #84121a   hue 356, 30%: the cold end. Its sRGB spread is 0.45, over ink-shaders.js's
+//                     0.42 gate, so the pass keeps it as colour and never re-states it as a black mark.
+//
+// All three pass the proof's own red test (red the largest channel, saturation over 0.55, green
+// and blue level) and none of them is his mouth, the fire, or the paper. Which of the three a mark
+// is decided by how far it is from the hole, never by chance per drawing — a colour that changed
+// on every boil would be a twinkle and not a light. And the FALLOFF is still spacing and length,
+// not alpha: every mark here is laid at full strength, and the light thins out because the marks do.
+export const HOT = '#d92a17';
+export const BLOOD = '#84121a';
+const RAMP = [HOT, CELLAR_R, BLOOD];
+const heatOf = (k) => RAMP[Math.max(0, Math.min(2, Math.floor(k * 3)))];
+
+// A PEN STROKE WITH A HAND IN IT: a gentle bend, round caps, and a nib that lifts toward the end,
+// struck in three runs that share their joints so it is one line. `broke` leaves the middle run out,
+// which is a pen skipping on a board and the only way a hatch of these stops reading as ruled.
+function lick(g, x0, y0, x1, y1, { w, color, rng, bend = 0, taper = 0.45, broke = false, wobble = 0.35 }) {
+  const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  const cx = (x0 + x1) / 2 + nx * bend * len, cy = (y0 + y1) / 2 + ny * bend * len;
+  const at = (t) => [(1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1, (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * cy + t * t * y1];
+  g.save();
+  g.strokeStyle = color;
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  const steps = Math.max(2, Math.min(6, Math.round(len / (w * 6))));
+  for (let p = 0; p < 3; p++) {
+    if (broke && p === 1) continue;
+    const t0 = p / 3, t1 = (p + 1) / 3;
+    g.beginPath();
+    for (let s = 0; s <= steps; s++) {
+      const [x, y] = at(t0 + ((t1 - t0) * s) / steps);
+      const j = s === 0 || s === steps ? 0 : (rng() - 0.5) * 2 * w * wobble;
+      if (s === 0) g.moveTo(x + nx * j, y + ny * j);
+      else g.lineTo(x + nx * j, y + ny * j);
+    }
+    g.lineWidth = w * (1 - (taper * p) / 2) * (0.9 + rng() * 0.2);
+    g.stroke();
+  }
+  g.restore();
+}
+// a nail head, and the light catching the side of it that faces the hole
+function nail(g, x, y, r, { rng, tick = null, towards = 0 }) {
+  g.save();
+  g.fillStyle = INK;
+  g.beginPath();
+  g.ellipse(x + (rng() - 0.5) * r * 0.3, y + (rng() - 0.5) * r * 0.3, r, r * 0.82, 0, 0, Math.PI * 2);
+  g.fill();
+  if (tick) {
+    g.strokeStyle = tick;
+    g.lineCap = 'round';
+    g.lineWidth = r * 0.75;
+    g.beginPath();
+    g.arc(x, y, r * 1.7, towards - 0.9, towards + 0.9);
+    g.stroke();
+  }
+  g.restore();
+}
+// a plan is a list of marks in the drawing's own metres, laid out ONCE from a fixed seed so that
+// both boils and every level of the breath strike the same marks with a different hand
+function strike(g, plan, { layer, X, Y, pen, rng }) {
+  for (const s of plan) {
+    if (s.layer !== layer) continue;
+    const o = { w: pen * s.w, color: s.color, rng, bend: s.bend + (rng() - 0.5) * 0.02, broke: s.broke, taper: s.taper ?? 0.45 };
+    if (!s.dash) {
+      lick(g, X(s.a[0], s.a[1]), Y(s.a[0], s.a[1]), X(s.b[0], s.b[1]), Y(s.b[0], s.b[1]), o);
+      continue;
+    }
+    // WHERE THE LIGHT IS GIVING OUT IT IS DASHES, which is the floor's own grammar (the brief: dash-
+    // strokes for floors): a line that is continuous at the lip breaks into dashes further out and
+    // into flecks at the end of it, and the gaps are the hand's and change on every boil
+    const L = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
+    const ux = (s.b[0] - s.a[0]) / L, uz = (s.b[1] - s.a[1]) / L;
+    for (let t = rng() * 0.02 * s.dash; t < L; ) {
+      const len = Math.min(L - t, (0.06 - 0.04 * s.dash) * (0.35 + 1.3 * rng()));
+      const p = [s.a[0] + ux * t, s.a[1] + uz * t], q = [s.a[0] + ux * (t + len), s.a[1] + uz * (t + len)];
+      lick(g, X(p[0], p[1]), Y(p[0], p[1]), X(q[0], q[1]), Y(q[0], q[1]), { ...o, broke: false, taper: 0.3 });
+      t += len + (0.008 + 0.045 * s.dash) * (0.5 + rng());
+    }
+  }
+}
+
 // ---- THE BOARDS, READ OFF THE FLOOR'S OWN TEXTURE -------------------------------------------------
 // room-textures.js lays ten boards to a 2.6 m tile with no two the same width, normalised so the
 // last seam lands on the tile edge. This is that loop, run again, so that "cut where the boards
@@ -232,7 +325,37 @@ const LID_SHUT = [173, 160, 140, 118, 96, 74, 54, 36, 21, 10, 3, 0];
 const PEN_M = 0.0118;
 const PPM_LID = 460; // the lid is 0.9 x 0.687 m and the lens gets within 2.8 m of it
 const PPM_WELL = 420; // the walls of the well: the nearest drawing in the film after the lid
-const PPM_MOUTH = 260; // the spill on the boards: a wash with no fine marks in it
+const PPM_MOUTH = 260; // the boards round the hole: no fine marks in it
+const PPM_SPILL = 420; // the light on those boards: pen strokes, struck at the well's own density
+
+// ---- THE BREATH ---------------------------------------------------------------------------------
+// Three levels, and the fire is at the middle one most of the time: 0 is the light drawn back into
+// the hole, 1 is how it sits, 2 is a SURGE, when it comes further along the boards, the wall down the
+// well takes more of it, and something comes up out of it. Written out by hand and not drawn from a
+// noise, because menace is timing: long holds, a surge of two drawings and then of five, a dip before
+// the next one. 110 drawings is nine seconds of film, long enough that nobody watching counts it.
+const BREATH = [
+  [1, 14], [2, 2], [1, 2], [2, 5], [1, 11], [0, 3], [1, 4], [0, 1], [1, 16],
+  [2, 3], [1, 1], [2, 2], [1, 13], [0, 2], [1, 7], [2, 6], [1, 10], [0, 2], [1, 6],
+];
+const BREATH_N = BREATH.reduce((s, [, n]) => s + n, 0);
+const BREATH_AT = (() => {
+  const out = [];
+  for (const [lv, n] of BREATH) for (let i = 0; i < n; i++) out.push(lv);
+  return out;
+})();
+export const breathAt = (frame) => BREATH_AT[((frame % BREATH_N) + BREATH_N) % BREATH_N];
+
+// how far the light reaches, at each level of the breath, in metres from the edge of the opening
+const REACH = {
+  // UPSTAGE IT IS HELD TO ONE BOARD, AT EVERY LEVEL. That board ends at the rug's fringe, and from
+  // the visitor's own chair (the `wide` plate) the proof projects this reach and asks that no red
+  // sits above it: 0.24 is inside its 0.26 with the pulse included.
+  up: [0.07, 0.16, 0.24],
+  down: [0.1, 0.26, 0.55], // toward the lens: a hand, one board, two boards
+  side: [0.1, 0.3, 0.72], // along the three cut boards, out of the side of the hole
+  rake: [0.05, 0.2, 0.55], // …and along the boards up- and downstage, past the ends of the hole
+};
 
 // ====================================================================================================
 // THE DRAWINGS
@@ -254,7 +377,7 @@ const PPM_MOUTH = 260; // the spill on the boards: a wash with no fine marks in 
 // is which way the strokes lie, and they lie ALONG the surface they are on — across a tread, down a
 // wall — because a stroke that runs the way the thing runs is shading and a stroke that cuts across
 // it is a texture.
-function lit(g, x, y, w, h, { pen, rng, from = 0, to = 1, tight = 1.5, open = 7, bands = 5, angle = 0, color = CELLAR_R, alpha = 0.95 }) {
+function lit(g, x, y, w, h, { pen, rng, from = 0, to = 1, tight = 1.5, open = 7, bands = 5, angle = 0, color = CELLAR_R, alpha = 0.95, ramp = false, wobble = 0.55 }) {
   for (let i = 0; i < bands; i++) {
     const t0 = i / bands, t1 = (i + 1) / bands;
     const k = from + (to - from) * ((t0 + t1) / 2); // 0 at the light, 1 at the far end
@@ -264,11 +387,11 @@ function lit(g, x, y, w, h, { pen, rng, from = 0, to = 1, tight = 1.5, open = 7,
       angle,
       spacing: sp,
       width: pen * (0.95 - 0.25 * k),
-      wobble: pen * 0.55,
+      wobble: pen * wobble,
       broken: 0.12 + 0.3 * k,
       rng,
-      color,
-      alpha: a,
+      color: ramp ? heatOf(k) : color, // the ramp: HOT at the light, BLOOD at the far end
+      alpha: ramp ? alpha : a,
     });
   }
 }
@@ -309,45 +432,70 @@ export function drawLidTop({ w, h, ppm, penM, seams, seed = 6201, boil = 0 }) {
   return c;
 }
 
+// THE RAKE ACROSS IT, laid out once: a line of light every centimetre or so down the hinge edge, each
+// running out along the lid's own boards in three lengths — one for each level of the breath — so a
+// surge is the SAME lines reaching further over the board, and not a new set of lines.
+const LID_STEP = [0.13, 0.13, 0.24]; // metres added at each level, before the hand shortens them
+function lidPlan(w, h) {
+  const lay = mulberry32(6329);
+  const out = [];
+  const far = LID_STEP.reduce((p, q) => p + q, 0);
+  for (let y = 0.007; y < h - 0.004; y += 0.0105 + lay() * 0.011) {
+    let x = 0.004;
+    for (let L = 0; L < 3; L++) {
+      const len = LID_STEP[L] * (0.3 + 0.7 * lay()) * (L === 0 ? 1 : 0.6 + 0.4 * lay());
+      if (L > 0 && lay() < 0.18) { x += len; continue; } // a line that stops, and a gap on the board
+      const k = (x + len / 2) / far;
+      out.push({ a: [x, y], b: [x + len, y + (lay() - 0.5) * 0.004], w: 0.85 - 0.25 * k, color: heatOf(k * 1.5), layer: L, bend: 0, broke: false, dash: L > 0 ? Math.min(1, 0.15 + k) : 0 });
+      x += len + 0.006 + lay() * 0.01;
+    }
+  }
+  return out;
+}
+const LID_NAILS = [0.16, 0.5, 0.84];
+
 // 2. THE LID, FROM UNDERNEATH, WITH THE LIGHT ON IT. This is the face the room sees for the whole of
 // the second half of the swing and for as long as the hatch is open, and it is where the red does its
 // plainest work: the glow comes out of the mouth, so it rakes across this board FROM THE HINGE EDGE
-// (u = 0) and dies two thirds of the way over. Under that, the two ledges and their clout nails,
-// which are the whole of what is on the back of a trapdoor.
-export function drawLidUnder({ w, h, ppm, penM, seams, seed = 6317, boil = 0 }) {
+// (u = 0), HOT against the hole and going to BLOOD as it gives out. Under that, the two ledges and
+// their clout nails, which are the whole of what is on the back of a trapdoor, and the nail nearest
+// the hole catches the light on its near side.
+// `layer` 0 is the board itself with the light at its lowest; 1 and 2 are the SAME board's light
+// reaching further on the breath, drawn on clear sheets laid over it (see THE BREATH).
+export function drawLidUnder({ w, h, ppm, penM, seams, seed = 6317, boil = 0, layer = 0 }) {
   const c = makeCanvas(Math.round(w * ppm), Math.round(h * ppm));
   const g = c.getContext('2d');
   const W = c.width, H = c.height;
-  const rng = mulberry32(seed + boil * 1361);
+  const rng = mulberry32(seed + boil * 1361 + layer * 53);
   const pen = penM * ppm;
-  g.fillStyle = PAPER;
-  g.fillRect(0, 0, W, H);
-  // THE LIGHT, HATCHED, raking from the hinge edge — which is the edge against the hole — and gone by
-  // a third of the way over. Struck ALONG the lid, so the strokes run the way its boards do. It was
-  // three flat plates of colour and the whole board came out RED: a painted trapdoor and not a lit
-  // one, which is the user's own objection to every red surface in this egg.
-  lit(g, 0, 0, W * 0.34, H, { pen, rng, tight: 1.4, open: 9, bands: 6, angle: 0, color: CELLAR_R });
-  lit(g, W * 0.2, 0, W * 0.22, H, { pen, rng, from: 0.5, to: 1, tight: 3, open: 11, bands: 3, angle: 0, color: RED_MID });
-  boards(g, W, H, pen, rng, { seams, alpha: 0.9 });
+  const X = (x) => x * ppm, Y = (x, y) => y * ppm;
+  if (layer === 0) {
+    g.fillStyle = PAPER;
+    g.fillRect(0, 0, W, H);
+  }
+  // THE LIGHT, HATCHED, raking from the hinge edge — which is the edge against the hole — and struck
+  // ALONG the lid, so the strokes run the way its boards do.
+  strike(g, lidPlan(w, h), { layer, X, Y, pen, rng });
+  const reach = LID_STEP.slice(0, layer + 1).reduce((p, q) => p + q, 0) * 0.8;
   for (const v of [0.26, 0.74]) {
     const y = v * H, t = pen * 2.6;
-    frame(g, [[pen * 1.5, y - t], [W - pen * 1.5, y - t], [W - pen * 1.5, y + t], [pen * 1.5, y + t]], { width: pen * 0.8, wobble: pen * 0.35, rng });
-    for (let i = 0; i < 3; i++) {
-      g.fillStyle = INK;
-      g.beginPath();
-      g.ellipse(W * (0.16 + i * 0.34), y, pen * 0.42, pen * 0.34, 0, 0, Math.PI * 2);
-      g.fill();
+    if (layer === 0) frame(g, [[pen * 1.5, y - t], [W - pen * 1.5, y - t], [W - pen * 1.5, y + t], [pen * 1.5, y + t]], { width: pen * 0.8, wobble: pen * 0.35, rng });
+    for (const u of LID_NAILS) {
+      const lit = u * w < reach && (layer === 0 || u * w >= LID_STEP.slice(0, layer).reduce((p, q) => p + q, 0) * 0.8);
+      if (layer === 0) nail(g, W * u, y, pen * 0.42, { rng, tick: lit ? HOT : null, towards: Math.PI });
+      else if (lit) nail(g, W * u, y, pen * 0.42, { rng, tick: heatOf(u * 1.4), towards: Math.PI });
     }
   }
+  if (layer > 0) return c;
+  boards(g, W, H, pen, rng, { seams, alpha: 0.9 });
   frame(g, [[pen, pen], [W - pen, pen], [W - pen, H - pen], [pen, H - pen]], { width: pen * 1.15, wobble: pen * 0.45, rng });
   return c;
 }
 
-// 3. THE MOUTH: the boards round the hole, and the light lying on them. One sheet, standing 1.5 mm
-// over the floor — under the warp's own amplitude, so it never shows an edge against the boards it
-// lies on — with the opening alpha-tested out of the middle of it. It does two jobs and the second is
-// the reason it is a sheet at all: it closes the 50 and 100 mm of grid the floor's own hole is bigger
-// by, in the floor's own drawing.
+// 3. THE MOUTH: the boards round the hole. One sheet, standing over the floor with the opening
+// alpha-tested out of the middle of it, and it does one job: it closes the 50 and 100 mm of grid the
+// floor's own hole is bigger by, in the floor's own drawing. It used to carry the light as well; the
+// light is on sheets of its own now (drawSpill), because it breathes and the boards do not.
 export function drawMouth({ w, h, ppm, penM, hole, seams, seed = 6449, boil = 0 }) {
   const c = makeCanvas(Math.round(w * ppm), Math.round(h * ppm));
   const g = c.getContext('2d');
@@ -357,56 +505,6 @@ export function drawMouth({ w, h, ppm, penM, hole, seams, seed = 6449, boil = 0 
   g.fillStyle = PAPER;
   g.fillRect(0, 0, W, H);
   boards(g, W, H, pen, rng, { seams });
-  // THE LIGHT LYING ON THE BOARDS, and it is a BAND ROUND THE OPENING and not a pool under it. Two
-  // things decide that and both were learnt by looking at the first cut of this: a hole throws the
-  // shape it IS, so an ellipse round a rectangle is a stain and a rounded rectangle is a spill; and
-  // the reach is 90 and 210 mm, because at 1.3 and 1.6 of the hole — which is what it was — a
-  // 900 by 687 mm opening lays a metre and a half of red across the middle of the room and the
-  // parlour has a red carpet in it. The saturated plate is not on the boards at all. It is down the
-  // well where the light is, and what reaches the floor is the two thin mixes.
-  // THE LIGHT ON THE BOARDS IS A FEATHER AND NOT A MAT, which is the third thing this halo has been.
-  // Solid, it was a blob; laid as four rectangles of hatch it was a striped doormat with square
-  // corners, because four rectangles have corners and light has none. So it is STROKES, one at a
-  // time, each one lying ALONG the boards the way a raking light on a boarded floor does — and each
-  // one SHORTER, thinner, more broken and further from its neighbour than the last as it goes out,
-  // which is what makes the patch end in the middle of nowhere instead of at a rule. The furthest
-  // reach is ONE BOARD, 260 mm (room-textures.js's own mean), and the strokes there are a third of
-  // the hole's width and mostly gap.
-  const perM = W / w; // sheet pixels to the metre
-  const out = 0.26 * perM;
-  const hx0 = hole.u0 * W, hx1 = hole.u1 * W, hy0 = hole.v0 * H, hy1 = hole.v1 * H;
-  const spill = (y0, dir) => {
-    let y = y0, t = 0;
-    while (t < 1) {
-      const k = t * t; // the light falls off with the square, as light does
-      const half = ((hx1 - hx0) / 2) * (1 - 0.66 * k) + out * 0.35 * (1 - k);
-      const cx = (hx0 + hx1) / 2 + (rng() - 0.5) * pen;
-      inkLine(g, cx - half, y, cx + half, y + (rng() - 0.5) * pen * 1.2, {
-        width: pen * (0.9 - 0.4 * k), wobble: pen * 0.7, rng, color: CELLAR_R,
-        alpha: 0.95 - 0.55 * k, segments: Math.max(4, Math.round(half / (pen * 6))),
-      });
-      const step = pen * (1.5 + 7 * k);
-      y += dir * step;
-      t += step / out;
-    }
-  };
-  spill(hy0 - pen * 0.6, -1);
-  spill(hy1 + pen * 0.6, 1);
-  // …and the two sides, where the same strokes run out sideways rather than away: they are the light
-  // getting past the ends of the opening, so they are short from the start.
-  const flank = (x0, dir) => {
-    for (let i = 0; i < 9; i++) {
-      const t = i / 8, k = t * t;
-      const y = hy0 + (hy1 - hy0) * (0.08 + 0.84 * (i / 8)) + (rng() - 0.5) * pen;
-      const len = out * (0.95 - 0.7 * k);
-      inkLine(g, x0, y, x0 + dir * len, y + (rng() - 0.5) * pen, {
-        width: pen * (0.85 - 0.35 * k), wobble: pen * 0.6, rng, color: CELLAR_R,
-        alpha: 0.9 - 0.5 * k, segments: 5,
-      });
-    }
-  };
-  flank(hx0 - pen * 0.5, -1);
-  flank(hx1 + pen * 0.5, 1);
   // …and the hole itself, punched out. Everything inside it is the well, and the well is geometry.
   g.save();
   g.globalCompositeOperation = 'destination-out';
@@ -420,47 +518,227 @@ export function drawMouth({ w, h, ppm, penM, hole, seams, seed = 6449, boil = 0 
   return c;
 }
 
-// 4. THE WALL OF THE WELL. Rubble stone laid in courses, and the light on it: the red is strongest at
-// the FOOT, because the light is down there, and the top of the wall — the course nearest the parlour
-// — is nearly bare paper.
-export function drawWell({ w, h, ppm, penM, seed = 6577, boil = 0 }) {
-  const c = makeCanvas(Math.round(w * ppm), Math.round(h * ppm));
-  const g = c.getContext('2d');
-  const W = c.width, H = c.height;
-  const rng = mulberry32(seed + boil * 1721);
-  const pen = penM * ppm;
-  g.fillStyle = PAPER;
-  g.fillRect(0, 0, W, H);
-  // the light, in bands from the foot up: the bottom fifth is the red itself and it is gone by two
-  // thirds of the way to the boards
-  // THE LIGHT ON IT, HATCHED FROM THE FOOT UP: the source is down there, so the bottom course is
-  // nearly solid with strokes and the top one — the course nearest the parlour — is bare. Struck
-  // ACROSS the wall, the way its courses run.
-  lit(g, 0, 0, W, H, { pen, rng, from: 1, to: 0, tight: 1.6, open: 12, bands: 6, angle: 0 });
-  // the coursing: rubble, so the beds wander and the perpends do not line up. It is struck at the
-  // full nib and not under it, because a wall of stone seen through a hole a metre away is the
-  // NEAREST drawing in the film and a wall whose lines are a contour wide reads as a wall in fog.
-  const courses = Math.max(4, Math.round(h / 0.19));
-  for (let r = 1; r < courses; r++) {
-    const y = (H * r) / courses;
-    inkLine(g, -4, y + (rng() - 0.5) * pen, W + 4, y + (rng() - 0.5) * pen * 2, { width: pen * 1.1, wobble: pen * 0.7, rng, alpha: 0.95, segments: 14 });
-    let x = -rng() * W * 0.3;
-    while (x < W) {
-      x += W * (0.13 + rng() * 0.17);
-      if (x > 0 && x < W) inkLine(g, x, y, x + (rng() - 0.5) * pen * 2.4, y + H / courses, { width: pen * 0.95, wobble: pen * 0.6, rng, alpha: 0.85, segments: 3 });
+// 3b. THE LIGHT ON THE BOARDS, AND IT FOLLOWS THE BOARDS. The halo this replaces was a disc of even
+// wavy strokes, and a hole in a boarded floor does not throw a disc: light coming up past a lip
+// RAKES, and a raking light on boards is picked up by the boards — along each plank, stopping at its
+// seams, catching the edge of the next one and the heads of the nails. So:
+//   · the LIP: the two sides of the opening, which are cut ends of board on the trimmer joists, get
+//     three tight HOT strokes each, running UP the edge of the frame;
+//   · the three CUT BOARDS carry the light straight out of the sides of the hole along their own
+//     length, each line HOT at the lip, going through the one red to BLOOD, and each board's lines
+//     stopping short of its seams so the board is what shapes the light;
+//   · the boards UP- and DOWNSTAGE carry it across the hole's width, densest against the edge and
+//     opening out away from it, and past the ends of the hole along the plank — the rake;
+//   · the NAIL HEADS on the trimmers catch it on the side that faces the hole.
+// Every line is laid out once in metres (spillPlan) and cut into three runs, one per level of the
+// breath, so a surge is the same lines reaching further along the same boards.
+function spillPlan(rect) {
+  const lay = mulberry32(7307);
+  const segs = [], nails = [];
+  const cx = (HATCH.x0 + HATCH.x1) / 2, hw = HW / 2;
+  const cum = (arr, L) => arr.slice(0, L + 1).reduce((p, q) => p + q, 0);
+  const seams = [...new Set([...seamsBetween(rect.z0 - 0.5, rect.z1 + 0.5), HATCH.z0, HATCH.z1])].sort((a, b) => a - b);
+  const bandOf = (z) => {
+    for (let i = 0; i < seams.length - 1; i++) if (z >= seams[i] && z <= seams[i + 1]) return [seams[i], seams[i + 1]];
+    return null;
+  };
+  const clearOfSeam = (z) => {
+    const b = bandOf(z);
+    return b && z - b[0] > 0.011 && b[1] - z > 0.011;
+  };
+  const inX = (x) => Math.max(rect.x0 + 0.01, Math.min(rect.x1 - 0.01, x));
+  // up- and downstage: lines across the hole's width, then out along the plank past its ends
+  for (const [edge, dir, reach] of [[HATCH.z0, -1, REACH.up], [HATCH.z1, 1, REACH.down]]) {
+    const far = reach[2];
+    for (let d = 0.005; d < far; d += 0.011 + 0.1 * Math.pow(d / 0.55, 1.2) + lay() * 0.012) {
+      const z = edge + dir * d;
+      if (z < rect.z0 + 0.008 || z > rect.z1 - 0.008 || !clearOfSeam(z)) continue;
+      const L = d < reach[0] ? 0 : d < reach[1] ? 1 : 2;
+      const k = d / 0.55;
+      const half = hw * (1.0 - 0.45 * Math.pow(k, 1.1)) * (k < 0.15 ? 0.95 + 0.08 * lay() : 0.7 + 0.4 * lay());
+      const off = (lay() - 0.5) * 0.06 * k;
+      const zz = () => z + (lay() - 0.5) * 0.003;
+      const w = 0.88 - 0.3 * Math.min(1, k);
+      segs.push({ a: [cx - half + off, zz()], b: [cx + half + off, zz()], w, color: heatOf(k * 1.7), layer: L, bend: 0, broke: k > 0.2 && k < 0.35 && lay() < 0.4, dash: k > 0.35 ? Math.min(1, (k - 0.35) * 2.2) : 0 });
+      // …and on out along the plank, in runs that belong to this level and the ones after it
+      for (const side of [-1, 1]) {
+        let x = half + 0.006 + lay() * 0.01;
+        for (let Lx = L; Lx < 3; Lx++) {
+          const len = REACH.rake[Lx] * Math.pow(Math.max(0, 1 - k * 1.3), 1.4) * (0.35 + 0.65 * lay());
+          if (len < 0.015) break;
+          const kk = Math.min(1, k + (x + len / 2 - hw) / 0.9);
+          const x0 = inX(cx + off + side * x), x1 = inX(cx + off + side * (x + len));
+          if (Math.abs(x1 - x0) > 0.012) segs.push({ a: [x0, zz()], b: [x1, zz()], w: w * (1 - 0.2 * kk), color: heatOf(kk * 1.6), layer: Lx, bend: 0, broke: false, dash: kk > 0.25 ? Math.min(1, (kk - 0.25) * 1.8) : 0 });
+          x += len + 0.008 + lay() * 0.02;
+        }
+      }
     }
   }
-  // the damp: the two corners and the head of the wall, which is the part of it the light does not
-  // reach at all. A wall with tone only at its edges is a wall with a hole in the middle of it.
-  for (const x0 of [0, W * 0.82])
-    hatchRect(g, x0, 0, W * 0.18, H, { angle: Math.PI / 2, spacing: pen * 3.6, width: pen * 0.5, wobble: pen * 0.7, broken: 0.5, rng, alpha: 0.32 });
-  hatchRect(g, 0, 0, W, H * 0.3, { angle: Math.PI / 2, spacing: pen * 4.2, width: pen * 0.5, wobble: pen * 0.8, broken: 0.55, rng, alpha: 0.3 });
+  // the three cut boards: out of each side of the hole along their own length
+  for (let z = HATCH.z0 + 0.013; z < HATCH.z1 - 0.01; z += 0.013 + lay() * 0.016) {
+    if (!clearOfSeam(z)) continue;
+    for (const side of [-1, 1]) {
+      const start = side < 0 ? HATCH.x0 : HATCH.x1;
+      let x = 0.022 + lay() * 0.008; // clear of the three strokes up the lip
+      const far = cum(REACH.side, 2);
+      for (let L = 0; L < 3; L++) {
+        // stage left of the hole the open lid is lying on these three boards, so past the lip there
+        // is nothing there to see
+        if (side < 0 && L > 0) break;
+        const len = REACH.side[L] * (0.3 + 0.7 * lay());
+        if (L > 0 && lay() < 0.2) { x += len; continue; }
+        const k = (x + len / 2) / far;
+        const zz = z + (lay() - 0.5) * 0.003;
+        segs.push({ a: [inX(start + side * x), zz], b: [inX(start + side * (x + len)), zz + (lay() - 0.5) * 0.004], w: 0.88 - 0.3 * k, color: heatOf(k * 1.5), layer: L, bend: 0, broke: false, dash: L > 0 ? Math.min(1, 0.2 + k * 1.3) : 0 });
+        x += len + 0.007 + lay() * 0.014;
+      }
+    }
+  }
+  // the lip: three strokes up each cut end, tight against the opening, and the hottest thing on the floor
+  for (const [x, side] of [[HATCH.x0, -1], [HATCH.x1, 1]])
+    for (const o of [0.004, 0.0105, 0.017]) {
+      const xx = x + side * (o + (lay() - 0.5) * 0.002);
+      segs.push({ a: [xx, HATCH.z0 + 0.006 + lay() * 0.01], b: [xx, HATCH.z1 - 0.006 - lay() * 0.01], w: o < 0.01 ? 0.95 : 0.8, color: o < 0.015 ? HOT : CELLAR_R, layer: 0, bend: 0, broke: o > 0.015 });
+    }
+  // the nails in the trimmers, two to a board, lit on the side toward the hole if the light gets there
+  for (let i = 0; i < seams.length - 1; i++) {
+    const [za, zb] = [seams[i], seams[i + 1]];
+    for (const z of [za + 0.034, zb - 0.034]) {
+      if (z < rect.z0 + 0.01 || z > rect.z1 - 0.01) continue;
+      for (const [x, side] of [[HATCH.x0 - 0.036, -1], [HATCH.x1 + 0.036, 1]]) {
+        const inside = z > HATCH.z0 && z < HATCH.z1;
+        const d = inside ? 0 : z < HATCH.z0 ? HATCH.z0 - z : z - HATCH.z1;
+        const reach = z < HATCH.z0 ? REACH.up : REACH.down;
+        const L = inside || d < reach[0] ? 0 : d < reach[1] ? 1 : d < reach[2] ? 2 : -1;
+        // the side of the head that faces the hole: across it for the cut boards, along it for the rest
+        const towards = inside ? (side < 0 ? 0 : Math.PI) : z < HATCH.z0 ? Math.PI / 2 : -Math.PI / 2;
+        nails.push({ x, z, layer: L, color: heatOf(inside ? 0 : d / 0.4), towards });
+      }
+    }
+  }
+  return { segs, nails };
+}
+
+// `rect` is the whole reach the plan is laid out in; `clip` is the part of it this sheet covers
+const plans = new Map();
+export function drawSpill({ rect, clip = rect, ppm, penM, layer, seed = 7309, boil = 0 }) {
+  const c = makeCanvas(Math.round((clip.x1 - clip.x0) * ppm), Math.round((clip.z1 - clip.z0) * ppm));
+  const g = c.getContext('2d');
+  const rng = mulberry32(seed + boil * 1543 + layer * 71);
+  const pen = penM * ppm;
+  const X = (x) => (x - clip.x0) * ppm, Y = (x, z) => (z - clip.z0) * ppm;
+  const key = `${rect.x0},${rect.x1},${rect.z0},${rect.z1}`;
+  if (!plans.has(key)) plans.set(key, spillPlan(rect));
+  const plan = plans.get(key);
+  strike(g, plan.segs, { layer, X, Y, pen, rng });
+  for (const n of plan.nails) {
+    // the heads are on the first sheet whatever the breath is doing; the light on them comes and goes
+    if (layer === 0) nail(g, X(n.x), Y(0, n.z), pen * 0.5, { rng, tick: n.layer === 0 ? n.color : null, towards: n.towards });
+    else if (n.layer === layer) nail(g, X(n.x), Y(0, n.z), pen * 0.5, { rng, tick: n.color, towards: n.towards });
+  }
   return c;
 }
 
-// 5. A TREAD, and a RISER. The light is under the flight, so a riser faces it square on and is the
-// reddest thing in the well; a tread has it only round the nose. The top of a tread is a board worn
-// hollow in the middle by however many people have gone down it.
+// 4. THE WALLS OF THE WELL. Rubble stone laid in courses, and the light on it — and the two side walls
+// are NOT the same drawing any more, because the light is not in the middle of the cellar. It is off
+// to stage left, where the cellar goes (api.turn), low down at the foot of the flight. So the RIGHT
+// wall faces it and is lit: hot at the foot, the licks of it going up the stone, the course-hatch
+// deepening from vermilion to blood as it climbs, and a timber trimmer at the top whose face is the
+// brightest thing down there, because it is the lip. The LEFT wall has its back to the fire and is the
+// deepest thing in the well: blood crossed with the pen, which is the nearest this drawing comes to a
+// black that is still red, and it is what makes the other wall look hot. The near and far walls are
+// never on the glass (one faces away from the lens, the other is past where any ray through the
+// mouth can reach) and are drawn as the dark one, cheaply.
+//
+// `zAt` turns a distance along the canvas into world z, so the marks go only where a ray through the
+// opening can land: z 0.25 .. 2.6, and bare stone past it. `u0 .. u1` is the part of the wall this
+// canvas covers, which for the clear sheets the breath lays over the lit wall is only that part.
+const TRIM = 0.075; // the trimmer joist at the head of the wall: 75 mm of timber under the boards
+function hotWallPlan(w, h, zAt) {
+  const lay = mulberry32(6581);
+  const segs = [];
+  const seen = (u) => { const z = zAt(u); return z > 0.25 && z < 2.61; };
+  let ua = 0, ub = w;
+  while (ua < w && !seen(ua)) ua += 0.01;
+  while (ub > 0 && !seen(ub)) ub -= 0.01;
+  const runs = (y, L, color, wt, gapP = 0.35) => {
+    let u = ua + lay() * 0.05;
+    while (u < ub) {
+      const len = 0.08 + lay() * 0.3;
+      const e = Math.min(ub, u + len);
+      if (lay() > gapP * 0.4) segs.push({ a: [u, y + (lay() - 0.5) * 0.004], b: [e, y + (lay() - 0.5) * 0.006], w: wt, color, layer: L, bend: 0, broke: lay() < gapP * 0.5 });
+      u = e + 0.01 + lay() * 0.05 * (1 + gapP * 3);
+    }
+  };
+  // the trimmer's face, hot and tight: the lip, from underneath
+  for (let y = 0.007; y < TRIM - 0.004; y += 0.0085 + lay() * 0.002) runs(y, 0, HOT, 0.85, 0.05);
+  // the course-hatch, from the foot up: tight and hot at the bottom, opening and cooling as it climbs,
+  // and the breath takes it further up the wall
+  // (the part of this wall the lens can see through the mouth is its top metre, so the light has to
+  // be there at its lowest level too: what the breath adds is the top of the wall, not the middle)
+  for (let y = h - 0.008; y > TRIM + 0.012; ) {
+    const t = (h - y) / (h - TRIM); // 0 at the foot, 1 at the trimmer
+    const L = t < 0.88 ? 0 : t < 0.95 ? 1 : 2;
+    runs(y, L, heatOf(t * 1.1), 1.15 - 0.25 * t, 0.1 + t * 0.3);
+    y -= 0.0085 + 0.012 * Math.pow(t, 1.3) + lay() * 0.005;
+  }
+  // THE LICKS: strokes going UP the stone from the foot with a lean and a curl in them, which is what
+  // turns a lit wall into a wall with a fire under it. They cluster, as flames do, and the tall ones
+  // only reach on the breath.
+  for (let u = ua + lay() * 0.03; u < ub; u += 0.022 + lay() * 0.05 * (lay() < 0.3 ? 3 : 1)) {
+    const tall = Math.pow(lay(), 1.3) * 0.62 + 0.3; // fraction of the wall's height
+    const L = tall < 0.68 ? 0 : tall < 0.8 ? 1 : 2;
+    const y0 = h - 0.004 - lay() * 0.03, y1 = h - (h - TRIM) * tall;
+    const lean = (lay() - 0.5) * 0.08;
+    const mid = y0 + (y1 - y0) * 0.45;
+    segs.push({ a: [u, y0], b: [u + lean * 0.4, mid], w: 0.9, color: HOT, layer: L, bend: (lay() - 0.5) * 0.3, taper: 0.2 });
+    segs.push({ a: [u + lean * 0.4, mid], b: [u + lean, y1], w: 0.8, color: heatOf(tall * 1.5), layer: L, bend: (lay() - 0.5) * 0.5, taper: 0.7, broke: lay() < 0.3 });
+  }
+  return segs;
+}
+export function drawWell({ w, h, ppm, penM, seed = 6577, boil = 0, mode = 'dark', zAt = (u) => u, layer = 0, u0 = 0, u1 = w }) {
+  const c = makeCanvas(Math.round((u1 - u0) * ppm), Math.round(h * ppm));
+  const g = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const rng = mulberry32(seed + boil * 1721 + layer * 29);
+  const pen = penM * ppm;
+  const X = (u) => (u - u0) * ppm, Y = (u, y) => y * ppm;
+  if (layer === 0) {
+    g.fillStyle = PAPER;
+    g.fillRect(0, 0, W, H);
+  }
+  if (mode === 'hot') {
+    strike(g, hotWallPlan(w, h, zAt), { layer, X, Y, pen, rng });
+    if (layer > 0) return c;
+  } else {
+    // THE DARK WALL: blood laid one way and the pen the other, tight, and a single hot thread along
+    // the lip where the light going up past it catches the edge of the trimmer
+    hatchRect(g, 0, 0, W, H, { angle: -0.55, spacing: pen * 1.5, width: pen * 0.8, wobble: pen * 0.4, broken: 0.15, rng, color: BLOOD, alpha: 1 });
+    hatchRect(g, 0, 0, W, H, { angle: 0.75, spacing: pen * 4.2, width: pen * 0.55, wobble: pen * 0.6, broken: 0.35, rng, alpha: 0.9 });
+    hatchRect(g, 0, 0, W, TRIM * ppm, { angle: 0, spacing: pen * 1.5, width: pen * 0.6, wobble: pen * 0.3, broken: 0.1, rng, color: BLOOD, alpha: 1 });
+    inkLine(g, -4, pen * 0.9, W + 4, pen * 0.9 + (rng() - 0.5) * pen, { width: pen * 0.62, wobble: pen * 0.4, rng, color: HOT, segments: 12 });
+  }
+  // the trimmer's lower edge, and the coursing: rubble, so the beds wander and the perpends do not
+  // line up. It is struck at the full nib and not under it, because a wall of stone seen through a
+  // hole a metre away is the NEAREST drawing in the film and a wall whose lines are a contour wide
+  // reads as a wall in fog.
+  inkLine(g, -4, TRIM * ppm, W + 4, TRIM * ppm + (rng() - 0.5) * pen, { width: pen * 1.0, wobble: pen * 0.5, rng, segments: 14 });
+  const courses = Math.max(4, Math.round(h / 0.19));
+  for (let r = 1; r < courses; r++) {
+    const y = TRIM * ppm + ((H - TRIM * ppm) * r) / courses;
+    inkLine(g, -4, y + (rng() - 0.5) * pen, W + 4, y + (rng() - 0.5) * pen * 2, { width: pen * 1.0, wobble: pen * 0.7, rng, alpha: 0.95, segments: 14 });
+    let x = -rng() * W * 0.1;
+    while (x < W) {
+      x += ppm * (0.18 + rng() * 0.26);
+      if (x > 0 && x < W) inkLine(g, x, y, x + (rng() - 0.5) * pen * 2.4, y + (H - TRIM * ppm) / courses, { width: pen * 0.9, wobble: pen * 0.6, rng, alpha: 0.85, segments: 3 });
+    }
+  }
+  return c;
+}
+
+// 5. A TREAD, and a RISER, and the FLOOR OF THE CELLAR. The light is under the flight and off to
+// stage left, so a riser faces it square on and is the hottest thing in the well; a tread has it only
+// round the nose; and the floor is where the light actually IS.
 export function drawTread({ w, h, ppm, penM, seed = 6701, boil = 0, riser = false, floor = false }) {
   const c = makeCanvas(Math.round(w * ppm), Math.round(h * ppm));
   const g = c.getContext('2d');
@@ -468,46 +746,73 @@ export function drawTread({ w, h, ppm, penM, seed = 6701, boil = 0, riser = fals
   const rng = mulberry32(seed + boil * 1867);
   const pen = penM * ppm;
   if (floor) {
-    // THE FLOOR OF THE CELLAR, and at the lens's 44 degrees it is two thirds of what is down the
-    // hole: the rays through the NEAR half of the mouth go furthest and land on it, so the flight
-    // occupies the top of the opening and this occupies the rest. It is the room the light is IN, so
-    // it is the mix laid flat rather than tone on paper — with the one red washed along the stage-
-    // left edge, which is the way the cellar goes and therefore where the light is coming from, and
-    // the far corner hatched over, because a lamp in one corner of a cellar does not reach the other.
-    // Flags and not boards: four joints across and two along, struck heavy, because a cellar floor is
-    // stone and the only thing that says so at this distance is the size of what it is laid in.
+    // THE FLOOR OF THE CELLAR. What the lens sees of it through the mouth is the stretch 0.3 .. 1.05 m
+    // of world z — UNDER THE FLIGHT, 1.5 m down — and that is the deepest thing in the picture, so it
+    // is drawn as the two things a fire in a cellar does to a floor. It POOLS: strokes going out from
+    // a source off the stage-left edge, hot and tight where they start and running out in blood,
+    // which is light and not a surface pattern because every one of them points back at the fire.
+    // And the stair THROWS ITS SHADOW across it: one bar of blood crossed with the pen under every
+    // riser, which is the long shadow of the flight and the thing that says the light is low. The
+    // upstage end of it, furthest under the stair, is crossed over again and is the near-black crimson
+    // at the bottom of the well.
     g.fillStyle = PAPER;
     g.fillRect(0, 0, W, H);
-    // the light lies ACROSS it from stage left, which is the way the cellar goes: hatched hard at
-    // that edge and three broken strokes at the other, with the far corner bare.
-    lit(g, 0, 0, W, H, { pen, rng, from: 0, to: 1, tight: 1.8, open: 13, bands: 6, angle: Math.PI / 2 });
-    hatchRect(g, 0, 0, W, H * 0.3, { angle: 0, spacing: pen * 3.2, width: pen * 0.6, wobble: pen * 0.8, broken: 0.45, rng, alpha: 0.45 });
+    const lay = mulberry32(seed + 5);
+    const Vz = (z) => (z - WELL.z0) * ppm; // the canvas's top is upstage
+    // the whole floor first takes the light at its thinnest — blood, laid across, open — because a
+    // cellar with a fire in it has no bare paper on its floor
+    hatchRect(g, 0, 0, W, H, { angle: 0.12, spacing: pen * 4.6, width: pen * 0.7, wobble: pen * 0.3, broken: 0.5, rng, color: BLOOD, alpha: 1 });
+    // the pool: rays out of a point off the stage-left edge, level with the middle of what is seen
+    const sx = -0.1 * ppm, sy = Vz(0.7);
+    for (let i = 0; i < 64; i++) {
+      const a = -1.2 + (2.4 * i) / 63 + (lay() - 0.5) * 0.04;
+      const r0 = (0.06 + lay() * 0.1) * ppm;
+      const r1 = r0 + (0.4 + Math.pow(lay(), 0.6) * 0.65) * Math.cos(a * 0.6) * ppm;
+      const rm = r0 + (r1 - r0) * (0.4 + lay() * 0.2);
+      const ca = Math.cos(a), sa = Math.sin(a);
+      lick(g, sx + ca * r0, sy + sa * r0, sx + ca * rm, sy + sa * rm, { w: pen * 0.9, color: HOT, rng, taper: 0.15, wobble: 0.2 });
+      lick(g, sx + ca * (rm + pen * 1.5), sy + sa * (rm + pen * 1.5), sx + ca * r1, sy + sa * r1, { w: pen * 0.75, color: heatOf(0.4 + (r1 - r0) / (1.1 * ppm)), rng, taper: 0.6, broke: lay() < 0.3, wobble: 0.2 });
+    }
+    // the shadow of the flight: a bar under every riser, blood struck tight along it and the pen
+    // struck along it more openly — both ALONG the bar, because a crossed pair at this depth knits
+    // into a chain-link and reads as a fence and not as a shadow
+    for (let n = 1; n <= STAIR.steps; n++) {
+      const z = HATCH.z0 - (n - 1) * STAIR.going;
+      const y0 = Vz(z - 0.03), y1 = Vz(z + 0.06);
+      hatchRect(g, 0, y0, W, y1 - y0, { angle: 0.04, spacing: pen * 1.25, width: pen * 0.8, wobble: pen * 0.2, broken: 0.1, rng, color: BLOOD, alpha: 1 });
+      hatchRect(g, 0, y0 + (y1 - y0) * 0.3, W, (y1 - y0) * 0.7, { angle: -0.03, spacing: pen * 2.3, width: pen * 0.7, wobble: pen * 0.2, broken: 0.25, rng, alpha: 0.95 });
+    }
+    // …and the far end, furthest under the stair and furthest from the fire: blood and the pen
+    // together, the near-black crimson at the bottom of the well
+    const deep = Vz(0.5);
+    hatchRect(g, 0, 0, W, deep, { angle: 0.04, spacing: pen * 1.3, width: pen * 0.8, wobble: pen * 0.2, broken: 0.1, rng, color: BLOOD, alpha: 1 });
+    hatchRect(g, 0, 0, W, deep, { angle: 1.3, spacing: pen * 2.4, width: pen * 0.65, wobble: pen * 0.4, broken: 0.2, rng, alpha: 0.95 });
+    hatchRect(g, W * 0.62, 0, W * 0.38, Vz(0.85), { angle: 1.3, spacing: pen * 2.8, width: pen * 0.6, wobble: pen * 0.4, broken: 0.3, rng, alpha: 0.9 });
+    // flags and not boards: joints struck heavy, because a cellar floor is stone and the only thing
+    // that says so at this distance is the size of what it is laid in
     for (let i = 1; i <= 4; i++) {
       const y = (H * i) / 5;
-      inkLine(g, -4, y + (rng() - 0.5) * pen, W + 4, y + (rng() - 0.5) * pen * 2, { width: pen * 1.1, wobble: pen * 0.8, rng, alpha: 0.9, segments: 12 });
+      inkLine(g, -4, y + (rng() - 0.5) * pen, W + 4, y + (rng() - 0.5) * pen * 2, { width: pen * 1.0, wobble: pen * 0.8, rng, alpha: 0.9, segments: 12 });
     }
     for (const u of [0.34, 0.68]) {
       const x = W * u + (rng() - 0.5) * pen * 2;
-      inkLine(g, x, -4, x + (rng() - 0.5) * pen * 3, H + 4, { width: pen * 1.05, wobble: pen * 0.9, rng, alpha: 0.85, segments: 14 });
+      inkLine(g, x, -4, x + (rng() - 0.5) * pen * 3, H + 4, { width: pen * 1.0, wobble: pen * 0.9, rng, alpha: 0.85, segments: 14 });
     }
     return c;
   }
   if (riser) {
-    // A RISER FACES THE LIGHT SQUARE ON and is the reddest thing in the well, and it carries the
-    // NOSING of the tread above it, which is the brightest: top to bottom, nine per cent of bare
-    // paper, which is the nosing seen edge-on and lit from below; then a band of heavy hatch, which
-    // is the shadow that nosing throws on the riser under it; and then the riser itself in the one
-    // red. Bright line, dark band, red field, with a tread in shadow between each pair — which is
-    // what a lit cellar stair looks like from the top of it, and only reads at all because the lens
-    // is steeper than the flight (see the head of this file).
+    // A RISER FACES THE LIGHT SQUARE ON and is the hottest thing in the well, and it carries the
+    // NOSING of the tread above it: top to bottom, nine per cent of bare paper, which is the nosing
+    // seen edge-on; then a band of blood crossed with the pen, which is the shadow that nosing throws
+    // on the riser under it; and then the riser itself, hatched hot from its foot — where the light is
+    // — and cooling to the one red under the shadow. Hatched and not filled: paper still shows
+    // between the strokes, which keeps it a drawn surface with light on it rather than a red card.
     g.fillStyle = PAPER;
     g.fillRect(0, 0, W, H);
-    // the riser faces the light square on, so it is the most heavily hatched thing in the well — but
-    // it is HATCHED and not filled: paper still shows between the strokes, which is what keeps it a
-    // drawn surface with light on it rather than a red card.
-    lit(g, 0, H * 0.26, W, H * 0.74, { pen, rng, from: 0.35, to: 0, tight: 1.25, open: 3.4, bands: 3, angle: 0 });
-    hatchRect(g, 0, H * 0.09, W, H * 0.17, { angle: 0, spacing: pen * 1.5, width: pen * 0.7, wobble: pen * 0.4, broken: 0.12, rng, alpha: 0.95 });
-    inkLine(g, 0, H * 0.09, W, H * 0.09 + (rng() - 0.5) * pen, { width: pen * 1.1, wobble: pen * 0.4, rng, segments: 11 });
+    lit(g, 0, H * 0.26, W, H * 0.74, { pen, rng, from: 0.5, to: 0, tight: 1.05, open: 2.1, bands: 4, angle: 0, ramp: true, alpha: 1, wobble: 0.14 });
+    hatchRect(g, 0, H * 0.09, W, H * 0.17, { angle: 0, spacing: pen * 1.4, width: pen * 0.65, wobble: pen * 0.4, broken: 0.12, rng, color: BLOOD, alpha: 1 });
+    hatchRect(g, 0, H * 0.09, W, H * 0.17, { angle: 0.02, spacing: pen * 2.2, width: pen * 0.6, wobble: pen * 0.2, broken: 0.2, rng, alpha: 0.9 });
+    inkLine(g, 0, H * 0.09, W, H * 0.09 + (rng() - 0.5) * pen, { width: pen * 1.0, wobble: pen * 0.4, rng, segments: 11 });
     inkLine(g, 0, H * 0.26, W, H * 0.26 + (rng() - 0.5) * pen, { width: pen * 0.7, wobble: pen * 0.6, rng, alpha: 0.6, segments: 9 });
     inkLine(g, 0, pen * 0.5, W, pen * 0.5 + (rng() - 0.5) * pen * 0.6, { width: pen * 0.8, wobble: pen * 0.3, rng, segments: 11 });
     inkLine(g, 0, H - pen * 0.7, W, H - pen * 0.7 + (rng() - 0.5) * pen, { width: pen * 0.8, wobble: pen * 0.5, rng, alpha: 0.8, segments: 10 });
@@ -515,25 +820,80 @@ export function drawTread({ w, h, ppm, penM, seed = 6701, boil = 0, riser = fals
   }
   // A TREAD IS IN ITS OWN SHADOW, which is the whole reason this drawing exists and is not bare
   // paper with a line round it. The light is BELOW the flight: every tread has the one above it
-  // between itself and the parlour and the one below it lighting nothing but its own underside, so
-  // what the lens sees looking down the well is a stack of DARK bars with a red edge on each. The
-  // first cut of this left them white and the stair came out as five floating shelves.
+  // between itself and the parlour, so what the lens sees looking down the well is a stack of DARK
+  // bars with a hot edge on each. The first cut of this left them white and the stair came out as
+  // five floating shelves; the second had them grey, and the pen alone down there read as soot. So
+  // the shadow is the pen crossed with BLOOD — the dark of a place lit red.
   g.fillStyle = PAPER;
   g.fillRect(0, 0, W, H);
-  // ONE LEVEL OF TONE AND IT LIES ALONG THE TREAD, which is two corrections in one line. Two levels
-  // of vertical hatch at a nib and a half apart came out, at this magnification, as a field of
-  // static: the strokes were closer together than the eye could tell apart and the flight read as
-  // interference. One level at four nibs, laid the way the board runs, reads as a board in shadow —
-  // which is what it is, because the light is under the flight and every tread has the one above it
-  // between itself and the parlour.
   hatchRect(g, 0, 0, W, H, { angle: 0, spacing: pen * 2.1, width: pen * 0.7, wobble: pen * 0.6, broken: 0.2, rng, alpha: 0.95 });
-  hatchRect(g, 0, 0, W, H * 0.62, { angle: 0, spacing: pen * 2.6, width: pen * 0.65, wobble: pen * 0.7, broken: 0.3, rng, alpha: 0.8 });
+  hatchRect(g, 0, 0, W, H * 0.7, { angle: 0.05, spacing: pen * 1.9, width: pen * 0.7, wobble: pen * 0.3, broken: 0.2, rng, color: BLOOD, alpha: 1 });
   // …and the NOSE, which is the only lit thing on it: the light comes round the front edge from
   // underneath and stops a nib and a half in.
-  lit(g, 0, H - pen * 1.6, W, pen * 1.6, { pen, rng, from: 0, to: 0, tight: 1.1, open: 1.4, bands: 1, angle: 0 });
+  lit(g, 0, H - pen * 1.6, W, pen * 1.6, { pen, rng, from: 0, to: 0, tight: 1.1, open: 1.4, bands: 1, angle: 0, color: HOT });
   inkLine(g, 0, H - pen * 1.4, W, H - pen * 1.4 + (rng() - 0.5) * pen, { width: pen * 0.9, wobble: pen * 0.5, rng, segments: 10 });
   frame(g, [[pen * 0.5, pen * 0.5], [W - pen * 0.5, pen * 0.5], [W - pen * 0.5, H - pen * 0.5], [pen * 0.5, H - pen * 0.5]], { width: pen * 0.85, wobble: pen * 0.4, rng });
   return c;
+}
+
+// 6. WHAT COMES UP OUT OF IT. Now and then — on a surge, and once in a long while on a hold — a
+// spark or a curl of heat comes up the well, over the lip, and dies a hand's breadth over the boards.
+// Each is a handful of drawings on a scrap of paper the size of the mark, struck in the one pen and
+// the three reds: a SPARK is a hot fleck with a tail that goes to a blood cross and a speck; a CURL is
+// the wavering line hot air draws, standing up, then breaking, then a fragment. They are laid out in
+// advance against THE BREATH so that the same drawing always has the same sparks in it.
+export const EMBER = { spark: { w: 0.05, h: 0.08, n: 5 }, curl: { w: 0.07, h: 0.17, n: 6 } };
+export function drawEmber(kind, f, { ppm, penM, seed = 7411 }) {
+  const K = EMBER[kind];
+  const c = makeCanvas(Math.round(K.w * ppm), Math.round(K.h * ppm));
+  const g = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const rng = mulberry32(seed + f * 131 + (kind === 'curl' ? 7 : 0));
+  const pen = penM * ppm;
+  if (kind === 'spark') {
+    const x = W * 0.5, y = H * 0.3;
+    if (f === 0) {
+      lick(g, x - pen * 0.3, y - pen * 1.2, x + pen * 0.3, y + pen * 1.2, { w: pen * 1.0, color: HOT, rng, taper: 0.1 });
+      lick(g, x + pen * 0.2, y + pen * 2.4, x - pen * 0.6, y + pen * 5.5, { w: pen * 0.5, color: CELLAR_R, rng, bend: 0.2 });
+    } else if (f === 1) {
+      lick(g, x - pen * 0.2, y - pen * 0.8, x + pen * 0.2, y + pen * 0.8, { w: pen * 0.9, color: HOT, rng, taper: 0.1 });
+      lick(g, x + pen * 0.2, y + pen * 2, x + pen * 0.8, y + pen * 5, { w: pen * 0.45, color: CELLAR_R, rng, bend: -0.3, broke: true });
+    } else if (f === 2) {
+      lick(g, x, y - pen * 0.4, x, y + pen * 0.4, { w: pen * 0.85, color: CELLAR_R, rng, taper: 0 });
+      lick(g, x - pen * 0.2, y + pen * 2, x - pen * 0.5, y + pen * 3.4, { w: pen * 0.4, color: BLOOD, rng });
+    } else if (f === 3) {
+      lick(g, x - pen * 0.8, y - pen * 0.8, x + pen * 0.8, y + pen * 0.8, { w: pen * 0.45, color: BLOOD, rng, taper: 0 });
+      lick(g, x + pen * 0.8, y - pen * 0.8, x - pen * 0.8, y + pen * 0.8, { w: pen * 0.45, color: BLOOD, rng, taper: 0 });
+    } else {
+      lick(g, x, y, x + pen * 0.2, y + pen * 0.2, { w: pen * 0.5, color: BLOOD, rng, taper: 0 });
+    }
+    return c;
+  }
+  // a curl: an upright S of two or three bends, from the foot of the scrap to its head
+  const pts = (y0, y1, ph, amp) => {
+    const out = [];
+    for (let i = 0; i <= 8; i++) {
+      const t = i / 8;
+      out.push([W / 2 + Math.sin(ph + t * Math.PI * 2.2) * amp * (0.4 + t * 0.6), H - pen - (H - 2 * pen) * (y0 + (y1 - y0) * t)]);
+    }
+    return out;
+  };
+  const run = (p, i0, i1, wt, color) => {
+    for (let i = i0; i < i1; i++) lick(g, p[i][0], p[i][1], p[i + 1][0], p[i + 1][1], { w: pen * wt * (1 - (0.35 * (i - i0)) / Math.max(1, i1 - i0)), color, rng, taper: 0.15, wobble: 0.2 });
+  };
+  const amp = W * 0.28;
+  if (f === 0) run(pts(0, 0.45, 0.3, amp * 0.6), 0, 8, 0.7, HOT);
+  else if (f === 1) run(pts(0.05, 0.85, 0.6, amp), 0, 8, 0.65, CELLAR_R);
+  else if (f === 2) {
+    const p = pts(0.15, 1, 1.0, amp);
+    run(p, 0, 3, 0.6, CELLAR_R);
+    run(p, 4, 8, 0.55, CELLAR_R);
+  } else if (f === 3) {
+    const p = pts(0.35, 1, 1.5, amp * 1.1);
+    run(p, 1, 3, 0.5, BLOOD);
+    run(p, 5, 7, 0.45, BLOOD);
+  } else if (f === 4) run(pts(0.6, 1, 2.0, amp * 1.2), 3, 6, 0.45, BLOOD);
+  return c; // f 5: nothing — it has gone
 }
 
 // ====================================================================================================
@@ -548,23 +908,45 @@ export function eggCellar(ctx, { group, switches }) {
 
   // egg-fine.js's three numbers, for egg-fine.js's reasons: the pigment is shown verbatim, no wash,
   // no lit tone, and no second contour round a drawing that has its own.
-  const sheet = (canvas, name, { side = THREE.FrontSide, cut = true, hatch = 0.02 } = {}) => {
+  // A canvas struck once is a texture uploaded once: the near and far walls are the same drawing, and
+  // are handed the same texture rather than two copies of it.
+  const texOf = new Map();
+  const sheet = (canvas, name, { side = THREE.FrontSide, cut = true, hatch = 0.02, clear = false } = {}) => {
     const m = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, metalness: 0, side });
     m.userData.ink = { hatch, lineWeight: 0, colorful: true };
-    const tex = canvasTexture(canvas);
-    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-    tex.anisotropy = Math.max(tex.anisotropy || 1, ctx.renderer?.capabilities?.getMaxAnisotropy?.() ?? 1);
+    let tex = texOf.get(canvas);
+    if (!tex) {
+      tex = canvasTexture(canvas);
+      tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.anisotropy = Math.max(tex.anisotropy || 1, ctx.renderer?.capabilities?.getMaxAnisotropy?.() ?? 1);
+      texOf.set(canvas, tex);
+    }
     m.map = tex;
-    if (cut) {
+    if (cut || clear) {
       m.alphaTest = 0.5;
       m.transparent = false;
+    }
+    // a CLEAR sheet is strokes and nothing else, laid a couple of millimetres over the surface it
+    // lights; the offset is there so the two never fight over a pixel at any distance the lens takes
+    if (clear) {
+      m.polygonOffset = true;
+      m.polygonOffsetFactor = -2;
+      m.polygonOffsetUnits = -2;
     }
     m.name = name;
     return m;
   };
+  const struck = new Map();
+  const once = (key, make) => {
+    if (!struck.has(key)) struck.set(key, make());
+    return struck.get(key);
+  };
   // THE BOIL. Two drawings of the same thing struck from two seeds, one of them visible on each
   // 12 fps step — egg-fine.js's arrangement, and the reason is its reason: a canvas re-cut twelve
   // times a second is a canvas re-cut twelve times a second, and there are thirty sheets down here.
+  // …AND THE BREATH, which rides the same arrangement: a sheet with a `layer` is shown only while the
+  // breath is at that level or over it (THE BREATH, at the head of this file). Layer 0 is the light
+  // at its lowest and is always there; 1 and 2 are clear sheets over it with the rest of the reach.
   const twos = [];
   function pair(parent, name, make, geo, place, opts = {}) {
     const out = [0, 1].map((b) => {
@@ -575,6 +957,7 @@ export function eggCellar(ctx, { group, switches }) {
       parent.add(m);
       return m;
     });
+    out.layer = opts.layer ?? 0;
     twos.push(out);
     return out;
   }
@@ -656,6 +1039,28 @@ export function eggCellar(ctx, { group, switches }) {
     // lightest level of tone there is, which is what the boards round it are carrying.
     { hatch: 0.12 },
   );
+  // …AND THE LIGHT ON THEM, on three clear sheets over the mouth: layer 0 the lip and the first of
+  // it, always there; 1 and 2 the rest of the reach, shown as the breath comes up (drawSpill). Each
+  // is cut to what its own layer can reach, so the far one is the only big one, and it is struck a
+  // little coarser because its marks are the few, long, blood-dark ones at the end of the light.
+  const SPILL = [
+    { x0: HATCH.x0 - 0.22, x1: HATCH.x1 + 0.22, z0: HATCH.z0 - 0.09, z1: HATCH.z1 + 0.15, ppm: PPM_SPILL },
+    { x0: HATCH.x0 - 0.55, x1: HATCH.x1 + 0.55, z0: HATCH.z0 - 0.18, z1: HATCH.z1 + 0.32, ppm: PPM_SPILL },
+    { x0: HATCH.x0 - 0.95, x1: HATCH.x1 + 1.2, z0: HATCH.z0 - 0.25, z1: HATCH.z1 + 0.58, ppm: 340 },
+  ];
+  SPILL.forEach((R, L) =>
+    pair(
+      root,
+      `cellar-spill-${L}`,
+      (b) => drawSpill({ rect: SPILL[2], clip: R, ppm: R.ppm, penM: PEN_M, layer: L, boil: b }),
+      () => new THREE.PlaneGeometry(R.x1 - R.x0, R.z1 - R.z0),
+      (m) => {
+        m.rotation.x = -Math.PI / 2;
+        m.position.set((R.x0 + R.x1) / 2, 0.011, (R.z0 + R.z1) / 2);
+      },
+      { clear: true, cut: false, layer: L },
+    ),
+  );
 
   // ---- 3. THE LID --------------------------------------------------------------------------------
   // Two sheets back to back on a pivot at the hinge, because past the vertical the room is looking at
@@ -692,6 +1097,20 @@ export function eggCellar(ctx, { group, switches }) {
       m.position.set(HW / 2, -HATCH.thick, 0);
     },
   );
+  // …and the breath across it: the same rake reaching further over the board, on two clear sheets
+  // a couple of millimetres off its face
+  for (const L of [1, 2])
+    pair(
+      lid,
+      `cellar-lid-glow-${L}`,
+      (b) => drawLidUnder({ w: HW, h: HD, ppm: PPM_LID, penM: PEN_M, seams: lidSeams.map((v) => 1 - v), boil: b, layer: L }),
+      () => new THREE.PlaneGeometry(HW, HD),
+      (m) => {
+        m.rotation.x = Math.PI / 2;
+        m.position.set(HW / 2, -HATCH.thick - 0.002, 0);
+      },
+      { clear: true, cut: false, layer: L },
+    );
   // the EDGE of it, which is the one thing a pair of flat sheets cannot say: 24 mm of board, so that
   // at the top of the swing the lid is a board and not a leaf of paper. Seen edge-on only, so it
   // carries no drawing and takes the room's own tone.
@@ -717,7 +1136,10 @@ export function eggCellar(ctx, { group, switches }) {
   root.add(well);
   const DEEP = 0 - WELL.y; // 1.52 m from the boards to the cellar's floor
   const wallGeo = (w) => () => new THREE.PlaneGeometry(w, DEEP);
-  const wall = (name, w, place) => pair(well, name, (b) => drawWell({ w, h: DEEP, ppm: PPM_WELL, penM: PEN_M, boil: b }), wallGeo(w), place, { cut: false });
+  // the near and far walls are never on the glass and are one drawing between them; the left has its
+  // back to the fire; the right faces it (drawWell)
+  const wall = (name, w, place, mode = 'dark', zAt) =>
+    pair(well, name, (b) => (mode === 'dark' && w === HW ? once(`end-${b}`, () => drawWell({ w, h: DEEP, ppm: PPM_WELL, penM: PEN_M, boil: b })) : drawWell({ w, h: DEEP, ppm: PPM_WELL, penM: PEN_M, boil: b, mode, zAt, seed: mode === 'hot' ? 6599 : 6577 })), wallGeo(w), place, { cut: false });
   const MIDX = (HATCH.x0 + HATCH.x1) / 2;
   wall('cellar-wall-near', HW, (m) => {
     m.rotation.y = Math.PI;
@@ -728,10 +1150,29 @@ export function eggCellar(ctx, { group, switches }) {
     m.rotation.y = Math.PI / 2;
     m.position.set(WELL.x0, WELL.y + DEEP / 2, (WELL.z0 + WELL.z1) / 2);
   });
-  wall('cellar-wall-right', WELL.z1 - WELL.z0, (m) => {
+  // the right wall's canvas runs upstage to downstage (rotated -90 about y, the plane's own +x goes to
+  // world +z), and the left wall's the other way
+  const LEN = WELL.z1 - WELL.z0;
+  const zRight = (u) => WELL.z0 + u;
+  wall('cellar-wall-right', LEN, (m) => {
     m.rotation.y = -Math.PI / 2;
     m.position.set(WELL.x1, WELL.y + DEEP / 2, (WELL.z0 + WELL.z1) / 2);
-  });
+  }, 'hot', zRight);
+  // …and the breath on it: two clear sheets over the part of it a ray through the mouth can reach,
+  // with the course-hatch and the licks that climb higher up the stone on a surge
+  const U0 = 0.25 - WELL.z0, U1 = LEN;
+  for (const L of [1, 2])
+    pair(
+      well,
+      `cellar-wall-glow-${L}`,
+      (b) => drawWell({ w: LEN, h: DEEP, ppm: 300, penM: PEN_M, boil: b, mode: 'hot', zAt: zRight, seed: 6599, layer: L, u0: U0, u1: U1 }),
+      () => new THREE.PlaneGeometry(U1 - U0, DEEP),
+      (m) => {
+        m.rotation.y = -Math.PI / 2;
+        m.position.set(WELL.x1 - 0.002, WELL.y + DEEP / 2, WELL.z0 + (U0 + U1) / 2);
+      },
+      { clear: true, cut: false, layer: L },
+    );
   // THE FLOOR OF THE CELLAR, and it runs the WHOLE length of the well rather than being a landing at
   // the end of it. The first cut laid a 550 mm landing at the foot of the flight and left everything
   // downstage of it open, which was a hole in the drawing and not in the floor: the steepest ray
@@ -743,8 +1184,10 @@ export function eggCellar(ctx, { group, switches }) {
   pair(
     well,
     'cellar-floor',
-    (b) => drawTread({ w: STAIR.width, h: WELL.z1 - WELL.z0, ppm: PPM_WELL, penM: PEN_M, boil: b, seed: 7001, floor: true }),
-    () => new THREE.PlaneGeometry(STAIR.width, WELL.z1 - WELL.z0),
+    // wall to wall, and not the stair's width: a floor 780 mm wide in a 900 mm well left a white slot
+    // down each side of the picture where the rays found nothing at all
+    (b) => drawTread({ w: HW, h: WELL.z1 - WELL.z0, ppm: PPM_WELL, penM: PEN_M, boil: b, seed: 7001, floor: true }),
+    () => new THREE.PlaneGeometry(HW, WELL.z1 - WELL.z0),
     (m) => {
       m.rotation.x = -Math.PI / 2;
       m.position.set(MIDX, WELL.y, (WELL.z0 + WELL.z1) / 2);
@@ -867,6 +1310,97 @@ export function eggCellar(ctx, { group, switches }) {
     return true;
   }
 
+  // ---- 5b. WHAT COMES UP OUT OF IT ----------------------------------------------------------------
+  // A handful of scraps with a spark or a curl drawn on them (drawEmber), laid out against THE BREATH
+  // once: two to four go up on every surge, and one on a long hold now and then. Each starts down the
+  // well where the lens can see it — upstage, against the far seam, since the near boards hide the
+  // deep part of the near side — goes up past the lip on the twelves, easing as it goes, and dies a
+  // hand's breadth over the boards. AND NO HIGHER, which is a measurement and not a taste: from the
+  // visitor's own chair the proof asks that no red sits above the line the spill reaches on the
+  // boards, and the top of a curl's scrap 0.2 m over the far seam is over it; at 0.14 it is under it.
+  const EMBER_PPM = 420;
+  const emberTex = {};
+  for (const kind of Object.keys(EMBER))
+    emberTex[kind] = Array.from({ length: EMBER[kind].n }, (_, f) => {
+      const t = canvasTexture(drawEmber(kind, f, { ppm: EMBER_PPM, penM: PEN_M }));
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      return t;
+    });
+  const SPARKS = (() => {
+    const lay = mulberry32(7433);
+    const out = [];
+    // the deepest a mark at this z can start and still be seen past the near seam from the lean
+    const floorOf = (z) => Math.max(-0.72, EYE_Y - ((EYE_Y - 0) * (EYE_Z - z)) / (EYE_Z - (HATCH.z1 - 0.05)) + 0.06);
+    const one = (born, lone) => {
+      const kind = lay() < (lone ? 0.65 : 0.4) ? 'curl' : 'spark';
+      const z = HATCH.z0 + 0.05 + lay() * 0.26;
+      return {
+        born, kind, z,
+        life: kind === 'curl' ? 12 + Math.floor(lay() * 6) : 9 + Math.floor(lay() * 5),
+        x: MIDX + (lay() - 0.5) * 0.6,
+        y0: floorOf(z) + lay() * 0.12,
+        y1: 0.005 + lay() * 0.05,
+        sway: (lay() - 0.5) * 0.06,
+        ph: lay() * 6.28,
+      };
+    };
+    let t = 0;
+    for (const [lv, n] of BREATH) {
+      if (lv === 2) {
+        const k = 2 + Math.floor(lay() * 3);
+        for (let i = 0; i < k; i++) out.push(one(t + Math.floor(lay() * Math.min(n, 3)), false));
+      } else if (lv === 1 && n >= 10 && lay() < 0.7) out.push(one(t + 3 + Math.floor(lay() * (n - 6)), true));
+      t += n;
+    }
+    return out;
+  })();
+  const ageOf = (n, e) => (((n - e.born) % BREATH_N) + BREATH_N) % BREATH_N;
+  let POOL = 0;
+  for (let n = 0; n < BREATH_N; n++) POOL = Math.max(POOL, SPARKS.filter((e) => ageOf(n, e) < e.life).length);
+  const embers = new THREE.Group();
+  embers.name = 'cellar-embers';
+  root.add(embers);
+  const pool = Array.from({ length: POOL }, (_, i) => {
+    const m = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, metalness: 0, side: THREE.DoubleSide, alphaTest: 0.5 });
+    m.userData.ink = { hatch: 0.02, lineWeight: 0, colorful: true };
+    m.name = `cellar-ember-${i}`;
+    const geos = Object.fromEntries(Object.entries(EMBER).map(([k, K]) => [k, new THREE.PlaneGeometry(K.w, K.h)]));
+    const mesh = new THREE.Mesh(geos.spark, m);
+    mesh.userData.geos = geos;
+    mesh.name = `cellar-ember-${i}`;
+    mesh.castShadow = mesh.receiveShadow = false;
+    mesh.visible = false;
+    embers.add(mesh);
+    return mesh;
+  });
+  const _q = new THREE.Quaternion();
+  let risen = 0;
+  function rise(n) {
+    const live = SPARKS.filter((e) => ageOf(n, e) < e.life);
+    risen = live.length;
+    // a scrap always faces the lens, whatever the room is doing with it
+    if (ctx.camera) {
+      embers.parent?.updateMatrixWorld?.();
+      embers.parent?.getWorldQuaternion?.(_q);
+      _q.invert().multiply(ctx.camera.quaternion);
+    }
+    pool.forEach((mesh, i) => {
+      const e = live[i];
+      mesh.visible = !!e;
+      if (!e) return;
+      const age = ageOf(n, e), t = age / e.life;
+      const K = EMBER[e.kind];
+      mesh.geometry = mesh.userData.geos[e.kind];
+      const tex = emberTex[e.kind][Math.min(K.n - 1, Math.floor(t * K.n))];
+      if (mesh.material.map !== tex) {
+        mesh.material.map = tex;
+        mesh.material.needsUpdate = true;
+      }
+      mesh.position.set(e.x + e.sway * Math.sin(e.ph + age * 0.55), e.y0 + (e.y1 - e.y0) * (1 - Math.pow(1 - t, 1.5)), e.z);
+      mesh.quaternion.copy(_q);
+    });
+  }
+
   // ---- 6. the boxes on the glass -----------------------------------------------------------------
   const _v = new THREE.Vector3();
   function boxOfRect({ x0, x1, z0, z1 }, y = 0) {
@@ -892,18 +1426,28 @@ export function eggCellar(ctx, { group, switches }) {
   // …and the box the whole thing occupies, lid and all, which is what a proof counts red inside and
   // outside of. The open lid lies a metre to stage left of the hole and the spill is on the boards
   // round it, so neither is inside `hitBox`.
-  const seenBox = () => boxOfRect({ x0: MO.x0 - HW, x1: MO.x1, z0: MO.z0, z1: MO.z1 });
+  // …AND THE LIGHT NOW REACHES FURTHER THAN THE MOUTH SHEET, along the boards and on the breath, so
+  // the box is the mouth and the lid OR the furthest the spill can reach, whichever is bigger
+  const seenBox = () => boxOfRect({ x0: Math.min(MO.x0 - HW, SPILL[2].x0), x1: Math.max(MO.x1, SPILL[2].x1), z0: Math.min(MO.z0, SPILL[2].z0), z1: Math.max(MO.z1, SPILL[2].z1) });
 
   // ---- 7. the drawing, and the state ---------------------------------------------------------------
   let shown = false;
   let theta = 0;
   let boil = 0;
+  let level = 1;
+  let drawing = 0;
+  // one call a drawing (egg-cross.js hands it the clock's frame): which of the two boils, how far the
+  // breath has the light reaching, and where everything coming up out of it has got to
   function showBoil(n) {
-    boil = n & 1;
+    drawing = n | 0;
+    boil = drawing & 1;
+    level = breathAt(drawing);
     for (const two of twos) {
-      two[0].visible = boil === 0;
-      two[1].visible = boil === 1;
+      const on = level >= two.layer;
+      two[0].visible = on && boil === 0;
+      two[1].visible = on && boil === 1;
     }
+    rise(drawing);
   }
   function setLid(deg) {
     theta = (deg * Math.PI) / 180;
@@ -926,7 +1470,16 @@ export function eggCellar(ctx, { group, switches }) {
     // WHAT IS DOWN THERE, for the room that is not built yet
     bottom: [MIDX, WELL.y, +(HATCH.z0 - STAIR.steps * STAIR.going - 0.2).toFixed(4)],
     turn: [-1, 0, 0], // the cellar goes off the foot of the flight to stage left
-    red: { one: CELLAR_R, mid: RED_MID },
+    red: { one: CELLAR_R, mid: RED_MID, hot: HOT, blood: BLOOD },
+    // the breath: [level, drawings] on a loop, and where it is now; and how many sparks are up
+    breath: { script: BREATH.map((r) => [...r]), length: BREATH_N, at: breathAt },
+    get level() {
+      return level;
+    },
+    get sparks() {
+      return root.visible ? risen : 0;
+    },
+    spill: SPILL.map((R) => ({ ...R })),
     seams: [...SEAMS],
     poses: { open: [...LID_OPEN], shut: [...LID_SHUT], land: LID_LAND },
     shot: () => cellarShot((ctx.size?.w || window.innerWidth) / (ctx.size?.h || window.innerHeight)),
