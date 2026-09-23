@@ -34,8 +34,6 @@ const CAP = 14; // the hand's floor (titles-sign.js): a phone letters at 14 px c
 const TRACK = 0.14;
 const LEAD = 1.3; // line box, in ems of the hand
 const PAD_X = 14, PAD_Y = 9; // inside a bubble, px
-const FACE = 34; // his portrait at the bubble's foot, px
-const FACE_GAP = 8;
 const SIDE = 12; // screen gutter, px
 const BTN = 50; // the two round corner buttons
 const ROW_GAP = 10; // between the row's parts
@@ -71,11 +69,9 @@ function buildStyle() {
   .pc-b.ghost { pointer-events: none; }
   .pc-b > svg.edge { position: absolute; left: -6px; top: -6px; overflow: visible; pointer-events: none; }
   .pc-b > canvas { position: relative; display: block; }
-  .pc-b.him { align-self: flex-start; margin-left: ${FACE + FACE_GAP}px; }
+  .pc-b.him { align-self: flex-start; }
   .pc-b.me { align-self: flex-end; }
-  .pc-b.title { align-self: flex-start; margin-left: ${FACE + FACE_GAP}px; }
-  .pc-b .face { position: absolute; left: -${FACE + FACE_GAP}px; bottom: -2px; width: ${FACE}px; height: ${FACE}px;
-    overflow: visible; pointer-events: none; }
+  .pc-b.title { align-self: flex-start; }
   .pc-b .sr, .pc .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .pc-b svg.dots { display: block; position: relative; width: 44px; height: 16px; margin: 3px 4px; }
   .pc-row, .pc-row * { touch-action: none; }
@@ -542,6 +538,47 @@ export function buildPhone(ctx, deps) {
   log.addEventListener('scroll', () => {
     stick = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   }, { passive: true });
+  // SCROLLING BACK (the owner, 2026-09-23: "we can't scroll backwards in chat"). The log itself lets
+  // every touch through to the room — it stands over the whole wall, and the room behind it must
+  // still take a drag and a tap — so the browser never scrolls it: a finger laid on a BUBBLE scrolls
+  // it by hand instead, and a flick coasts. The press is kept from the window, so holding a bubble to
+  // read back is not also a tap that hurries him through his line.
+  let hold = null, glide = 0;
+  log.addEventListener('pointerdown', (e) => e.stopPropagation());
+  log.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    cancelAnimationFrame(glide);
+    const y = e.touches[0].clientY;
+    hold = { y0: y, st0: log.scrollTop, y, t: performance.now(), v: 0 };
+  }, { passive: true });
+  log.addEventListener('touchmove', (e) => {
+    if (!hold || e.touches.length !== 1) return;
+    e.preventDefault();
+    const y = e.touches[0].clientY, now = performance.now();
+    log.scrollTop = hold.st0 - (y - hold.y0);
+    hold.v = (hold.y - y) / Math.max(1, now - hold.t);
+    hold.y = y;
+    hold.t = now;
+  }, { passive: false });
+  const letGo = () => {
+    if (!hold) return;
+    let v = performance.now() - hold.t > 80 ? 0 : hold.v * 16;
+    hold = null;
+    const step = () => {
+      if (Math.abs(v) < 0.4) return;
+      log.scrollTop += v;
+      v *= 0.94;
+      glide = requestAnimationFrame(step);
+    };
+    glide = requestAnimationFrame(step);
+  };
+  log.addEventListener('touchend', letGo, { passive: true });
+  log.addEventListener('touchcancel', letGo, { passive: true });
+  // a mouse wheel over a bubble (a laptop looking at ?phone=1) scrolls it too
+  log.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    log.scrollTop += e.deltaY;
+  }, { passive: false });
 
   // ---- THE TWO CORNER BUTTONS --------------------------------------------------------------------
   // The chat button hides and shows the conversation, and it is the ONLY thing that does: nothing
@@ -722,19 +759,12 @@ export function buildPhone(ctx, deps) {
   input.addEventListener('blur', () => setTimeout(layout, 60));
 
   // ---- THE BUBBLES ---------------------------------------------------------------------------------
-  // His portrait at the foot of each of his bubbles: his own supplied drawing, cut round his face,
-  // in a ring of the same pen as the bubble's rule.
-  const FACE_URL = '/pepe/pepe-meditation.webp';
-  const faceStyle = document.createElement('style');
-  const FS = FACE - 4, FK = FS / 150; // the circle shows ~150 px of the 474 px source
-  faceStyle.textContent = `.pc-b .face i { position: absolute; inset: 2px; border-radius: 50%; background: ${PAPER} url(${FACE_URL}) no-repeat;
-    background-size: ${(474 * FK).toFixed(1)}px auto; background-position: ${(-(252 * FK) + FS / 2).toFixed(1)}px ${(-(74 * FK) + FS / 2).toFixed(1)}px; }
-    .pc-b .face svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }`;
-  document.head.appendChild(faceStyle);
+  // NO PORTRAIT on his bubbles (the owner, 2026-09-23: "we don't need the Pepe circle around each
+  // message"): his are the green ones on the left, and that is enough to say whose they are.
   let seedN = 1;
   const measureFor = (who) => {
     const w = W();
-    if (who === 'him') return Math.max(140, Math.min(w * 0.8, w - 2 * SIDE - FACE - FACE_GAP - 10) - 2 * PAD_X);
+    if (who === 'him') return Math.max(140, Math.min(w * 0.8, w - 2 * SIDE - 10) - 2 * PAD_X);
     return Math.max(140, Math.min(w * 0.74, w - 2 * SIDE - 40) - 2 * PAD_X);
   };
   function makeBubble(who, rows, { width, align = 'left', label = '' }) {
@@ -744,15 +774,6 @@ export function buildPhone(ctx, deps) {
     b.canvas = el('canvas', '', b.el);
     b.canvas.setAttribute('aria-hidden', 'true');
     b.el.style.padding = `${PAD_Y}px ${PAD_X}px`;
-    if (who === 'him' || who === 'title') {
-      const f = el('span', 'face', b.el);
-      el('i', '', f);
-      const ring = svgEl('', f);
-      ring.setAttribute('viewBox', `0 0 ${FACE} ${FACE}`);
-      const rng = mulberry32(b.seed);
-      const c = FACE / 2;
-      ring.innerHTML = `<path d="${pathOf(Array.from({ length: 31 }, (_, i) => { const a = (i / 28) * Math.PI * 2 + 0.7; const r = c - 1.2 + (rng() - 0.5) * 0.6; return [c + Math.cos(a) * r, c + Math.sin(a) * r]; }))}" fill="none" stroke="${INK}" stroke-width="2" stroke-linecap="round"/>`;
-    }
     if (label) {
       const sr = el('span', 'sr', b.el);
       sr.textContent = label;
