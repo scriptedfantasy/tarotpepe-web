@@ -81,6 +81,7 @@ import { stanceOf, readingScript, followupScript, answerScript, beatText, aboutT
 import { intentOf, talkScript, farewellScript, looksLikeOffer } from './mind-talk.js';
 import { objectAsk, objectScript, objectBody, noteTold } from './mind-room.js';
 import { bySlug } from '../core/deck.js';
+import posthog from '../posthog.js';
 
 export const meta = {
   name: 'mind',
@@ -180,6 +181,8 @@ function scripted({ beat, user, slug, position, question, spread = [], focus = n
 export async function build(ctx) {
   const history = [];
   const spread = [];
+  // One AI session per evening; each request below gets its own trace within it.
+  const posthogAiSessionId = crypto.randomUUID();
   // the conversation's own memory: how many turns the visitor has taken, every line he has already
   // spent (so he never recites), whether a reading is on offer, and what he has made of them.
   // `told` counts how many times each object in the room has been asked about tonight, so the
@@ -317,6 +320,8 @@ export async function build(ctx) {
       if (beat === 'talk' || beat === 'object') talk.turns++;
       const body = {
         beat,
+        // only a counted visitor's requests are traced (src/posthog.js: never the tools, never dev)
+        ...(posthog ? { posthogAiSessionId, posthogAiTraceId: crypto.randomUUID(), posthogDistinctId: posthog.get_distinct_id?.() } : {}),
         history: history.map((h) => ({ role: h.role, text: h.text })),
         user: said,
         question: beat === 'followup' ? said : '',

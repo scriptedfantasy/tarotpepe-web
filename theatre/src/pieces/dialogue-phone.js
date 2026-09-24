@@ -27,6 +27,7 @@ import { signCaps, signFold, signWidth } from './titles-sign.js';
 import { SVGNS, drawDots } from './dialogue-ink.js';
 import { mulberry32 } from '../core/rng.js';
 import { INK, PAPER } from '../core/strokes.js';
+import posthog from '../posthog.js';
 
 const PEPE_GREEN = '#3a7736';
 const CPS = 28; // characters per second, the placard's pace
@@ -603,6 +604,7 @@ export function buildPhone(ctx, deps) {
   let shutAt = 0; // when the conversation was last put away, wall-clock seconds
   const WAIT_NUDGE = 8; // put away while he is already waiting: the nudge starts this much later
   function setOpen(on) {
+    if (!!on && !open) posthog?.capture('chat_opened');
     open = !!on;
     shutAt = open ? 0 : nowS();
     pc.classList.toggle('shut', !open);
@@ -630,7 +632,10 @@ export function buildPhone(ctx, deps) {
     if (!T) return;
     // enable() asks iOS for motion; it must be called here, inside the tap, before anything awaits
     if (T.on) T.disable?.();
-    else T.enable?.()?.then?.(() => paintButtons());
+    else {
+      T.enable?.()?.then?.(() => paintButtons());
+      posthog?.capture('tilt_enabled');
+    }
     paintButtons();
   });
   let unTilt = null;

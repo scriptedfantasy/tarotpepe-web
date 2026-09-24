@@ -50,6 +50,7 @@
 //      setState(name)
 //   states: closed · opening (the whole arrival, looped, deterministic in ctx.clock.raw) · open ·
 //           arrived (played once and held: the frame to measure against `camera/home`) · leaving
+import posthog from '../posthog.js';
 import { drawEntrance, cutName, placement, coverZooms } from './entrance-door.js';
 
 export const meta = {
@@ -421,6 +422,8 @@ export async function build(ctx) {
       paint(SHUT);
       await knock();
       if (mine !== token) return;
+      posthog?.capture('experience_started');
+      posthog?.logger?.info('theatre entrance opened');
       // the visitor's first gesture is also what a browser wants before any sound
       ctx.pieces.sound?.start?.();
       mode = 'walk';

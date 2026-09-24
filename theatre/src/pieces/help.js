@@ -68,6 +68,7 @@
 //      cards: open(slug) · close() · next() · prev() · slug
 //      states: closed · hover (the board under a pointer) · open · cards
 import * as THREE from 'three';
+import posthog from '../posthog.js';
 import { PAPER, drawTexture, inkMaterial, inkLine } from '../core/strokes.js';
 import { signCaps } from './titles-sign.js';
 import { cutBill } from './help-bill.js';
@@ -191,6 +192,7 @@ export async function build(ctx) {
         return;
       }
       keep.hand(ctx).catch((e) => console.warn('[help] keep', e));
+      posthog?.capture('reading_downloaded');
       ctx.emit?.('help:keep');
     },
   });
@@ -289,6 +291,7 @@ export async function build(ctx) {
     // asks a second after the tap, so the PDF is built while the notice is coming up and the tap
     // finds it already made. See help-keep.js, HANDING IT OVER.
     if (keep.hasReading(ctx)) keep.prepare(ctx).catch((e) => console.warn('[help] keep', e));
+    posthog?.capture('help_opened');
     ctx.emit?.('help:open');
   }
   // ---- the card turns over, and back ------------------------------------------------------------
@@ -322,6 +325,7 @@ export async function build(ctx) {
         })
         .catch((e) => console.warn('[help] keep', e));
     cue('flip');
+    posthog?.capture('reading_viewed');
     ctx.emit?.('help:reading');
   }
   function toNotice() {
@@ -358,6 +362,7 @@ export async function build(ctx) {
     layoutCards();
     plateReady = view.show(slug);
     if (was !== 'cards') cue('flip');
+    posthog?.capture('tarot_card_viewed', { card_slug: slug });
     ctx.emit?.('help:cards', { slug });
     return true;
   }

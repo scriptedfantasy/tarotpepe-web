@@ -8,6 +8,7 @@
 //   &t=<seconds>       freeze the stop-motion clock at t (deterministic frames)
 //   &seed=<n>          deterministic shuffles / boil
 //   &shot=1            screenshot mode: no autoplay flow, sets window.__theatreReady when settled
+import posthog from './posthog.js';
 import * as THREE from 'three';
 import { LAYOUT } from './core/layout.js';
 import { createClock } from './core/clock.js';
@@ -137,6 +138,7 @@ if (view) {
   ctx.pieces.camera?.cut?.('home');
 }
 await ctx.assets.settle();
+posthog?.logger?.info('theatre initialized', { built_piece_count: Object.keys(ctx.pieces).length });
 
 const warned = new Set();
 let rendered = 0;

@@ -48,8 +48,12 @@
 // The persona (SYSTEM) is byte-identical on every request and carries the cache breakpoint; the beat's
 // stage direction rides in the last user turn, after the history, so the cached prefix survives.
 import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import Anthropic from '@anthropic-ai/sdk';
+import AnthropicSDK from '@anthropic-ai/sdk';
+import { Anthropic } from '@posthog/ai/anthropic';
+import { PostHog } from 'posthog-node';
+import { configurePostHogLogs, posthogLog } from './posthog-logs.mjs';
 import { DECK } from '../src/core/deck.js';
 
 const ANTHROPIC_MODEL = 'claude-opus-5';
@@ -781,54 +785,111 @@ function settings(root) {
   const get = (k) => (process.env[k] && process.env[k].trim()) || (file[k] && file[k].trim()) || '';
   const anthropicKey = get('ANTHROPIC_API_KEY');
   const openrouterKey = get('OPENROUTER_API_KEY');
+  // the project key is public (it ships in every page), so the server falls back to the same one
+  // the browser uses and a host needs no PostHog variables at all
+  const posthogKey = get('POSTHOG_API_KEY') || get('VITE_POSTHOG_KEY') || 'phc_yrxpbUBHKitNA3YUPezsHHEkudJexPRzDhR2XVy7utbz';
+  const posthogHost = get('POSTHOG_HOST') || get('VITE_POSTHOG_HOST') || 'https://eu.i.posthog.com';
   const override = get('LLM_MODEL');
   const guard = get('PEPE_GUARD') !== '0';
   // which build of the voice this server defaults to; a request may still ask for the other one
   const persona = get('PEPE_PERSONA');
   // the canned upstream wins over everything, key or no key: it is the only provider this machine has
   const fake = get('PEPE_FAKE');
-  if (fake) return { provider: 'fake', key: '', model: `fake/${fake}`, fake, guard, persona };
-  if (anthropicKey) return { provider: 'anthropic', key: anthropicKey, model: override || ANTHROPIC_MODEL, effort: get('LLM_EFFORT') || 'low', fallbacks: get('LLM_FALLBACKS') !== '0', guard, persona };
-  if (openrouterKey) return { provider: 'openrouter', key: openrouterKey, model: override || OPENROUTER_MODEL, guard, persona };
-  return { provider: 'none', key: '', model: null, guard, persona };
+  if (fake) return { provider: 'fake', key: '', model: `fake/${fake}`, fake, guard, persona, posthogKey, posthogHost };
+  if (anthropicKey) return { provider: 'anthropic', key: anthropicKey, model: override || ANTHROPIC_MODEL, effort: get('LLM_EFFORT') || 'low', fallbacks: get('LLM_FALLBACKS') !== '0', guard, persona, posthogKey, posthogHost };
+  if (openrouterKey) return { provider: 'openrouter', key: openrouterKey, model: override || OPENROUTER_MODEL, guard, persona, posthogKey, posthogHost };
+  return { provider: 'none', key: '', model: null, guard, persona, posthogKey, posthogHost };
+}
+
+function aiContext(body) {
+  const sessionId = String(body?.posthogAiSessionId ?? '').trim();
+  const traceId = String(body?.posthogAiTraceId ?? '').trim();
+  if (!sessionId || !traceId) return null;
+  const distinctId = String(body?.posthogDistinctId ?? sessionId).trim() || sessionId;
+  return { sessionId, traceId, distinctId };
+}
+
+// PostHog is optional on the server: with no key it simply records nothing, and it never stands
+// between a visitor and his reply. What the visitor typed and what he answered are NOT sent unless
+// POSTHOG_AI_CONTENT=1 (privacy mode keeps the timings, tokens and model and drops the words).
+const aiContent = () => (process.env.POSTHOG_AI_CONTENT ?? '').trim() === '1';
+function posthogClient(cfg) {
+  if (!cfg.posthogKey || !cfg.posthogHost) return null;
+  try {
+    return new PostHog(cfg.posthogKey, { host: cfg.posthogHost, privacyMode: !aiContent(), enableExceptionAutocapture: true, flushAt: 1, flushInterval: 0 });
+  } catch {
+    return null;
+  }
+}
+
+function captureToolSelections(posthog, ai, tools) {
+  for (const tool of tools) {
+    posthog.capture({
+      distinctId: ai.distinctId,
+      event: '$ai_span',
+      properties: {
+        $ai_trace_id: ai.traceId,
+        $ai_session_id: ai.sessionId,
+        $ai_span_id: randomUUID(),
+        $ai_span_name: `tool_selected:${tool.name}`,
+        $ai_output_state: { status: 'returned_to_client' },
+      },
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
 // Upstream calls. Each takes (cfg, messages, signal, send) and returns {text, stop}.
 // ---------------------------------------------------------------------------------------------
-async function callAnthropic(cfg, messages, signal, send, names = [], system = SYSTEM) {
-  const client = new Anthropic({ apiKey: cfg.key, maxRetries: 1, timeout: UPSTREAM_MS });
+async function callAnthropic(cfg, messages, signal, send, names = [], system = SYSTEM, ai = null) {
+  const posthog = ai ? posthogClient(cfg) : null;
+  const client = posthog
+    ? new Anthropic({ apiKey: cfg.key, maxRetries: 1, timeout: UPSTREAM_MS, posthog })
+    : new AnthropicSDK({ apiKey: cfg.key, maxRetries: 1, timeout: UPSTREAM_MS });
   const params = {
     model: cfg.model,
     max_tokens: MAX_TOKENS.anthropic,
     system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
     messages,
   };
+  if (posthog) {
+    params.posthogDistinctId = ai.distinctId;
+    params.posthogTraceId = ai.traceId;
+    params.posthogProperties = { $ai_session_id: ai.sessionId };
+  }
   // The Anthropic path takes its tool calls off the final message rather than off the deltas: the
   // SDK has already assembled the tool_use blocks by then, and this route waits for the final
   // message anyway. The delta-accumulating is the OpenAI path's problem, and it is solved there.
   if (names.length) params.tools = anthropicTools(names);
   if (EFFORT_OK(cfg.model)) params.output_config = { effort: cfg.effort };
   if (SAMPLING_OK.test(cfg.model)) params.temperature = 0.8;
-  const useFallback = cfg.fallbacks && FALLBACK_OK.test(cfg.model);
-  const stream = useFallback
-    ? client.beta.messages.stream({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }, { signal })
-    : client.messages.stream(params, { signal });
-  let text = '';
-  for await (const ev of stream) {
-    if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta' && ev.delta.text) {
-      text += ev.delta.text;
-      send(ev.delta.text);
+  try {
+    const useFallback = cfg.fallbacks && FALLBACK_OK.test(cfg.model);
+    const stream = useFallback
+      ? client.beta.messages.stream({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }, { signal })
+      : client.messages.stream(params, { signal });
+    let text = '';
+    for await (const ev of stream) {
+      if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta' && ev.delta.text) {
+        text += ev.delta.text;
+        send(ev.delta.text);
+      }
     }
+    const final = await stream.finalMessage();
+    const tools = (final.content ?? [])
+      .filter((c) => c?.type === 'tool_use' && TOOLS[c.name])
+      .map((c) => ({ name: c.name, args: c.input && typeof c.input === 'object' ? c.input : {} }));
+    if (posthog) captureToolSelections(posthog, ai, tools);
+    return { text, stop: final.stop_reason, usage: final.usage, tools };
+  } finally {
+    await posthog?.shutdown()?.catch?.(() => {});
   }
-  const final = await stream.finalMessage();
-  const tools = (final.content ?? [])
-    .filter((c) => c?.type === 'tool_use' && TOOLS[c.name])
-    .map((c) => ({ name: c.name, args: c.input && typeof c.input === 'object' ? c.input : {} }));
-  return { text, stop: final.stop_reason, usage: final.usage, tools };
 }
 
-async function callOpenRouter(cfg, messages, signal, send, names = [], system = SYSTEM) {
+async function callOpenRouter(cfg, messages, signal, send, names = [], system = SYSTEM, ai = null) {
+  let posthog = null;
+  const startedAt = Date.now();
+  let firstTokenAt = null;
   const body = {
     model: cfg.model,
     stream: true,
@@ -890,6 +951,7 @@ async function callOpenRouter(cfg, messages, signal, send, names = [], system = 
     const ch = j.choices?.[0];
     const d = ch?.delta?.content;
     if (d) {
+      firstTokenAt ??= Date.now();
       text += d;
       send(d);
     }
@@ -910,7 +972,32 @@ async function callOpenRouter(cfg, messages, signal, send, names = [], system = 
     }
   }
   if (buf.trim()) handle(buf.trim());
-  return { text, stop, usage, tools: acc.done() };
+  const tools = acc.done();
+  posthog = ai && !cfg.fake ? posthogClient(cfg) : null;
+  if (posthog) {
+    posthog.capture({
+      distinctId: ai.distinctId,
+      event: '$ai_generation',
+      properties: {
+        $ai_trace_id: ai.traceId,
+        $ai_session_id: ai.sessionId,
+        $ai_model: cfg.model,
+        $ai_provider: 'openrouter',
+        $ai_input: aiContent() ? body.messages : undefined,
+        $ai_input_tokens: usage?.prompt_tokens,
+        $ai_output_choices: aiContent() ? [{ role: 'assistant', content: text }] : undefined,
+        $ai_output_tokens: usage?.completion_tokens,
+        $ai_latency: (Date.now() - startedAt) / 1000,
+        $ai_stream: true,
+        $ai_time_to_first_token: firstTokenAt == null ? undefined : (firstTokenAt - startedAt) / 1000,
+        $ai_stop_reason: stop,
+        $ai_tools: body.tools,
+      },
+    });
+    captureToolSelections(posthog, ai, tools);
+    await posthog.shutdown().catch(() => {});
+  }
+  return { text, stop, usage, tools };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1118,6 +1205,7 @@ export function pepeApi() {
     name: 'pepe-api',
     configureServer(server) {
       const root = server.config.root;
+      configurePostHogLogs(settings(root));
       server.middlewares.use(async (req, res, next) => {
         const url = (req.url ?? '').split('?')[0];
         if (url === '/api/pepe/health') {
@@ -1194,6 +1282,7 @@ export function pepeApi() {
           } catch {}
         };
         const t0 = Date.now();
+        const ai = aiContext(body);
         const names = toolsFor(body);
         // which build of the voice this turn gets: the page's ?persona=, the body, the Referer's
         // query, PEPE_PERSONA, else the room build.
@@ -1201,8 +1290,8 @@ export function pepeApi() {
         try {
           const messages = buildMessages(body, names, style);
           const call = cfg.provider === 'anthropic' ? callAnthropic : callOpenRouter;
-          const out = await call(cfg, messages, ac.signal, send, names, PERSONAS[style]).catch((e) => {
-            if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) e.fatal = true;
+          const out = await call(cfg, messages, ac.signal, send, names, PERSONAS[style], ai).catch((e) => {
+            if (e instanceof AnthropicSDK.AuthenticationError || e instanceof AnthropicSDK.PermissionDeniedError) e.fatal = true;
             throw e;
           });
           clearTimeout(timer);
@@ -1213,8 +1302,24 @@ export function pepeApi() {
           if (tool) event({ tool: { name: tool.name, args: tool.args ?? {} } });
           if (gate.struck)
             server.config.logger.warn(`[pepe] ${body.beat ?? '?'} struck a reading in prose: "${gate.struck}" is not on the table`, { timestamp: true });
-          if (!gate.kept.trim() && !tool) {
-            end({ error: gate.struck ? 'struck' : out.stop === 'refusal' ? 'refusal' : 'empty reply' });
+          const responseError = gate.struck ? 'struck' : out.stop === 'refusal' ? 'refusal' : 'empty reply';
+          const outcome = !gate.kept.trim() && !tool
+            ? responseError.replace(' ', '_')
+            : 'completed';
+          posthogLog({
+            severityText: 'INFO',
+            body: 'pepe response completed',
+            attributes: {
+              provider: cfg.provider,
+              beat: String(body.beat ?? 'unknown'),
+              outcome,
+              duration_ms: Date.now() - t0,
+              response_characters: gate.kept.length,
+              tool_name: tool?.name,
+            },
+          });
+          if (outcome !== 'completed') {
+            end({ error: responseError });
           } else {
             const cached = out.usage?.cache_read_input_tokens ?? out.usage?.prompt_tokens_details?.cached_tokens;
             server.config.logger.info(
@@ -1227,6 +1332,17 @@ export function pepeApi() {
           clearTimeout(timer);
           flush();
           const msg = ac.signal.aborted ? String(ac.signal.reason?.message ?? 'aborted') : String(e?.message ?? e);
+          posthogLog({
+            severityText: 'WARN',
+            body: 'pepe response failed',
+            attributes: {
+              provider: cfg.provider,
+              beat: String(body.beat ?? 'unknown'),
+              failure_kind: ac.signal.aborted ? 'request_aborted' : e?.fatal ? 'provider_access' : 'provider_error',
+              duration_ms: Date.now() - t0,
+              response_characters: gate.kept.length,
+            },
+          });
           server.config.logger.warn(`[pepe] ${body.beat ?? '?'} ${cfg.provider} failed after ${Date.now() - t0}ms: ${msg}`, { timestamp: true });
           if (streamed) end({ done: true, truncated: true, error: msg });
           else end({ error: msg, fatal: !!e?.fatal });

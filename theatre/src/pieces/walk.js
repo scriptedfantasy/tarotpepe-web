@@ -103,6 +103,7 @@
 //                   src/pieces/walk-marks.js
 import { buildBooks } from './walk-book.js';
 import { phoneMode } from '../core/phone.js';
+import posthog from '../posthog.js';
 import { mountMarks, markSize, floorRing, bboxOf, watchPointer, RING_R } from './walk-marks.js';
 
 export const meta = {
@@ -264,6 +265,7 @@ export async function build(ctx) {
     const from = at ? PLACES[at].shot : null; // null = off whatever pose the camera is holding
     const was = at;
     at = name;
+    posthog?.capture('place_visited', { place: name });
     // the hold before the first drawing, and it is moved rather than re-taken: releasing the old
     // one first would leave one tick in which the conversation could cut the camera home
     mine = p.shot;

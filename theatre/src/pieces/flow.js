@@ -63,6 +63,7 @@
 // API: start(), restart(), beat, intent, readings, recalls, flips, setState(name)
 //   states: greeting · talk · shuffle · fan · dealt · reading · recall · farewell (stills)
 import * as THREE from 'three';
+import posthog from '../posthog.js';
 import { PROMPTS, SAMPLE_ANSWER, scriptedLines, splitSentences, parsePick, detectIntent, recallFocus } from './flow-lines.js';
 import { makeFlip } from './flow-flip.js';
 
@@ -579,6 +580,8 @@ export async function build(ctx) {
           if ((await timeout(landed, PICK_S)) === TIMEOUT) {
             R.pickRandom?.();
             await timeout(landed, 10);
+          } else {
+            posthog?.capture('tarot_card_selected', { selection_method: 'pointer' });
           }
           await wait(0.6);
           continue;
@@ -593,6 +596,7 @@ export async function build(ctx) {
           const typed = D.ask(prompt, { signal: ac.signal, timeout: PICK_S, hold: 0.3 });
           const result = await Promise.race([landed.then((pick) => ({ pick })), typed.then((text) => ({ text }))]);
           if ('pick' in result) {
+            posthog?.capture('tarot_card_selected', { selection_method: 'pointer' });
             ac.abort(); // the click chose: the placard goes
             await typed;
             break;
@@ -612,6 +616,7 @@ export async function build(ctx) {
           }
           if (cmd.kind === 'random') R.pickRandom?.();
           else R.pickByOrdinal?.(cmd.n);
+          posthog?.capture('tarot_card_selected', { selection_method: 'text' });
           await timeout(landed, 10);
           break;
         }
@@ -667,6 +672,7 @@ export async function build(ctx) {
       cut('turn');
       await wait(0.9);
     }
+    if (alive(token)) posthog?.capture('tarot_reading_completed');
   }
 
   // ---- the cards, looked at again -----------------------------------------------------------------
@@ -955,6 +961,7 @@ export async function build(ctx) {
         continue;
       }
       quiet = 0;
+      posthog?.capture('conversation_message_sent');
       api.beat = 'reply';
       const { intent, focus, sentences } = await listen(said);
       if (!alive(token)) return { spoke: false };
@@ -976,6 +983,7 @@ export async function build(ctx) {
       // the cards, because they were asked for. His turn is the shuffle line: it goes over the
       // deck, not in front of it, so the story card cuts in the moment he agrees.
       if (intent === 'draw') {
+        posthog?.capture('tarot_reading_requested');
         const back = await drawing(token, api.readings++, sentences);
         if (!alive(token)) return { spoke: false };
         frame = 'home';
