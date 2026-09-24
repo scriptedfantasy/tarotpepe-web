@@ -60,7 +60,7 @@ function buildStyle() {
     overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; pointer-events: none;
     display: flex; flex-direction: column; gap: 10px; padding: 18px ${SIDE}px 8px; box-sizing: border-box;
     scrollbar-width: none; -webkit-overflow-scrolling: touch;
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 ${FADE}px); mask-image: linear-gradient(to bottom, transparent 0, #000 ${FADE}px); }
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade, ${FADE}px)); mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade, ${FADE}px)); }
   .pc-log::-webkit-scrollbar { display: none; }
   .pc-log > :first-child { margin-top: auto; }
   .pc.foot .pc-log { top: auto; bottom: calc(var(--kb) + var(--safe-b) + ${BTN + ROW_GAP}px); }
@@ -421,6 +421,8 @@ export function buildPhone(ctx, deps) {
   let owedAt = 0; // wall-clock seconds since he has owed them a line; 0 = he owes nothing
   let beat = 'idle';
   let steps = 0; // stepped frames seen, for the half-second jobs
+  let fade = FADE; // px at the top of the stack that fade into the wall (a share of its height)
+  let topsDirty = true; // the log changed shape: the bubbles' tops are read again on the next frame
   let stick = true; // the log follows its newest line unless the visitor has scrolled back
   const nowS = () => performance.now() / 1000;
   const shotName = () => ctx.pieces.camera?.current ?? 'home';
@@ -531,6 +533,11 @@ export function buildPhone(ctx, deps) {
     if (h !== lastLogH) {
       lastLogH = h;
       pc.style.setProperty('--log-h', `${h}px`);
+      // the fade is a share of the stack, not a fixed 110 px: in the card flow the stack is a band
+      // of 250–380 px at the head of the frame, and 110 px of it was a third of what could be read
+      fade = Math.min(FADE, Math.round(h * 0.2));
+      pc.style.setProperty('--fade', `${fade}px`);
+      topsDirty = true;
       if (stick) toBottom();
     }
   }
@@ -796,6 +803,7 @@ export function buildPhone(ctx, deps) {
     if (think) dropThink();
     log.appendChild(b.el);
     bubbles.push(b);
+    topsDirty = true;
     // an evening is long; a phone keeps the last sixty
     while (bubbles.length > 60) bubbles.shift().el.remove();
     strike(b, true);
@@ -830,6 +838,7 @@ export function buildPhone(ctx, deps) {
     b.at = ctx.clock?.frame ?? 0;
     think = b;
     log.appendChild(b.el);
+    topsDirty = true;
     if (stick) toBottom();
     ctx.emit?.('dialogue:thinking', { on: true });
   }
@@ -837,6 +846,7 @@ export function buildPhone(ctx, deps) {
     if (!think) return;
     think.el.remove();
     think = null;
+    topsDirty = true;
   }
   function tickThinking() {
     const owed = thinkForced || (owedAt && !typing && !inter && nowS() - owedAt >= THINK_WAIT);
@@ -1183,14 +1193,54 @@ export function buildPhone(ctx, deps) {
       }
       // a bubble faded into the wall at the top of the stack lets a finger through to the room (the
       // ? card on the sign is up there); the ones that can be read can be held to scroll
+      //
+      // AND WHAT IS FAR OFF THE SCREEN GIVES ITS PAPER BACK. The owner, 2026-09-24: "The scrolling
+      // function on mobile for the text eventually gets worse and worse and worse." Every bubble is a
+      // canvas at three times the screen's pixels, and an evening of sixty of them is fifteen
+      // megapixels (60 MB) of canvas under a masked scroller, on the same GPU as the room — measured
+      // in WebKit as an iPhone 13, the 90th-percentile scroll frame went from 23 ms at nine bubbles
+      // to 35 at forty-three and the scroll step's own cost fivefold. And the fade test below read
+      // `offsetTop` off every bubble every frame, right after the boil had re-cut the newest two,
+      // which is a full layout of the log per frame. So the tops are read only when the log has
+      // changed shape, and a bubble more than a screen away from the part being read drops its
+      // canvas to one pixel (its box keeps its size, so nothing moves) and is struck again the moment
+      // it comes back within a screen.
       if (open) {
-        const st = log.scrollTop;
-        for (const b of bubbles) b.el.classList.toggle('ghost', b.el.offsetTop - st < FADE);
+        if (topsDirty) {
+          for (const b of bubbles) {
+            b.top = b.el.offsetTop;
+            b.hgt = b.el.offsetHeight;
+          }
+          topsDirty = false;
+        }
+        const st = log.scrollTop, span = log.clientHeight || 600;
+        for (const b of bubbles) {
+          const top = b.top ?? 0;
+          // A BUBBLE IS A GHOST ONLY ONCE IT HAS GONE INTO THE WALL. The owner, 2026-09-24, after a
+          // reading: "I tried to scroll back to see what the first few things were that he said
+          // about the first card, I actually couldn't get back there." The test was the bubble's
+          // TOP inside the fade — and in the card flow's 312 px band a tall bubble with its top in
+          // the fade was most of the readable band, so only the newest bubble would take a finger
+          // (measured mid-reading: 1 of 8). Now it is its BOTTOM: a bubble that shows any real part
+          // of itself below the fade can be held to scroll.
+          b.el.classList.toggle('ghost', top + (b.hgt ?? 0) - st < fade + 12);
+          if (!b.canvas) continue;
+          const near = top + (b.boxH ?? 0) > st - span && top < st + 2 * span;
+          if (!near && !b.freed) {
+            b.freed = true;
+            b.canvas.width = b.canvas.height = 1;
+            b.canvas.dataset.k = '';
+          } else if (near && b.freed) {
+            b.freed = false;
+            strike(b, true);
+          }
+        }
       }
       // THE BOIL: the newest bubbles are re-cut on every second frame, the rest hold still
       const from = Math.max(0, bubbles.length - BOIL_KEEP);
       for (let k = 0; k < bubbles.length; k++) {
         const b = bubbles[k];
+        if (b.freed) continue; // off the screen: it is struck again when it comes back
         if (k < from) {
           if (!b.still) {
             b.still = true;
@@ -1218,6 +1268,7 @@ export function buildPhone(ctx, deps) {
     }
     layout();
     drawField();
+    topsDirty = true;
   }
   ctx.on?.('resize', () => {
     headTop = 0;
