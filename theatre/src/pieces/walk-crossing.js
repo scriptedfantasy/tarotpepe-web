@@ -1,4 +1,4 @@
-// walk-crossing — HE GOES TO THE FIRE, AND NOBODY IS SEEN GOING.
+// walk-crossing — HE GOES TO THE FIRE (AND TO THE READING TABLE), AND NOBODY IS SEEN GOING.
 //
 // The owner, 2026-09-24, over sixteen versions of a mockup (claude.ai/artifact/A4QfYDquTYgsPaDo63YNrw):
 // Pepe is supernatural, so he does not walk. When the visitor asks for the fireplace, he comes
@@ -43,10 +43,22 @@ const PAPER = '#f8f9f4';
 const SEAT = [0, 0, -0.82]; // his bench (layout.js pepe.pos)
 const LAMP = [0, 1.9, -0.9];
 const PERSON_H = 1.56;
-// round the lit side of the table and across the bare rug to the hearth step
-const ROAD = [[-0.8, 0, -0.2], [-1.05, 0, 0.25], [-1.35, 0, 0.55], [-1.75, 0, 0.6], [-2.08, 0, 0.35]];
-const HEARTH = [-2.08, 0, 0.35];
-const PHONE_LOOK = [-1.75, 0.95, 0.05]; // where a phone turns to while the prints cross
+// WHERE HE GOES, AND BY WHICH ROAD. Each road is measured off the rendered floor of the home shot
+// (1280x800, the mean of a 7 px patch at each set point, 0 black to 255 paper): it keeps to what
+// reads as paper and out of the table's own hatched shadow, which falls behind it and to the right.
+//   fireplace  round the lit side of the table and across the bare rug to the hearth step
+//              (225–248 along it, against 112–155 for the first road behind the table)
+//   table      the mirror of it: round the front of the table on the right, across the rug and
+//              up to the chair pulled to the reading table (226–247 along it; the shadow it
+//              skirts is 122–168)
+// `look` is where a phone turns to while the prints cross, so its narrow frame holds them.
+const ROUTES = {
+  fireplace: { road: [[-0.8, 0, -0.2], [-1.05, 0, 0.25], [-1.35, 0, 0.55], [-1.75, 0, 0.6], [-2.08, 0, 0.35]], look: [-1.75, 0.95, 0.05] },
+  table: { road: [[0.8, 0, -0.2], [1.02, 0, 0.22], [1.28, 0, 0.42], [1.5, 0, 0.26], [1.46, 0, -0.18]], look: [1.3, 0.95, 0.02] },
+};
+let ROAD = ROUTES.fireplace.road;
+let END = ROAD[ROAD.length - 1];
+let LOOK = ROUTES.fireplace.look;
 // his card, for taking him off the frame: a box round the seated figure
 const SEAT_BOX = { x: [-0.55, 0.55], y: [0.28, 1.58], z: [-0.95, -0.7] };
 
@@ -90,20 +102,28 @@ function road() {
     return [lerp(ROAD[i - 1][0], ROAD[i][0], t), 0, lerp(ROAD[i - 1][2], ROAD[i][2], t), Math.atan2(ROAD[i][2] - ROAD[i - 1][2], ROAD[i][0] - ROAD[i - 1][0])];
   };
 }
-const along = road();
-for (const g of [THERE, BACK]) {
-  g.at = (u) => {
-    const r = along(g.dir > 0 ? u : 1 - u);
-    if (g.dir < 0) r[3] += Math.PI;
-    return r;
-  };
-  g.prints = Array.from({ length: g.n }, (_, j) => {
-    const [x, , z, h] = g.at(j / (g.n - 1)), side = j % 2 ? 1 : -1;
-    return { x: x - Math.sin(h) * 0.1 * side, z: z + Math.cos(h) * 0.1 * side, h, side, t: g.carry + g.step * j };
-  });
-  g.from = g.dir > 0 ? SEAT : HEARTH;
-  g.to = g.dir > 0 ? HEARTH : SEAT;
+// lay both legs' prints along the road to one place
+function route(name) {
+  const r = ROUTES[name] ?? ROUTES.fireplace;
+  ROAD = r.road;
+  END = ROAD[ROAD.length - 1];
+  LOOK = r.look;
+  const along = road();
+  for (const g of [THERE, BACK]) {
+    g.at = (u) => {
+      const q = along(g.dir > 0 ? u : 1 - u);
+      if (g.dir < 0) q[3] += Math.PI;
+      return q;
+    };
+    g.prints = Array.from({ length: g.n }, (_, j) => {
+      const [x, , z, h] = g.at(j / (g.n - 1)), side = j % 2 ? 1 : -1;
+      return { x: x - Math.sin(h) * 0.1 * side, z: z + Math.cos(h) * 0.1 * side, h, side, t: g.carry + g.step * j };
+    });
+    g.from = g.dir > 0 ? SEAT : END;
+    g.to = g.dir > 0 ? END : SEAT;
+  }
 }
+route('fireplace');
 
 // the table's drum hides what is behind it (a cloth to the floor, the top at 0.76)
 function hidden(cam, p) {
@@ -230,6 +250,7 @@ export function createCrossing(ctx) {
   let heard = -1; // the last drawing whose sounds have been fired
   let gate = true; // on the way back, he does not form until the camera is home to see it
   let drawn = false;
+  let place = null; // where he went
   const rel = () => ctx.clock.frame - f0;
 
   function wait(r) {
@@ -588,7 +609,7 @@ export function createCrossing(ctx) {
     // done: the dark has lifted and the prints have dried
     const done = hold != null && f > hold + 8 + 14;
     if (done) {
-      if (leg === BACK) { away = false; card = null; }
+      if (leg === BACK) { away = false; card = null; place = null; }
       leg = null;
       hold = null;
       c.setTransform(1, 0, 0, 1, 0, 0);
@@ -632,7 +653,7 @@ export function createCrossing(ctx) {
     // where a phone turns to while the prints cross, as a pose the camera can walk to
     panPose() {
       const v = cam.view && cam.view.enabled ? [cam.view.offsetX / cam.view.fullWidth, cam.view.offsetY / cam.view.fullHeight] : [0, 0];
-      pan = { pos: cam.position.toArray(), look: PHONE_LOOK, fov: cam.fov, shift: v };
+      pan = { pos: cam.position.toArray(), look: LOOK, fov: cam.fov, shift: v };
       return pan;
     },
     // the way back on a phone turns to the same place, so the prints can be seen coming home
@@ -642,8 +663,15 @@ export function createCrossing(ctx) {
     backPanSeconds: BACK.carry / 12 + 0.25,
     homeSeconds: (BACK.arrive - BACK.turn) / 12,
     panSeconds: (THERE.land - THERE.carry) / 12,
+    // the places he crosses to rather than staying put
+    goes: (name) => name in ROUTES,
+    get place() {
+      return place;
+    },
     // he goes: resolves `carry` when the first print lands and `landed` when the last one has
-    there() {
+    there(name = 'fireplace') {
+      route(name);
+      place = name;
       leg = THERE;
       f0 = ctx.clock.frame;
       heard = -1;
@@ -681,6 +709,7 @@ export function createCrossing(ctx) {
       hold = null;
       away = false;
       card = null;
+      place = null;
       waits.splice(0).forEach((w) => w.resolve());
       if (pepe()?.parts?.torso) pepe().parts.torso.visible = true;
       c.setTransform(1, 0, 0, 1, 0, 0);

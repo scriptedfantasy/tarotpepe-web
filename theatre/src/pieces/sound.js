@@ -51,7 +51,9 @@
 //      toggleMute() · muted · running · cues · timeline · tune · setTune(id)
 //      render(name, seconds, opts) · measureTune(id, opts)   (the last two are for tools/)
 import { LEVEL, LENGTH, TRIM, CUES, VEIL, play as voice, tick as clockTick, roomTone } from './sound-voices.js';
-import { TUNES, TUNE_IDS, DEFAULT_TUNE, TUNE_LEVEL, makeTune, renderTune, pianoNote } from './sound-tune.js';
+import { space } from './sound-core.js';
+import { TUNES, TUNE_IDS, DEFAULT_TUNE, TUNE_LEVEL, renderTune } from './sound-tune.js';
+import { makeTune, pianoNote } from './sound-tune.js';
 
 export const meta = {
   name: 'sound',
@@ -97,6 +99,10 @@ export async function build(ctx) {
   // duck or a door arriving must reach the ticks that are already on the timeline
   let tuneBus = null; // and the tune, for the same reason: its bars are laid seconds ahead too
   let tune = null;
+  let hall = null; // the parlour's own acoustic (sound-core.js `space`): voices go through it
+  let clockWet = null; // the clock's send into it, which carries the clock's duck and door too
+  let tuneWet = null; // …and the tune's
+  let recBus = null; // the record on the radio: dry, as the owner likes it, ducked with the tune
   let room = null;
   let running = false;
   let muted = params.get('mute') === '1';
@@ -165,12 +171,25 @@ export async function build(ctx) {
       master = ac.createGain();
       master.gain.setValueAtTime(muted ? 0 : 1, ac.currentTime);
       master.connect(ac.destination);
+      hall = space(ac, master);
       clockBus = ac.createGain();
       clockBus.gain.setValueAtTime(1, ac.currentTime);
       clockBus.connect(master);
+      clockWet = ac.createGain();
+      clockWet.gain.setValueAtTime(1, ac.currentTime);
+      clockWet.connect(hall.send);
+      clockBus.__room = clockWet;
       tuneBus = ac.createGain();
       tuneBus.gain.setValueAtTime(1, ac.currentTime);
       tuneBus.connect(master);
+      // the music box and the piano are in the room: a fixed share of the tune bus, after its duck
+      tuneWet = ac.createGain();
+      tuneWet.gain.setValueAtTime(0.3, ac.currentTime);
+      tuneBus.connect(tuneWet);
+      tuneWet.connect(hall.send);
+      recBus = ac.createGain();
+      recBus.gain.setValueAtTime(1, ac.currentTime);
+      recBus.connect(master);
     }
     if (ac.state === 'suspended') ac.resume?.();
     return ac;
@@ -185,12 +204,15 @@ export async function build(ctx) {
   // the same two things, on the escapement's own fader, so they reach ticks already scheduled
   function clockLevel(when = ac?.currentTime ?? 0, veiled = when >= veilFrom && when < veilTo) {
     if (!clockBus || !ac) return;
-    clockBus.gain.setValueAtTime((ducked ? DUCK_CLOCK : 1) * (veiled ? VEIL.gain : 1), Math.max(when, ac.currentTime));
+    const v = (ducked ? DUCK_CLOCK : 1) * (veiled ? VEIL.gain : 1), at = Math.max(when, ac.currentTime);
+    clockBus.gain.setValueAtTime(v, at);
+    clockWet?.gain.setValueAtTime(v * (veiled ? 0.35 : 1), at); // behind the door the room is the door's
   }
   // and the tune's own fader, which carries only the duck; the door is on the tune's own filter
   function tuneLevel(when = ac?.currentTime ?? 0) {
     if (!tuneBus || !ac) return;
     tuneBus.gain.setValueAtTime(ducked ? DUCK_TUNE : 1, Math.max(when, ac.currentTime));
+    recBus?.gain.setValueAtTime(ducked ? DUCK_TUNE : 1, Math.max(when, ac.currentTime));
   }
   function startRoom() {
     if (!ac || room) return;
@@ -213,7 +235,7 @@ export async function build(ctx) {
   // important one; if it cannot be built, the parlour is simply quiet.
   let rec = null; // the record on the set, made once: { el, gain }
   function startRecord() {
-    if (!ac || !tuneBus) return;
+    if (!ac || !recBus) return;
     try {
       if (!rec) {
         const el = new Audio(RECORD.src);
@@ -234,7 +256,7 @@ export async function build(ctx) {
         node.connect(hp);
         hp.connect(lp);
         lp.connect(gain);
-        gain.connect(tuneBus);
+        gain.connect(recBus);
         rec = { el, gain };
       }
       // play() is called inside the click on the set, which is the gesture a browser wants for it
@@ -407,6 +429,37 @@ export async function build(ctx) {
     if (words.length) step();
   }
 
+  // ---- WARMING THE SECOND BANK --------------------------------------------------------------------
+  // Some voices build tables the first time they sound: the paper's noise (about 50 ms), the fire's
+  // loop, the piano's soundboard and pedal, the tear and the gathering of his crossing. Built on the
+  // first card dealt, that is a hitch on the first card dealt. So each is sounded once, into a
+  // silent gain, one per idle moment after the gesture, before anything has asked for it.
+  function warm() {
+    if (!ac) return;
+    const hush = ac.createGain();
+    hush.gain.value = 0;
+    hush.connect(master);
+    const jobs = [
+      () => voice(ac, hush, 'deal', ac.currentTime + 0.05, { seed: 1 }),
+      () => voice(ac, hush, 'crackle', ac.currentTime + 0.05, { seed: 1 }),
+      () => pianoNote(ac, hush, { t: ac.currentTime + 0.05, freq: 220, dur: 0.1, level: 0.001 }),
+      () => voice(ac, hush, 'unmake', ac.currentTime + 0.05, { seed: 1 }),
+      () => voice(ac, hush, 'reform', ac.currentTime + 0.05, { seed: 1 }),
+    ];
+    const idle = window.requestIdleCallback ?? ((f) => setTimeout(f, 120));
+    const next = () => {
+      const job = jobs.shift();
+      if (!job) return setTimeout(() => hush.disconnect(), 3000);
+      try {
+        job();
+      } catch {
+        /* a voice that cannot warm will build when it is asked for */
+      }
+      idle(next, { timeout: 600 });
+    };
+    idle(next, { timeout: 600 });
+  }
+
   // ---- the piece ---------------------------------------------------------------------------------
   let state = 'default';
   const timeline = []; // every cue scheduled, with the audio time it lands on (tools/_sound-probe)
@@ -482,6 +535,7 @@ export async function build(ctx) {
       startTune();
       armClock();
       armStreet();
+      warm();
     },
     stop() {
       running = false;
@@ -537,7 +591,7 @@ export async function build(ctx) {
     // moment it begins and cannot be collapsed into one click by a slow frame. play() is at(0).
     // `through: 'set'` puts the cue out of the radio's loudspeaker instead of into the room (see
     // speakerBus, above); anything else is the room, as it always was.
-    at(seconds = 0, name, { gain = 1, pan, through = null } = {}) {
+    at(seconds = 0, name, { gain = 1, pan, through = null, tock = false } = {}) {
       if (silent || muted || !name) return 0;
       if (!running) return 0; // no gesture yet: the world has not opened
       try {
@@ -567,9 +621,9 @@ export async function build(ctx) {
         let len;
         if (name === 'clock') {
           const cp = clockPlace();
-          len = clockTick(ac, clockBus, when, { level: LEVEL.clock * cp.gain * gain, pan: pan ?? cp.pan });
+          len = clockTick(ac, clockBus, when, { level: LEVEL.clock * cp.gain * gain, pan: pan ?? cp.pan, tock, seed: ++seed });
         } else {
-          const dest = (through === 'set' && speakerBus()) || master;
+          const dest = (through === 'set' && speakerBus()) || hall?.bus || master;
           len = voice(ac, dest, name, when, { seed: ++seed, gain, pan: pan ?? 0 });
         }
         timeline.push({ name, at: +when.toFixed(4), wall: +wall.toFixed(4), ...(through ? { through } : null) });
@@ -647,13 +701,15 @@ export async function build(ctx) {
     // everything at `ac.currentTime + 0.005 + ahead`, which is never a whole sample frame, and a
     // cue rendered at a round 0.02 s is the one case that hides a sample-alignment fault. The
     // probes render both.
-    async render(name, seconds = 1.4, { seed: s = 7, sampleRate = 22050, pan = 0, at: when = 0.02 } = {}) {
+    async render(name, seconds = 1.4, { seed: s = 7, sampleRate = 22050, pan = 0, at: when = 0.02, dry = true } = {}) {
       const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
       if (!OC) return null;
       const oc = new OC(2, Math.max(64, Math.ceil(seconds * sampleRate)), sampleRate);
-      const bus = oc.createGain();
-      bus.gain.value = 1;
-      bus.connect(oc.destination);
+      const out = oc.createGain();
+      out.gain.value = 1;
+      out.connect(oc.destination);
+      // `dry: true` measures the voice alone (the trims are taken dry); otherwise it is in the room
+      const bus = dry ? out : space(oc, out).bus;
       if (name === 'room') roomTone(oc, bus, { level: LEVEL.room });
       else if (name === 'clock') clockTick(oc, bus, when, { level: LEVEL.clock, pan });
       else if (name === 'clock-run')

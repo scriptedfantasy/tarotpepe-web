@@ -34,7 +34,7 @@
 // IT IS BACKGROUND, AND ALL THREE ARE THE SAME LOUDNESS. Every one is trimmed to an RMS of 0.0080,
 // which is +4 dB on the room tone and 8–17 dB under the door's stop, so what the user is choosing
 // between is three compositions and not three volumes. Peak is left where each instrument puts it
-// (a struck music box has 21 dB of crest; a reed drone has 14). It ducks to 0.34 under Pepe's
+// (a struck music box has 20 dB of crest; a reed drone has 15). It ducks to 0.34 under Pepe's
 // spoken voice, it goes behind the door with the room tone until the leaf arrives, and it never
 // fades — it is cut in and cut out, like everything else here.
 //
@@ -43,6 +43,7 @@
 // takes a 6–30 ms ramp. That is a de-click, not a swell. There are no crossfades and no phrase ever
 // swells or dies away under another one.
 import { mulberry32 } from '../core/rng.js';
+import { noise, shaper } from './sound-core.js';
 
 // ---- pitch ---------------------------------------------------------------------------------------
 // Everything is written in semitones from the tune's own reference pitch, so a melody reads as a
@@ -115,91 +116,452 @@ function pluck(ac, dest, { t, freq, dur, level, partials, type = 'sine', click =
   return t + dur;
 }
 
-// THE PIANO, and it is the pluck above with a piano's own partials on it. A struck string is not a
-// sine: the fundamental carries maybe half the energy and the rest is in the first six partials,
-// each dying quicker than the one below it, with a hammer knock across the front of all of them.
-// Four things make it a piano rather than the music box's tine:
-//   THE STRING DECIDES HOW LONG IT RINGS, AND IT DECIDES BY ITS OWN PITCH. This is the one that was
-//   wrong. The ring used to be worked out from how long the note was HELD, which is a plucked
-//   string's rule and not a struck one: a chord struck on the second beat of a bar came out 37 dB
-//   down by the end of that bar, i.e. gone, and the Gymnopédie's whole sound is the chord still
-//   there under the melody when the next bar arrives. A real string decays at a rate set by its own
-//   mass and length — seconds at the bottom of the keyboard, a second or two at the top — so the
-//   ring here is a curve through the keyboard and nothing else: 8 s at the bottom of it (the cap),
-//   7.1 s at this piece's own bass G, 5.1 under the accompaniment's chord, 3.2 at the top of the
-//   melody. Measured through it, in tools/_piano-render.mjs, that is −20 dB at 1.6 s for the bass
-//   and 3.8 s to −40; 1.1 s and 2.7 s for the chord; 0.85 s and 1.9 s for a melody note, which is
-//   just under a beat and just over two. And the number the piece is actually about: the end of a
-//   bar now sits 16 to 21 dB under the chord that was struck on its second beat, where it sat 30 to
-//   33 dB under — the difference between a chord that is still there and one that is gone.
-//   AND THE PEDAL IS DOWN, which is why `dur` no longer shortens it. Satie's accompaniment cannot
-//   be played without the sustaining pedal — no hand holds a bass note AND the chord an octave and
-//   a half above it (see piano-song.js) — so a key let go is a key whose damper is off the string.
-//   `pedal: false` puts the damper back and cuts the ring at the note's own length, for whatever
-//   asks for a piano and does not mean this piece.
-//   THE PARTIALS ARE ALMOST HARMONIC. The tine's are bent sharp on purpose (`inharm`); a string's
-//   are bent sharp by ITS OWN STIFFNESS, which is a smaller thing but a real one and is a good part
-//   of why a piano sounds like wire under tension — partial n lands at n·f·√(1+Bn²), and B here is
-//   0.0005, which puts the sixth partial eighteen cents sharp. A spinet, short strings in a small
-//   box, has more of it than a concert grand, not less.
-//   AND THERE IS A KNOCK. 4 ms of banded noise at the onset — the hammer on the string and the key
-//   on its bed — at a tenth of the note's own level. Without it every note begins out of nothing,
-//   which is an organ.
-// `dur` is how long the note is HELD, and with the pedal down that is a fact about the hands and
-// not about the sound.
-const B_STIFF = 0.0005;
-const PARTIAL = (n) => n * Math.sqrt(1 + B_STIFF * n * n);
-export function pianoNote(ac, dest, { t, freq, dur, level = 0.5, pedal = true }) {
-  const f = Math.max(27.5, freq);
-  let ring = 7.1 * Math.pow(98 / f, 0.36);
-  ring = Math.max(1.1, Math.min(8, ring));
-  if (!pedal) ring = Math.min(ring, Math.max(0.2, dur) + 0.12);
-  // brighter at the bottom of the keyboard, where a real string has more of its energy up high
-  const bright = Math.min(1, 220 / Math.max(80, f) + 0.42);
-  return pluck(ac, dest, {
-    t,
-    freq,
-    dur: ring,
-    level,
-    type: 'triangle',
-    click: 0.11,
-    seed: Math.round(freq),
-    // …and the partials go before the fundamental does, in the order they were struck: the sixth is
-    // gone in a tenth of the note, the second is still there at a third of it. That ordering is
-    // what turns a struck note into a hum rather than a chord that stays bright to the end.
-    partials: [
-      [1, 0.62, 1],
-      [PARTIAL(2), 0.26 * bright, 0.34],
-      [PARTIAL(3), 0.15 * bright, 0.24],
-      [PARTIAL(4), 0.09 * bright, 0.17],
-      [PARTIAL(5), 0.055 * bright, 0.12],
-      [PARTIAL(6), 0.035 * bright, 0.09],
-    ],
-  });
+// ---- the workshop: what the instruments are made of ------------------------------------------------
+// A real instrument is three things at once, and the old bank had only the first: a vibrating
+// thing (a tine, a string, a reed), the body it is fixed to (a box, a soundboard), and the noise of
+// the mechanism that sets it going (a pin, a hammer, a bellows). Everything below builds one of
+// the three, and every one of them is deterministic: a tine is mistuned the same way every time
+// it is struck, because the comb was cut once.
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const nyq = (ac) => ac.sampleRate * 0.45;
+function zg(ac, v = 0) {
+  const g = ac.createGain();
+  g.gain.value = v;
+  return g;
+}
+function bq(ac, type, freq, q = 0.7, gain = 0) {
+  const f = ac.createBiquadFilter();
+  f.type = type;
+  f.frequency.value = Math.min(freq, nyq(ac));
+  f.Q.value = q;
+  if (gain) f.gain.value = gain;
+  return f;
 }
 
-// A blown / bowed voice: a sustained tone with a body, a de-click on and a cut off. Used by the
-// reed drone and by the mains hum; never by anything that is supposed to be struck.
-function held(ac, dest, { t, freq, dur, level, type = 'sawtooth', cut = 900, q = 0.7, attack = 0.03, detune = 0 }) {
-  const o = ac.createOscillator();
-  o.type = type;
-  o.frequency.setValueAtTime(freq, t);
-  if (detune) o.detune.setValueAtTime(detune, t);
-  const f = ac.createBiquadFilter();
-  f.type = 'lowpass';
-  f.frequency.setValueAtTime(cut, t);
-  f.Q.value = q;
-  const g = ac.createGain();
-  g.gain.value = 0;
-  g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(level, t + attack);
-  g.gain.setValueAtTime(level, t + Math.max(attack, dur - attack));
-  g.gain.linearRampToValueAtTime(0, t + dur);
-  o.connect(f);
+// A sine at a fixed amplitude, as a PeriodicWave: the second and third strings of a note can then be
+// quieter than the first without a gain node each. And a pulse at a given duty, for the line.
+const waveCache = new WeakMap();
+function wavesOf(ac) {
+  let m = waveCache.get(ac);
+  if (!m) waveCache.set(ac, (m = new Map()));
+  return m;
+}
+function sineAt(ac, amp) {
+  const q = Math.round(clamp(amp, 0.05, 1) * 40) / 40;
+  const m = wavesOf(ac);
+  const k = 's' + q;
+  if (!m.has(k)) m.set(k, ac.createPeriodicWave(new Float32Array([0, 0]), new Float32Array([0, q]), { disableNormalization: true }));
+  return m.get(k);
+}
+function pulseWave(ac, duty) {
+  const m = wavesOf(ac);
+  const k = 'p' + duty;
+  if (!m.has(k)) {
+    const N = 40;
+    const re = new Float32Array(N + 1), im = new Float32Array(N + 1);
+    for (let n = 1; n <= N; n++) re[n] = (2 * Math.sin(n * Math.PI * duty)) / (n * Math.PI);
+    m.set(k, ac.createPeriodicWave(re, im));
+  }
+  return m.get(k);
+}
+
+// ---- bodies: impulse responses made once per context ------------------------------------------------
+// A body is a convolution with a short impulse response built here out of decaying modes and a
+// little decaying noise — the same way sound-core builds the room, but a few centimetres across.
+function addRing(d, sr, hz, amp, t60, phase = 0) {
+  if (hz <= 0 || hz >= sr * 0.45) return;
+  const w = (2 * Math.PI * hz) / sr, c = Math.cos(w), s = Math.sin(w);
+  const r = Math.exp(-6.9078 / (t60 * sr));
+  let x = Math.cos(phase) * amp, y = Math.sin(phase) * amp;
+  const n = Math.min(d.length, Math.ceil(t60 * 1.15 * sr));
+  for (let i = 0; i < n; i++) {
+    d[i] += y;
+    const nx = (x * c - y * s) * r;
+    y = (x * s + y * c) * r;
+    x = nx;
+  }
+}
+function addHiss(d, sr, amp, t60, lpHz, rng) {
+  const r = Math.exp(-6.9078 / (t60 * sr));
+  const a = 1 - Math.exp((-2 * Math.PI * lpHz) / sr);
+  let e = amp, y = 0;
+  const n = Math.min(d.length, Math.ceil(t60 * 1.15 * sr));
+  for (let i = 0; i < n; i++, e *= r) {
+    y += a * ((rng() * 2 - 1) - y);
+    d[i] += y * e * 2;
+  }
+}
+const IR = {
+  // THE MUSIC BOX'S CASE: a walnut box about 12 × 8 × 6 cm with a spruce floor the comb is screwed
+  // to. The tine barely moves air on its own; what you hear is this floor. Plate modes from 350 Hz
+  // up, short (a few tens of ms), and almost nothing below 300 Hz, which a box that size cannot make.
+  box: { seconds: 0.3, seed: 12, direct: 0.35, build(d, sr, rng) {
+    for (const [f, a, t60] of [[352, 0.7, 0.085], [521, 1, 0.07], [786, 0.9, 0.06], [1118, 0.85, 0.05], [1537, 0.6, 0.045], [2090, 0.5, 0.036], [2870, 0.42, 0.03], [3720, 0.28, 0.022], [5150, 0.16, 0.016]])
+      addRing(d, sr, f * (0.98 + 0.04 * rng()), a, t60, rng() * 6.283);
+    addHiss(d, sr, 0.35, 0.045, 6500, rng);
+  } },
+  // THE SPINET'S SOUNDBOARD AND CASE: a small board, dense in modes, ringing a quarter of a second at
+  // the bottom and a few hundredths at the top, with the case's own boom near 165 and 290 Hz — the
+  // boxy low-mid that says upright and not grand.
+  board: { seconds: 0.55, seed: 1888, direct: 0.5, build(d, sr, rng) {
+    for (let i = 0; i < 40; i++) {
+      const f = 85 * Math.pow(5200 / 85, (i + rng()) / 40);
+      addRing(d, sr, f, (0.45 + 0.55 * rng()) / (1 + f / 2400), clamp(0.07 * Math.sqrt(200 / f), 0.015, 0.08), rng() * 6.283);
+    }
+    addRing(d, sr, 166, 0.7, 0.06, 0.3);
+    addRing(d, sr, 291, 0.5, 0.05, 1.9);
+    addHiss(d, sr, 0.25, 0.07, 3800, rng);
+  } },
+  // THE ZITHER'S BODY for the mechanism's plucked string: a shallow wooden box, a little bigger than
+  // the music box's, so its modes start lower and ring a little longer.
+  zither: { seconds: 0.35, seed: 77, direct: 0.45, build(d, sr, rng) {
+    for (const [f, a, t60] of [[212, 1, 0.12], [334, 0.8, 0.1], [471, 0.9, 0.085], [693, 0.7, 0.065], [987, 0.6, 0.05], [1410, 0.45, 0.04], [2080, 0.3, 0.03], [3010, 0.2, 0.02]])
+      addRing(d, sr, f * (0.98 + 0.04 * rng()), a, t60, rng() * 6.283);
+    addHiss(d, sr, 0.3, 0.05, 5000, rng);
+  } },
+  // THE PEDAL, as the rest of the piano: with the dampers off, every string on the frame is free to
+  // answer whatever is played. This is that frame — a narrow decaying resonance at every key's
+  // first two partials, tuned exactly as the keys are (spinetKey, below), so a struck note sets
+  // ringing its octaves and fifths, a little out of tune with it, which is the halo a pedalled
+  // upright has. Not normalised: each resonance peaks at unity gain, and the send sets the level.
+  sym: { seconds: 1.5, seed: 5, raw: true, build(d, sr, rng) {
+    for (let key = 28; key <= 100; key++) {
+      const K = spinetKey(440 * Math.pow(2, (key - 69) / 12));
+      for (const n of [1, 2]) {
+        const fn = n * K.f * Math.sqrt(1 + K.B * n * n);
+        const t60 = Math.min(1.2, K.T1 * 0.3) / n;
+        const tau = t60 / 6.9078;
+        addRing(d, sr, fn, (2 / (tau * sr)) * (n === 1 ? 1 : 0.6), t60, rng() * 6.283);
+      }
+    }
+  } },
+};
+const irCache = new WeakMap();
+function irOf(ac, name) {
+  let m = irCache.get(ac);
+  if (!m) irCache.set(ac, (m = {}));
+  if (m[name]) return m[name];
+  const spec = IR[name], sr = ac.sampleRate;
+  const n = Math.ceil(spec.seconds * sr);
+  const b = ac.createBuffer(1, n, sr);
+  const d = b.getChannelData(0);
+  spec.build(d, sr, mulberry32(spec.seed));
+  const fade = Math.floor(n * 0.15);
+  for (let i = 0; i < fade; i++) d[n - 1 - i] *= i / fade;
+  if (!spec.raw) {
+    let e = 0;
+    for (let i = 0; i < n; i++) e += d[i] * d[i];
+    const k = Math.sqrt(1 - spec.direct * spec.direct) / Math.sqrt(e || 1);
+    for (let i = 0; i < n; i++) d[i] *= k;
+    d[0] += spec.direct;
+  }
+  return (m[name] = b);
+}
+// a body: the dry path and the convolved path, summed, into `dest`; returns the input
+function body(ac, dest, name, { dry = 0.5, wet = 0.8, hp = 0 } = {}) {
+  const input = zg(ac, 1);
+  const d = zg(ac, dry), w = zg(ac, wet);
+  const c = ac.createConvolver();
+  c.normalize = false;
+  c.buffer = irOf(ac, name);
+  input.connect(d);
+  input.connect(c);
+  c.connect(w);
+  let out = dest;
+  if (hp) {
+    out = bq(ac, 'highpass', hp, 0.6);
+    out.connect(dest);
+  }
+  d.connect(out);
+  w.connect(out);
+  return input;
+}
+
+// ---- the string -----------------------------------------------------------------------------------
+// One vibrating string, or a unison of two or three, as its partials. Each partial is a sine per
+// string (so the strings of a unison BEAT, on the partials where they are listed), under an envelope
+// of its own, and the envelope has two stages when there is more than one string: the PROMPT sound,
+// while the strings move together and hand their energy to the board quickly, and the AFTERSOUND,
+// once they have drifted out of phase and the board can no longer drain them. That knee, ten dB or
+// so down in the first half-second, is most of why a piano note is not a bell.
+//   parts:  [{ n, fn, a, T }] — partial number, frequency, amplitude, T60 of the aftersound
+//   unison: cents of each string (strings after the first are quieter, via sineAt)
+//   beatN:  the partials that get the whole unison; the rest are one sine
+//   after:  the aftersound's share of the level (1 = one stage)
+//   cut:    audio time a damper lands, or Infinity
+function strike(ac, out, { t, parts, unison = [0], beatN = 2, after = 1, cut = Infinity, seed = 1 }) {
+  // each partial is already moving when the string is struck — started a random fraction of a cycle
+  // early under a shut gain — so the note is at level on its first sample with no spike in it
+  const ph = mulberry32((seed * 40503) >>> 0);
+  // a partial is let go once it is 50 dB under the LOUDEST partial, not under itself: a quiet
+  // upper partial needs a fraction of the time, and the oscillator count under a pedalled chord
+  // is what a phone pays for
+  let amax = 0;
+  for (const p of parts) amax = Math.max(amax, p.a);
+  let last = t;
+  for (const { n, fn, a, T } of parts) {
+    if (a < amax * 0.02) continue;
+    const D = Math.max(15, 50 - 20 * Math.log10(amax / a));
+    const early = Math.max(0, t - ph() / fn);
+    const S = n <= beatN ? unison.length : 1;
+    let sum = 0;
+    for (let s = 0; s < S; s++) sum += s === 0 ? 1 : Math.round(clamp(0.8 - 0.12 * s, 0.05, 1) * 40) / 40;
+    const A = a / sum;
+    const g = zg(ac);
+    g.gain.setValueAtTime(A, t);
+    let tEnd;
+    if (after < 1) {
+      const tau = Math.min(0.35, T * 0.035);
+      const plateau = A * after;
+      const t2 = t + 3 * tau;
+      g.gain.setTargetAtTime(plateau, t, tau);
+      g.gain.setValueAtTime(plateau + (A - plateau) * Math.exp(-3), t2);
+      tEnd = t2 + (T * Math.max(5, D + 20 * Math.log10(after))) / 60;
+    } else tEnd = t + (T * D) / 60;
+    g.gain.exponentialRampToValueAtTime(A * Math.pow(10, -D / 20), tEnd);
+    const stop = Math.min(tEnd, cut + 0.3) + 0.02;
+    g.connect(out);
+    for (let s = 0; s < S; s++) {
+      const o = ac.createOscillator();
+      if (s > 0) o.setPeriodicWave(sineAt(ac, 0.8 - 0.12 * s));
+      o.frequency.value = fn;
+      if (S > 1 && unison[s]) o.detune.value = unison[s];
+      o.connect(g);
+      o.start(early);
+      o.stop(stop);
+    }
+    last = Math.max(last, stop);
+  }
+  return last;
+}
+
+// A burst from the shared noise buffer through a filter: a pin, a hammer, a finger. At level on its
+// first sample, gone in `dur`.
+function knock(ac, dest, { t, level, dur, type = 'bandpass', freq, q = 0.8, seed = 1 }) {
+  const src = ac.createBufferSource();
+  src.buffer = noise(ac, 'white');
+  const f = bq(ac, type, freq, q);
+  const g = zg(ac);
+  g.gain.setValueAtTime(level, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(1e-7, level * 0.001), t + dur);
+  g.gain.setValueAtTime(0, t + dur + 0.002);
+  src.connect(f);
   f.connect(g);
   g.connect(dest);
-  o.start(t);
-  o.stop(t + dur + 0.02);
+  const r = mulberry32((seed * 2654435761) >>> 0);
+  src.start(t, r() * 1.8, dur + 0.01);
+  return g;
+}
+
+// A plucked string (the line's bass, the mechanism's zither). The pluck point sets the spectrum —
+// a string pulled at a fifth of its length has no fifth partial — and a pulled string's partials
+// fall as 1/n², where a hammered one's fall nearer 1/n.
+function stringPluck(ac, dest, { t, freq, level, T60, beta = 0.2, tilt = 1.8, B = 0.0002, unison = [0], nMax = 10, knockAt = 0.1, seed = 1 }) {
+  const top = Math.min(nyq(ac), 9000);
+  const parts = [];
+  let e = 0;
+  for (let n = 1; n <= nMax; n++) {
+    const fn = n * freq * Math.sqrt(1 + B * n * n);
+    if (fn >= top) break;
+    const a = Math.abs(Math.sin(n * Math.PI * beta)) / Math.pow(n, tilt);
+    if (a < 0.002) continue;
+    parts.push({ n, fn, a, T: T60 / (1 + 0.35 * (n - 1) + (fn / 3000) ** 2) });
+    e += a * a;
+  }
+  const out = zg(ac);
+  out.gain.setValueAtTime(level / Math.sqrt(e || 1), t);
+  out.connect(dest);
+  if (knockAt) knock(ac, dest, { t, level: level * knockAt, dur: 0.012, freq: Math.min(4200, freq * 6 + 900), q: 0.9, seed });
+  return strike(ac, out, { t, parts, unison, beatN: 2, after: unison.length > 1 ? 0.55 : 1, seed });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// THE TINE. A comb tooth is a steel cantilever, clamped at the root and free at the tip, and a
+// cantilever's modes are not harmonic: the second bending mode sits 6.27 times above the first and
+// the third 17.5 times (a real tine, filed and weighted with lead, lands near those and never on
+// them — fixed per tine, below). The pin lifts the tip and lets go, which is a click with the tine
+// already at full swing: level on the first sample. The upper modes die in tenths of a second, the
+// fundamental rings for seconds (longer at the bass end of the comb, where the teeth are long and
+// weighted), and on a good box each note has TWO teeth cut to the same pitch and not quite, so it
+// beats slowly, once or twice a second — the shimmer a music box has and a sine does not.
+// The tine is heard through the box (lines.box, built in makeTune), which is where its wood is.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+function tine(ac, dest, { t, freq, level, dur = 0, seed = 1 }) {
+  const r = mulberry32(Math.round(freq * 13) + 7); // per TOOTH: the comb was cut once
+  const top = nyq(ac);
+  const T = Math.max(clamp(3.8 * Math.pow(620 / freq, 0.62), 1.2, 5.5), dur * 0.9);
+  const end = t + T;
+  // the pair: two teeth for one note, the second a little quieter and a fraction of a hertz away
+  const beat = 0.35 + 1.9 * r();
+  const second = 0.45 + 0.35 * r();
+  const lv = level / (1 + second);
+  const g = zg(ac);
+  g.gain.setValueAtTime(lv, t);
+  g.gain.exponentialRampToValueAtTime(lv * 0.001, end);
+  g.gain.setValueAtTime(0, end + 0.01);
+  g.connect(dest);
+  const o1 = ac.createOscillator();
+  o1.frequency.value = freq;
+  o1.connect(g);
+  const o2 = ac.createOscillator();
+  o2.frequency.value = freq + beat;
+  const g2 = zg(ac, second);
+  o2.connect(g2);
+  g2.connect(g);
+  // released from full swing: the tine is at the top of its travel when the pin lets it go, so it
+  // speaks at full level on its first sample (started a quarter-cycle early under a shut gain)
+  for (const o of [o1, o2]) {
+    o.start(Math.max(0, t - 0.25 / freq));
+    o.stop(end + 0.02);
+  }
+  // the upper modes: [ratio, level, T60]. The bass teeth carry lead weights and clang more.
+  const clang = freq < 520 ? 1.35 : 1;
+  for (const [ratio, amp, t60] of [
+    [6.02 + 0.5 * r(), 0.3 * clang, Math.min(0.55, T * 0.14)], // the second bending mode
+    [16.8 + 1.4 * r(), 0.1 * clang, 0.09], // the third
+    [2.85 + 0.9 * r(), 0.04, T * 0.3], // a twisting mode, faint: the steel's sheen
+  ]) {
+    const fm = freq * ratio;
+    if (fm >= top) continue;
+    const o = ac.createOscillator();
+    o.frequency.value = fm;
+    const og = zg(ac);
+    og.gain.setValueAtTime(amp * (1 + second), t);
+    og.gain.exponentialRampToValueAtTime(amp * 0.001, t + t60);
+    o.connect(og);
+    og.connect(g);
+    o.start(t);
+    o.stop(t + t60 + 0.02);
+  }
+  // the pin slipping off the tip
+  knock(ac, dest, { t, level: level * 0.2, dur: 0.01, freq: Math.min(top * 0.9, 3400 + freq * 1.2), q: 0.9, seed });
+  return end;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// THE PIANO — an old upright spinet, in the corner, and nobody has tuned it for a while.
+//   THE KEY. Every key is out by a few cents of its own (fixed, per key), the octaves are stretched
+//   the way every piano's are and a short-stringed one's more, and the two or three strings of one
+//   note disagree by a cent or three — more than a tuner would leave, which is the character.
+//   THE STRING IS STIFF: partial n lands at n·f·√(1+Bn²), and B climbs up the keyboard (short
+//   treble wire) and again at the very bottom (a spinet's stubby wound bass), so the top rings
+//   glassy and the bass a little clangy.
+//   THE HAMMER. Felt, striking an eighth of the way along: the partials fall off as 1/n in the bass
+//   and faster up the top (a harder, smaller hammer on a shorter string gives fewer of them), the
+//   partial at the strike point is missing, and there is a knock — the felt on the wire and the key
+//   on its bed — that is relatively louder in the treble, where the tone is thin.
+//   THE UNISON. Bichords in the bass, trichords above: the strings beat on the lower partials, and
+//   the note decays in two stages (prompt, then aftersound — see `strike`).
+//   THE BOARD. A spinet's soundboard is small, so it barely radiates the bottom octave: the bass
+//   fundamentals are thin and the second and third partials carry the pitch. Everything goes out
+//   through the board's own impulse response (IR.board), with its boxy case resonance.
+//   THE PEDAL. Down, as Satie needs it: the ring is set by the string's own pitch (8 s at the
+//   bottom, 1.1 s at the top), not by how long the key is held, and the rest of the strings answer
+//   sympathetically (IR.sym). `pedal: false` drops the damper at the note's own length.
+// `dur` is how long the key is held; with the pedal down that is a fact about the hands.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+function spinetKey(freq) {
+  const m = 69 + 12 * Math.log2(freq / 440);
+  const key = Math.round(m);
+  const r = mulberry32(key * 9173 + 71);
+  const cents = (r() - 0.5) * 9 + (m - 60) * 0.13;
+  const f = freq * Math.pow(2, cents / 1200);
+  const spread = 0.7 + 2.6 * r();
+  const strings = key < 34 ? 1 : key < 48 ? 2 : 3;
+  const unison = strings === 1 ? [0] : strings === 2 ? [-spread / 2, spread / 2] : [-spread / 2, (r() - 0.5) * spread * 0.5, spread / 2];
+  const B = 0.00022 * Math.pow(2, (m - 48) / 13) + 0.0012 * Math.pow(Math.max(0, (46 - m) / 16), 1.6);
+  const T1 = clamp(7.1 * Math.pow(98 / f, 0.36), 1.1, 8) * 1.4; // the aftersound's T60 at the fundamental
+  return { m, key, f, unison, strings, B, T1, r };
+}
+// The piano's gain into the tune bus, trimmed so the Gymnopédie measures what it did before this
+// instrument was rebuilt (tools/_piano-render.mjs: 0.028 while playing).
+const PIANO_GAIN = 0.297;
+const SYM_SEND = 0.1;
+const pianoRooms = new WeakMap();
+function pianoRoom(ac, dest) {
+  const p = pianoRooms.get(dest);
+  if (p && p.ac === ac) return p;
+  const input = body(ac, dest, 'board', { dry: 0.9, wet: 0.4 });
+  const sym = zg(ac, SYM_SEND);
+  const c = ac.createConvolver();
+  c.normalize = false;
+  c.buffer = irOf(ac, 'sym');
+  sym.connect(c);
+  c.connect(input);
+  const room = { ac, input, sym };
+  pianoRooms.set(dest, room);
+  return room;
+}
+export function pianoNote(ac, dest, { t, freq, dur, level = 0.5, pedal = true }) {
+  const K = spinetKey(Math.max(27.5, freq));
+  const { m, f } = K;
+  const top = Math.min(nyq(ac), 9000);
+  const room = pianoRoom(ac, dest);
+  const hi = clamp((m - 36) / 60, 0, 1); // 0 at C2, 1 at C7
+  const beta = 0.125 - 0.03 * hi + (K.r() - 0.5) * 0.01;
+  const tilt = 0.85 + 0.7 * hi;
+  const felt = 1250 * Math.pow(2, (m - 40) / 24);
+  const nMax = Math.round(clamp(14 - 0.17 * (m - 30), 3, 12));
+  const parts = [];
+  let e = 0;
+  for (let n = 1; n <= nMax; n++) {
+    const fn = n * f * Math.sqrt(1 + K.B * n * n);
+    if (fn >= top) break;
+    const rad = (fn * fn) / (fn * fn + 140 * 140);
+    const a = (Math.abs(Math.sin(n * Math.PI * beta)) / Math.pow(n, tilt) / (1 + (fn / felt) ** 2)) * rad;
+    if (a < 1e-3) continue;
+    parts.push({ n, fn, a, T: K.T1 / (1 + 0.28 * (n - 1) + (fn / 2600) ** 2) });
+    e += a * a;
+  }
+  const lv = level * PIANO_GAIN;
+  const out = zg(ac);
+  out.gain.setValueAtTime(lv / Math.sqrt(e || 1), t);
+  const cut = pedal ? Infinity : t + Math.max(0.08, dur);
+  if (!pedal) {
+    out.gain.setValueAtTime(lv / Math.sqrt(e || 1), cut);
+    out.gain.setTargetAtTime(0, cut, 0.035);
+  }
+  out.connect(room.input);
+  if (pedal) out.connect(room.sym);
+  // the hammer and the key: felt on wire, and wood on the key bed, both through the board
+  const seed = K.key * 131 + Math.round(t * 997);
+  knock(ac, room.input, { t, level: lv * (0.1 + 0.22 * hi), dur: 0.014 + 0.03 * (1 - hi), freq: Math.min(top, 380 + f * 1.4), q: 0.7, seed });
+  knock(ac, room.input, { t, level: lv * 0.3, dur: 0.04, type: 'lowpass', freq: 170, q: 0.9, seed: seed + 1 });
+  const after = K.strings === 1 ? 0.6 : K.strings === 2 ? 0.5 : 0.45;
+  return strike(ac, out, { t, parts, unison: K.unison, beatN: 2, after, cut, seed: K.key });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// THE REED — the mechanism's harmonium. A free reed is a brass tongue swinging through a slot: its
+// wave is a narrow, lopsided pulse, rich to the top, and the reed cell it sits in puts a broad
+// formant under it. A harmonium's celeste stop sounds two reeds per note, tuned a hertz apart so
+// the note beats slowly; and the bellows are pumped by feet, so the whole chord breathes. Sustained,
+// so it takes a de-click ramp; never a swell.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+function reed(ac, dest, { t, freq, dur, level, cut = 900, attack = 0.03, detune = 0 }) {
+  const cel = 1200 * Math.log2(1 + 0.8 / freq);
+  const o1 = ac.createOscillator();
+  o1.type = 'sawtooth';
+  const o2 = ac.createOscillator();
+  o2.setPeriodicWave(pulseWave(ac, 0.28));
+  const lp = bq(ac, 'lowpass', cut * 1.7, 0.5);
+  const cell = bq(ac, 'peaking', 900, 1.1, 5);
+  const g = zg(ac);
+  const lv = level * 0.55;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(lv, t + attack);
+  g.gain.setValueAtTime(lv, t + Math.max(attack, dur - attack));
+  g.gain.linearRampToValueAtTime(0, t + dur);
+  for (const [o, c] of [[o1, detune], [o2, detune + cel]]) {
+    o.frequency.value = freq;
+    if (c) o.detune.value = c;
+    o.connect(lp);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+  lp.connect(cell);
+  cell.connect(g);
+  g.connect(dest);
   return t + dur;
 }
 
@@ -243,25 +605,18 @@ const A_BASS = [
   -12, -12, -16, -16, -9, -7, -5, -12,
 ];
 
-function tuneA(ac, dest, bar, t0, level) {
+function tuneA(ac, dest, bar, t0, level, lines = {}) {
   const beat = A_BEAT;
   const k = ((bar % A_BARS) + A_BARS) % A_BARS;
   const b0 = k * 3; // the loop's beat index at the top of this bar
+  // every tooth of the comb goes out through the box's floor (built once, in makeTune)
   const note = (semis, at, len, lv, dur) =>
-    pluck(ac, dest, {
+    tine(ac, lines.box ?? dest, {
       t: t0 + (at - b0) * beat,
       freq: hz(A_REF, semis + 12, boxCents(semis)), // the comb sounds an octave above the written line
       dur,
       level: level * lv,
-      type: 'sine',
-      click: 0.16,
       seed: 31 + at * 7 + semis,
-      partials: [
-        [1, 1, 1],
-        [3.02, 0.24, 0.42],
-        [5.41, 0.09, 0.24],
-        [8.23, 0.035, 0.14],
-      ],
     });
   for (const [at, semis, len] of A_MELODY) {
     if (at < b0 || at >= b0 + 3) continue;
@@ -330,11 +685,22 @@ function tuneB(ac, dest, bar, t0, level, lines) {
     if (at < b0 || at >= b0 + 4) continue;
     const t = t0 + (at - b0) * beat;
     const dur = len * beat * 0.92;
+    // a quarter-duty pulse, the hold-music chip's own voice, with a little vibrato that comes in
+    // after the note has spoken (the 1.15 keeps it where the old full square sat over the bass)
     const o = ac.createOscillator();
-    o.type = 'square';
+    o.setPeriodicWave(pulseWave(ac, 0.25));
     o.frequency.setValueAtTime(hz(B_REF, semis), t);
+    const vib = ac.createOscillator();
+    vib.frequency.value = 5.1;
+    const vg = zg(ac);
+    vg.gain.setValueAtTime(0, t);
+    vg.gain.linearRampToValueAtTime(9, t + Math.min(0.35, dur * 0.6));
+    vib.connect(vg);
+    vg.connect(o.detune);
+    vib.start(t);
+    vib.stop(t + dur + 0.03);
     const g = ac.createGain();
-    const lv = level * 0.30;
+    const lv = level * 0.30 * 1.15;
     g.gain.value = 0;
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(lv, t + 0.006); // a de-click, not a swell
@@ -350,16 +716,19 @@ function tuneB(ac, dest, bar, t0, level, lines) {
   }
   // the bass: plucked, in the room, one on the downbeat and the fifth halfway through the bar
   const root = B_BASS[k];
+  // a gut string pulled a quarter of the way along, with the finger's own snap on it
   const bass = (semis, at, dur, lv) =>
-    pluck(ac, dest, {
+    stringPluck(ac, dest, {
       t: t0 + at * beat,
       freq: hz(B_REF, semis),
-      dur,
+      T60: dur * 1.4,
       level: level * lv,
-      type: 'triangle',
-      click: 0.1,
+      beta: 0.24,
+      tilt: 1.5,
+      B: 0.00012,
+      nMax: 9,
+      knockAt: 0.15,
       seed: 77 + k * 13 + semis,
-      partials: [[1, 1, 1], [2, 0.3, 0.45], [3, 0.1, 0.25], [4.02, 0.04, 0.15]],
     });
   bass(root, 0, 1.5, 0.42);
   bass(root + 7, 2, 1.1, 0.24);
@@ -369,10 +738,10 @@ function tuneB(ac, dest, bar, t0, level, lines) {
       const t = t0 + off * beat;
       for (const s of [root + 12, root + 15, root + 19]) {
         const o = ac.createOscillator();
-        o.type = 'square';
+        o.setPeriodicWave(pulseWave(ac, 0.125));
         o.frequency.setValueAtTime(hz(B_REF, s), t);
         const g = ac.createGain();
-        const lv = level * 0.055;
+        const lv = level * 0.055 * 2.2;
         g.gain.value = 0;
         g.gain.setValueAtTime(0, t);
         g.gain.linearRampToValueAtTime(lv, t + 0.005);
@@ -411,30 +780,61 @@ const C_PLUCKS = [
   [19, 5], [23, 12], [28, 3],
 ];
 
-function tuneC(ac, dest, bar, t0, level) {
+function tuneC(ac, dest, bar, t0, level, lines = {}) {
   const u = ((bar % C_BARS) + C_BARS) % C_BARS;
   // the reed: a new pair of tones every 16 units, cut in, cut out, no crossfade — the chord
   // CHANGES, it does not dissolve into the next one
   if (u % C_CHORD_UNITS === 0) {
     const root = C_CHORDS[(u / C_CHORD_UNITS) % C_CHORDS.length];
     const dur = C_CHORD_UNITS * C_UNIT;
-    held(ac, dest, { t: t0, freq: hz(C_REF, root), dur, level: level * 0.30, type: 'sawtooth', cut: 380, q: 0.6, attack: 0.35, detune: -4 });
-    held(ac, dest, { t: t0, freq: hz(C_REF, root + 7), dur, level: level * 0.20, type: 'sawtooth', cut: 460, q: 0.6, attack: 0.42, detune: 5 });
-    held(ac, dest, { t: t0, freq: hz(C_REF, root + 12), dur, level: level * 0.10, type: 'triangle', cut: 700, q: 0.5, attack: 0.5 });
+    // the bellows the three reeds share: pumped by feet, so the chord breathes a few percent, and
+    // the air through the reed pans hisses a little under it
+    const bel = zg(ac, 1);
+    bel.connect(dest);
+    const pump = ac.createOscillator();
+    pump.frequency.value = 0.21 + 0.03 * ((u / C_CHORD_UNITS) % 3);
+    const pg = zg(ac, 0.07);
+    pump.connect(pg);
+    pg.connect(bel.gain);
+    pump.start(t0);
+    pump.stop(t0 + dur + 0.05);
+    const air = ac.createBufferSource();
+    air.buffer = noise(ac, 'pink');
+    air.loop = true;
+    const af = bq(ac, 'bandpass', 1500, 0.6);
+    const ag = zg(ac);
+    ag.gain.setValueAtTime(0, t0);
+    ag.gain.linearRampToValueAtTime(level * 0.03, t0 + 0.4);
+    ag.gain.setValueAtTime(level * 0.03, t0 + dur - 0.4);
+    ag.gain.linearRampToValueAtTime(0, t0 + dur);
+    air.connect(af);
+    af.connect(ag);
+    ag.connect(bel);
+    air.start(t0, (u * 0.37) % 1.5);
+    air.stop(t0 + dur + 0.02);
+    reed(ac, bel, { t: t0, freq: hz(C_REF, root), dur, level: level * 0.30, cut: 380, attack: 0.35, detune: -4 });
+    reed(ac, bel, { t: t0, freq: hz(C_REF, root + 7), dur, level: level * 0.20, cut: 460, attack: 0.42, detune: 5 });
+    reed(ac, bel, { t: t0, freq: hz(C_REF, root + 12), dur, level: level * 0.10, cut: 700, attack: 0.5 });
   }
   // the string, on the other cycle
   const p = u % 32;
   for (const [at, semis] of C_PLUCKS) {
     if (at !== p) continue;
-    pluck(ac, dest, {
+    // a zither course: two steel strings to the note, pulled near the bridge, through its box. It
+    // rings longer and fuller than the old triangle did, so it is played softer (× 0.34) to sit
+    // where that one sat under the reeds, 12 dB down
+    stringPluck(ac, lines.body ?? dest, {
       t: t0,
       freq: hz(C_REF, semis),
-      dur: 2.6,
-      level: level * 0.34,
-      type: 'triangle',
-      click: 0.22,
+      T60: 3.2,
+      level: level * 0.34 * 0.34,
+      beta: 0.17,
+      tilt: 1.7,
+      B: 0.00015,
+      unison: [-0.9, 0.9],
+      nMax: 10,
+      knockAt: 0.14,
       seed: 900 + u * 3 + semis,
-      partials: [[1, 1, 1], [2.001, 0.32, 0.4], [3.01, 0.12, 0.22], [4.98, 0.05, 0.12]],
     });
   }
   return C_UNIT;
@@ -452,7 +852,7 @@ export const TUNES = {
     bars: A_BARS,
     barSeconds: 3 * A_BEAT,
     loop: A_BARS * 3 * A_BEAT,
-    voices: ['comb tine (struck sine + three inharmonic partials + a pin click)', 'the case, one low note every eight bars'],
+    voices: ['comb tine: paired, beating steel teeth with cantilever modes and a pin click, through the box floor', 'the motor’s governor whirr, far under', 'the case, one low note every eight bars'],
     play: tuneA,
   },
   b: {
@@ -465,7 +865,7 @@ export const TUNES = {
     bars: B_BARS,
     barSeconds: 4 * B_BEAT,
     loop: B_BARS * 4 * B_BEAT,
-    voices: ['pulse lead through a 300–3000 Hz telephone band', 'plucked triangle bass, in the room', '50 Hz mains hum', 'a continuous 440 dial tone'],
+    voices: ['quarter-pulse lead with late vibrato, through a 300–3000 Hz band and a carbon mic', 'plucked gut bass, in the room', '50 Hz mains hum', 'a continuous 440 dial tone', 'line hiss'],
     play: tuneB,
     beds: true,
   },
@@ -479,7 +879,7 @@ export const TUNES = {
     bars: C_BARS,
     barSeconds: C_UNIT,
     loop: C_BARS * C_UNIT,
-    voices: ['reed, three tones, changing every 11.2 s', 'one plucked string on a 22.4 s cycle'],
+    voices: ['harmonium: celeste reed pairs on shared, breathing bellows, changing every 11.2 s', 'one zither course on a 22.4 s cycle'],
     play: tuneC,
   },
 };
@@ -490,19 +890,23 @@ export const DEFAULT_TUNE = 'a';
 // (peak and RMS, summed L+R, against the same references the cue table uses):
 //
 //              peak     rms      crest    centroid   vs room tone     vs escapement   vs door stop
-//   a  box     0.0920   0.0080   21.2 dB    796 Hz   +14.2 / +4 dB      +2.6 dB          -8.5 dB
-//   b  line    0.0359   0.0080   13.1 dB    940 Hz    +6.0 / +4 dB      -5.5 dB         -16.6 dB
-//   c  mech    0.0389   0.0080   13.7 dB    320 Hz    +6.7 / +4 dB      -4.8 dB         -15.9 dB
+//   a  box     0.0796   0.0080   20.0 dB    690 Hz   +14.8 / +6 dB      -0.9 dB         -12.0 dB
+//   b  line    0.0359   0.0080   13.0 dB   1206 Hz    +7.9 / +6 dB      -7.9 dB         -18.9 dB
+//   c  mech    0.0473   0.0080   15.4 dB    543 Hz   +10.3 / +6 dB      -5.4 dB         -16.5 dB
 //
-// (room tone peak 0.018 / rms 0.0050; escapement 0.068; the pen 0.040; the door's stop 0.244.)
+// (room tone peak 0.0145 / rms 0.0040; escapement 0.089; the pen 0.164; the door's stop 0.315 —
+// the rebuilt bank, 2026-09-24, re-measured when the instruments were rebuilt.)
 export const TUNE_LEVEL = 0.034;
 // Measured, and EQUALISED BY RMS, not by peak: the user is choosing between three compositions and
 // must not be choosing between three volumes. Each trim lands the tune's RMS on 0.0080 (about
 // +4 dB on the room tone, which is what a bed under a conversation wants), and the peaks fall where
-// the instrument puts them — a struck music box has 20 dB of crest and a reed drone has 13, and
+// the instrument puts them — a struck music box has 20 dB of crest and a reed drone has 15, and
 // flattening that would be flattening the instruments. `node tools/_tune-probe.mjs` prints the trim
 // each one needs; paste it back here.
-export const TUNE_TRIM = { a: 0.775, b: 0.444, c: 0.621 };
+export const TUNE_TRIM = { a: 0.183, b: 0.349, c: 0.715 };
+// the music box's motor and the line's hiss, as fractions of the tune's own level
+const WHIRR = 0.15;
+const LINE_HISS = 0.02;
 
 // ---- the instrument ------------------------------------------------------------------------------
 // Builds the graph for one tune and hands back a bar-at-a-time scheduler. `pump(now)` lays down
@@ -536,9 +940,23 @@ export function makeTune(ac, dest, { which = DEFAULT_TUNE, level = TUNE_LEVEL, v
     lp.frequency.value = 3000;
     lp.Q.value = 0.9;
     hp.connect(lp);
-    lp.connect(door);
+    // …and a carbon microphone at the far end: a presence peak and a soft clip that only the
+    // loudest notes of the lead reach
+    const mic = bq(ac, 'peaking', 1700, 1, 4);
+    const pre = zg(ac, 60);
+    const clip = shaper(ac, 1.6);
+    const post = zg(ac, 1 / 60);
+    lp.connect(mic);
+    mic.connect(pre);
+    pre.connect(clip);
+    clip.connect(post);
+    post.connect(door);
     lines.wire = hp;
   }
+  // A's comb is screwed to the floor of a small box, and the box is what you hear (IR.box)
+  if (T.id === 'a') lines.box = body(ac, door, 'box', { dry: 0.45, wet: 0.9, hp: 190 });
+  // C's string is on a zither, and the zither has a body too
+  if (T.id === 'c') lines.body = body(ac, door, 'zither', { dry: 0.5, wet: 0.8, hp: 90 });
 
   // B's two beds: the exchange's mains hum and the dial tone. Both continuous, both so far under
   // the tune that they read as the room being electrically alive rather than as notes.
@@ -575,6 +993,43 @@ export function makeTune(ac, dest, { which = DEFAULT_TUNE, level = TUNE_LEVEL, v
     dg.connect(lines.wire ?? door);
     dial.start(t0);
     beds.push(hum, buzz, dial);
+    // and the line itself: a faint hiss down the wire, under everything
+    const line = ac.createBufferSource();
+    line.buffer = noise(ac, 'pink');
+    line.loop = true;
+    const lg = zg(ac);
+    lg.gain.setValueAtTime(0, t0);
+    lg.gain.linearRampToValueAtTime(lv * LINE_HISS, t0 + 0.3);
+    line.connect(lg);
+    lg.connect(lines.wire ?? door);
+    line.start(t0);
+    beds.push(line);
+  }
+  // A's motor: the spring barrel, the gear train and the governor's air-brake fan, which spins at
+  // about thirty turns a second — a soft whirr fluttering at the fan's rate, inside the box, just
+  // under the tune. Continuous, so it takes a de-click ramp.
+  if (T.id === 'a' && WHIRR > 0) {
+    const w = ac.createBufferSource();
+    w.buffer = noise(ac, 'pink');
+    w.loop = true;
+    w.playbackRate.value = 0.93;
+    const wf = bq(ac, 'bandpass', 1150, 0.9);
+    const wg = zg(ac);
+    wg.gain.setValueAtTime(0, t0);
+    wg.gain.linearRampToValueAtTime(lv * WHIRR, t0 + 0.03);
+    const fan = ac.createOscillator();
+    fan.frequency.value = 31;
+    const fg = zg(ac);
+    fg.gain.setValueAtTime(0, t0);
+    fg.gain.linearRampToValueAtTime(lv * WHIRR * 0.6, t0 + 0.03);
+    fan.connect(fg);
+    fg.connect(wg.gain);
+    w.connect(wf);
+    wf.connect(wg);
+    wg.connect(lines.box);
+    w.start(t0);
+    fan.start(t0);
+    beds.push(w, fan);
   }
 
   let bar = 0; // absolute bar index; bar % T.bars is where it is in the material

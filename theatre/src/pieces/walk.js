@@ -225,9 +225,9 @@ export async function build(ctx) {
 
   // ---- THE STATE ------------------------------------------------------------------------------
   let at = null; // which place the visitor is standing at, or null for the chair
-  // HE GOES TO THE FIRE FIRST, AND NOBODY IS SEEN GOING (walk-crossing.js): the one place so far
-  // where he goes too. From the chair to the fireplace his prints cross the room and the camera
-  // follows them; from the fireplace home, the camera goes at once and the prints bring him back.
+  // HE GOES TOO, AND NOBODY IS SEEN GOING (walk-crossing.js), to the fireplace and to the reading
+  // table. From the chair his prints cross the room and the camera follows them; from there home,
+  // the camera goes at once and the prints bring him back.
   const crossing = C ? createCrossing(ctx) : null;
   let mine = null; // the shot THIS piece is holding the camera on, so busy() knows its own hold
   let pending = null; // ?walk=<place>, spent on the first update
@@ -277,10 +277,10 @@ export async function build(ctx) {
     mine = p.shot;
     C.hold(p.shot, { jump: false });
     ctx.emit?.('walk', { at, from: was, walking: true });
-    if (name === 'fireplace' && !was && crossing) {
+    if (!was && crossing?.goes(name)) {
       // the camera holds while his prints cross (a phone turns to keep them in its narrow frame),
       // and follows them once the last one is down
-      const legs = crossing.there();
+      const legs = crossing.there(name);
       if (C.phonePan) {
         await legs.carry;
         if (at !== name) return true;
@@ -563,7 +563,7 @@ export async function build(ctx) {
       api.books?.update?.();
       crossing?.update();
       // taken away from the fire by any other road (a judged state, a cut): he is simply back
-      if (crossing?.away && !crossing.active && at !== 'fireplace') crossing.reset();
+      if (crossing?.away && !crossing.active && at !== crossing.place) crossing.reset();
       drawMarks();
       // SELF-HEALING. If the camera left a place by a road that did not come through this piece —
       // a judging state, a tool putting the cross away, anything that cuts — then the visitor is

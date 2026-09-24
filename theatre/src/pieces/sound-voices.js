@@ -8,6 +8,10 @@
 // The one rule the pictures keep, kept here: nothing fades in. A voice is at its level on its first
 // sample and decays or is cut. No swells, no crossfades, no compressor pumping.
 import { mulberry32 } from '../core/rng.js';
+import * as PAPER from './sound-paper.js';
+import * as WOOD from './sound-wood.js';
+import * as METAL from './sound-metal.js';
+import * as AIR from './sound-air.js';
 
 // ---- the noise the whole world is made of --------------------------------------------------------
 const NOISE_S = 2;
@@ -31,11 +35,13 @@ export const LEVEL = {
   clock: 0.034,
   cut: 0.022,
   snap: 0.1,
-  deal: 0.052,
+  deal: 0.031, // 2026-09-24: the second bank's deal is a real sustained hiss, +4.5 dB at the same peak
   settle: 0.115,
   pick: 0.062,
-  flip: 0.085,
+  flip: 0.051, // …and the flip +4.4 dB
   riffle: 0.135,
+  // the whole deck laid out, seventy-eight light landings (sound-paper.js `spread`)
+  spread: 0.07,
   tap: 0.108,
   // the smoosh (reveal round 11 asked for these and had been falling back on riffle/deal/tap).
   // A wash is not a riffle: it is long, dry, soft-topped and it has no snap anywhere in it, so it
@@ -101,11 +107,11 @@ export const LEVEL = {
   // the vase of dried stems, wilting (egg-vase.js). Dead flowers are the lightest thing anybody in
   // this room could disturb, so it sits with the buzz and the pour, at the quiet end: it happens
   // on the sideboard at the far wall and it is meant to be heard only by whoever is watching it.
-  rustle: 0.023,
+  rustle: 0.034, // 2026-09-24: crackly by nature, 3.4 dB quieter at the same peak
   // the weather outside the window (egg-rain.js). It is not a cue, it is a BED — see rainBed at the
   // foot of this file — and it is the quietest thing in the piece: under the room tone itself,
   // because rain is on the far side of two panes of glass and the room tone is in the room.
-  rain: 0.006,
+  rain: 0.008, // 2026-09-24: the drop clusters set the peak now, so the wash sat 9 dB under the old bed at 0.006
   // a fingernail on the mirror's glass (egg-mirror.js). Quieter than the pour and shorter than the
   // switch: it happens on the far wall, and it is the sound of something small being touched.
   chink: 0.026,
@@ -116,6 +122,8 @@ export const LEVEL = {
   // …and the toad hitting the boards. Between the mains lever and a card landing: it is small and
   // it is a foot off the floor, so it is a knock and not a crash.
   thud: 0.096,
+  // a hardback's board landing on the reading table (walk-book.js), which used to borrow the toad's
+  board: 0.096,
 
   // ---- THE CROSS AND THE FLOOR UNDER IT (egg-cross.js, egg-cellar.js) --------------------------
   // Four events and they are two pairs: something small letting go of a wall three metres away, and
@@ -330,6 +338,23 @@ export const LENGTH = {
   reform: 0.46,
 };
 
+// ---- THE SECOND BANK (2026-09-24) -----------------------------------------------------------------
+// The owner: "i like the radio, i like the footsteps - the rest should improve significantly".
+// Every voice rebuilt in one of four families (sound-paper, sound-wood, sound-metal, sound-air) on
+// the primitives and the room in sound-core.js. A voice a family defines wins over the old one
+// below; its TRIM and LENGTH replace the old numbers. `print` and `footfall` (the footsteps) and
+// the radio's record are the owner's and are kept exactly as they were.
+// The first bank is in git history (before 2026-09-24) if it is ever wanted for comparison.
+const KEEP = new Set(['print', 'footfall']);
+const OLD = false;
+export const VOICES = {};
+if (!OLD)
+  for (const F of [PAPER, WOOD, METAL, AIR]) {
+    for (const [k, v] of Object.entries(F.VOICES ?? {})) if (!KEEP.has(k)) VOICES[k] = v;
+    for (const [k, v] of Object.entries(F.TRIM ?? {})) if (!KEEP.has(k)) TRIM[k] = v;
+    for (const [k, v] of Object.entries(F.LENGTH ?? {})) if (!KEEP.has(k)) LENGTH[k] = v;
+  }
+
 // ---- the two primitives --------------------------------------------------------------------------
 function out(ac, dest, pan) {
   if (!pan || !ac.createStereoPanner) return dest;
@@ -415,6 +440,7 @@ function struck(ac, dest, { t, dur, level, freq, type = 'sine', partials = [], p
 // A dry escapement: a hard little noise click with a short wooden body under it. The tock is a
 // tone lower than the tick, as a real one is; both are over in 40 ms.
 export function tick(ac, dest, t, { level = LEVEL.clock, pan = 0, tock = false, seed = 1 } = {}) {
+  if (VOICES.clock) return VOICES.clock(ac, dest, t, { level: level * (TRIM.clock ?? 1), seed, rng: mulberry32(seed * 2654435761), pan, gain: 1, tock });
   const b = tock ? 0.86 : 1;
   const lv = level * TRIM.clock;
   burst(ac, dest, { t, dur: 0.012, level: lv, freq: 2350 * b, q: 1.1, pan, seed });
@@ -433,6 +459,7 @@ export function tick(ac, dest, t, { level = LEVEL.clock, pan = 0, tock = false, 
 // exact audio time the door arrives (`veil(false, when)`).
 export const VEIL = { hz: 250, gain: 0.5, open: 18000 };
 export function roomTone(ac, dest, { level: want = LEVEL.room } = {}) {
+  if (!OLD && AIR.roomTone) return AIR.roomTone(ac, dest, { level: want * (TRIM.room ?? 1), VEIL });
   const level = want * TRIM.room;
   const t = ac.currentTime;
   const src = ac.createBufferSource();
@@ -505,6 +532,8 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
   const rng = mulberry32(seed * 2654435761);
   const trim = TRIM[name] ?? 1;
   const L = (k) => LEVEL[k] * gain * trim;
+  const V = VOICES[name];
+  if (V) return V(ac, dest, t, { level: L(name), seed, rng, pan, gain });
   switch (name) {
     // the camera cut: a dry paper tick, barely there, the frame changing
     case 'cut': {
@@ -1235,7 +1264,7 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink', 'blip', 'croak', 'thud', 'nail', 'rap', 'hatch', 'lid', 'unmake', 'gutter', 'print', 'reform'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink', 'blip', 'croak', 'thud', 'board', 'spread', 'nail', 'rap', 'hatch', 'lid', 'unmake', 'gutter', 'print', 'reform'];
 // ---- THE WEATHER: a bed, not a cue (egg-rain.js) --------------------------------------------------
 // The room tone above is the only other thing in this piece that RUNS rather than happens, and this
 // is built the same way and for the same reason: rain does not have a beginning, a shape and an end
@@ -1257,6 +1286,7 @@ export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 
 //
 // It is cut in at level on its first sample and cut dead when it stops. Nothing here fades.
 export function rainBed(ac, dest, { level: want = LEVEL.rain } = {}) {
+  if (!OLD && AIR.rainBed) return AIR.rainBed(ac, dest, { level: want * (TRIM.rain ?? 1) });
   const level = want * (TRIM.rain ?? 1);
   const t = ac.currentTime;
   const src = ac.createBufferSource();

@@ -501,7 +501,9 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
     phase = next;
     ctx.emit?.('props:deck', { phase: next });
   }
-  const CUE_LAY = [[0.0, 'riffle', 1], [0.5, 'riffle', 0.8], [1.0, 'riffle', 0.65], [1.5, 'riffle', 0.5]];
+  // the lay-out is one cue on its own exposure sheet: every card off the pile and down in its bow
+  // (sound-paper.js `spread`). It was four riffles, and a riffle ends on the pack dropping.
+  const CUE_LAY = [[0.0, 'spread', 1]];
 
   function step() {
     if (mode === 'shut') return;
@@ -539,10 +541,8 @@ export function eggDeck(ctx, { switches, konami = null } = {}) {
           let last = 0;
           for (let i = base; i < base + n; i++) last = Math.max(last, rank[i]);
           base += n;
-          if (t + 1e-6 >= depart(last) + FLY && !said.has('b' + k)) {
-            said.add('b' + k);
-            sound()?.play?.('deal', { gain: 0.5 });
-          }
+          // each bow's last card is already in `spread`; this is only the bookkeeping now
+          if (t + 1e-6 >= depart(last) + FLY && !said.has('b' + k)) said.add('b' + k);
         });
       }
       say('laying');

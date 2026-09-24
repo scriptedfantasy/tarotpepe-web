@@ -1862,10 +1862,10 @@ export function buildBooks(ctx, { switches, place }) {
       //   a RIFFLE   see `riffleAt`: a burst every six drawings at the gain the run's own speed
       //              asks for, so the sound follows the count instead of being fired once at a run
       //              that then goes on for another second and three quarters in silence
-      if (motion.kind === 'swing' && motion.k === 8) sound('thud', { gain: 0.42 });
+      if (motion.kind === 'swing' && motion.k === 8) sound('board', { gain: 0.42 });
       if (motion.kind === 'swing' && motion.k === 9) sound('rustle', { gain: 0.2 });
       if (motion.kind === 'shut' && motion.k === 6) sound('rustle', { gain: 0.3 });
-      if (motion.kind === 'shut' && motion.k === 8) sound('thud', { gain: 0.62 });
+      if (motion.kind === 'shut' && motion.k === 8) sound('board', { gain: 0.62 });
       if (motion.kind === 'turn' && motion.k === 7) sound('rustle', { gain: 0.16 });
       if (motion.kind === 'riffle' && motion.k < motion.drawings && motion.k % 6 === 0) {
         sound('riffle', { gain: 0.3 + 0.45 * riffleAt(motion).speed });
