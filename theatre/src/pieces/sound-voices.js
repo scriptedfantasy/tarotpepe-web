@@ -140,6 +140,14 @@ export const LEVEL = {
   // film that is: 2 kg of board falling 900 mm onto a boarded floor is the loudest event in the
   // parlour and there is no sense pretending otherwise.
   lid: 0.152,
+  // HIS CROSSING (walk-crossing.js). He comes apart where he sits, the lamp gutters, and wet prints
+  // with nobody in them cross the boards. The prints are the loudest of the four because they are
+  // the whole of what the visitor can see of him; the lamp is under the clock, because it is the
+  // room and not an event.
+  unmake: 0.07,
+  gutter: 0.022,
+  print: 0.06,
+  reform: 0.052,
 };
 
 // A filter eats most of a noise burst, and how much depends on its Q, so LEVEL above is a wish and
@@ -215,6 +223,12 @@ export const TRIM = {
   rap: 1,
   hatch: 1,
   lid: 1,
+  // measured by rendering each through sound.render offline over four seeds and taking the peak
+  // (the same arithmetic gives footfall 0.04999 against its LEVEL of 0.05, which checks the method)
+  unmake: 3.698,
+  gutter: 0.429,
+  print: 1.519,
+  reform: 1.932,
 };
 
 // how long each cue is allowed to be, in seconds; the probe asserts the rendered length against it
@@ -304,6 +318,16 @@ export const LENGTH = {
   // 0.34: a 2 kg board landing flat on a boarded floor, the floor answering under it, and a second
   // contact at the rebound. Three times the toad's 0.12 because it is twenty times the toad.
   lid: 0.34,
+  // 0.5: the paper tearing is 0.3 of it, and the breath that goes with it runs a little past
+  unmake: 0.5,
+  // 0.12: a filament and the mains under it, once per step of the dark — the steps are a drawing
+  // (1/12 s) apart, so each runs a little into the next and the four read as one lamp failing
+  gutter: 0.12,
+  // 0.13: webbed feet on boards are a wet slap and the webbing peeling off after it; the prints are
+  // three drawings (0.25 s) apart, so there is floor between them — a frog walks, it does not run
+  print: 0.13,
+  // 0.46: the reverse of the unmaking — the grains gather rather than scatter, and land
+  reform: 0.46,
 };
 
 // ---- the two primitives --------------------------------------------------------------------------
@@ -1157,12 +1181,61 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
       return LENGTH.lid;
     }
 
+    // ---- HIS CROSSING ------------------------------------------------------------------------------
+    // He comes apart: a soft thump of paper giving way, then a dry tear that runs FASTER as it goes
+    // (grains closer and closer together), and under both a breath drawn in — a band of air that
+    // climbs. The breath is the one attack here, and it is the wash's de-click, not a swell.
+    case 'unmake': {
+      burst(ac, dest, { t, dur: 0.16, level: L('unmake') * 0.55, freq: 140, q: 0.7, type: 'lowpass', pan, seed });
+      let at = t + 0.02;
+      for (let k = 0; k < 16; k++) {
+        const gap = 0.034 * Math.pow(0.86, k);
+        burst(ac, dest, { t: at, dur: 0.009 + rng() * 0.006, level: L('unmake') * (0.55 + 0.45 * (k / 15)), freq: 1800 + rng() * 2600, q: 2.6, pan: pan + (rng() - 0.5) * 0.2, seed: seed + 10 + k });
+        at += gap;
+      }
+      burst(ac, dest, { t, dur: 0.46, level: L('unmake') * 0.32, freq: 420, q: 1.4, sweep: 2100, attack: 0.03, pan, seed: seed + 3 });
+      return LENGTH.unmake;
+    }
+
+    // the lamp failing a step: the filament's tink, and the mains sagging under it
+    case 'gutter': {
+      struck(ac, dest, { t, dur: 0.03, level: L('gutter') * 0.7, freq: 2900 + rng() * 500, type: 'triangle', pan });
+      struck(ac, dest, { t, dur: 0.11, level: L('gutter'), freq: 100, type: 'sine', partials: [[2, 0.5, 0.8], [3, 0.22, 0.5]], pan });
+      burst(ac, dest, { t, dur: 0.05, level: L('gutter') * 0.4, freq: 5200, q: 1.5, pan, seed });
+      return LENGTH.gutter;
+    }
+
+    // a webbed foot put down on boards, wet: a low slap with the board under it, the smack of the
+    // wet skin, and the webbing coming away from the floor a moment after in two small peels
+    case 'print': {
+      burst(ac, dest, { t, dur: 0.07, level: L('print'), freq: 150 + rng() * 40, q: 0.8, type: 'lowpass', pan, seed });
+      struck(ac, dest, { t, dur: 0.09, level: L('print') * 0.45, freq: 62 + rng() * 10, type: 'sine', pan });
+      burst(ac, dest, { t, dur: 0.045, level: L('print') * 0.7, freq: 780 + rng() * 360, q: 1.8, pan, seed: seed + 1 });
+      burst(ac, dest, { t: t + 0.036 + rng() * 0.01, dur: 0.009, level: L('print') * 0.32, freq: 2900 + rng() * 800, q: 3, pan, seed: seed + 2 });
+      burst(ac, dest, { t: t + 0.062 + rng() * 0.014, dur: 0.008, level: L('print') * 0.22, freq: 3400 + rng() * 700, q: 3, pan, seed: seed + 3 });
+      return LENGTH.print;
+    }
+
+    // he gathers at his table: the tear run backwards — grains coming closer together and slowing
+    // into one another — and the paper of him landing on the bench
+    case 'reform': {
+      let at = t;
+      for (let k = 0; k < 14; k++) {
+        burst(ac, dest, { t: at, dur: 0.008 + rng() * 0.006, level: L('reform') * (0.3 + 0.5 * (k / 13)), freq: 1500 + rng() * 2200, q: 2.4, pan: pan + (rng() - 0.5) * 0.3, seed: seed + 10 + k });
+        at += 0.012 + 0.03 * (k / 13);
+      }
+      burst(ac, dest, { t: at, dur: 0.09, level: L('reform'), freq: 200, q: 0.8, type: 'lowpass', pan, seed });
+      struck(ac, dest, { t: at, dur: 0.08, level: L('reform') * 0.4, freq: 92, type: 'sine', pan });
+      burst(ac, dest, { t: at, dur: 0.01, level: L('reform') * 0.45, freq: 2800, q: 1.2, pan, seed: seed + 1 });
+      return LENGTH.reform;
+    }
+
     default:
       return 0;
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink', 'blip', 'croak', 'thud', 'nail', 'rap', 'hatch', 'lid'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink', 'blip', 'croak', 'thud', 'nail', 'rap', 'hatch', 'lid', 'unmake', 'gutter', 'print', 'reform'];
 // ---- THE WEATHER: a bed, not a cue (egg-rain.js) --------------------------------------------------
 // The room tone above is the only other thing in this piece that RUNS rather than happens, and this
 // is built the same way and for the same reason: rain does not have a beginning, a shape and an end

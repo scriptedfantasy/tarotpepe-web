@@ -102,6 +102,7 @@
 //                   `ring(name)`, `tap(name)`, `stand(name)`, `radius` — see THE MARKS below and
 //                   src/pieces/walk-marks.js
 import { buildBooks } from './walk-book.js';
+import { createCrossing } from './walk-crossing.js';
 import { phoneMode } from '../core/phone.js';
 import posthog from '../posthog.js';
 import { mountMarks, markSize, floorRing, bboxOf, watchPointer, RING_R } from './walk-marks.js';
@@ -134,7 +135,7 @@ const MIN_TAP = 44; // px: what a thumb needs, whatever the thing measures on th
 //              in front of it and is furniture; and not the keys, which are their own switch and
 //              are subtracted from this one (`boxesOn`).
 const PLACES = {
-  fireplace: { shot: 'fireplace', x: [-2.6, -2.36], y: [0, 1.26], z: [-0.66, 0.56] },
+  fireplace: { shot: 'fireplace', phoneHolds: false, x: [-2.6, -2.36], y: [0, 1.26], z: [-0.66, 0.56] },
   // THE DOORWAY IS NOT A PLACE ANY MORE (the owner, 2026-09-23: "remove the functionality at the
   // door, i dont want the door to the outside to open anymore"). It was the one place with nothing
   // to do but open the door onto the crossroads; with that gone there is nothing to walk to, so its
@@ -224,6 +225,10 @@ export async function build(ctx) {
 
   // ---- THE STATE ------------------------------------------------------------------------------
   let at = null; // which place the visitor is standing at, or null for the chair
+  // HE GOES TO THE FIRE FIRST, AND NOBODY IS SEEN GOING (walk-crossing.js): the one place so far
+  // where he goes too. From the chair to the fireplace his prints cross the room and the camera
+  // follows them; from the fireplace home, the camera goes at once and the prints bring him back.
+  const crossing = C ? createCrossing(ctx) : null;
   let mine = null; // the shot THIS piece is holding the camera on, so busy() knows its own hold
   let pending = null; // ?walk=<place>, spent on the first update
   let MARKS = null; // the drawn marks a window with no cursor gets (THE MARKS, at the foot)
@@ -253,6 +258,7 @@ export async function build(ctx) {
     // piece's own business and the day phases are entered from here (see egg-cross.js, THE DAY)
     if (Pp?.cross && Pp.cross.phase !== 'shut' && at !== 'doorway') return 'cross';
     if (ctx.pieces?.help?.showing) return 'notice';
+    if (crossing?.busy) return 'crossing';
     if (midReading()) return 'reading';
     if (busy()) return 'book';
     return null;
@@ -271,6 +277,33 @@ export async function build(ctx) {
     mine = p.shot;
     C.hold(p.shot, { jump: false });
     ctx.emit?.('walk', { at, from: was, walking: true });
+    if (name === 'fireplace' && !was && crossing) {
+      // the camera holds while his prints cross (a phone turns to keep them in its narrow frame),
+      // and follows them once the last one is down
+      const legs = crossing.there();
+      if (C.phonePan) {
+        await legs.carry;
+        if (at !== name) return true;
+        const pan = crossing.panPose();
+        mine = pan;
+        C.hold(pan, { jump: false });
+        C.move(null, pan, crossing.panSeconds);
+      }
+      await legs.landed;
+      if (at !== name) return true;
+      mine = p.shot;
+      C.hold(p.shot, { jump: false });
+      await C.move(null, p.shot, crossing.CROSS_SECONDS);
+      crossing.settled();
+      if (at === name) ctx.emit?.('walk', { at, from: was, walking: false });
+      return true;
+    }
+    // walking on from the fire to somewhere else: his prints take him home on their own while the
+    // camera goes where it was sent — never a pop back into his seat
+    if (crossing?.away) {
+      crossing.back();
+      crossing.open();
+    }
     await C.move(from, p.shot, SECONDS, { via: VIA[name] ?? [] });
     if (at === name) ctx.emit?.('walk', { at, from: was, walking: false });
     return true;
@@ -278,13 +311,32 @@ export async function build(ctx) {
 
   async function back() {
     if (!at) return false;
+    if (crossing?.busy) return false; // his prints are still on their way
     if (C.holding != null && C.holding !== mine) return false;
     const was = at;
     at = null;
     mine = 'home';
     C.hold('home', { jump: false }); // the way home is what the hold protects now
     ctx.emit?.('walk', { at: null, from: was, walking: true });
-    await C.move(null, 'home', SECONDS, { via: VIA[was] ?? [] });
+    if (crossing?.away && C.phonePan && crossing.pan) {
+      // he comes home on his own. A phone's narrow frame cannot hold his road from the chair, so it
+      // turns to where it watched him go, watches the prints come back, and turns home as he forms
+      const legs = crossing.back();
+      mine = crossing.pan;
+      C.hold(crossing.pan, { jump: false });
+      await C.move(null, crossing.pan, crossing.backPanSeconds);
+      await legs.turn;
+      if (at !== null) { crossing.open(); return true; }
+      mine = 'home';
+      C.hold('home', { jump: false });
+      await C.move(null, 'home', crossing.homeSeconds);
+      crossing.open();
+    } else {
+      const coming = crossing?.away; // he comes home on his own, alongside the camera
+      if (coming) crossing.back();
+      await C.move(null, 'home', SECONDS, { via: VIA[was] ?? [] });
+      if (coming) crossing.open();
+    }
     if (at !== null) return true; // somebody walked somewhere else while this was running
     C.release?.('home');
     mine = null;
@@ -366,6 +418,12 @@ export async function build(ctx) {
   // cell at all that walks the visitor back, with no Escape key to do it instead. Nothing on the
   // case's own boards answers a tap (the TAROT spine is a book on a shelf, see walk-book.js), so on
   // a phone `phoneHolds: false` lets a tap on the boards walk them back. A laptop keeps its hold.
+  //
+  // …AND THE FIREPLACE, 2026-09-24, for the same reason: held upright, its shot is the chimney
+  // breast edge to edge, so a thumb had nowhere to go but the piano at the side — which walked the
+  // visitor on to the piano and put Pepe back in his seat in one drawing, with none of his crossing
+  // home (the owner: "on mobile we're still missing the black lines that port him back"). The grate
+  // is a switch of its own and keeps its tap; the breast round it now walks the visitor back.
   const PHONE = phoneMode();
   const ownsClick = (name) => PLACES[name]?.holds !== false && !(PHONE && PLACES[name]?.phoneHolds === false);
   // THE PLACE ITSELF, WITHOUT ITS MARK — the drawing, the thumb's margin round it while that is
@@ -497,8 +555,15 @@ export async function build(ctx) {
       C?.release?.(C?.holding);
       C?.cut?.(p.shot);
     },
+    afterRender() {
+      crossing?.afterRender();
+    },
+    crossing,
     update() {
       api.books?.update?.();
+      crossing?.update();
+      // taken away from the fire by any other road (a judged state, a cut): he is simply back
+      if (crossing?.away && !crossing.active && at !== 'fireplace') crossing.reset();
       drawMarks();
       // SELF-HEALING. If the camera left a place by a road that did not come through this piece —
       // a judging state, a tool putting the cross away, anything that cuts — then the visitor is

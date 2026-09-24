@@ -144,6 +144,11 @@ const warned = new Set();
 let rendered = 0;
 function loop() {
   requestAnimationFrame(loop);
+  // iOS Safari does not always say when its window changes height — the keyboard going away, the
+  // address bar coming back — and a missed resize leaves the canvas at the old height with the
+  // page's black showing under it (the owner, on an iPhone: "a large black frame at the bottom").
+  // So the window is asked every frame, which costs two property reads.
+  if (window.innerWidth !== ctx.size.w || window.innerHeight !== ctx.size.h) onResize();
   ctx.clock.tick();
   for (const name in ctx.pieces) {
     const api = ctx.pieces[name];
@@ -160,17 +165,30 @@ function loop() {
   cam.updateMatrixWorld();
   if (ctx.pieces.ink?.render) ctx.pieces.ink.render(ctx);
   else renderer.render(scene, cam);
+  // a piece that draws over the finished frame (walk-crossing.js) does it here, in the same task,
+  // while the frame just rendered is still on the glass to be read
+  for (const name in ctx.pieces) {
+    try {
+      ctx.pieces[name].afterRender?.(ctx);
+    } catch (e) {
+      if (!warned.has(name + ':after')) {
+        warned.add(name + ':after');
+        console.error(`[piece:${name}] afterRender failed`, e);
+      }
+    }
+  }
   if (++rendered === 3) window.__theatreReady = true;
   if (debugEl && params.has('debug')) debugEl.textContent = `t=${ctx.clock.t.toFixed(2)} f=${ctx.clock.frame} view=${view ?? '-'} state=${state}`;
 }
 loop();
 
-window.addEventListener('resize', () => {
+function onResize() {
   ctx.size = { w: window.innerWidth, h: window.innerHeight, dpr: renderer.getPixelRatio() };
   cam.aspect = ctx.size.w / ctx.size.h;
   cam.updateProjectionMatrix();
   renderer.setSize(ctx.size.w, ctx.size.h);
   ctx.emit('resize', ctx.size);
-});
+}
+window.addEventListener('resize', onResize);
 
 window.__theatre = ctx;
