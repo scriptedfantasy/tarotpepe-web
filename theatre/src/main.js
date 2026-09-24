@@ -18,6 +18,7 @@ import { createAssets } from './core/assets.js';
 import * as lighting from './pieces/lighting.js';
 import * as room from './pieces/room.js';
 import * as props from './pieces/props.js';
+import * as tally from './pieces/tally.js';
 import * as table from './pieces/table.js';
 import * as cards from './pieces/cards.js';
 import * as pepe from './pieces/pepe.js';
@@ -36,7 +37,7 @@ import * as flow from './pieces/flow.js';
 import * as dials from './pieces/dials.js';
 
 // Build order = dependency order. Each piece receives ctx.pieces with everything built before it.
-export const PIECES = [lighting, room, props, table, cards, pepe, pepeAnim, reveal, camera, walk, ink, entrance, titles, dialogue, help, sound, mind, flow, dials];
+export const PIECES = [lighting, room, props, tally, table, cards, pepe, pepeAnim, reveal, camera, walk, ink, entrance, titles, dialogue, help, sound, mind, flow, dials];
 
 const params = new URLSearchParams(location.search);
 const view = params.get('view');

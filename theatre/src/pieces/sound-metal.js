@@ -726,3 +726,55 @@ VOICES.bell = (ac, dest, t, { level, seed, pan }) => {
 };
 TRIM.bell = 1.026;
 LENGTH.bell = 2.0;
+
+// ---- A NAIL SCORING THE PLASTER (tally.js) ----------------------------------------------------------
+// The visitor's own mark going onto the chimney breast: the point of a nail dragged down through
+// lime plaster, a hand's length of it. Plaster is not glass and it does not ring; what a point in
+// it makes is GRIT — the steel catching on a crumb, slipping, catching on the next, several hundred
+// times a second, each catch a contact a fraction of a millisecond long, heard through the wall as
+// a dry rasp high up where the crumbs are small. The first catch is the bite and it is the loudest
+// thing in it (nothing here fades in); a few crumbs break off on the way down and tick a little
+// louder than the rasp; the point lifts off at the end and the rasp stops inside a few
+// milliseconds. The nail itself hums a very little, two thin short steel modes, and the breast
+// answers each catch low and dead — it is a column of brick in a wall, which is why this is quiet:
+// LEVEL 0.03, under the switch and the radio's static. It is something small happening on a wall
+// three metres away. It lasts as long as the drawing does: five drawings at 12 fps, 0.42 s.
+VOICES.scratch = (ac, dest, t, { level, seed, pan }) => {
+  const rng = mulberry32(seed * 6353 + 7);
+  const { sr, d } = frame(ac, LENGTH.scratch);
+  const n = d.length;
+  const drag = 0.36 + rng() * 0.04; // how long the point is on the wall
+  const x = new Float64Array(n); // the catches
+  const lift = (u) => 1 - rc((u - 0.86) / 0.14); // the point coming away
+  // the stick-slip: 450..900 catches a second, clumped where the plaster is rougher
+  let at = 0.006;
+  const wander = rng() * 6;
+  while (at < drag) {
+    const u = at / drag;
+    const press = (0.62 + 0.22 * Math.sin(u * 7.3 + wander) + 0.1 * Math.sin(u * 23 + wander * 2)) * lift(u);
+    const i = Math.round(at * sr);
+    if (i < n) x[i] += press * (0.35 + 0.65 * rng()) * (rng() < 0.5 ? 1 : -1);
+    at += (1 / (450 + 450 * rng())) * (rng() < 0.12 ? 2.6 : 1);
+  }
+  // …and the dust between the catches, riding the same pressure
+  for (let i = 0; i < Math.min(n, drag * sr); i++) x[i] += (rng() * 2 - 1) * 0.07 * lift(i / sr / drag);
+  // the grit is high and narrow-ish; the wall under it is low and dead
+  const grit = Float64Array.from(x);
+  biquad(grit, sr, 'bp', 3400 + rng() * 500, 1.1);
+  const fine = Float64Array.from(x);
+  biquad(fine, sr, 'bp', 6800 + rng() * 800, 1.6);
+  for (let i = 0; i < n; i++) d[i] += grit[i] + fine[i] * 0.55;
+  resonators(d, x, sr, [[640 + rng() * 60, 0.05, 0.018], [1480 + rng() * 120, 0.04, 0.012]]);
+  // the nail's own shank, barely: two thin steel modes excited by the catches
+  resonators(d, x, sr, [[5230 + rng() * 200, 0.012, 0.03], [8110 + rng() * 300, 0.008, 0.02]]);
+  // the bite: the point going in
+  click(d, sr, 0, 1.3, 0.12, rng, { hp: 0.85 });
+  ring(d, sr, 0, 700 + rng() * 80, 0.25, 0.025);
+  // crumbs breaking off on the way down
+  const chips = 2 + Math.floor(rng() * 3);
+  for (let k = 0; k < chips; k++) click(d, sr, 0.05 + rng() * (drag - 0.1), 0.55 + rng() * 0.3, 0.06, rng, { hp: 0.9 });
+  biquad(d, sr, 'hp', 380, 0.7);
+  return ship(ac, dest, t, d, { level, pan, room: 0.35, vary: 0.9 + rng() * 0.1 });
+};
+TRIM.scratch = 1.832;
+LENGTH.scratch = 0.46;

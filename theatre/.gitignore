@@ -6,3 +6,6 @@ public/progress/shots/
 public/progress/log.jsonl
 *.log
 .DS_Store
+
+# the visitors count (server/tally.mjs) when no TALLY_DIR / Railway volume is set
+.data/

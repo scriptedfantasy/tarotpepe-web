@@ -12,6 +12,7 @@ import { createReadStream, statSync } from 'node:fs';
 import { join, extname, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pepeMiddleware } from './server/pepe.mjs';
+import { tallyMiddleware } from './server/tally.mjs';
 
 const ROOT = fileURLToPath(new URL('./', import.meta.url));
 const DIST = join(ROOT, 'dist');
@@ -37,6 +38,9 @@ const MIME = {
 };
 
 const api = pepeMiddleware(ROOT);
+// the visitors' count on the chimney breast (server/tally.mjs): one number in a JSON file, kept in
+// TALLY_DIR or the Railway volume, else .data/ here
+const tally = tallyMiddleware(ROOT);
 
 // A file under dist/, or index.html for anything that is not a file — the app is one page and its
 // own query parameters are how a view is asked for.
@@ -117,7 +121,7 @@ async function relay(req, res) {
 
 createServer((req, res) => {
   if ((req.url ?? '').startsWith('/rel/')) return relay(req, res);
-  api(req, res, () => serve(req, res));
+  tally(req, res, () => api(req, res, () => serve(req, res)));
 }).listen(PORT, () => {
   console.log(`tarot pepe · http://localhost:${PORT}`);
 });

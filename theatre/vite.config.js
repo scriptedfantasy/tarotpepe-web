@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import { pepeApi } from './server/pepe.mjs';
+import { tallyApi } from './server/tally.mjs';
 
 // /progress/ is a plain page in public/, not part of the app. Vite's SPA fallback answers a
 // directory request with the app's index.html, so without this the progress board and the scene
@@ -38,7 +39,7 @@ function shipOnlyWhatIsAsked() {
 }
 
 export default defineConfig({
-  plugins: [pepeApi(), progressIndex(), shipOnlyWhatIsAsked()],
+  plugins: [pepeApi(), tallyApi(), progressIndex(), shipOnlyWhatIsAsked()],
   server: { host: '127.0.0.1', port: 5173, strictPort: true },
   build: { target: 'es2022' },
 });

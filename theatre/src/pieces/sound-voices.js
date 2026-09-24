@@ -136,6 +136,10 @@ export const LEVEL = {
   // sound — under the toad's croak — and it is here at all because the cross starts moving on the
   // same drawing and a thing that begins in silence has not begun.
   nail: 0.024,
+  // a nail point scoring the plaster over the mantel: the visitor's own mark going onto the chimney
+  // breast (tally.js). Beside the radio's static, under the switch's click: three metres away,
+  // small, on a wall — heard by someone who is looking at it.
+  scratch: 0.03,
   // …and the wood arriving under its own pin, rapping the plaster on the way. Between the croak and
   // the toad's fall: a lath 230 mm long, swinging on one pin, striking a wall.
   rap: 0.062,
@@ -1264,7 +1268,7 @@ export function play(ac, dest, name, t, { seed = 1, gain = 1, pan = 0 } = {}) {
   }
 }
 
-export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink', 'blip', 'croak', 'thud', 'board', 'spread', 'nail', 'rap', 'hatch', 'lid', 'unmake', 'gutter', 'print', 'reform'];
+export const CUES = ['cut', 'snap', 'deal', 'settle', 'pick', 'flip', 'riffle', 'tap', 'wash', 'smoosh', 'rake', 'square', 'title', 'closing', 'creak', 'street', 'type', 'latch', 'hinge', 'knock', 'footfall', 'static', 'switch', 'plug', 'dialtone', 'bell', 'clack', 'glug', 'buzz', 'rustle', 'crackle', 'chink', 'blip', 'croak', 'thud', 'board', 'spread', 'nail', 'rap', 'hatch', 'lid', 'unmake', 'gutter', 'print', 'reform', 'scratch'];
 // ---- THE WEATHER: a bed, not a cue (egg-rain.js) --------------------------------------------------
 // The room tone above is the only other thing in this piece that RUNS rather than happens, and this
 // is built the same way and for the same reason: rain does not have a beginning, a shape and an end

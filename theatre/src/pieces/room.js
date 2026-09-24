@@ -401,7 +401,10 @@ export async function build(ctx) {
     opening: { z0: (fire.x0 + fire.x1) / 2 - fire.open / 2, z1: (fire.x0 + fire.x1) / 2 + fire.open / 2, y0: fire.sill, y1: fire.head },
     grate: { x: -hx + fire.proj - 0.1, y: fire.sill, z: (fire.x0 + fire.x1) / 2 },
   };
-  return { group: g, sideWindow: sideWin, leftWindow: sideWinL, fireplace: fireWorld, door, bands: BAND, setState() {} };
+  // …and the hand's WARP itself, because a drawing laid ON one of these walls has to bend with it:
+  // the chimney breast's face moves up to 9 mm off its plane, and the visitors' tally (tally.js) is
+  // a sheet 3 mm proud of it, so it goes through the same field or the plaster comes through it.
+  return { group: g, sideWindow: sideWin, leftWindow: sideWinL, fireplace: fireWorld, door, bands: BAND, warp: P.warp, setState() {} };
 }
 
 // A casement window in a reveal, an architrave, a sill, and (if there is wall for them) two louvred
