@@ -611,7 +611,10 @@ function situation(b, names = []) {
       return 'The little wooden cross over the door has just dropped off its top nail, swung round on the pin through its foot, and is hanging upside down on the frieze. At the same moment three floorboards in front of the visitor lifted on a hinge, and under them is a stone stair going down into your cellar with a red light coming up it. You have lived over this cellar for years and it has never done that by itself before. Say what is down there, in one or two lines, in your own way.';
     case 'globe': {
       const c = clip(b.country, 60) || 'somewhere';
-      return `The globe on the cabinet has just stopped turning, under the visitor's finger, on ${c}. You once had an affair there, on a holiday, years ago. Tell it in three sentences: where, what it was like, how it ended. Do not name the person.`;
+      // Said as the visitor ASKING: a note that only reports the spin loses to "never bring an object
+      // up unless asked" and "never answer the note", and mid-conversation he answered their last
+      // line instead (0 of 16 on gpt-5.6-luna; 16 of 16 worded like this).
+      return `The visitor has just spun the globe on the cabinet and it has stopped, under their finger, on ${c}. That is them asking about the globe, and in this room it is how somebody asks for the one story it holds: you once had an affair in ${c}, on a holiday, years ago, and you tell it. Tell it now, in three sentences: where, what it was like, how it ended. Do not name the person.`;
     }
     case 'shuffle': {
       const about = b.about ? ` You took the reading to be about "${clip(b.about, 80)}".` : '';

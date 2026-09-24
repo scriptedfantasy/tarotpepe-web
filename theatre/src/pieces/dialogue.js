@@ -1726,6 +1726,7 @@ export async function build(ctx) {
       while (t.ti < t.takes.length - 1) nextTake(t, 'finish:' + why);
       reveal(t.words, Infinity);
       standing = true;
+      unturned = why === 'hold'; // the clock settled it; nobody has read it that we know of
       t.done?.();
     }
     if (inter) {
@@ -1760,6 +1761,47 @@ export async function build(ctx) {
   // A judging still has no clock running under it, so nothing would put the mark up or keep it
   // there. This says the still asked for it: see setState's `still`.
   let arrowStill = false;
+  // ROUND 17: NOTHING OF HIS REPLACES ANYTHING OF HIS ON A CLOCK. The owner, 2026-09-24: "at the
+  // start pepe's chatbox often fills up and then jumps to the next bit without the arrow that the
+  // user is supposed to click. remember, we dont know how fast users read". Round 16 gated every
+  // line that was cut and every card that filled; the one left on the clock was a line that fitted
+  // on one card short of the fourth line — held for `hold`, settled, and his NEXT line typed over it
+  // whether it had been read or not. At the start of the evening that is most of what he says.
+  //
+  // So a line the clock settled is UNTURNED, and the next thing of his that would take its place —
+  // a sentence, a card's title — waits behind the mark on it until the visitor turns it: the card,
+  // the mark, Space, Return, a click on the picture. `say`'s promise still settles on the clock
+  // (flow's own timing is untouched); it is the next line that waits, at its own door. What is not
+  // a replacement is not gated: the field opening under his line (`ask`), the thinking dots after
+  // they have answered, a card they have folded away to look at the room.
+  let unturned = false; // his line is standing, settled by the clock, and nobody has turned it
+  let turnOpen = null; // the next line's door, while it waits for the visitor
+  let turnWait = null;
+  function waitTurn() {
+    if (turnWait) return turnWait;
+    if (!unturned || !standing || field || cap.hidden || folded || ctx.shotMode || ctx.clock.frozen) {
+      unturned = false;
+      return null;
+    }
+    note('turn-wait', 'say', {});
+    turnWait = new Promise((res) => {
+      turnOpen = res;
+    });
+    setArrow(true);
+    return turnWait;
+  }
+  // `go` false is a clear: the card is being taken off the paper, and what was waiting is dropped
+  function openTurn(why = '?', go = true) {
+    unturned = false;
+    if (!turnOpen) return false;
+    note('turn-open', why, {});
+    const r = turnOpen;
+    turnOpen = null;
+    turnWait = null;
+    setArrow(false);
+    r(go);
+    return true;
+  }
   function drawTheArrow() {
     if (!arrowUp) return;
     // The nib's own weight. The mark is drawn in a 26-unit box laid out at 2.1em, so a unit is
@@ -1972,6 +2014,7 @@ export async function build(ctx) {
     fit();
   }
   function openBlock(value = '') {
+    unturned = false; // the field opens under his line: nothing of his is being replaced
     const reply = cap.querySelector('.reply');
     if (!reply) return null;
     // ROUND 13 — A FULL CARD IS CLEARED FOR THEM. The user: "The user's cursor can pop up on an
@@ -2091,7 +2134,11 @@ export async function build(ctx) {
     // plus `hold`, unchanged — and then STANDS there until his next line replaces it (round 8).
     // (`keep` and `who` are accepted and do nothing: every line keeps now, and round 6 took the
     // speaker's name off the card altogether.)
-    say(text, { hold = 1.2, keep = false } = {}) {
+    say(text, opts) {
+      const turn = waitTurn();
+      return turn ? turn.then((go) => (go === false ? undefined : api.sayNow(text, opts))) : api.sayNow(text, opts);
+    },
+    sayNow(text, { hold = 1.2, keep = false } = {}) {
       // NOTHING GOES UP OVER A CARD THEY HAVE NOT TURNED, and this is where that claim is checkable
       // rather than argued. The queue is flow's own `await`: every sentence of the evening is
       // sequenced off the promise below, which does not settle until the visitor's hand has passed
@@ -2116,7 +2163,11 @@ export async function build(ctx) {
     },
 
     // The card's title: numeral (or ordinal), name, position, on the bare paper beside the card.
-    intertitle(slug, position, { hold = INTER_HOLD } = {}) {
+    intertitle(slug, position, opts) {
+      const turn = waitTurn();
+      return turn ? turn.then((go) => (go === false ? undefined : api.intertitleNow(slug, position, opts))) : api.intertitleNow(slug, position, opts);
+    },
+    intertitleNow(slug, position, { hold = INTER_HOLD } = {}) {
       finish('intertitle');
       const [n, name, label] = interLines(slug, position);
       const fresh = cap.hidden;
@@ -2282,6 +2333,7 @@ export async function build(ctx) {
     // reason to make them wait out a hold written for somebody reading at his pace.
     skip(why = 'skip') {
       note('skip', why, { typing: !!typing, full: wellFull(), gesture });
+      if (!typing && !inter && openTurn('skip:' + why)) return true;
       if (typing) {
         const t = typing;
         const last = t.words[t.words.length - 1];
@@ -2349,6 +2401,7 @@ export async function build(ctx) {
     // The one thing that takes a line off the paper without putting another in its place: a new
     // evening, the visitor's Escape, the walk back out through the door.
     clear() {
+      openTurn('clear', false);
       finish('clear');
       cut('clear');
       thinkForced = false;
@@ -2361,6 +2414,7 @@ export async function build(ctx) {
     //   ?line=<n>  which line of the beat   ?card=<slug>&pos=<0..2>  the reading   ?inter=1  its title
     //   ?answer=<text>  what the visitor has written so far
     setState(name) {
+      openTurn('setState', false);
       finish('setState');
       cut('setState');
       thinkForced = false;
@@ -2459,7 +2513,7 @@ export async function build(ctx) {
       // the arrow boils like every other line on the card, on the same 12 fps step
       if (arrowUp) drawTheArrow();
       if (!typing) {
-        if (!inter && !arrowStill) setArrow(false);
+        if (!inter && !arrowStill && !turnOpen) setArrow(false);
         return;
       }
       const chars = Math.floor((t - typing.start) * CPS + 1e-6);

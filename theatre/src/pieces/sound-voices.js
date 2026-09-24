@@ -32,7 +32,7 @@ export function noiseBuffer(ac) {
 // room tone is a tenth of the quietest cue; the clock sits under every card.
 export const LEVEL = {
   room: 0.009,
-  clock: 0.034,
+  clock: 0.011, // 2026-09-24, the owner: "the clock is really annoying, we have to make it way quieter" (was 0.034)
   cut: 0.022,
   snap: 0.1,
   deal: 0.031, // 2026-09-24: the second bank's deal is a real sustained hiss, +4.5 dB at the same peak
