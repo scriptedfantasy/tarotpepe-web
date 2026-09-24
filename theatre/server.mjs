@@ -86,7 +86,37 @@ function serve(req, res) {
   createReadStream(file).pipe(res);
 }
 
+// THE COUNTER'S OWN DOOR. PostHog is reached through this server at /rel/… rather than at
+// posthog.com, because tracker blockers refuse any request to posthog.com and a visitor with one
+// would simply not be counted (the owner's own Chrome was one of them). Same origin, a neutral path:
+// /rel/static and /rel/array are PostHog's scripts, everything else is its ingestion API.
+const PH_API = 'https://eu.i.posthog.com';
+const PH_ASSETS = 'https://eu-assets.i.posthog.com';
+async function relay(req, res) {
+  try {
+    const path = req.url.slice('/rel'.length) || '/';
+    const up = (/^\/(static|array)\//.test(path) ? PH_ASSETS : PH_API) + path;
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const headers = {};
+    for (const h of ['content-type', 'content-encoding', 'user-agent', 'accept', 'accept-language', 'origin', 'referer'])
+      if (req.headers[h]) headers[h] = req.headers[h];
+    const ip = String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0].trim();
+    if (ip) headers['x-forwarded-for'] = ip;
+    const r = await fetch(up, { method: req.method, headers, body: chunks.length && req.method !== 'GET' && req.method !== 'HEAD' ? Buffer.concat(chunks) : undefined });
+    const out = {};
+    for (const h of ['content-type', 'cache-control', 'access-control-allow-origin'])
+      if (r.headers.get(h)) out[h] = r.headers.get(h);
+    res.writeHead(r.status, out);
+    res.end(Buffer.from(await r.arrayBuffer()));
+  } catch {
+    res.writeHead(502);
+    res.end();
+  }
+}
+
 createServer((req, res) => {
+  if ((req.url ?? '').startsWith('/rel/')) return relay(req, res);
   api(req, res, () => serve(req, res));
 }).listen(PORT, () => {
   console.log(`tarot pepe · http://localhost:${PORT}`);

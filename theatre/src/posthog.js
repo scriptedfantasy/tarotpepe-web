@@ -9,6 +9,10 @@
 // (every proof and contact sheet in tools/ runs Playwright against this page, and would otherwise
 // be most of the traffic). `?ph=1` counts a dev page on purpose.
 //
+// THE LIVE SITE SENDS THROUGH ITS OWN SERVER (server.mjs, /rel/): tracker blockers refuse
+// posthog.com outright, and a visitor with one would not be counted at all. A dev page (?ph=1)
+// talks to PostHog directly, as Vite has no relay.
+//
 // The project key and host are public by design (they ship in every page), so the build falls back
 // to them when the VITE_ variables are not set — the Railway build does not need them.
 import posthogClient from 'posthog-js';
@@ -29,7 +33,8 @@ const live = (import.meta.env.PROD || forced) && !automated;
 
 const posthog = live
   ? (posthogClient.init(key, {
-    api_host: host,
+    api_host: import.meta.env.PROD ? '/rel' : host,
+    ui_host: 'https://eu.posthog.com',
     defaults: '2026-05-30',
     cookieless_mode: 'always',
     logs: {
