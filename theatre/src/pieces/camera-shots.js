@@ -878,7 +878,16 @@ export function buildShots(L, aspect, reveal = null, opts = {}) {
         [SPINET.front + 0.03, SPINET.keyY + 0.22, SPINET.z0 + 0.02], [SPINET.front + 0.03, SPINET.keyY + 0.22, SPINET.z1 - 0.02],
       ];
       const tall = aspect < 1.05;
-      return fitEither({ pos, look, ...(tall ? { up: [0, 0, -1] } : null), keep, pad: tall ? 0.06 : 0.1 }, aspect);
+      const shot = fitEither({ pos, look, ...(tall ? { up: [0, 0, -1] } : null), keep, pad: tall ? 0.06 : 0.1 }, aspect);
+      // …AND ON A LANDSCAPE WINDOW THE LENS FALLS, to show the lid and a strip of the window over it
+      // (the owner, on the piano mockup: "tilt the frame up a bit so we don't see that much of the
+      // seat, but the piano chords the piano notes move more downwards and we have a little bit of
+      // the wind[ow] over the top"). Same lens, same place, same aim; only the rise, which the solver
+      // sets at +0.142 for 1280×800 to centre the keys, is −0.04: the keyboard sits in the lower
+      // third, the stool is a sliver at the foot, and the lid — where the jar of flies stands — is in
+      // the picture. A frame turned on its side for a phone keeps the solver's own ("Mobile looks
+      // good").
+      return tall ? shot : { ...shot, shift: [shot.shift?.[0] ?? 0, -0.04] };
     })(),
     case: flat([(TALL_CASE.x0 + TALL_CASE.x1) / 2, 1.1, 3.2], {
       keep: [

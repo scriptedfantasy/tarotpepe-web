@@ -1610,6 +1610,11 @@ export async function build(ctx) {
     // key down for, `hands` what his two rigs are doing, `hold(beat)` freezes a bar of it for a
     // still and `piano-playing` is that as a judging state.
     piano: PIANO_,
+    // the piano's prints, dimmed room and jar of flies are drawn over the finished frame
+    // (piano-prints.js), the way the crossing's sheet is
+    afterRender() {
+      PIANO_.afterRender?.();
+    },
     // THE RADIO on the case's middle board, round 8. `station` is 0..1 (0 is off), `tune` the sound piece's own
     // name for it, `turn()` advances one stop as a click does, `set(i)` jumps there without the
     // throw or the crackle, and hitBox/tapBox are the set's box on the glass and the box a thumb

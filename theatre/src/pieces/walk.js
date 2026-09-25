@@ -110,7 +110,7 @@ import { mountMarks, markSize, floorRing, bboxOf, watchPointer, RING_R } from '.
 export const meta = {
   name: 'walk',
   judge: { shot: 'home', states: ['home', 'fireplace', 'case', 'piano', 'table'] },
-  files: ['src/pieces/walk.js', 'src/pieces/walk-marks.js', 'src/pieces/walk-book.js', 'src/pieces/walk-book-page.js', 'src/pieces/book-tarot.js', 'src/pieces/props-piano.js', 'src/pieces/piano-song.js', 'src/pieces/props-table.js'],
+  files: ['src/pieces/walk.js', 'src/pieces/walk-marks.js', 'src/pieces/walk-book.js', 'src/pieces/walk-book-page.js', 'src/pieces/book-tarot.js', 'src/pieces/props-piano.js', 'src/pieces/piano-song.js', 'src/pieces/piano-prints.js', 'src/pieces/props-table.js'],
 };
 
 // 1.5 s, which at twelve a second is eighteen drawings. The cross egg's own walk out through the
@@ -225,8 +225,8 @@ export async function build(ctx) {
 
   // ---- THE STATE ------------------------------------------------------------------------------
   let at = null; // which place the visitor is standing at, or null for the chair
-  // HE GOES TOO, AND NOBODY IS SEEN GOING (walk-crossing.js), to the fireplace and to the reading
-  // table. From the chair his prints cross the room and the camera follows them; from there home,
+  // HE GOES TOO, AND NOBODY IS SEEN GOING (walk-crossing.js), to the fireplace, the reading table
+  // and the piano. From the chair his prints cross the room and the camera follows them; from there home,
   // the camera goes at once and the prints bring him back.
   const crossing = C ? createCrossing(ctx) : null;
   let mine = null; // the shot THIS piece is holding the camera on, so busy() knows its own hold
@@ -295,6 +295,7 @@ export async function build(ctx) {
       C.hold(p.shot, { jump: false });
       await C.move(null, p.shot, crossing.CROSS_SECONDS);
       crossing.settled();
+      if (at === name) arrived(name);
       if (at === name) ctx.emit?.('walk', { at, from: was, walking: false });
       return true;
     }
@@ -305,8 +306,15 @@ export async function build(ctx) {
       crossing.open();
     }
     await C.move(from, p.shot, SECONDS, { via: VIA[name] ?? [] });
+    if (at === name) arrived(name);
     if (at === name) ctx.emit?.('walk', { at, from: was, walking: false });
     return true;
+  }
+  // THE PIANO STARTS WHEN THE CAMERA GETS THERE, with no second click (the owner: arriving at the
+  // piano starts the song). The keys stay a switch that stops and starts it, and walking away
+  // still stops it (props-piano.js).
+  function arrived(name) {
+    if (name === 'piano') ctx.pieces?.props?.piano?.start?.();
   }
 
   async function back() {

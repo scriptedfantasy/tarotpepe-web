@@ -30,18 +30,15 @@
 // keys, because that is what the user asked to see and because it is the only angle from which 88
 // keys are 88 keys rather than a grey band. camera-shots.js, `piano`.
 //
-// ---- HIS HANDS -------------------------------------------------------------------------------
-// Drawn for this shot, in src/pieces/piano-hands.js, and they are the one thing here that is not
-// borrowed. The first cut of this piano took the two rigs out of src/pieces/reveal-hand.js — the
-// drawing that comes over the cloth for the shuffle — and gave them a shoulder off the bottom of
-// the frame. Over a keyboard 2.2 m from the lens that came out as two white sleeve tubes arching
-// across the keys with three green slivers under them; the user: "review the hands on the piano,
-// they could be a lot better." So the cloth keeps its hands untouched and the piano has its own:
-// the BACKS of two hands, his own green and his own four fingers and thumb, a short white cuff at
-// each wrist and no sleeve past it, with the fingering worked out from the score every drawing.
-// AND PEPE DOES NOT MOVE while they play. He sits at the table with both hands on it, a metre and a
-// half behind the stool, which is the joke and is also the only way a frog reaches this piano.
-import { buildPianoHands } from './piano-hands.js';
+// ---- NOBODY PLAYS IT -------------------------------------------------------------------------
+// There were hands here: first the shuffle's two rigs with a shoulder off the bottom of the frame,
+// then a pair drawn for this shot (piano-hands.js). The owner, 2026-09-25: "Right now the piano is a
+// few flying hands. doesn't really make sense." After a round of mockups — a ghost of him at the
+// stool, then no one at all — the one approved was the INVISIBLE PLAYER: his prints cross the room
+// to the stool (walk-crossing.js, ROUTES.piano), the piano starts on its own the moment the camera
+// arrives, and every key it strikes takes a wet green toe print from a finger that is not there
+// (src/pieces/piano-prints.js, which draws the prints, the dimmed room and the jar of flies).
+import { buildPianoPrints } from './piano-prints.js';
 import { NOTES, BEAT, METRE, BARS, LOOP, freqOf, soundingAt } from './piano-song.js';
 
 // ---- the joinery, in world metres ---------------------------------------------------------------
@@ -171,19 +168,25 @@ export function buildPiano(ctx, { group, switches, O, M }) {
     root.add(O.rod([lx, S.seat - 0.05, lz], [lx + ox * 0.02, 0, lz + oz * 0.02], 0.014, M.solid));
   }
 
-  // ---- 4. HIS HANDS -----------------------------------------------------------------------------
-  // One pair, drawn for this shot (src/pieces/piano-hands.js). They are given the four things about
-  // this instrument a hand has to know — how high the white keys are, where a key stands along the
-  // board, which of the 88 are black, and where the key block begins — and they work out the rest,
-  // including which finger takes which note, from the notes they are handed each drawing.
-  // THE HANDS HANG OFF THE PIANO. Its root is in world metres like every other prop, so a hand put
-  // at a key's own z is at that key; and when the room is dressed away (?nodress) the hands go with
-  // it, which the cloth's rig — a child of the scene — never could.
-  // `home` is the first note each hand plays, read off the score: where a hand that has nothing to
-  // do yet waits. The left hand has this piece to itself for four bars, and the right hand comes in
-  // with it anyway and stands over the F♯ it is going to enter on.
-  const home = { L: NOTES.find((n) => n.hand === 'L').m, R: NOTES.find((n) => n.hand === 'R').m };
-  const hands = buildPianoHands(ctx, { parent: root, keyY: P.keyY, keyZ, isBlack, front: P.front, home });
+  // ---- 4. THE JAR OF FLIES on the lid ------------------------------------------------------------
+  // His snacks, and the thing the owner put on the lid once the piano shot was tilted up to show it:
+  // "a jar of flies ... that buzz and bump the glass in time with the music". This is the ROOM'S jar,
+  // the same lathe and label the MIEL jar on the spares press is made of (props-objects.js, `jar`),
+  // so from the chair, the fireplace or the case it is one more jar in the parlour. At the piano shot
+  // the prints' sheet takes it out of the scene and draws its own over the same spot — the glass, the
+  // punched tin lid, the narrow MOUCHES label and the flies in it — because a fly is a speck of ink a
+  // few pixels long and there is no drawing it on a lathe.
+  // x −2.33 is judged on the glass (piano-prints.js, JAR): a quarter of the visible lid clear in
+  // front of it and behind it at the piano shot, in both framings.
+  const JARPOS = { x: -2.33, z: -1.86 };
+  const jarMesh = O.shelfItem({ kind: 'jar', name: 'MOUCHES', h: 0.081, scale: 1.0625, seed: 73 }, () => 0.5);
+  jarMesh.name = 'mouches-jar';
+  jarMesh.position.set(JARPOS.x, P.top, JARPOS.z);
+  // the label to the room: the lathe's label faces −z, turned to face the piano shot's lens, which
+  // stands 1.6 m out from the jar and 0.45 m toward the bass
+  jarMesh.rotation.y = Math.atan2(-1.6, -0.45);
+  root.add(jarMesh);
+  const prints = buildPianoPrints(ctx, { piano: P, keyZ, isBlack, whites: WHITES, jarMesh });
 
   // ---- 5. THE SONG ------------------------------------------------------------------------------
   // It runs on the TWELVES like everything else drawn in this room, and on the AUDIO CLOCK for the
@@ -215,19 +218,19 @@ export function buildPiano(ctx, { group, switches, O, M }) {
     startFrame = ctx.clock.frame;
     scheduledTo = -1;
     struck.length = 0;
-    hands.enter();
+    prints.playing(true);
     ctx.emit?.('piano', { playing: true });
     return true;
   }
-  // `gone` is the visitor having walked away: the hands go at once rather than taking their three
-  // drawings to leave the frame, because the frame is not this one any more and a pair of hands
-  // sliding off a keyboard nobody is looking at is three drawings spent on nothing.
+  // `gone` is the visitor having walked away; the prints dry on their own either way
   function stop(gone = false) {
+    void gone;
     if (!playing) return false;
     playing = false;
     heldBeat = null;
     allKeysUp();
-    hands.leave(gone);
+    prints.releaseAll();
+    prints.playing(false);
     ctx.emit?.('piano', { playing: false });
     return true;
   }
@@ -294,8 +297,14 @@ export function buildPiano(ctx, { group, switches, O, M }) {
     get struck() {
       return struck.slice();
     },
-    get hands() {
-      return hands.state;
+    // the prints, the dim and the flies (piano-prints.js), for the tools
+    get prints() {
+      return prints.state;
+    },
+    printsApi: prints,
+    jar: jarMesh,
+    afterRender() {
+      prints.afterRender();
     },
     start,
     stop,
@@ -310,7 +319,6 @@ export function buildPiano(ctx, { group, switches, O, M }) {
       playing = true;
       heldBeat = ((b % (BARS * METRE)) + BARS * METRE) % (BARS * METRE);
       scheduledTo = 1e9;
-      hands.enter(true); // a still is not an entrance: the hands are already on the keys
       api.update(ctx);
       return heldBeat;
     },
@@ -319,11 +327,10 @@ export function buildPiano(ctx, { group, switches, O, M }) {
       else stop();
     },
     update(c) {
-      // THE HANDS ARE DRAWN WHETHER THE SONG IS ON OR NOT: they take three drawings to come in from
-      // the bottom of the frame and three to go back down, and two of those fall after the last
-      // note. A hand that is neither playing nor leaving costs one comparison here.
+      // THE PRINTS' SHEET RUNS WHETHER THE SONG IS ON OR NOT: prints dry and flies settle after the
+      // last note, and the dim comes back up
       if (!playing) {
-        if (c.clock.stepped) hands.step();
+        prints.update();
         return;
       }
       // WALKING AWAY STOPS IT. The keys are only a switch from the piano's own shot, so a visitor
@@ -332,6 +339,7 @@ export function buildPiano(ctx, { group, switches, O, M }) {
       // judging state is nobody standing anywhere.
       if (heldBeat == null && ctx.pieces?.walk?.at !== 'piano') {
         stop(true);
+        prints.update();
         return;
       }
       if (!c.clock.stepped) return;
@@ -342,8 +350,10 @@ export function buildPiano(ctx, { group, switches, O, M }) {
       for (const m of want) if (!pressed.has(m)) {
         pressed.set(m, c.clock.frame);
         struck.push({ m, beat: +b.toFixed(3) });
+        // …and on the drawing it goes down, a finger that is not there leaves its print on it
+        prints.strike(m, now.R.includes(m) ? 'R' : 'L');
       }
-      for (const m of [...pressed.keys()]) if (!want.has(m)) pressed.delete(m);
+      for (const m of [...pressed.keys()]) if (!want.has(m)) { pressed.delete(m); prints.release(m); }
       for (const [m, k] of keys) {
         const dn = pressed.has(m);
         // A KEY GOES DOWN BY 8 MM AT THE FRONT, which is a piano's own dip, and it goes down on the
@@ -356,14 +366,7 @@ export function buildPiano(ctx, { group, switches, O, M }) {
         k.position.y = k.userData.rest - (dn ? 0.006 : 0);
         k.rotation.z = dn ? -0.056 : 0;
       }
-      // THE HANDS. Each is handed WHAT ITS OWN SIDE IS SOUNDING and nothing else — not a position,
-      // not a pose: which finger goes on which of those notes, and where the hand has to stand to
-      // put it there, is the hands' own arithmetic (piano-hands.js, "WHICH FINGER PLAYS WHICH
-      // NOTE"). A side that is silent is handed an empty list, which holds it where it was: the
-      // left hand does not leave the keyboard between the bass and the chord.
-      hands.play('L', now.L);
-      hands.play('R', now.R);
-      hands.step();
+      prints.update();
       // ---- the sound, laid a bar ahead on the audio clock ------------------------------------
       const S2 = ctx.pieces?.sound;
       if (!S2?.key || scheduledTo > 1e8) return;

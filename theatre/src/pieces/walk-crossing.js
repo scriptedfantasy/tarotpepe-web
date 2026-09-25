@@ -1,4 +1,4 @@
-// walk-crossing — HE GOES TO THE FIRE (AND TO THE READING TABLE), AND NOBODY IS SEEN GOING.
+// walk-crossing — HE GOES TO THE FIRE (AND TO THE READING TABLE, AND THE PIANO), AND NOBODY IS SEEN GOING.
 //
 // The owner, 2026-09-24, over sixteen versions of a mockup (claude.ai/artifact/A4QfYDquTYgsPaDo63YNrw):
 // Pepe is supernatural, so he does not walk. When the visitor asks for the fireplace, he comes
@@ -51,10 +51,17 @@ const PERSON_H = 1.56;
 //   table      the mirror of it: round the front of the table on the right, across the rug and
 //              up to the chair pulled to the reading table (226–247 along it; the shadow it
 //              skirts is 122–168)
+//   piano      out the lit side of the table the way the fireplace road goes, then along the front
+//              of the rug toward the hearth, over its border, and up the bare boards beside the
+//              stool (x −1.8) to its near end — the rug's middle behind the table there is the
+//              table's own hatched shadow and the tall case's (89–186), and the boards off the rug
+//              are paper all the way up (247). Measured 206–247 along it, the border stroke aside.
+//              Nobody reappears at the other end: the piano plays itself (piano-prints.js)
 // `look` is where a phone turns to while the prints cross, so its narrow frame holds them.
 const ROUTES = {
   fireplace: { road: [[-0.8, 0, -0.2], [-1.05, 0, 0.25], [-1.35, 0, 0.55], [-1.75, 0, 0.6], [-2.08, 0, 0.35]], look: [-1.75, 0.95, 0.05] },
   table: { road: [[0.8, 0, -0.2], [1.02, 0, 0.22], [1.28, 0, 0.42], [1.5, 0, 0.26], [1.46, 0, -0.18]], look: [1.3, 0.95, 0.02] },
+  piano: { road: [[-0.8, 0, -0.35], [-1.05, 0, -0.2], [-1.35, 0, -0.12], [-1.62, 0, -0.2], [-1.8, 0, -0.5], [-1.84, 0, -1.02]], look: [-1.4, 0.95, -0.55] },
 };
 let ROAD = ROUTES.fireplace.road;
 let END = ROAD[ROAD.length - 1];
